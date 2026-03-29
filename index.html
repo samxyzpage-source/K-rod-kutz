@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K Rod Kutz | Miami's Premier Barber</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@300;400;700&display=swap');
+        
+        :root {
+            --gold: #d4af37;
+            --dark-bg: #0a0a0a;
+        }
+
+        body { 
+            font-family: 'Montserrat', sans-serif; 
+            background-color: var(--dark-bg); 
+            color: #fff; 
+            scroll-behavior: smooth;
+        }
+
+        .heading-font { font-family: 'Bebas Neue', cursive; }
+        .gold-text { color: var(--gold); }
+        .gold-bg { background-color: var(--gold); }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 10px; }
+
+        .hero-gradient {
+            background: linear-gradient(rgba(0,0,0,0.6), rgba(10,10,10,1)), 
+                        url('https://images.unsplash.com/photo-1585747860715-2ba37e788b70?auto=format&fit=crop&w=1920&q=80');
+            background-size: cover;
+            background-position: center;
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="fixed w-full z-50 flex justify-between items-center p-6 bg-black/80 backdrop-blur-md border-b border-gray-900">
+        <h1 class="heading-font text-3xl tracking-widest">K ROD <span class="gold-text">KUTZ</span></h1>
+        <div class="hidden md:flex space-x-8 uppercase text-xs tracking-widest font-bold">
+            <a href="#services" class="hover:text-[#d4af37] transition">Services</a>
+            <a href="#gallery" class="hover:text-[#d4af37] transition">Gallery</a>
+            <a href="#location" class="hover:text-[#d4af37] transition">Location</a>
+        </div>
+        <a href="https://booksy.com/en-us/198678_kevin-krod_barber-shop_15889_miami" target="_blank" class="gold-bg text-black px-5 py-2 font-bold rounded uppercase text-xs hover:scale-105 transition">Book Now</a>
+    </nav>
+
+    <header class="relative h-screen flex items-center justify-center text-center px-4 hero-gradient">
+        <div class="max-w-3xl">
+            <span class="gold-text tracking-[0.3em] uppercase text-sm mb-4 block font-bold">Est. Miami, FL</span>
+            <h2 class="heading-font text-7xl md:text-9xl mb-6 leading-none">Sharper <br> Than Ever</h2>
+            <p class="text-gray-400 text-lg mb-10 max-w-lg mx-auto">Experience the finest precision cuts and premium grooming in the heart of Miami.</p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <a href="https://booksy.com/en-us/198678_kevin-krod_barber-shop_15889_miami" target="_blank" class="gold-bg text-black px-10 py-4 font-bold hover:bg-yellow-600 transition uppercase tracking-widest">Secure Appointment</a>
+                <a href="#gallery" class="border border-white px-10 py-4 font-bold hover:bg-white hover:text-black transition uppercase tracking-widest">View Work</a>
+            </div>
+        </div>
+    </header>
+
+    <section id="services" class="py-24 px-6 bg-zinc-950">
+        <div class="max-w-5xl mx-auto">
+            <div class="text-center mb-16">
+                <h3 class="heading-font text-5xl mb-2">Service Menu</h3>
+                <div class="w-20 h-1 gold-bg mx-auto"></div>
+            </div>
+            
+            <div class="grid md:grid-cols-2 gap-x-16 gap-y-8">
+                <div class="flex justify-between items-end border-b border-zinc-800 pb-4 group">
+                    <div>
+                        <h4 class="text-xl font-bold group-hover:gold-text transition">Regular Haircut</h4>
+                        <p class="text-gray-500 text-sm">Precision fade or taper with styling</p>
+                    </div>
+                    <span class="gold-text font-bold text-xl">$40+</span>
+                </div>
+                <div class="flex justify-between items-end border-b border-zinc-800 pb-4 group">
+                    <div>
+                        <h4 class="text-xl font-bold group-hover:gold-text transition">Haircut & Beard</h4>
+                        <p class="text-gray-500 text-sm">Full service including line-up</p>
+                    </div>
+                    <span class="gold-text font-bold text-xl">$50+</span>
+                </div>
+                <div class="flex justify-between items-end border-b border-zinc-800 pb-4 group">
+                    <div>
+                        <h4 class="text-xl font-bold group-hover:gold-text transition">Kids Cut (12 & Under)</h4>
+                        <p class="text-gray-500 text-sm">Clean look for the young kings</p>
+                    </div>
+                    <span class="gold-text font-bold text-xl">$35+</span>
+                </div>
+                <div class="flex justify-between items-end border-b border-zinc-800 pb-4 group">
+                    <div>
+                        <h4 class="text-xl font-bold group-hover:gold-text transition">Hot Towel Shave</h4>
+                        <p class="text-gray-500 text-sm">Traditional straight razor experience</p>
+                    </div>
+                    <span class="gold-text font-bold text-xl">$50+</span>
+                </div>
+                <div class="flex justify-between items-end border-b border-zinc-800 pb-4 group">
+                    <div>
+                        <h4 class="text-xl font-bold group-hover:gold-text transition">
