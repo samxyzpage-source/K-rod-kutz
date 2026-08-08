@@ -105,4 +105,4 @@ The combination — **verified school-scoped community + real booking operations
 
 ---
 
-*Prototype pitch page: [`hallway.html`](./hallway.html). Seller-page template ancestor: [`index.html`](./index.html).*
+*Prototype pitch page: [`hallway.html`](./hallway.html). Working MVP demo (directory, booking calendar, seller onboarding): [`app.html`](./app.html). Seller-page template ancestor: [`index.html`](./index.html).*

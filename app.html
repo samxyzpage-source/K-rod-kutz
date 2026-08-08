@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hallway — Westside High</title>
+<style>
+    /* ---------- design tokens ---------- */
+    :root {
+        --ink: #0c0e0a;
+        --panel: #14170f;
+        --panel-2: #1a1e13;
+        --line: #262b1c;
+        --lime: #c8f04e;
+        --lime-dim: #9dbf3a;
+        --text: #f4f6ef;
+        --muted: #9aa08d;
+        --danger: #f0704e;
+        --radius: 14px;
+        --sans: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+        --display: 'Space Grotesk', var(--sans);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { background: var(--ink); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.55; }
+    a { color: inherit; text-decoration: none; }
+    button { font-family: inherit; cursor: pointer; }
+    input, select, textarea { font-family: inherit; font-size: 15px; }
+
+    /* ---------- layout ---------- */
+    .wrap { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+    header.top {
+        position: sticky; top: 0; z-index: 40;
+        background: rgba(12,14,10,.92); backdrop-filter: blur(8px);
+        border-bottom: 1px solid var(--line);
+    }
+    .top-inner { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; gap: 12px; }
+    .logo { font-family: var(--display); font-weight: 700; font-size: 22px; letter-spacing: -.5px; }
+    .logo span { color: var(--lime); }
+    .school-tag { font-size: 11px; text-transform: uppercase; letter-spacing: .18em; color: var(--muted); border: 1px solid var(--line); padding: 4px 10px; border-radius: 99px; white-space: nowrap; }
+    nav.tabs { display: flex; gap: 4px; }
+    nav.tabs a {
+        padding: 8px 14px; border-radius: 99px; font-size: 13px; font-weight: 600; color: var(--muted);
+    }
+    nav.tabs a.active, nav.tabs a:hover { color: var(--ink); background: var(--lime); }
+    main { padding: 28px 0 80px; min-height: 70vh; }
+
+    /* ---------- shared bits ---------- */
+    .h1 { font-family: var(--display); font-size: 30px; font-weight: 700; letter-spacing: -.5px; margin-bottom: 6px; }
+    .sub { color: var(--muted); margin-bottom: 22px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+    .btn {
+        display: inline-block; background: var(--lime); color: var(--ink); border: none;
+        font-weight: 700; font-size: 14px; padding: 12px 22px; border-radius: 99px;
+    }
+    .btn:hover { opacity: .9; }
+    .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    .btn.ghost:hover { border-color: var(--lime); opacity: 1; }
+    .btn.sm { padding: 8px 16px; font-size: 13px; }
+    .btn.danger { background: transparent; color: var(--danger); border: 1px solid var(--line); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .pill { display: inline-block; font-size: 11px; text-transform: uppercase; letter-spacing: .14em; font-weight: 600; color: var(--lime-dim); border: 1px solid var(--line); border-radius: 99px; padding: 3px 10px; }
+    .star { color: var(--lime); }
+    label.field { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 16px 0 6px; font-weight: 600; }
+    input.input, select.input, textarea.input {
+        width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+        border-radius: 10px; padding: 12px 14px; outline: none;
+    }
+    input.input:focus, select.input:focus, textarea.input:focus { border-color: var(--lime-dim); }
+    .muted { color: var(--muted); }
+    .small { font-size: 13px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .spread { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .back { display: inline-block; color: var(--muted); font-size: 13px; font-weight: 600; margin-bottom: 18px; }
+    .back:hover { color: var(--lime); }
+
+    /* ---------- directory ---------- */
+    .searchbar { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 99px; padding: 13px 20px; color: var(--text); outline: none; margin-bottom: 14px; }
+    .searchbar:focus { border-color: var(--lime-dim); }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+    .chip { background: var(--panel); border: 1px solid var(--line); color: var(--muted); font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 99px; }
+    .chip.on { background: var(--lime); color: var(--ink); border-color: var(--lime); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+    .seller-card { padding: 20px; display: block; transition: border-color .15s; }
+    .seller-card:hover { border-color: var(--lime-dim); }
+    .avatar {
+        width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+        font-family: var(--display); font-weight: 700; font-size: 18px; color: var(--ink); background: var(--lime); margin-bottom: 12px;
+    }
+    .seller-card h3 { font-family: var(--display); font-size: 18px; margin-bottom: 2px; }
+    .seller-card .tag { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+    .rating { font-size: 13px; font-weight: 600; }
+    .from { font-size: 13px; color: var(--lime-dim); font-weight: 600; margin-top: 8px; }
+
+    /* ---------- seller profile ---------- */
+    .profile-head { padding: 26px; display: flex; gap: 18px; align-items: flex-start; margin-bottom: 16px; }
+    .profile-head .avatar { width: 64px; height: 64px; font-size: 24px; margin: 0; flex-shrink: 0; }
+    .profile-head h2 { font-family: var(--display); font-size: 26px; letter-spacing: -.5px; }
+    .svc { padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid var(--line); }
+    .svc:first-child { border-top: none; }
+    .svc .nm { font-weight: 600; }
+    .svc .meta { font-size: 13px; color: var(--muted); }
+    .price { font-family: var(--display); font-weight: 700; color: var(--lime); font-size: 17px; white-space: nowrap; }
+    .review { padding: 16px 20px; border-top: 1px solid var(--line); }
+    .review:first-child { border-top: none; }
+    .review .who { font-weight: 600; font-size: 14px; }
+    .section-label { font-size: 12px; text-transform: uppercase; letter-spacing: .16em; color: var(--muted); font-weight: 600; margin: 26px 0 10px; }
+
+    /* ---------- booking calendar ---------- */
+    .days { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 16px; }
+    .day {
+        flex: 0 0 auto; min-width: 74px; text-align: center; padding: 12px 10px; border-radius: 12px;
+        background: var(--panel); border: 1px solid var(--line); color: var(--muted); font-weight: 600; font-size: 13px;
+    }
+    .day .dn { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; display: block; margin-bottom: 2px; }
+    .day .dd { font-family: var(--display); font-size: 20px; color: var(--text); display: block; }
+    .day.on { background: var(--lime); border-color: var(--lime); }
+    .day.on .dd, .day.on .dn, .day.on { color: var(--ink); }
+    .day:disabled { opacity: .35; cursor: not-allowed; }
+    .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+    .slot { background: var(--panel); border: 1px solid var(--line); color: var(--text); padding: 11px 6px; border-radius: 10px; font-weight: 600; font-size: 14px; }
+    .slot:hover { border-color: var(--lime-dim); }
+    .slot.on { background: var(--lime); color: var(--ink); border-color: var(--lime); }
+    .note { background: var(--panel-2); border: 1px dashed var(--line); border-radius: 10px; padding: 12px 16px; font-size: 13px; color: var(--muted); margin-top: 18px; }
+
+    /* ---------- bookings list ---------- */
+    .bk { padding: 18px 20px; margin-bottom: 12px; }
+    .bk .when { font-family: var(--display); font-weight: 700; font-size: 17px; }
+    .bk.cancelled { opacity: .5; }
+
+    /* ---------- wizard ---------- */
+    .steps { display: flex; gap: 6px; margin-bottom: 24px; }
+    .steps i { flex: 1; height: 4px; border-radius: 4px; background: var(--line); }
+    .steps i.on { background: var(--lime); }
+    .wizard-card { padding: 28px; }
+    .svc-edit { display: grid; grid-template-columns: 1fr 90px 90px 34px; gap: 8px; margin-bottom: 8px; }
+    .svc-edit input { padding: 10px 12px; }
+    .x { background: none; border: none; color: var(--muted); font-size: 18px; }
+    .x:hover { color: var(--danger); }
+    .gen {
+        background: var(--panel-2); border-left: 3px solid var(--lime); border-radius: 0 10px 10px 0;
+        padding: 16px 18px; margin: 14px 0; font-size: 14px;
+    }
+    .gen .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .14em; color: var(--lime-dim); font-weight: 700; display: block; margin-bottom: 6px; }
+
+    /* ---------- toast / confirm ---------- */
+    .toast {
+        position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+        background: var(--lime); color: var(--ink); font-weight: 700; font-size: 14px;
+        padding: 12px 22px; border-radius: 99px; z-index: 60; box-shadow: 0 8px 30px rgba(0,0,0,.5);
+        opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+    .confirm-hero { text-align: center; padding: 48px 28px; }
+    .confirm-hero .big { font-size: 46px; margin-bottom: 10px; }
+    footer { border-top: 1px solid var(--line); padding: 22px 0; }
+    footer .wrap { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .14em; }
+    footer button { background: none; border: none; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .14em; }
+    footer button:hover { color: var(--lime); }
+    @media (max-width: 560px) {
+        nav.tabs a { padding: 8px 10px; font-size: 12px; }
+        .school-tag { display: none; }
+    }
+</style>
+</head>
+<body>
+
+<header class="top">
+    <div class="wrap top-inner">
+        <a class="logo" href="#/">hall<span>way</span></a>
+        <span class="school-tag">Westside High &middot; verified</span>
+        <nav class="tabs" id="tabs">
+            <a href="#/" data-tab="home">Explore</a>
+            <a href="#/bookings" data-tab="bookings">My bookings</a>
+            <a href="#/sell" data-tab="sell">Start selling</a>
+        </nav>
+    </div>
+</header>
+
+<main><div class="wrap" id="view"></div></main>
+
+<footer>
+    <div class="wrap">
+        <span>Hallway MVP demo &middot; data lives in your browser</span>
+        <button onclick="resetDemo()">Reset demo data</button>
+    </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+/* =====================================================================
+   Hallway MVP — single-file demo app.
+   localStorage stands in for the database; the SMS layer is simulated.
+   ===================================================================== */
+
+const DB_KEY = 'hallway-db-v1';
+const CATEGORIES = ['Barber', 'Lashes & Nails', 'Tutoring', 'Sneaker Care', 'Photography', 'Food'];
+
+/* ---------- seed data ---------- */
+function seedDB() {
+    return {
+        sellers: [
+            {
+                id: 'kev', name: 'Kev Rodriguez', handle: 'kevkutz', category: 'Barber',
+                tagline: 'Precise fades. Sharp lines. Booked out by Friday.',
+                about: "Cutting since freshman year — 3 years in, 400+ cuts. Garage setup on 12th, two chairs, good lighting, no waiting around. Trained by watching the best shops in Miami do it.",
+                services: [
+                    { name: 'Fade', mins: 30, price: 20 },
+                    { name: 'Taper', mins: 30, price: 18 },
+                    { name: 'Cut + lineup', mins: 45, price: 25 },
+                    { name: 'Design (add-on)', mins: 15, price: 8 },
+                ],
+                windows: { 1: ['16:00','19:00'], 2: ['16:00','19:00'], 4: ['16:00','19:00'], 6: ['10:00','16:00'] },
+                slotMins: 30, rating: 4.9, ratingCount: 87,
+                reviews: [
+                    { who: 'Marcus T. · senior', stars: 5, text: 'Cleanest fade at Westside, not close. Never late.' },
+                    { who: 'Dre W. · junior', stars: 5, text: 'Booked Thursday, homecoming photos looked right. Enough said.' },
+                    { who: 'Alex P. · sophomore', stars: 4, text: 'Great cut. Book early — his Saturdays go fast.' },
+                ],
+            },
+            {
+                id: 'maya', name: 'Maya Okafor', handle: 'lashesbymaya', category: 'Lashes & Nails',
+                tagline: 'Classic + hybrid sets that survive game day.',
+                about: 'Certified from a summer course, 2 years of sets. I do classic, hybrid, and volume. Prom weeks book out a month early — get on the waitlist.',
+                services: [
+                    { name: 'Classic set', mins: 60, price: 35 },
+                    { name: 'Hybrid set', mins: 75, price: 45 },
+                    { name: 'Refill', mins: 45, price: 25 },
+                ],
+                windows: { 2: ['16:30','19:30'], 3: ['16:30','19:30'], 6: ['11:00','17:00'] },
+                slotMins: 45, rating: 5.0, ratingCount: 52,
+                reviews: [
+                    { who: 'Jasmine L. · senior', stars: 5, text: 'Three weeks and they still look like day one.' },
+                    { who: 'Priya R. · junior', stars: 5, text: 'Gentle, fast, and the shape is perfect.' },
+                ],
+            },
+            {
+                id: 'sofia', name: 'Sofia Reyes', handle: 'sofiasolves', category: 'Tutoring',
+                tagline: 'AP Calc & SAT math, minus the panic.',
+                about: '5 on AP Calc AB and BC, 790 SAT math. I tutor the way I wish someone tutored me: practice problems first, theory when you need it. Bring your actual homework.',
+                services: [
+                    { name: 'SAT math session', mins: 60, price: 20 },
+                    { name: 'AP Calc session', mins: 60, price: 20 },
+                    { name: 'Exam cram (2hr)', mins: 120, price: 35 },
+                ],
+                windows: { 1: ['15:30','18:30'], 3: ['15:30','18:30'], 0: ['13:00','17:00'] },
+                slotMins: 60, rating: 4.8, ratingCount: 34,
+                reviews: [
+                    { who: 'Ben H. · junior', stars: 5, text: 'Went from a 610 to a 720 on math in six weeks.' },
+                    { who: 'Nia C. · senior', stars: 4, text: 'Actually explains it instead of just doing it for you.' },
+                ],
+            },
+            {
+                id: 'darius', name: 'Darius Cole', handle: 'freshkicksdc', category: 'Sneaker Care',
+                tagline: 'Your kicks, back from the dead.',
+                about: 'Deep clean, sole whitening, suede rescue, relacing. Drop-off at school, back in 48 hours. I photograph before/after every pair.',
+                services: [
+                    { name: 'Standard clean', mins: 30, price: 12 },
+                    { name: 'Deep clean + whitening', mins: 45, price: 20 },
+                    { name: 'Suede rescue', mins: 45, price: 25 },
+                ],
+                windows: { 2: ['16:00','18:00'], 5: ['16:00','18:00'] },
+                slotMins: 15, rating: 4.7, ratingCount: 41,
+                reviews: [
+                    { who: 'Tomas V. · sophomore', stars: 5, text: 'AF1s went from gray to actually white. Wild.' },
+                ],
+            },
+            {
+                id: 'jayden', name: 'Jayden Park', handle: 'jp.shoots', category: 'Photography',
+                tagline: 'Portraits & events. Golden hour is my home field.',
+                about: 'Shooting on a Sony a6400. Homecoming, senior portraits, team photos, birthday shoots. 48-hour edited delivery, you pick the final shots.',
+                services: [
+                    { name: 'Portrait mini (30 min)', mins: 30, price: 30 },
+                    { name: 'Full shoot (1 hr)', mins: 60, price: 55 },
+                    { name: 'Event coverage (2 hr)', mins: 120, price: 90 },
+                ],
+                windows: { 5: ['16:00','19:00'], 6: ['09:00','18:00'], 0: ['09:00','18:00'] },
+                slotMins: 30, rating: 4.9, ratingCount: 28,
+                reviews: [
+                    { who: 'Student council', stars: 5, text: 'Shot the whole pep rally, edits back in a day.' },
+                    { who: 'Grace M. · senior', stars: 5, text: 'My senior portraits look like a magazine.' },
+                ],
+            },
+        ],
+        bookings: [],
+    };
+}
+
+let db;
+function loadDB() {
+    try {
+        const raw = localStorage.getItem(DB_KEY);
+        db = raw ? JSON.parse(raw) : seedDB();
+    } catch { db = seedDB(); }
+    saveDB();
+}
+function saveDB() { try { localStorage.setItem(DB_KEY, JSON.stringify(db)); } catch {} }
+function resetDemo() { localStorage.removeItem(DB_KEY); loadDB(); location.hash = '#/'; render(); toast('Demo data reset'); }
+
+/* ---------- helpers ---------- */
+const $ = sel => document.querySelector(sel);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const initials = n => n.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+const fmtTime = hm => { const [h, m] = hm.split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; const h12 = h % 12 || 12; return `${h12}:${String(m).padStart(2,'0')} ${ap}`; };
+const dateKey = d => d.toISOString().slice(0, 10);
+const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function fmtDate(iso) { const d = new Date(iso + 'T00:00:00'); return `${DAY_NAMES[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}`; }
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2600); }
+function stars(n) { return '★'.repeat(Math.round(n)) + '☆'.repeat(5 - Math.round(n)); }
+
+/* Generate open slots for a seller on a given date, minus existing bookings. */
+function slotsFor(seller, iso) {
+    const d = new Date(iso + 'T00:00:00');
+    const win = seller.windows[d.getDay()];
+    if (!win) return [];
+    const taken = new Set(db.bookings.filter(b => b.sellerId === seller.id && b.date === iso && b.status !== 'cancelled').map(b => b.time));
+    const out = [];
+    let [h, m] = win[0].split(':').map(Number);
+    const [eh, em] = win[1].split(':').map(Number);
+    const now = new Date();
+    while (h * 60 + m + seller.slotMins <= eh * 60 + em) {
+        const hm = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+        const slotDate = new Date(`${iso}T${hm}:00`);
+        if (!taken.has(hm) && slotDate > now) out.push(hm);
+        m += seller.slotMins;
+        h += Math.floor(m / 60); m %= 60;
+    }
+    return out;
+}
+function next7Days() {
+    const out = [];
+    for (let i = 0; i < 7; i++) { const d = new Date(); d.setDate(d.getDate() + i); out.push(dateKey(d)); }
+    return out;
+}
+
+/* ---------- "AI" page generator (rule-based stand-in for the LLM call) ---------- */
+const GEN = {
+    'Barber':        { tag: v => `${v} fades and clean lineups — walk out ready.`, about: (n, e) => `${n} has been cutting for ${e}. Book a slot, show up, leave sharp — no DM back-and-forth, no waiting on a maybe.` },
+    'Lashes & Nails':{ tag: v => `${v} sets that hold up all week.`, about: (n, e) => `${n} has ${e} of sets behind them. Clean tools, careful work, and photos of every finished set on the page.` },
+    'Tutoring':      { tag: v => `${v} help that actually raises grades.`, about: (n, e) => `${n} has been tutoring for ${e}. Sessions built around your real homework and your real test dates — not generic worksheets.` },
+    'Sneaker Care':  { tag: v => `${v} cleans — your pairs, revived.`, about: (n, e) => `${n} has ${e} of pairs restored. Drop off at school, get them back photographed and fresh.` },
+    'Photography':   { tag: v => `${v} shots for the moments that matter.`, about: (n, e) => `${n} has been shooting for ${e}. Fast turnaround, edited delivery, and you pick the finals.` },
+    'Food':          { tag: v => `${v} bakes and bites, made to order.`, about: (n, e) => `${n} has ${e} in the kitchen. Order ahead, pick up at school, tell your friends.` },
+};
+
+/* =====================================================================
+   Router + views
+   ===================================================================== */
+function render() {
+    const hash = location.hash || '#/';
+    const view = $('#view');
+    const [_, route, arg] = hash.split('/');
+    let tab = 'home';
+    if (route === 's') view.innerHTML = sellerView(arg);
+    else if (route === 'book') view.innerHTML = bookView(arg);
+    else if (route === 'confirmed') { view.innerHTML = confirmedView(arg); tab = 'bookings'; }
+    else if (route === 'bookings') { view.innerHTML = bookingsView(); tab = 'bookings'; }
+    else if (route === 'sell') { view.innerHTML = sellView(); tab = 'sell'; }
+    else view.innerHTML = homeView();
+    document.querySelectorAll('#tabs a').forEach(a => a.classList.toggle('active', a.dataset.tab === tab));
+    window.scrollTo(0, 0);
+}
+
+/* ---------- home / directory ---------- */
+let filterCat = null, query = '';
+function homeView() {
+    const sellers = db.sellers.filter(s =>
+        (!filterCat || s.category === filterCat) &&
+        (!query || (s.name + s.tagline + s.category).toLowerCase().includes(query.toLowerCase()))
+    );
+    return `
+        <h1 class="h1">Who's got you this week?</h1>
+        <p class="sub">${db.sellers.length} verified student sellers at Westside High</p>
+        <input class="searchbar" placeholder="Search fades, lashes, calc help, kicks…" value="${esc(query)}"
+               oninput="query=this.value; refreshHome()">
+        <div class="chips" id="chips">${chipsHTML()}</div>
+        <div class="grid" id="results">${sellers.map(sellerCard).join('') || `<p class="muted">No one yet in that category — <a href="#/sell" style="color:var(--lime)">be the first</a>.</p>`}</div>`;
+}
+function chipsHTML() {
+    return ['All', ...CATEGORIES].map(c => {
+        const on = (c === 'All' && !filterCat) || filterCat === c;
+        return `<button class="chip ${on ? 'on' : ''}" onclick="filterCat=${c === 'All' ? 'null' : `'${c}'`}; refreshHome()">${c}</button>`;
+    }).join('');
+}
+function refreshHome() {
+    $('#chips').innerHTML = chipsHTML();
+    const sellers = db.sellers.filter(s =>
+        (!filterCat || s.category === filterCat) &&
+        (!query || (s.name + s.tagline + s.category).toLowerCase().includes(query.toLowerCase()))
+    );
+    $('#results').innerHTML = sellers.map(sellerCard).join('') || `<p class="muted">No one yet in that category — <a href="#/sell" style="color:var(--lime)">be the first</a>.</p>`;
+}
+function sellerCard(s) {
+    const from = Math.min(...s.services.map(x => x.price));
+    return `
+        <a class="card seller-card" href="#/s/${s.id}">
+            <div class="avatar">${initials(s.name)}</div>
+            <h3>${esc(s.name)}</h3>
+            <div class="tag">${esc(s.category)} · @${esc(s.handle)}</div>
+            <div class="rating"><span class="star">${stars(s.rating)}</span> ${s.rating.toFixed(1)} <span class="muted">(${s.ratingCount})</span></div>
+            <div class="from">from $${from}</div>
+        </a>`;
+}
+
+/* ---------- seller profile ---------- */
+function sellerView(id) {
+    const s = db.sellers.find(x => x.id === id);
+    if (!s) return `<p class="muted">Seller not found.</p>`;
+    return `
+        <a class="back" href="#/">&larr; Back to explore</a>
+        <div class="card profile-head">
+            <div class="avatar">${initials(s.name)}</div>
+            <div style="flex:1">
+                <div class="spread">
+                    <h2>${esc(s.name)}</h2>
+                    <span class="pill">${esc(s.category)}</span>
+                </div>
+                <div class="rating" style="margin:4px 0 8px"><span class="star">${stars(s.rating)}</span> ${s.rating.toFixed(1)} <span class="muted">· ${s.ratingCount} reviews · @${esc(s.handle)}</span></div>
+                <p class="muted">${esc(s.tagline)}</p>
+            </div>
+        </div>
+        <p style="margin:0 4px 4px">${esc(s.about)}</p>
+
+        <div class="section-label">Services</div>
+        <div class="card">
+            ${s.services.map((svc, i) => `
+                <div class="svc">
+                    <div><div class="nm">${esc(svc.name)}</div><div class="meta">${svc.mins} min</div></div>
+                    <div class="row"><span class="price">$${svc.price}</span>
+                    <a class="btn sm" href="#/book/${s.id}-${i}">Book</a></div>
+                </div>`).join('')}
+        </div>
+
+        <div class="section-label">Reviews</div>
+        <div class="card">
+            ${s.reviews.map(r => `
+                <div class="review">
+                    <div class="spread"><span class="who">${esc(r.who)}</span><span class="star small">${stars(r.stars)}</span></div>
+                    <p class="small muted" style="margin-top:4px">${esc(r.text)}</p>
+                </div>`).join('') || '<div class="review muted small">No reviews yet.</div>'}
+        </div>`;
+}
+
+/* ---------- booking flow ---------- */
+let bkState = {};
+function bookView(arg) {
+    const [id, svcIdx] = arg.split('-');
+    const s = db.sellers.find(x => x.id === id);
+    if (!s) return `<p class="muted">Seller not found.</p>`;
+    const svc = s.services[Number(svcIdx)] || s.services[0];
+    const days = next7Days();
+    if (bkState.arg !== arg) bkState = { arg, date: days.find(d => slotsFor(s, d).length) || days[0], time: null };
+    return `
+        <a class="back" href="#/s/${s.id}">&larr; ${esc(s.name)}</a>
+        <h1 class="h1">Book: ${esc(svc.name)}</h1>
+        <p class="sub">${svc.mins} min · <span style="color:var(--lime)">$${svc.price}</span> · pay ${esc(s.name.split(' ')[0])} in person</p>
+
+        <div class="section-label">Pick a day</div>
+        <div class="days">
+            ${days.map(d => {
+                const open = slotsFor(s, d).length;
+                const dd = new Date(d + 'T00:00:00');
+                return `<button class="day ${bkState.date === d ? 'on' : ''}" ${open ? '' : 'disabled'}
+                    onclick="bkState.date='${d}'; bkState.time=null; render()">
+                    <span class="dn">${DAY_NAMES[dd.getDay()]}</span><span class="dd">${dd.getDate()}</span>${open ? open + ' open' : 'closed'}
+                </button>`;
+            }).join('')}
+        </div>
+
+        <div class="section-label">Pick a time — ${fmtDate(bkState.date)}</div>
+        <div class="slots">
+            ${slotsFor(s, bkState.date).map(t => `
+                <button class="slot ${bkState.time === t ? 'on' : ''}" onclick="bkState.time='${t}'; render()">${fmtTime(t)}</button>
+            `).join('') || '<p class="muted small">No open slots this day.</p>'}
+        </div>
+
+        <form onsubmit="return submitBooking(event, '${s.id}', ${Number(svcIdx) || 0})">
+            <label class="field" for="bname">Your name</label>
+            <input class="input" id="bname" required placeholder="First name + last initial">
+            <label class="field" for="bphone">Phone (for the SMS reminder)</label>
+            <input class="input" id="bphone" required placeholder="(305) 555-0134" inputmode="tel">
+            <div style="margin-top:22px">
+                <button class="btn" type="submit" ${bkState.time ? '' : 'disabled'}>
+                    ${bkState.time ? `Confirm ${fmtTime(bkState.time)} · ${fmtDate(bkState.date)}` : 'Pick a time slot first'}
+                </button>
+            </div>
+        </form>
+        <div class="note">📲 In the real product, Twilio sends a confirmation text now and a reminder the day before — the no-show killer. This demo simulates it.</div>`;
+}
+function submitBooking(e, sellerId, svcIdx) {
+    e.preventDefault();
+    const s = db.sellers.find(x => x.id === sellerId);
+    if (!bkState.time || !slotsFor(s, bkState.date).includes(bkState.time)) { toast('That slot was just taken — pick another'); render(); return false; }
+    const b = {
+        id: 'b' + Date.now(), sellerId, service: s.services[svcIdx].name, price: s.services[svcIdx].price,
+        date: bkState.date, time: bkState.time,
+        buyer: $('#bname').value.trim(), phone: $('#bphone').value.trim(), status: 'confirmed',
+    };
+    db.bookings.push(b); saveDB();
+    location.hash = '#/confirmed/' + b.id;
+    return false;
+}
+function confirmedView(id) {
+    const b = db.bookings.find(x => x.id === id);
+    if (!b) return `<p class="muted">Booking not found.</p>`;
+    const s = db.sellers.find(x => x.id === b.sellerId);
+    return `
+        <div class="card confirm-hero">
+            <div class="big">🎉</div>
+            <h1 class="h1">You're booked.</h1>
+            <p class="muted" style="margin-bottom:6px">${esc(b.service)} with <b style="color:var(--text)">${esc(s.name)}</b></p>
+            <p style="font-family:var(--display); font-size:22px; font-weight:700; color:var(--lime); margin-bottom:18px">${fmtDate(b.date)} · ${fmtTime(b.time)}</p>
+            <p class="small muted" style="max-width:380px; margin:0 auto 24px">Confirmation text sent to ${esc(b.phone)} <i>(simulated)</i>. You'll get a reminder the day before. Bring $${b.price} — you pay in person.</p>
+            <div class="row" style="justify-content:center">
+                <a class="btn" href="#/bookings">My bookings</a>
+                <a class="btn ghost" href="#/">Keep exploring</a>
+            </div>
+        </div>`;
+}
+
+/* ---------- my bookings ---------- */
+function bookingsView() {
+    const list = [...db.bookings].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+    if (!list.length) return `
+        <h1 class="h1">My bookings</h1>
+        <p class="sub">Nothing yet.</p>
+        <a class="btn" href="#/">Find someone at Westside</a>`;
+    return `
+        <h1 class="h1">My bookings</h1>
+        <p class="sub">${list.filter(b => b.status === 'confirmed').length} upcoming</p>
+        ${list.map(b => {
+            const s = db.sellers.find(x => x.id === b.sellerId);
+            return `
+            <div class="card bk ${b.status}">
+                <div class="spread">
+                    <div>
+                        <div class="when">${fmtDate(b.date)} · ${fmtTime(b.time)}</div>
+                        <div class="small muted">${esc(b.service)} with ${esc(s?.name || '?')} · $${b.price} in person${b.status === 'cancelled' ? ' · cancelled' : ''}</div>
+                    </div>
+                    ${b.status === 'confirmed' ? `<button class="btn sm danger" onclick="cancelBooking('${b.id}')">Cancel</button>` : ''}
+                </div>
+            </div>`;
+        }).join('')}`;
+}
+function cancelBooking(id) {
+    const b = db.bookings.find(x => x.id === id);
+    if (b) { b.status = 'cancelled'; saveDB(); render(); toast('Cancelled — the slot is open again'); }
+}
+
+/* ---------- seller onboarding wizard ---------- */
+let wiz = null;
+function sellView() {
+    if (!wiz) wiz = { step: 0, name: '', handle: '', category: CATEGORIES[0], exp: '1 year', vibe: 'Clean', services: [{ name: '', mins: 30, price: 15 }], days: [1, 3, 6] };
+    const stepBar = `<div class="steps">${[0,1,2,3,4].map(i => `<i class="${i <= wiz.step ? 'on' : ''}"></i>`).join('')}</div>`;
+    const steps = [
+        () => `
+            <h2 class="h1" style="font-size:22px">1 · Who are you?</h2>
+            <label class="field">Your name</label>
+            <input class="input" id="w-name" value="${esc(wiz.name)}" placeholder="e.g. Jordan Diaz">
+            <label class="field">Handle (how people find you)</label>
+            <input class="input" id="w-handle" value="${esc(wiz.handle)}" placeholder="e.g. jd.cuts">`,
+        () => `
+            <h2 class="h1" style="font-size:22px">2 · What do you do?</h2>
+            <label class="field">Category</label>
+            <select class="input" id="w-cat">${CATEGORIES.map(c => `<option ${wiz.category === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
+            <label class="field">How long have you been at it?</label>
+            <select class="input" id="w-exp">${['6 months','1 year','2 years','3+ years'].map(x => `<option ${wiz.exp === x ? 'selected' : ''}>${x}</option>`).join('')}</select>
+            <label class="field">One word for your style</label>
+            <input class="input" id="w-vibe" value="${esc(wiz.vibe)}" placeholder="Clean / Bold / Chill…">`,
+        () => `
+            <h2 class="h1" style="font-size:22px">3 · Your menu</h2>
+            <p class="small muted" style="margin-bottom:14px">Name, minutes, price. Add up to five.</p>
+            <div class="svc-edit small muted" style="margin-bottom:2px"><span>Service</span><span>Mins</span><span>Price $</span><span></span></div>
+            ${wiz.services.map((s, i) => `
+                <div class="svc-edit">
+                    <input class="input" value="${esc(s.name)}" placeholder="e.g. Fade" onchange="wiz.services[${i}].name=this.value">
+                    <input class="input" type="number" min="15" step="15" value="${s.mins}" onchange="wiz.services[${i}].mins=+this.value">
+                    <input class="input" type="number" min="1" value="${s.price}" onchange="wiz.services[${i}].price=+this.value">
+                    <button type="button" class="x" onclick="wiz.services.splice(${i},1); render()" ${wiz.services.length === 1 ? 'disabled' : ''}>&times;</button>
+                </div>`).join('')}
+            ${wiz.services.length < 5 ? `<button type="button" class="btn ghost sm" onclick="wiz.services.push({name:'',mins:30,price:15}); render()">+ Add service</button>` : ''}`,
+        () => `
+            <h2 class="h1" style="font-size:22px">4 · When are you open?</h2>
+            <p class="small muted" style="margin-bottom:14px">Pick your after-school / weekend days. (Real product: exact windows per day.)</p>
+            <div class="chips">
+                ${DAY_NAMES.map((d, i) => `<button type="button" class="chip ${wiz.days.includes(i) ? 'on' : ''}"
+                    onclick="wiz.days.includes(${i}) ? wiz.days.splice(wiz.days.indexOf(${i}),1) : wiz.days.push(${i}); render()">${d}</button>`).join('')}
+            </div>`,
+        () => {
+            const g = GEN[wiz.category] || GEN['Barber'];
+            wiz.genTag = g.tag(wiz.vibe || 'Clean');
+            wiz.genAbout = g.about(wiz.name.split(' ')[0] || 'They', wiz.exp);
+            return `
+            <h2 class="h1" style="font-size:22px">5 · Your page, written for you</h2>
+            <p class="small muted">This is the AI copywriter step — in the real product an LLM drafts this from your five answers. Edit anything.</p>
+            <div class="gen"><span class="lbl">Generated tagline</span>
+                <input class="input" id="w-tag" value="${esc(wiz.genTag)}"></div>
+            <div class="gen"><span class="lbl">Generated about</span>
+                <textarea class="input" id="w-about" rows="3">${esc(wiz.genAbout)}</textarea></div>
+            <p class="small muted">Publishing gives you: a public page, a live booking calendar on your open days, and SMS reminders for every client.</p>`;
+        },
+    ];
+    return `
+        <h1 class="h1">Start selling at Westside</h1>
+        <p class="sub">Five questions. Your page and calendar go live at the end.</p>
+        <div class="card wizard-card">
+            ${stepBar}
+            ${steps[wiz.step]()}
+            <div class="spread" style="margin-top:26px">
+                ${wiz.step > 0 ? `<button class="btn ghost" onclick="wizStash(); wiz.step--; render()">Back</button>` : '<span></span>'}
+                ${wiz.step < 4
+                    ? `<button class="btn" onclick="wizNext()">Next</button>`
+                    : `<button class="btn" onclick="wizPublish()">Publish my page 🚀</button>`}
+            </div>
+        </div>`;
+}
+function wizStash() {
+    if ($('#w-name')) { wiz.name = $('#w-name').value.trim(); wiz.handle = $('#w-handle').value.trim(); }
+    if ($('#w-cat')) { wiz.category = $('#w-cat').value; wiz.exp = $('#w-exp').value; wiz.vibe = $('#w-vibe').value.trim(); }
+    if ($('#w-tag')) { wiz.genTag = $('#w-tag').value.trim(); wiz.genAbout = $('#w-about').value.trim(); }
+}
+function wizNext() {
+    wizStash();
+    if (wiz.step === 0 && (!wiz.name || !wiz.handle)) { toast('Name and handle first'); return; }
+    if (wiz.step === 2 && !wiz.services.some(s => s.name.trim())) { toast('Add at least one service'); return; }
+    if (wiz.step === 3 && !wiz.days.length) { toast('Pick at least one day'); return; }
+    wiz.step++; render();
+}
+function wizPublish() {
+    wizStash();
+    const windows = {};
+    wiz.days.forEach(d => { windows[d] = (d === 0 || d === 6) ? ['10:00','16:00'] : ['16:00','19:00']; });
+    const id = wiz.handle.toLowerCase().replace(/[^a-z0-9]/g, '') || 'seller' + Date.now();
+    db.sellers.push({
+        id, name: wiz.name, handle: wiz.handle, category: wiz.category,
+        tagline: wiz.genTag, about: wiz.genAbout,
+        services: wiz.services.filter(s => s.name.trim()),
+        windows, slotMins: Math.min(...wiz.services.filter(s => s.name.trim()).map(s => s.mins)),
+        rating: 5.0, ratingCount: 0, reviews: [],
+    });
+    saveDB();
+    wiz = null;
+    location.hash = '#/s/' + id;
+    toast('Your page is live 🎉');
+}
+
+/* ---------- boot ---------- */
+loadDB();
+window.addEventListener('hashchange', render);
+render();
+</script>
+</body>
+</html>
