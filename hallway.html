@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hallway | Your School's Marketplace</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@300;400;600&display=swap');
+        :root { --lime: #c8f04e; --ink: #0c0e0a; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--ink); color: #f4f6ef; }
+        .display { font-family: 'Space Grotesk', sans-serif; }
+        .lime { color: var(--lime); }
+        .lime-bg { background-color: var(--lime); }
+        .card { background: #14170f; border: 1px solid #23281a; border-radius: 1rem; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: var(--lime); border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+    <nav class="fixed w-full z-50 flex justify-between items-center px-6 py-4 bg-black/80 backdrop-blur-md border-b border-zinc-900">
+        <h1 class="display text-2xl font-bold tracking-tight">hall<span class="lime">way</span></h1>
+        <span class="hidden sm:block text-xs uppercase tracking-widest text-zinc-500">Concept pitch &middot; not a live product</span>
+        <a href="#how" class="lime-bg text-black px-5 py-2 font-semibold rounded-full text-sm hover:scale-105 transition">See how it works</a>
+    </nav>
+
+    <header class="min-h-[85vh] flex items-center px-6 pt-28 pb-16">
+        <div class="max-w-4xl mx-auto">
+            <p class="lime uppercase tracking-[.35em] text-xs font-semibold mb-6">The student service economy, finally with software</p>
+            <h2 class="display text-5xl md:text-7xl font-bold leading-tight mb-8">Every school is full of businesses.<br><span class="lime">None of them have tools.</span></h2>
+            <p class="text-zinc-400 text-lg max-w-2xl mb-10">Student barbers, lash techs, tutors, sneaker cleaners and photographers run real money through Instagram DMs and Cash App. Hallway gives every campus seller a booking page, a schedule, SMS reminders, and a reputation — verified, one school at a time.</p>
+            <div class="flex flex-col sm:flex-row gap-4">
+                <a href="#how" class="lime-bg text-black px-8 py-4 font-bold rounded-full text-center hover:opacity-90 transition">How it works</a>
+                <a href="#math" class="border border-zinc-700 px-8 py-4 font-bold rounded-full text-center hover:border-[#c8f04e] transition">The math</a>
+            </div>
+        </div>
+    </header>
+
+    <section class="py-20 px-6 border-t border-zinc-900">
+        <div class="max-w-4xl mx-auto grid md:grid-cols-3 gap-6">
+            <div class="card p-8">
+                <h3 class="display text-xl font-bold mb-3">Bookings live in DMs</h3>
+                <p class="text-zinc-400 text-sm leading-relaxed">Double-bookings and no-shows are constant. One no-show costs a student barber a meaningful slice of the week's income.</p>
+            </div>
+            <div class="card p-8">
+                <h3 class="display text-xl font-bold mb-3">Discovery is word of mouth</h3>
+                <p class="text-zinc-400 text-sm leading-relaxed">A great seller is invisible two lunch tables away. There is no directory of who at your school does what.</p>
+            </div>
+            <div class="card p-8">
+                <h3 class="display text-xl font-bold mb-3">Incumbents are locked out</h3>
+                <p class="text-zinc-400 text-sm leading-relaxed">Booksy, Fiverr, and Stripe all require sellers to be 18+ or licensed. The constraint that blocks them is the opening.</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="how" class="py-24 px-6 bg-[#101308] border-t border-zinc-900">
+        <div class="max-w-4xl mx-auto">
+            <h3 class="display text-4xl font-bold mb-14 text-center">How it <span class="lime">works</span></h3>
+            <div class="space-y-10">
+                <div class="flex gap-6 items-start">
+                    <span class="display lime text-3xl font-bold">01</span>
+                    <div>
+                        <h4 class="display text-2xl font-bold mb-2">A page in five minutes</h4>
+                        <p class="text-zinc-400 leading-relaxed max-w-2xl">Answer five questions — what you do, what you charge, three photos — and an AI setup flow writes your page: services, prices, gallery, book button. The kind of page that used to take a freelancer a weekend.</p>
+                    </div>
+                </div>
+                <div class="flex gap-6 items-start">
+                    <span class="display lime text-3xl font-bold">02</span>
+                    <div>
+                        <h4 class="display text-2xl font-bold mb-2">A real calendar, with reminders</h4>
+                        <p class="text-zinc-400 leading-relaxed max-w-2xl">Open slots, automatic SMS confirmations, day-before reminders, and waitlist pings when a slot frees up. Cutting no-shows is an immediate raise — that's why sellers switch in week one. A DM importer reads your existing booking thread and seeds your calendar in one paste.</p>
+                    </div>
+                </div>
+                <div class="flex gap-6 items-start">
+                    <span class="display lime text-3xl font-bold">03</span>
+                    <div>
+                        <h4 class="display text-2xl font-bold mb-2">A school-verified reputation</h4>
+                        <p class="text-zinc-400 leading-relaxed max-w-2xl">Join with your school email or a verified invite. Real names, public reviews, reliability scores on both sides. Seniors graduate with a portable record — 300 rated cuts is a resume for barber school or a chair at a real shop.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="math" class="py-24 px-6 border-t border-zinc-900">
+        <div class="max-w-3xl mx-auto">
+            <h3 class="display text-4xl font-bold mb-10 text-center">The <span class="lime">math</span> for one school</h3>
+            <div class="card p-8 overflow-x-auto">
+                <table class="w-full text-sm">
+                    <tbody class="divide-y divide-zinc-800">
+                        <tr><td class="py-3 text-zinc-400">Students</td><td class="py-3 text-right font-semibold">1,500</td></tr>
+                        <tr><td class="py-3 text-zinc-400">Active sellers (barbers, beauty, tutors, misc)</td><td class="py-3 text-right font-semibold">~25</td></tr>
+                        <tr><td class="py-3 text-zinc-400">Average seller revenue</td><td class="py-3 text-right font-semibold">$120 / week</td></tr>
+                        <tr><td class="py-3 text-zinc-400">School-year marketplace volume</td><td class="py-3 text-right font-semibold lime">~$108,000</td></tr>
+                        <tr><td class="py-3 text-zinc-400">Year-one revenue (Pro subs + featured weeks)</td><td class="py-3 text-right font-semibold">$1,500&ndash;2,500</td></tr>
+                        <tr><td class="py-3 text-zinc-400">At 100 schools with a 5% take</td><td class="py-3 text-right font-semibold lime">$500k+ / year</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="text-zinc-500 text-sm mt-6 text-center max-w-xl mx-auto">Costs are a student's costs: free-tier hosting, a domain, and about a cent per text message. One school pays for itself at roughly fifteen Pro subscribers.</p>
+        </div>
+    </section>
+
+    <section class="py-24 px-6 bg-[#101308] border-t border-zinc-900">
+        <div class="max-w-3xl mx-auto text-center">
+            <h3 class="display text-4xl font-bold mb-6">Scaled the way campuses scale</h3>
+            <p class="text-zinc-400 leading-relaxed mb-10">Launch only where you can hit density. Seed ten sellers, launch the week before homecoming, prove three numbers — no-show rate, rebooking rate, seller revenue — then hand the playbook to one ambassador at the next school. Software costs nothing to copy; a verified trust graph costs everything to catch up to.</p>
+            <a href="BUSINESS-PLAN.md" class="lime-bg text-black px-10 py-4 font-bold rounded-full inline-block hover:opacity-90 transition">Read the full plan</a>
+        </div>
+    </section>
+
+    <footer class="py-10 px-6 border-t border-zinc-900 text-center text-zinc-600 text-xs uppercase tracking-widest">
+        Hallway &middot; concept &middot; built from a hallway, for the hallway
+    </footer>
+
+</body>
+</html>
