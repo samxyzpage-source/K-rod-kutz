@@ -445,6 +445,29 @@
   }
 
   /**
+   * Input-independent numbers of a context (cheap; no erf): range, carry, target, window, wind drift,
+   * flight time and the shank tail. Kick.model builds on it; resolve uses it directly.
+   * @param {Object} ctx KickContext @param {Object} [attrs] raw attrs (default ctx.kicker.attrs)
+   * @returns {{maxFG:number, carryMax:number, rneed:number, pNeed:number, targetDeg:number, windowDeg:{left:number, right:number},
+   *   windDriftYd:number, windDriftDeg:number, windAlong:number, windCross:number, flightTime:number, pShank:number}}
+   */
+  Kick.geometry = function (ctx, attrs) {
+    var kicker = kickerOf(ctx);
+    attrs = attrsFor(ctx, attrs);
+    var D = ctx.distance;
+    var maxFG = Kick.maxFG(attrs.POW, ctx, kicker);
+    var carryMax = Kick.carryMax(maxFG);
+    var rneed = Kick.rneed(D);
+    var wind = Kick.windDrift(ctx);
+    return {
+      maxFG: maxFG, carryMax: carryMax, rneed: rneed, pNeed: rneed / carryMax,
+      targetDeg: Kick.targetDeg(ctx.ballX, D), windowDeg: Kick.windowDeg(ctx),
+      windDriftYd: wind.yd, windDriftDeg: wind.deg, windAlong: wind.along, windCross: wind.cross,
+      flightTime: Kick.flightTime(D), pShank: Kick.pShank(attrs.CON)
+    };
+  };
+
+  /**
    * The pure closed-form model (§2.3.9): every derived number for a context, assuming the AI power
    * rule (with its N(0, 0.02) noise) and quality 0.85 unless overridden in `opts`.
    *   pClear   = Φ((carryMax·Peff − Rneed) / (powerNoiseSd·qualityFactor·carryMax))
@@ -463,35 +486,29 @@
     var A = K().ai, R = K().range, C = K().contact;
     var kicker = kickerOf(ctx);
     attrs = attrsFor(ctx, attrs);
+    var g = Kick.geometry(ctx, attrs);
     var D = ctx.distance;
-    var maxFG = Kick.maxFG(attrs.POW, ctx, kicker);
-    var carryMax = Kick.carryMax(maxFG);
-    var rneed = Kick.rneed(D);
-    var pNeed = rneed / carryMax;
     var quality = opts.quality !== undefined ? clamp(opts.quality, 0, 1) : A.modelQuality;
-    var power = opts.power !== undefined ? clamp(opts.power, 0, R.powerMax) : Kick.aiPower(pNeed);
+    var power = opts.power !== undefined ? clamp(opts.power, 0, R.powerMax) : Kick.aiPower(g.pNeed);
     var qualityFactor = R.contactPowerBase + R.contactPowerQuality * quality;
     var peff = power * qualityFactor;
-    var wind = Kick.windDrift(ctx);
-    var targetDeg = Kick.targetDeg(ctx.ballX, D);
     var parts = Kick.sigmaParts(ctx, { power: power, holdMs: opts.holdMs }, attrs);
     var sigma = parts.total;
-    var pShank = Kick.pShank(attrs.CON);
-    var pBlock = Kick.pBlock(ctx, peff, maxFG, attrs);
+    var pBlock = Kick.pBlock(ctx, peff, g.maxFG, attrs);
     var aimSd = opts.aimSd !== undefined ? Math.max(0, opts.aimSd) : A.aimSd;
-    var aimMean = opts.aim !== undefined ? clamp(opts.aim, -R.aimMax, R.aimMax) : -wind.deg * Kick.aiWindComp(attrs.ACC);
+    var aimMean = opts.aim !== undefined ? clamp(opts.aim, -R.aimMax, R.aimMax) : -g.windDriftDeg * Kick.aiWindComp(attrs.ACC);
     var overBias = Kick.overBias(power, kicker.foot);
     var contact = (1 - quality) * C.degPerQuality;
-    var pLateral = lateralProb(D, ctx.ballX || 0, wind.yd, targetDeg, aimMean + overBias, contact, sigma, aimSd, pShank);
+    var pLateral = lateralProb(D, ctx.ballX || 0, g.windDriftYd, g.targetDeg, aimMean + overBias, contact, sigma, aimSd, g.pShank);
     var powerSd = opts.powerSd !== undefined ? Math.max(0, opts.powerSd) : A.powerNoiseSd;
-    var margin = carryMax * peff - rneed;
-    var pClear = powerSd > 0 ? Util.phi(margin / (powerSd * qualityFactor * carryMax)) : (margin >= 0 ? 1 : 0);
+    var margin = g.carryMax * peff - g.rneed;
+    var pClear = powerSd > 0 ? Util.phi(margin / (powerSd * qualityFactor * g.carryMax)) : (margin >= 0 ? 1 : 0);
     var pMake = (1 - pBlock) * pClear * pLateral;
     return {
-      sigmaDeg: sigma, sigmaParts: parts, targetDeg: targetDeg, windowDeg: Kick.windowDeg(ctx),
-      maxFG: maxFG, carryMax: carryMax, rneed: rneed, pNeed: pNeed,
-      windDriftYd: wind.yd, windDriftDeg: wind.deg, flightTime: Kick.flightTime(D),
-      pBlock: pBlock, pShank: pShank, pMake: pMake, pClear: pClear, pLateral: pLateral,
+      sigmaDeg: sigma, sigmaParts: parts, targetDeg: g.targetDeg, windowDeg: g.windowDeg,
+      maxFG: g.maxFG, carryMax: g.carryMax, rneed: g.rneed, pNeed: g.pNeed,
+      windDriftYd: g.windDriftYd, windDriftDeg: g.windDriftDeg, flightTime: g.flightTime,
+      pBlock: pBlock, pShank: g.pShank, pMake: pMake, pClear: pClear, pLateral: pLateral,
       power: power, quality: quality, peff: peff, aimMean: aimMean, overBiasDeg: overBias, contactDeg: contact
     };
   };
@@ -577,7 +594,7 @@
       contactDeg: rd(n.contact), overBiasDeg: rd(n.overBias), windDriftYd: rd(m.windDriftYd), sigmaDeg: rd(n.sigma),
       power: rd(inp.power), aim: rd(inp.aim), quality: rd(inp.quality), holdMs: Math.round(inp.holdMs),
       flightTime: rd(m.flightTime), sub: cls.sub || '', blocked: !!n.blocked, blockReturnTd: !!cls.blockReturnTd,
-      pMake: rd(m.pMake), pNeed: rd(m.pNeed),
+      pNeed: rd(m.pNeed),
       tags: Kick.tagsFor(ctx, opts), auto: !!(opts && opts.auto), forced: !!(opts && opts.forced),
       feedback: null
     };
@@ -602,7 +619,7 @@
     var kicker = kickerOf(ctx);
     attrs = attrsFor(ctx, attrs);
     var inp = normInput(input);
-    var m = Kick.model(ctx, attrs);                                                       // input-independent numbers
+    var m = Kick.geometry(ctx, attrs);                                                    // input-independent numbers (no erf)
     if (opts.forced) return Kick.forcedResult(ctx, attrs, inp, opts.forced, m, opts);
     var D = ctx.distance;
     var peff = Kick.peff(inp.power, inp.quality);
@@ -627,7 +644,7 @@
    * Debug: a consistent KickResult for a requested outcome without consuming rng. `forced` is an
    * outcome string or {outcome, sub?, side? (−1 left / +1 right), blockReturnTd?}.
    * @param {Object} ctx @param {Object|null} attrs @param {Object} input @param {string|Object} forced
-   * @param {Object} [model] @param {{auto?:boolean}} [opts] @returns {Object} KickResult
+   * @param {Object} [model] Kick.model or Kick.geometry output @param {{auto?:boolean}} [opts] @returns {Object} KickResult
    */
   Kick.forcedResult = function (ctx, attrs, input, forced, model, opts) {
     var T = K(), G = T.geometry, F = T.forced;
@@ -635,7 +652,7 @@
     var outcome = has(OUTCOMES, f.outcome) ? f.outcome : 'GOOD';
     var kicker = kickerOf(ctx);
     attrs = attrsFor(ctx, attrs);
-    var m = model || Kick.model(ctx, attrs);
+    var m = model || Kick.geometry(ctx, attrs);
     var inp = normInput(input);
     var D = ctx.distance;
     var side = f.side === -1 || f.side === 1 ? f.side : footSign(kicker.foot);
@@ -665,7 +682,7 @@
     var err = launch - m.targetDeg - inp.aim - contact - overBias;
     var o = Object.assign({}, opts || {}, { forced: true });
     return makeResult(ctx, m, inp, {
-      x: x, h: h, launch: launch, err: err, shank: false, contact: contact, overBias: overBias, sigma: m.sigmaDeg, blocked: blocked
+      x: x, h: h, launch: launch, err: err, shank: false, contact: contact, overBias: overBias, sigma: Kick.sigmaFor(ctx, inp, attrs), blocked: blocked
     }, { outcome: outcome, sub: sub, blockReturnTd: !!f.blockReturnTd }, o);
   };
 
@@ -763,11 +780,11 @@
   /**
    * Feedback block for a result (§3.4): timing / power labels, miss geometry (yards, side and a
    * yards + feet text) and one "what the coach saw" sentence. Pure.
-   * @param {Object} ctx @param {Object|null} model (computed when omitted) @param {Object} input @param {Object} result
+   * @param {Object} ctx @param {Object|null} model Kick.model or Kick.geometry output (computed when omitted) @param {Object} input @param {Object} result
    * @returns {{timing:string, power:string, missBy:{yd:number, side:string|null, text:string}, coachSaw:string}}
    */
   Kick.feedbackFor = function (ctx, model, input, result) {
-    var m = model || Kick.model(ctx, null);
+    var m = model || Kick.geometry(ctx, null);
     var inp = normInput(input);
     var miss = missBy(ctx, m, inp, result);
     return { timing: timingLabel(inp.quality), power: powerLabel(inp.power, m.pNeed), missBy: miss, coachSaw: coachSaw(ctx, m, inp, result, miss) };

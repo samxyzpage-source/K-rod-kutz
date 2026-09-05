@@ -13,6 +13,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const RTG = require('./load')();
+/** Cross-realm deep equality: engine objects come from a vm context, so normalise through JSON first. */
+const J = (v) => JSON.parse(JSON.stringify(v));
+const deq = (a, b, m) => assert.deepEqual(J(a), J(b), m);
+const ndeq = (a, b, m) => assert.notDeepEqual(J(a), J(b), m);
 const leagueFx = require('./fixtures/league');
 
 const T = RTG.Tuning.schedule;
@@ -78,7 +82,7 @@ test('college: one season is structurally valid (year 1)', () => {
   const games = RTG.Schedule.college(college, 1, leagueFx.testRng(RTG, 1));
   checkCollegeYear(games, 1);
   const v = RTG.Schedule.validate(games, college);
-  assert.deepEqual(v, { ok: true, errors: [] });
+  deq(v, { ok: true, errors: [] });
 });
 
 test('college: §2.6.1 non-conference formula A[t] vs B[(t + r + year) mod 8], home = A if (t + year) even', () => {
@@ -115,7 +119,7 @@ test('college: deterministic (no rng draws) and 100 consecutive years valid in <
   const a = RTG.Schedule.college(college, 4, r1);
   assert.equal(r1.state(), s1, 'college schedule draws nothing from the rng');
   const b = RTG.Schedule.college(college, 4, r2);
-  assert.deepEqual(a.map((g) => g.id), b.map((g) => g.id), 'independent of rng');
+  deq(a.map((g) => g.id), b.map((g) => g.id), 'independent of rng');
   let worst = 0;
   for (let y = 1; y <= 100; y++) {
     const t0 = process.hrtime.bigint();
@@ -184,8 +188,8 @@ function checkNflYear(games, year) {
     assert.equal(crossConf.length, 5, `${id} 4 rotating + 1 place-based other-conference`);
     const countBy = (arr) => arr.reduce((m, o) => ((m[o.div] = (m[o.div] || 0) + 1), m), {});
     const sc = countBy(sameConfOther), cc = countBy(crossConf);
-    assert.deepEqual(Object.values(sc).sort(), [1, 1, 4], `${id} same-conference: one full division + one team from each of the other two`);
-    assert.deepEqual(Object.values(cc).sort(), [1, 4], `${id} other-conference: one full division + one place-based`);
+    deq(Object.values(sc).sort(), [1, 1, 4], `${id} same-conference: one full division + one team from each of the other two`);
+    deq(Object.values(cc).sort(), [1, 4], `${id} other-conference: one full division + one place-based`);
     // Home split: 8 or 9, Liberty gets 9 in even years (hosts the 17th game).
     const libertyHosts = year % 2 === 0;
     const expectHome = (me.confIdx === 0) === libertyHosts ? 9 : 8;
@@ -212,7 +216,7 @@ function checkNflYear(games, year) {
 test('nfl: one season is structurally valid (year 1, data-order places)', () => {
   const games = RTG.Schedule.nfl(nfl, 1, null, leagueFx.testRng(RTG, 11));
   checkNflYear(games, 1);
-  assert.deepEqual(RTG.Schedule.validate(games, nfl), { ok: true, errors: [] });
+  deq(RTG.Schedule.validate(games, nfl), { ok: true, errors: [] });
 });
 
 test('nfl: place-based opponents follow the previous standings (divRank)', () => {
@@ -252,9 +256,9 @@ test('nfl: same-place opponents come from the two same-conference divisions NOT 
 test('nfl: deterministic by seed, different seeds differ, and 100 consecutive years valid in < 50 ms', () => {
   const a = RTG.Schedule.nfl(nfl, 3, null, leagueFx.testRng(RTG, 77));
   const b = RTG.Schedule.nfl(nfl, 3, null, leagueFx.testRng(RTG, 77));
-  assert.deepEqual(a, b, 'same seed → identical schedule');
+  deq(a, b, 'same seed → identical schedule');
   const c = RTG.Schedule.nfl(nfl, 3, null, leagueFx.testRng(RTG, 78));
-  assert.notDeepEqual(a.map((g) => g.id), c.map((g) => g.id), 'different seed → different slotting');
+  ndeq(a.map((g) => g.id), c.map((g) => g.id), 'different seed → different slotting');
   const rng = leagueFx.testRng(RTG, 2024);
   let worst = 0, prev = null;
   for (let y = 1; y <= 100; y++) {
@@ -290,7 +294,7 @@ test('nfl: rotation partners change from year to year', () => {
 // ─────────────────────────────── queries ───────────────────────────────
 
 test('weeksFor and gamesInWeek', () => {
-  assert.deepEqual(RTG.Schedule.weeksFor(college).reg, T.college.regWeeks);
+  deq(RTG.Schedule.weeksFor(college).reg, T.college.regWeeks);
   assert.equal(RTG.Schedule.weeksFor(college).post, 4);
   assert.equal(RTG.Schedule.weeksFor(college).total, T.college.totalWeeks);
   assert.equal(RTG.Schedule.weeksFor('NFL').reg, 18);
@@ -309,5 +313,5 @@ test('weeksFor and gamesInWeek', () => {
 
 test('schedules are JSON-serialisable plain data', () => {
   const games = RTG.Schedule.college(college, 2, rng0).concat(RTG.Schedule.nfl(nfl, 2, null, rng0));
-  assert.deepEqual(JSON.parse(JSON.stringify(games)), games);
+  deq(JSON.parse(JSON.stringify(games)), games);
 });

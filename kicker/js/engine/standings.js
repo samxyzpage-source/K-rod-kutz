@@ -451,7 +451,7 @@
       if (rk) { row.pollRank = rk.rank; row.rankScore = rk.score; }
       rows[teams[i].id] = row;
     }
-    var confPct = function (id) { var rr = rows[id]; return pct(rr.confW, rr.confL, 0) + rr.pct * 1e-6; };
+    var confPct = function (id) { var rr = rows[id]; return pct(rr.confW, rr.confL, 0); };
     var confs = confOrder(league);
     var ordered = [];
     for (var c = 0; c < confs.length; c++) {
