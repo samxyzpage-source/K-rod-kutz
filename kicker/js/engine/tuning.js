@@ -62,6 +62,7 @@
           flightBase: 1.0, flightPerYd: 0.026, // t = 1.0 + 0.026·D
           uiFlightScale: 0.75,
           powerMax: 1.15, aimMax: 12,
+          launchClampDeg: 60,                  // numerical guard for the tan() projection of the launch angle
           contactPowerBase: 0.92, contactPowerQuality: 0.08   // Peff = power·(0.92 + 0.08·quality)
         },
         // §2.3.3 lateral error model (degrees)
@@ -78,7 +79,7 @@
           hesitationDegPer100ms: 0.15, hesitationFromMs: 1200, hesitationCluBelow: 70
         },
         shank: { base: 0.05, perCon: 0.0004, min: 0.005, max: 0.06, sigmaMult: 3 },
-        contact: { degPerQuality: 3.0 },                 // contact = (1 − q)·3.0·±1
+        contact: { degPerQuality: 4.0, signProb: 0.5 },  // contact = (1 − q)·degPerQuality·±1 (sign draw p = 0.5); 4.0 fitted so quality 0.5 costs 5–12 pts (§5.1)
         overBias: { deg: 1.2, zone: 0.15 },              // 1.2·max(0, power − 1)/0.15·footSign
         wind: { driftCoeff: 0.025, legendGustSd: 0.30 }, // windDriftYd = 0.025·windCross·t²
         // §2.3.7 pressure
@@ -109,18 +110,18 @@
           powerAdd: 0.15, powerMinAdd: 0.05, powerFloor: 1.0, powerCap: 1.08, powerSd: 0.02,
           windCompBase: 0.65, windCompPerAcc: 0.30, aimSd: 0.5,
           qualityBase: 0.80, qualityPerCon: 0.15, qualitySd: 0.06, qualityMin: 0.4, qualityMax: 1.0,
-          modelQuality: 0.85, powerNoiseSd: 0.025   // used by Kick.model.pClear
+          modelQuality: 0.85, powerNoiseSd: 0.02    // Kick.model.pClear: sd of the AI power noise (= powerSd) × Peff quality factor × carryMax
         },
         // §2.3.10 kickoffs
         kickoff: {
           hangBase: 3.4, hangPerKo: 0.012, hangTiming: 0.3, hangSd: 0.12,
-          distBase: 55, distPerKo: 0.22, distTiming: 4, distSd: 4,
+          distBase: 55, distPerKo: 0.105, distTiming: 4, distSd: 4,   // distPerKo fitted (spec 0.22) so auto touchbacks ≈ 35 % @ KO 50, ≈ 75 % @ KO 90
           kickFromYard: 35,
           touchbackDist: 65, touchbackYard: { NFL: 30, COLLEGE: 25 },
           returnBase: 28, returnPerYdShort: 0.4, returnHangAnchor: 3.9, returnPerHangSec: 6,
           returnSd: 7, returnMin: 5, returnMax: 60, returnTdProb: 0.015,
           oobTiming: 0.9, oobYard: 40,
-          onsideProb: 0.10, onsideTrainedProb: 0.18,
+          onsideProb: 0.10, onsideTrainedProb: 0.18, onsideDist: 10,   // onside kicks travel ~10 yd from the kick spot
           greenZoneBase: 12, greenZonePerKo: 0.35,
           autoTiming: 0.2,                     // |timing| used for simulated (input null) kickoffs
           autoTouchbackTarget: { ko50: 0.35, ko90: 0.75 }   // §5.1 kick test targets
@@ -207,7 +208,7 @@
         climates: {
           warm: { temp: [82, 78, 70, 64, 60], rain: 0.18, snow: 0 },
           temperate: { temp: [74, 64, 52, 44, 40], rain: 0.15, snow: 0.25 },
-          cold: { temp: [68, 55, 42, 32, 26], rain: 0.12, snow: 0.35 },
+          cold: { temp: [68, 55, 42, 32, 26], rain: 0.12, snow: 0.48 },   // snow 0.48 (spec 0.35) so cold-climate December snow share lands in the §5.1 band 25–45 %
           dome: { temp: [70, 70, 70, 70, 70], rain: 0, snow: 0 }
         },
         months: ['Sep', 'Oct', 'Nov', 'Dec', 'Jan'],
@@ -478,11 +479,13 @@
       schedule: {
         college: { regWeeks: 13, ccgWeek: 13, bowlWeek: 14, playoffWeeks: [14, 15, 16, 17], totalWeeks: 17,
                    confGames: 7, nonConfGames: 5, rivalryWeek: 12, nonConfWeeks: [1, 2, 3, 5, 9],
+                   confWeeks: [4, 6, 7, 8, 10, 11, 12], titleGameName: 'The National Title Game',
                    rivalPairs: [[0, 7], [1, 6], [2, 5], [3, 4]], teams: 48, conferences: 6, perConf: 8,
                    playoffTeams: 12, autoBids: 5, byes: 4, bowlMinWins: 6, majorBowls: 6, minorBowls: 12 },
         nfl: { regWeeks: 18, games: 17, playoffWeeks: [19, 20, 21, 22], totalWeeks: 22, byeWeeks: [5, 14],
                teams: 32, conferences: 2, divisions: 4, perDiv: 4, playoffPerConf: 7, maxGamesPerWeek: 16,
-               slotShuffles: 200, maxRestarts: 500, genBudgetMs: 50 },
+               slotShuffles: 200, maxRestarts: 500, genBudgetMs: 50, maxByesPerWeek: 6 },
+        tiebreak: { commonGamesMin: 4, coinP: 0.5 },
         ranking: { winW: 0.55, sosW: 0.20, marginW: 0.12, marginDiv: 25, prestigeW: 0.13, sticky: 0.7 },
         firstYear: 2026
       },
