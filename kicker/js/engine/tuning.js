@@ -450,7 +450,22 @@
         offseasonPerSlot: 2, offseasonProb: 1.0,
         recentRing: 12, headlineRing: 40,
         halftime70Dist: 70,
-        psych: { cluTotal: 3, weeks: 6 }
+        psych: { cluTotal: 3, weeks: 6 },
+        // E3 additions (data/events.js + engine/events.js)
+        halftime70: { pressure: 0.3, makeFame: 80, makeFans: 15, missFans: -5, missMorale: -3 },
+        guru: { sigma: 1.2, weeks: 2, acc: 2 },
+        ultimatum: { weeks: 3, fgPct: 0.85, trust: 20, jsNfl: -20 },
+        trade: { execProb: 0.40, trust: -15 },                       // TRADE action (Career.handleActions)
+        holdout: { extensionProb: 0.55 },                            // branch split for event #5 (see contracts.holdout)
+        timelineImpact: { choice: 1, action: 2 },
+        gates: {                                                     // cond thresholds of the §2.10.2 catalog
+          nilFame: 100, portalJs: 40, portalTrust: 40, ultimatumTrust: 30, captainTrust: 65, aggressiveTrust: 70,
+          halftimeFame: 250, agentFame: 250, podcastFame: 100, petitionFans: 30, psychClu: 60, psychFreePrestige: 4,
+          holdoutOvr: 82, contenderOvr: 78, contenderWinPct: 0.4, contenderWeeks: [4, 9], contenderMinGames: 3,
+          tradeRumorJs: 45, tradeRumorTrust: 40, retirementAge: 35, drinkFame: 400, drinkFans: 60,
+          windTunnelMoneyK: 10, hurricaneMonths: [9, 10], comebackWeeks: 4, coachShoppingMinFga: 3,
+          draftEligibleSeasons: 3, mentorNflSeasons: 0, coldTempF: 40
+        }
       },
 
       // ───────────────────────────── §2.4 DIFFICULTY ─────────────────────────────

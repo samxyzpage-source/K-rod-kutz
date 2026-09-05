@@ -8,10 +8,10 @@
  *   forGame  : dome venue → 0 draws (controlled environment: 70 °F, wind 0, weather 'dome').
  *              outdoors  → temp gauss 2 · wind Rayleigh 1 · dir 1
  *                          · snow roll 1 (only when tempF < snowTempBelow)
- *                          · rain roll 1 (only when no snow)
+ *                          · rain roll 1 (always drawn; ignored when it snows)
  *                          · fog roll 1 (always drawn; only used when there is no
  *                            precipitation and the temperature is neither cold nor heat)
- *              i.e. 6 or 7 draws, in that order.
+ *              i.e. 6 draws, 7 below the snow line, in that order.
  *   perKick  : exactly 2 draws (one gauss), even for domes.
  *
  * Dependencies (load order): Util, Tuning.
@@ -109,10 +109,10 @@
     if (venue.windy) speed *= T.wind.windyMult;
     out.wind.speed = Util.round1(Math.min(windCap, speed));
     out.wind.dir = rng.int(0, T.wind.dirMax);
-    // 3. precipitation: snow roll only below the snow line (1 draw), rain roll when no snow (1 draw)
-    var snow = false, rain = false;
+    // 3. precipitation: snow roll only below the snow line (1 draw), then the rain roll (always 1 draw)
+    var snow = false;
     if (out.tempF < T.snowTempBelow) snow = rng.chance(cl.row.snow);
-    if (!snow) rain = rng.chance(cl.row.rain);
+    var rain = rng.chance(cl.row.rain) && !snow;
     // 4. fog roll (always 1 draw so the count only depends on the snow line; only temperate/cold can fog)
     var fog = rng.chance(T.fogClimates.indexOf(cl.key) >= 0 ? T.fogProb : 0);
     if (snow) out.weather = 'snow';

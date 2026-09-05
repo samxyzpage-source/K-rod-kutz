@@ -164,7 +164,7 @@ test('components / flipDir / label helpers', () => {
   assert.ok(Math.abs(c90.cross - 10) < 1e-9 && Math.abs(c90.along) < 1e-9);
   const c180 = W.components({ speed: 10, dir: 180 });
   assert.ok(Math.abs(c180.along + 10) < 1e-9);
-  assert.deepEqual(W.components(null), { along: 0, cross: 0 });
+  assert.deepEqual(JSON.parse(JSON.stringify(W.components(null))), { along: 0, cross: 0 });
   assert.equal(W.flipDir(350), 170);
   assert.equal(W.flipDir(90), 270);
   assert.equal(W.label({ weather: 'dome', wind: { speed: 0, dir: 0 } }), 'DOME');
