@@ -48,6 +48,8 @@
   function has(arr, v) { return !!arr && arr.indexOf(v) >= 0; }
   function num(v, dflt) { return (typeof v === 'number' && isFinite(v)) ? v : dflt; }
   function rd(x) { return Util.roundN(x, RESULT_DECIMALS); }
+  /** Normalise −0 to +0 (so zero results compare equal with Object.is / assert.equal). */
+  function nz(x) { return x === 0 ? 0 : x; }
   function footSign(foot) { return foot === 'L' ? -1 : 1; }
   function isOutdoors(ctx) { return !(ctx && (ctx.dome || ctx.weather === 'dome')); }
 
@@ -146,7 +148,7 @@
    * @param {number} ballX @param {number} D @returns {number}
    */
   Kick.targetDeg = function (ballX, D) {
-    return Math.atan2(-(ballX || 0), D) * DEG;
+    return nz(Math.atan2(-(ballX || 0), D) * DEG);
   };
 
   /**
@@ -332,7 +334,7 @@
    */
   Kick.overBias = function (power, foot) {
     var O = K().overBias;
-    return O.deg * Math.max(0, power - 1) / O.zone * footSign(foot);
+    return nz(O.deg * Math.max(0, power - 1) / O.zone * footSign(foot));
   };
 
   /**
@@ -363,8 +365,8 @@
     var kicker = kickerOf(ctx);
     var c = windComponents(ctx.wind);
     var t = Kick.flightTime(ctx.distance);
-    var yd = K().wind.driftCoeff * c.cross * t * t * Kick.modValue(kicker.mods, 'windDrift', 'mul');
-    return { yd: yd, deg: Math.atan2(yd, ctx.distance) * DEG, along: c.along, cross: c.cross };
+    var yd = nz(K().wind.driftCoeff * c.cross * t * t * Kick.modValue(kicker.mods, 'windDrift', 'mul'));
+    return { yd: yd, deg: nz(Math.atan2(yd, ctx.distance) * DEG), along: nz(c.along), cross: nz(c.cross) };
   };
 
   // ═══════════════════════════════ AI INPUT (§2.3.8) ═══════════════════════════════

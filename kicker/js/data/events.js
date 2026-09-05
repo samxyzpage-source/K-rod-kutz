@@ -152,9 +152,15 @@
     if (!ks || ks.fga < G().coachShoppingMinFga) return false;
     return ks.fgm / ks.fga < T().soft.js.rivalFgPctBelow;
   }
+  var MONTH_NUM = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
+  /** Calendar month number (1–12) of the current week; Weather.monthFor returns a name ('Sep'). */
   function month(s) {
     var W = RTG.Weather;
-    if (W && typeof W.monthFor === 'function') return W.monthFor(s.week, P(s).league || 'COLLEGE');
+    if (W && typeof W.monthFor === 'function') {
+      var m = W.monthFor(s.week, P(s).league || 'COLLEGE');
+      if (typeof m === 'number') return m;
+      if (MONTH_NUM[m]) return MONTH_NUM[m];
+    }
     return s.week <= 4 ? 9 : (s.week <= 8 ? 10 : 11);
   }
   function warmClimate(s) {

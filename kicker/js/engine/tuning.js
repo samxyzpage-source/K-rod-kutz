@@ -68,7 +68,7 @@
         // §2.3.3 lateral error model (degrees)
         sigma: {
           accWeight: 0.7, conWeight: 0.3, attrDiv: 99,   // s = (0.7·ACC_eff + 0.3·CON)/99
-          base: 1.8, spread: 6.0,                        // σ_base = 1.8 + 6.0·(1 − s)²
+          base: 1.746, spread: 5.82,                     // σ_base = 1.746 + 5.82·(1 − s)²  (spec 1.8 / 6.0 × 0.97: re-fitted by Monte Carlo so the §2.3.6 table centres on its targets with the harness's contact/aim/shank terms; college 2.98 · rookie 2.72 · vet 2.03 · elite 1.78)
           distPerYd: 0.018, distFrom: 40,                // σ_dist = 1 + 0.018·max(0, D − 40)
           pressBase: 0.9, pressPerClu: 0.008,            // σ_press = 1 + p·(0.9 − 0.008·CLU)
           weather: { clear: 1.00, dome: 1.00, heat: 1.02, fog: 1.00, rain: 1.12, cold: 1.06, snow: 1.25 },
@@ -342,7 +342,8 @@
           udfa: { years: 3, aav: 0.80, gtd: 0 }
         },
         aav: {
-          base: 0.9, per: 0.055, ovrFrom: 60, exp: 1.35, max: 8.0,
+          // base/per are the spec's 0.9/0.055 ÷ fameBase (0.92) so the §2.7.7 worked values (75→3.0, 85→5.1, 92→6.8) hold at fame 0
+          base: 0.9783, per: 0.0598, ovrFrom: 60, exp: 1.35, max: 8.0,
           ageMul: [{ maxAge: 31, mult: 1.00 }, { maxAge: 34, mult: 0.90 }, { maxAge: 37, mult: 0.75 }, { maxAge: 999, mult: 0.55 }],
           fameBase: 0.92, famePer: 0.16,
           market: { per: 0.06, anchor: 6, div: 6, min: 0.90, max: 1.12 }
@@ -358,6 +359,10 @@
         tag: { base: 6.0, growth: 1.05, aavMin: 4.5, maxAge: 33, prob: 0.5, morale: -8, secondMult: 1.2, max: 2 },
         fa: {
           offersMin: 1, offersMax: 4, aavRange: [0.85, 1.10], hometownWeight: 1.5,
+          minOffers: [0, 2],                                          // 'MIN' mode (mid-season cut / ring chase): vet-minimum offers
+          capRoom: { per: 0.005, min: 0.88, max: 1.0 },              // teamCapRoom01 = clamp(1 − per·(avg(OFF,DEF) − league.drift.nflAnchor), min, max)
+          needDiv: 12,                                               // need01 = clamp(teamsNeedingK / needDiv, 0, 1)
+          yearsByAge: [{ maxAge: 28, years: [3, 5] }, { maxAge: 32, years: [2, 4] }, { maxAge: 999, years: [1, 2] }],
           hometownDiscount: 0.08, hometownMorale: 10, hometownFans: 10,
           withdrawProb: 0.35, newOfferProb: 0.40, noOffersRetireAfter: 2,
           practiceSquad: { callUpProb: 0.30, weeks: 6, xpMult: 0.5 }
@@ -390,15 +395,17 @@
         undraftedBelow: 60,
         shock: { prob: 0.01, pickMin: 28, pickMax: 32, fame: 150 },
         udfaInvites: [2, 3],
-        tryout: { kicks: 6, passMakes: 4 },
+        tryout: { kicks: 6, passMakes: 4, distances: [33, 38, 42, 46, 50, 53], pressure: 0.35 },
         springLeague: { xpMult: 0.6, maxFailures: 2, ageAdd: 1 },
         pickSlot: { teamsPerRound: 32, jitterMax: 5 },
+        ticker: { before: 6, after: 3 },                            // fictional picks shown around the user's pick
         positions: [
           { pos: 'QB', w: 8 }, { pos: 'OL', w: 18 }, { pos: 'WR', w: 12 }, { pos: 'DB', w: 16 }, { pos: 'DL', w: 14 },
           { pos: 'LB', w: 11 }, { pos: 'RB', w: 8 }, { pos: 'TE', w: 5 }, { pos: 'K/P', w: 1 }, { pos: 'ATH', w: 7 }
         ],
         combine: { ladder: [45, 50, 55, 60, 65], safeStop: 55, accDist: 40, accKicks: 5,
-                   ladderAnchor: 3, accAnchor: 3, hangAnchor: 3.9, hangW: 5, perMake: 2, clamp: 8, interviewClu: 1 },
+                   ladderAnchor: 3, accAnchor: 3, hangAnchor: 3.9, hangW: 5, perMake: 2, clamp: 8, interviewClu: 1,
+                   pressure: 0.25 },
         declare: { seasonsMin: 3, seasonsMax: 5, nonRedshirtAuto: 4 },
         projectionBand: { tier0: 2, tier1: 1, tier2: 1 }
       },
@@ -420,7 +427,16 @@
           CLUTCH_KICK_NFL: { xp: 100, fame: 80 }, CHAMPIONSHIP_MVP: { xp: 250, fame: 300 }, COMEBACK_LEG: { xp: 80, fame: 60 }
         },
         goalXp: [40, 60, 100],
-        milestones: { fgm: [100, 200, 300, 400, 500], pts: [1000, 1500, 2000], consecutive: 20, gw: 10, fame: 20 }
+        milestones: { fgm: [100, 200, 300, 400, 500], pts: [1000, 1500, 2000], consecutive: 20, gw: 10, fame: 20 },
+        // E3 additions (engine/awards.js): season goals (§2.7.3) and misc award rules
+        goals: {
+          wins:  { base: 0.5, perRating: 40, min: 0.20, max: 0.85, scale: 0.95, jitter: [-1, 0], floor: 3, ceilBelowGames: 2 },
+          fgPct: { base: 0.70, perOvr: 0.003, ovrAnchor: 50, min: 0.65, max: 0.90, jitter: 0.02, step: 0.01, minFga: 8 },
+          fans:  { gain: 12, jitter: 3, max: 90 }
+        },
+        awardImpact: 2,                 // timeline impact for a user award
+        weeklyImpact: 1,
+        longestMinFga: 1                // Iron Leg needs at least one made FG
       },
 
       // ───────────────────────────── §2.7.9 HALL OF FAME ─────────────────────────────
@@ -434,7 +450,8 @@
         tiers: [{ min: 900, name: 'Immortal' }, { min: 550, name: 'Legend' }, { min: 300, name: 'Franchise Leg' },
                 { min: 150, name: 'Solid Starter' }, { min: 0, name: 'Journeyman' }],
         moments: { decisive: 40, doink: 20, playoff: 15, missMult: 0.6, keep: 10 },
-        targets: { firstBallotMax: 0.10, inducted: [0.15, 0.25] }
+        targets: { firstBallotMax: 0.10, inducted: [0.15, 0.25] },
+        inductionYear: { base: 5, famePer: 4 }   // INDUCTED: year = clamp(round(5 − 4·fame/1000), 1, 5)  (E3, engine/awards.js)
       },
 
       // ───────────────────────────── §2.9 RECORDS (base values live in data/records.js) ───────────
@@ -442,6 +459,15 @@
         keys: ['longFG', 'seasonFGM', 'seasonPts', 'seasonFGpct', 'season50plus', 'careerFGM', 'careerPts',
                'careerFGpct', 'consecutiveFGM', 'careerGW', 'careerSeasons'],
         minFgaSeasonPct: 20, minFgaCareerPct: 100
+      },
+
+      // ───────────────────────────── §3.5.12 STATS (E3, engine/stats.js) ─────────────────────────────
+      stats: {
+        splitPressureTense: 0.30,       // byPressure split: calm < 0.30 ≤ tense < clutchThreshold ≤ clutch
+        grade: { b: 0.85, c: 0.70, d: 0.50, aMinFga: 2, decisiveMissCap: 'D' },   // §3.5.12 grade table
+        seasonGrade: { a: 0.90, b: 0.85, c: 0.78, d: 0.70 },                       // SeasonLine.grade by FG%
+        momentMinScore: 15,             // kicks below this moment score are not kept in history.moments
+        milestoneImpact: 2, recordImpact: 3
       },
 
       // ───────────────────────────── §2.10 EVENTS ─────────────────────────────
