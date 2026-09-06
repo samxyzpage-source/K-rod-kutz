@@ -42,7 +42,7 @@
   var CONST = {
     grabRadiusCss: 96, powerMax: 1.15, aimMax: 12,
     dFullPortrait: 0.32, dFullLandscape: 0.45,
-    ring: 32, flickWindowMs: 120, flickMinSamples: 6,
+    ring: 32, flickWindowMs: 120, flickMinSamples: 6, powerWindowMs: 300,
     noFlickVy: -0.12, weakSpeed: 0.35, yankSpeed: 2.2, weakMult: 0.85, yankPenalty: 0.15,
     rmsPerpDiv: 14, holdFromP: 0.95, holdMs: 1200, noCancelP: 0.20,
     mishit: { power: 0.5, aimSd: 2, quality: 0.3 }, cancelQuality: 0.5,
@@ -72,7 +72,7 @@
     var destroyed = false;
     var state = 'IDLE';
     var out = { power: 0, aim: 0, quality: 0, holdMs: 0 };   // reused output object
-    var meta = { kind: 'flick', speed: 0, rmsPerp: 0, weak: false, yanked: false };
+    var meta = { kind: 'flick', speed: 0, rmsPerp: 0, weak: false, yanked: false, samples: 0, windowMs: 0 };
 
     canvasEl.style.touchAction = 'none';
 
@@ -185,7 +185,10 @@
       if (e.pointerId !== undefined && e.pointerId !== pointerId) return;
       var px = e.clientX - rectLeft, py = e.clientY - rectTop;
       var t = now();
-      push(px, py, t);
+      // a release at the last move's position adds no motion: keep the segment's end at the last real sample
+      // (a late pointerup — common on touch — would otherwise dilute the flick speed)
+      var li = at(count - 1);
+      if (!count || Math.abs(sx[li] - px) > 0.5 || Math.abs(sy[li] - py) > 0.5) push(px, py, t);
       if (e.preventDefault) e.preventDefault();
       computeFlick(t);
     }
@@ -199,7 +202,8 @@
     function computeFlick(tEnd) {
       // flick segment: samples within the last 120 ms, or the last 6 samples, whichever is the larger set
       var n = count, first = n - 1;
-      for (var i = n - 1; i >= 0; i--) { if (tEnd - st[at(i)] <= CONST.flickWindowMs) first = i; else break; }
+      var tLast = st[at(n - 1)];
+      for (var i = n - 1; i >= 0; i--) { if (tLast - st[at(i)] <= CONST.flickWindowMs) first = i; else break; }
       var byCount = Math.max(0, n - CONST.flickMinSamples);
       if (byCount < first) first = byCount;
       var last = n - 1;
@@ -208,9 +212,10 @@
       var vx = 0, vy = 0;
       if (dt > 0) { vx = (sx[i1] - sx[i0]) / dt; vy = (sy[i1] - sy[i0]) / dt; }
       if (vy > CONST.noFlickVy || dt <= 0) { mishit('mishit'); return; }
-      // power = the pull depth where the flick began: the deepest sample of the flick window
+      // power = the pull depth where the flick began: the deepest point reached in the last powerWindowMs before
+      // the release (the flick itself starts after the reversal, so its own samples sit above the bottom)
       var deepest = i0, dF = dFull();
-      for (var q = first; q <= last; q++) { var kq = at(q); if (sy[kq] > sy[deepest]) deepest = kq; }
+      for (var q = n - 1; q >= 0; q--) { var kq = at(q); if (tLast - st[kq] > CONST.powerWindowMs) break; if (sy[kq] > sy[deepest]) deepest = kq; }
       var power = clamp((sy[deepest] - y0) / dF, 0, CONST.powerMax);
       var flickStartT = st[deepest];
       var aim = Math.atan2(vx, -vy) * 180 / Math.PI;
@@ -232,7 +237,7 @@
       var quality = clamp(1 - clamp(rms / CONST.rmsPerpDiv, 0, 1) - yank, 0, 1);
       var hold = holdSince && (flickStartT - holdSince) > CONST.holdMs ? Math.round(flickStartT - holdSince) : 0;
       out.power = clamp(power, 0, CONST.powerMax); out.aim = aim; out.quality = quality; out.holdMs = hold;
-      meta.kind = 'flick'; meta.speed = speed; meta.rmsPerp = rms; meta.weak = weak; meta.yanked = yanked;
+      meta.kind = 'flick'; meta.speed = speed; meta.rmsPerp = rms; meta.weak = weak; meta.yanked = yanked; meta.samples = last - first + 1; meta.windowMs = dt;
       release();
     }
 

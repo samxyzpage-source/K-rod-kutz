@@ -35,17 +35,16 @@ function geometry(page) {
 /** Press on the ball, drag down `drag` px over `dragMs`, flick up `flick` px over `flickMs`, release. */
 async function mouseFlick(page, o) {
   o = o || {};
-  const drag = o.drag || 120, dragMs = o.dragMs || 300, flick = o.flick || 60, flickMs = o.flickMs || 80, dx = o.dx || 0;
+  const drag = o.drag || 120, dragMs = o.dragMs || 300, flick = o.flick || 60, dx = o.dx || 0;
   const g = await geometry(page);
   const b = g.ball;
   await page.mouse.move(b.x, b.y);
   await page.mouse.down();
-  const n1 = 10;
-  for (let i = 1; i <= n1; i++) { await page.mouse.move(b.x, b.y + drag * i / n1); await page.waitForTimeout(dragMs / n1); }
-  // the flick:  px in ~flickMs (a real flick is 0.35–2.2 css-px/ms; slower reads as WEAK, faster as YANKED).
-  // Each CDP mouse event costs a few ms on its own, so use few steps and short waits.
-  const n2 = 3;
-  for (let i = 1; i <= n2; i++) { await page.mouse.move(b.x + dx * i / n2, b.y + drag - flick * i / n2); if (i < n2) await page.waitForTimeout(Math.max(4, flickMs / n2 - 12)); }
+  // The pull: dense samples like a real 300 ms drag (each CDP move costs ~15 ms → 12 steps ≈ 180–300 ms)
+  await page.mouse.move(b.x, b.y + drag, { steps: Math.max(6, Math.round(dragMs / 25)) });
+  // The flick: the  px up in a few back-to-back moves (each CDP mouse event costs ~15 ms, so 4 steps ≈ 60–80 ms;
+  // a real flick is 0.35–2.2 css-px/ms — slower reads as WEAK, faster as YANKED).
+  await page.mouse.move(b.x + dx, b.y + drag - flick, { steps: 6 });
   await page.mouse.up();
   return g;
 }
@@ -53,16 +52,16 @@ async function mouseFlick(page, o) {
 /** The same gesture through CDP touch events (Chromium turns them into pointer events with pointerType 'touch'). */
 async function touchFlick(page, o) {
   o = o || {};
-  const drag = o.drag || 120, dragMs = o.dragMs || 300, flick = o.flick || 60, flickMs = o.flickMs || 80;
+  const drag = o.drag || 120, dragMs = o.dragMs || 300, flick = o.flick || 60;
   const g = await geometry(page);
   const b = g.ball;
   const cdp = await page.context().newCDPSession(page);
   const tp = (x, y) => ({ x: x, y: y, id: 1, radiusX: 4, radiusY: 4, force: 1 });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [tp(b.x, b.y)] });
-  const n1 = 10;
-  for (let i = 1; i <= n1; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [tp(b.x, b.y + drag * i / n1)] }); await page.waitForTimeout(dragMs / n1); }
-  const n2 = 3;
-  for (let i = 1; i <= n2; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [tp(b.x + i, b.y + drag - flick * i / n2)] }); if (i < n2) await page.waitForTimeout(Math.max(4, flickMs / n2 - 12)); }
+  const n1 = Math.max(6, Math.round(dragMs / 25));
+  for (let i = 1; i <= n1; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [tp(b.x, b.y + drag * i / n1)] });
+  const n2 = 6;   // see mouseFlick
+  for (let i = 1; i <= n2; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [tp(b.x + i / 4, b.y + drag - flick * i / n2)] });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await cdp.detach();
   return g;

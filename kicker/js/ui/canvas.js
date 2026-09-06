@@ -48,11 +48,12 @@
       w: pw, h: ph, scale: 1, dpr: 1, landscape: false, running: false,
       stats: { fps: 0, frameP95Ms: 0, frames: 0 },
       _loop: null, _raf: 0, _last: 0, _times: new Float32Array(RING), _ti: 0, _tn: 0, _sorted: new Float32Array(RING),
-      _statAt: 0, _fpsCount: 0, _fpsAt: 0, _pt: { x: 0, y: 0 }
+      _statAt: 0, _fpsCount: 0, _fpsAt: 0, _pt: { x: 0, y: 0 }, _cw: 0, _ch: 0
     };
 
     function measure() {
       var cw = container.clientWidth, ch = container.clientHeight;
+      api._cw = cw; api._ch = ch;
       if (!cw || !ch) {
         var r = container.getBoundingClientRect();
         cw = cw || r.width || root.innerWidth || pw;
@@ -104,6 +105,11 @@
     function frame(t) {
       if (!api.running) return;
       api._raf = root.requestAnimationFrame(frame);
+      // late insertion / orientation change: re-measure the container every ~30 frames (cheap: two reads)
+      if ((api.stats.frames & 31) === 0) {
+        var cw = container.clientWidth, ch = container.clientHeight;
+        if ((cw || ch) && (cw !== api._cw || ch !== api._ch)) { api._cw = cw; api._ch = ch; api.resize(); }
+      }
       var dt = api._last ? Math.min(100, t - api._last) : 16.7;
       api._last = t;
       var t0 = now();

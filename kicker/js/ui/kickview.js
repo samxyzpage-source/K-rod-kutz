@@ -222,6 +222,7 @@
     var vignette = null;
     var destroyed = false, unsub = null, timers = [];
     var forcedPending = null;
+    var lastInput = null, lastMeta = null;
     var clockOwner = null;
     var lastAria = '';
     var rangeOpen = false;
@@ -458,6 +459,7 @@
       if (destroyed || !inputActive()) return;
       var triple = { power: inp.power, aim: inp.aim, quality: inp.quality };
       if (inp.holdMs) triple.holdMs = inp.holdMs;
+      lastInput = triple; lastMeta = meta ? { kind: meta.kind, speed: meta.speed, rmsPerp: meta.rmsPerp, weak: !!meta.weak, yanked: !!meta.yanked, samples: meta.samples, windowMs: meta.windowMs } : null;
       var res = null;
       try { res = opts.onInput ? opts.onInput(triple, meta) : null; }
       catch (e) { if (root.console) root.console.error('KickView onInput failed', e); }
@@ -960,6 +962,9 @@
       layout: function () { return L; },
       ctx: function () { return ctx; },
       result: function () { return result; },
+      /** The last emitted triple and its input meta ({kind, speed css-px/ms, rmsPerp, weak, yanked, samples, windowMs}). */
+      lastInput: function () { return lastInput; },
+      lastMeta: function () { return lastMeta; },
       skip: skip,
       next: function (c2, m2, s2) { arm(c2, m2, s2); return view; },
       /** Animate an externally resolved result (auto kicks, forced kicks). */

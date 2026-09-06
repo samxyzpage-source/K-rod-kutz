@@ -7,7 +7,7 @@
 
 /* ───────────────────────────── screen wrappers ───────────────────────────── */
 .screen-kick, .screen-session {
-  display: flex; flex-direction: column; box-sizing: border-box;
+  display: flex; flex-direction: column; box-sizing: border-box; max-width: none; margin: 0;   /* chromeless canvas screens use the whole host */
   height: 100vh; height: 100dvh; min-height: 0; width: 100%;
   background: var(--navy, #1b1f3a); color: var(--cream, #f4e9d0);
   padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
