@@ -221,8 +221,7 @@
       var gp = st.game.pending;
       if (gp.type === 'USER_KICKOFF') return dispatch('applyUserKickoff', arg.timing !== undefined ? { timing: arg.timing } : null);
       if (triple) return dispatch('applyUserKick', triple);
-      var res = K.resolve(rng, gp.ctx, null, neutralInput(gp.ctx), { forced: forced });
-      RTG.Sim.applyKick(st.game, st, rng, res);
+      var res = RTG.Engine.applyUserKick(st, rng, null, { forced: forced });   // 0 rng draws; the engine does the bookkeeping
       s.touch('applyUserKick', res, { forced: true, noSync: true });
       return clone(res);
     }
@@ -233,17 +232,9 @@
       if (idx < 0) throw new Error('debug.forceKick: the session is complete');
       var ctx = sess.contexts[idx];
       if (triple || ctx.type === 'KO') return dispatch('sessionKick', ctx.type === 'KO' ? (arg.timing !== undefined ? { timing: arg.timing } : null) : triple);
-      var result = K.resolve(rng, ctx, null, neutralInput(ctx), { forced: forced });
-      sess.results[idx] = result;
-      sess.idx = sess.results.length;
-      var done = nextSessionIdx(sess) < 0, outcome = null;
-      if (done) {
-        outcome = RTG.Career.finishSession(st, rng);
-        if (isFn(RTG.Career.resume)) RTG.Career.resume(st, rng);
-      }
-      var out = { result: result, idx: idx, done: done, outcome: outcome, remaining: done ? 0 : sess.contexts.length - sess.results.length };
-      s.touch('sessionKick', out, { forced: true, noSync: true, autosave: done });
-      return clone(result);
+      var out = RTG.Engine.sessionKick(st, rng, null, { forced: forced });   // 0 rng draws; the engine does the session bookkeeping
+      s.touch('sessionKick', out, { forced: true, noSync: true, autosave: out.done });
+      return clone(out.result);
     }
     throw new Error('debug.forceKick: no pending kick (game or session)');
   };

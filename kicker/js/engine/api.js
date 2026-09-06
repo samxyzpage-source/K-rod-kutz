@@ -199,17 +199,25 @@
    * @param {Object} state @param {Object} rng @param {{power:number, aim:number, quality:number, holdMs?:number}} input
    * @returns {Object} KickResult
    */
-  Engine.applyUserKick = function (state, rng, input) {
+  Engine.applyUserKick = function (state, rng, input, opts) {
     checkState(state, 'applyUserKick'); checkRng(rng, 'applyUserKick');
     var gs = game(state, 'applyUserKick');
     if (!gs.pending) fail('applyUserKick', 'no pending kick (sim to the next kick first)');
     if (gs.pending.type !== 'USER_KICK') fail('applyUserKick', 'the pending play is a ' + gs.pending.type + ' — use applyUserKickoff');
-    if (!input || typeof input !== 'object') fail('applyUserKick', 'a KickInput {power, aim, quality} is required');
+    var forced = opts && opts.forced ? opts.forced : null;
+    if (!forced && (!input || typeof input !== 'object')) fail('applyUserKick', 'a KickInput {power, aim, quality} is required');
     var K = need(Kick(), 'Kick', 'applyUserKick'), Sm = need(Sim(), 'Sim', 'applyUserKick');
-    var result = K.resolve(rng, gs.pending.ctx, null, input);
+    var inp = input && typeof input === 'object' ? input : neutralInput(K, gs.pending.ctx);
+    var result = forced ? K.resolve(rng, gs.pending.ctx, null, inp, { forced: forced }) : K.resolve(rng, gs.pending.ctx, null, inp);
     Sm.applyKick(gs, state, rng, result);
     return sync(state, rng, result);
   };
+
+  /** A neutral kick triple (AI power for the distance, aim 0, quality 0.85) — used when a forced outcome is requested without an input. */
+  function neutralInput(K, ctx) {
+    var g = K.geometry(ctx, null);
+    return { power: K.aiPower(g.pNeed), aim: 0, quality: Tuning.kick.ai.modelQuality };
+  }
 
   /** Resolve the pending kick / kickoff with the AI rule (auto-PAT, sim mode). @returns {Object} KickResult|KickoffResult */
   Engine.autoKick = function (state, rng) {
@@ -291,7 +299,7 @@
    * = a kick triple ({timing} for a kickoff), or null for the AI rule. The last kick calls Career.finishSession.
    * @returns {{result:Object, idx:number, done:boolean, outcome:Object|null, remaining:number}}
    */
-  Engine.sessionKick = function (state, rng, input) {
+  Engine.sessionKick = function (state, rng, input, opts) {
     checkState(state, 'sessionKick'); checkRng(rng, 'sessionKick');
     if (!state.pending || state.pending.kind !== 'KICKS') fail('sessionKick', 'no pending kick session');
     var sess = state.pending.session;
@@ -299,8 +307,10 @@
     if (idx < 0) fail('sessionKick', 'the session is complete');
     var K = need(Kick(), 'Kick', 'sessionKick'), C = need(Career(), 'Career', 'sessionKick');
     var ctx = sess.contexts[idx];
+    var forced = opts && opts.forced ? opts.forced : null;
     var result;
     if (ctx.type === 'KO') result = K.resolveKickoff(rng, ctx, null, input || null);
+    else if (forced) result = K.resolve(rng, ctx, null, input || neutralInput(K, ctx), { forced: forced });   // debug: 0 draws
     else result = K.resolve(rng, ctx, null, input || K.aiInput(rng, ctx, null), input ? {} : { auto: true });
     sess.results[idx] = result;
     sess.idx = sess.results.length;

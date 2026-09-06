@@ -311,3 +311,26 @@ test('save / load round trip (Engine.save → Engine.load) restores the state an
   assert.equal(l2.state.stage, 'RETIRED');
   void schemaFx;
 });
+
+test('applyUserKick / sessionKick accept opts.forced (debug): requested outcome, no input needed, zero rng draws, state stays valid', () => {
+  const { state, rng } = Engine.newCareer({ name: 'Forced Kicker', archetype: 'CANNON', difficulty: 'pro', seed: 4242 }, 1757000000000);
+  assert.equal(state.pending.kind, 'KICKS');
+  const before = rng.state();
+  const r = Engine.sessionKick(state, rng, null, { forced: { outcome: 'DOINK_IN' } });
+  assert.equal(r.result.outcome, 'DOINK_IN'); assert.equal(r.result.made, true); assert.equal(r.result.forced, true);
+  assert.equal(rng.state(), before, 'a forced session kick consumes no rng draws');
+  while (state.pending && state.pending.kind === 'KICKS') Engine.sessionKick(state, rng, null, { forced: { outcome: 'GOOD' } });
+  assert.equal(state.stage, 'HS'); assert.equal(state.phase, 'OFFERS');
+  Engine.autoPlayCareer(state, rng, { untilStage: 'COLLEGE' });
+  Engine.nextPhase(state, rng);
+  Engine.startUserGame(state, rng);
+  const ev = Engine.simToKick(state, rng);
+  assert.equal(ev.type, 'USER_KICK');
+  const b2 = rng.state();
+  const k = Engine.applyUserKick(state, rng, null, { forced: { outcome: 'WIDE_L' } });
+  assert.equal(k.outcome, 'WIDE_L'); assert.equal(k.made, false); assert.equal(k.forced, true);
+  assert.equal(rng.state(), b2, 'a forced game kick consumes no rng draws');
+  assert.equal(state.game.pending, null);
+  assert.ok(RTG.Schema.validate(state).ok);
+  assert.throws(() => Engine.applyUserKick(state, rng, null), /pending/);
+});
