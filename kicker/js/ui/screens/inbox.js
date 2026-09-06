@@ -195,11 +195,11 @@
     }
 
     render();
-    markAllRead();
+    var readTimer = root.setTimeout(function () { readTimer = null; if (!destroyed) { markAllRead(); render(); } }, 0);
     unsub = store.subscribe(function (info) { if (info.fnName !== 'markRead') render(); });
     return {
       el: el,
-      destroy: function () { destroyed = true; if (unsub) unsub(); unsub = null; }
+      destroy: function () { destroyed = true; if (unsub) unsub(); unsub = null; if (readTimer) root.clearTimeout(readTimer); }
     };
   }
 
