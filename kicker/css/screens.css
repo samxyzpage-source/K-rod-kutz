@@ -6,6 +6,10 @@
    prefers-reduced-motion / body.reduced-motion.
    ========================================================================== */
 
+/* The shell's .scroll-x is not positioned, so the absolutely positioned .sr-only tooltip anchors (C.tooltip) inside a
+   wide table extend the document's scroll width past the viewport. Scoped under .screen / .modal (shell request). */
+.screen .scroll-x, .modal .scroll-x { position: relative; }
+
 /* ---------- kit: avatars, faces, crest rows, bracket ---------- */
 .kit-avatar { flex: 0 0 auto; background: var(--navy); border: var(--border) solid var(--ink); box-sizing: content-box; }
 .kit-face { position: relative; display: inline-block; border: var(--border) solid var(--ink); box-shadow: 2px 2px 0 var(--shadow); flex: 0 0 auto; }
@@ -51,7 +55,7 @@
 .carousel-dot.active { background: var(--gold); border-color: var(--ink); }
 .scr-offers .carousel-nav .btn { min-width: var(--touch); }
 .compare-scroll { margin-top: 4px; }
-.compare-tbl th[scope="row"] { color: var(--grey); font-size: 0.8em; text-transform: uppercase; background: var(--navy); position: sticky; left: 0; }
+.compare-tbl th[scope="row"] { color: var(--grey); font-size: 0.8em; text-transform: uppercase; background: var(--navy); }
 .compare-tbl th[scope="col"] { min-width: 96px; }
 .compare-tbl td { vertical-align: middle; }
 
@@ -277,12 +281,13 @@
 .scr-legacy .bust-name { font-size: 1.05em; }
 .scr-legacy .bust-tier { font-size: 1em; padding: 4px 10px; }
 .scr-legacy .hof-meter { margin-top: 4px; }
-.scr-legacy .hof-track { position: relative; height: 18px; background: var(--navy); border: var(--border) solid var(--ink); margin: 6px 0 34px; }
+.scr-legacy .hof-track { position: relative; height: 18px; background: var(--navy); border: var(--border) solid var(--ink); margin: 6px 0 44px; }
 .scr-legacy .hof-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gold); }
 .scr-legacy .hof-tick { position: absolute; top: -6px; bottom: -6px; width: 3px; background: var(--cream); }
 .scr-legacy .hof-tick.passed { background: var(--mint); }
 .scr-legacy .hof-tick-label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 6px; font-size: 0.6em; color: var(--grey); white-space: nowrap; }
-.scr-legacy .hof-tick:first-of-type .hof-tick-label { transform: translateX(-20%); }
+.scr-legacy .hof-tick-low .hof-tick-label { margin-top: 20px; }
+.scr-legacy .hof-tick-low { bottom: -20px; }
 .scr-legacy .hof-tick:last-of-type .hof-tick-label { transform: translateX(-80%); }
 .scr-legacy .legacy-verdict { color: var(--gold); line-height: 1.6; }
 .scr-legacy .doc-card { text-align: center; }
@@ -309,3 +314,6 @@
 /* ---------- phone landscape (height < 500) ---------- */
 html.is-landscape .scr-postgame .pg-score { font-size: 1.8em; }
 html.is-landscape .scr-training .focus-tile { min-height: 72px; }
+
+/* ---------- 44-px touch targets for the small controls (SPEC §4.3) ---------- */
+.scr-offers .screen-head-right .btn, .compare-tbl .btn, .scr-legacy .carousel-nav .btn, .scr-draft .pill { min-height: var(--touch); }

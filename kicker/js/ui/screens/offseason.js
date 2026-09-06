@@ -195,12 +195,22 @@
       c.replace(el, parts);
     }
 
+    // A pending COMBINE_PLAN routes here (Router.resolve: any other DECISION → offseason); the combine screen owns
+    // the plan card, so hand over once it is registered (deferred: never Router.go inside a factory).
+    var fwdTimer = null;
+    function forwardCombine() {
+      var pd = store.state && store.state.pending;
+      if (pd && pd.kind === 'DECISION' && pd.decision.kind === 'COMBINE_PLAN' && R.has('combine') && R.current() !== 'combine' && !fwdTimer) {
+        fwdTimer = root.setTimeout(function () { fwdTimer = null; if (!destroyed) R.go('combine', {}, { replace: true }); }, 0);
+      }
+    }
     render();
-    unsub = store.subscribe(function () { render(); });
+    forwardCombine();
+    unsub = store.subscribe(function () { render(); forwardCombine(); });
     return {
       el: el,
-      destroy: function () { destroyed = true; if (unsub) unsub(); unsub = null; },
-      onKey: function (ev) { if (ev.key === 'Enter' && !ev.repeat) { var b = el.querySelector('[data-action="continue"], .card-footer .btn-primary'); if (b) { b.click(); return true; } } return false; }
+      destroy: function () { destroyed = true; if (unsub) unsub(); unsub = null; if (fwdTimer) root.clearTimeout(fwdTimer); },
+      onKey: function (ev) { if (ev.target && ev.target !== root.document.body && ev.target !== root.document.documentElement) return false; if (ev.key === 'Enter' && !ev.repeat) { var b = el.querySelector('[data-action="continue"], .card-footer .btn-primary'); if (b) { b.click(); return true; } } return false; }
     };
   }
 

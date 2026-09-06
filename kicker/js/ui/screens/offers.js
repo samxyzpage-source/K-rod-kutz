@@ -47,6 +47,7 @@
         for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) copy[k] = o[k];
         copy.myOvr = dec.payload.myOvr;
         slide.appendChild(Kit.offerCard(copy, { onPick: function () { pick(dec, o); }, pickLabel: 'COMMIT', selected: i === idx }));
+        if (i !== idx) { var hidden = slide.querySelectorAll('button'); for (var h = 0; h < hidden.length; h++) hidden[h].setAttribute('tabindex', '-1'); }
         track.appendChild(slide);
       });
       track.style.transform = 'translateX(' + (-idx * 100) + '%)';

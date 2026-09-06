@@ -77,7 +77,7 @@
 
     function gradeStamp(s) {
       if (!s.grade) return null;
-      var st = c.el('div', { class: 'stamp stamp-' + s.grade + ' pg-stamp' + (Kit.reduced() ? ' stamp-instant' : ''), text: s.grade, role: 'img', 'aria-label': 'Game grade ' + s.grade });
+      var st = c.el('div', { class: 'stamp stamp-' + s.grade + ' pg-stamp' + (Kit.reduced() ? ' stamp-instant' : ''), text: s.grade, role: 'img', 'aria-label': 'Game grade ' + s.grade, 'data-grade': s.grade });
       Kit.tip(st, 'A = perfect with 2+ attempts or a game-winner · B ≥ 85 % · C ≥ 70 % · D ≥ 50 % · a decisive miss caps at D');
       return c.el('div', { class: 'pg-stamp-wrap center' }, st);
     }
@@ -173,7 +173,7 @@
     return {
       el: el,
       destroy: function () { destroyed = true; if (unsub) unsub(); unsub = null; if (stampTimer) root.clearTimeout(stampTimer); },
-      onKey: function (ev) { if (ev.key === 'Enter' && !ev.repeat) { var b = el.querySelector('[data-action="continue"]'); if (b) { b.click(); return true; } } return false; }
+      onKey: function (ev) { if (ev.target && ev.target !== root.document.body && ev.target !== root.document.documentElement) return false; if (ev.key === 'Enter' && !ev.repeat) { var b = el.querySelector('[data-action="continue"]'); if (b) { b.click(); return true; } } return false; }
     };
   }
 

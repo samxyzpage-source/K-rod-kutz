@@ -63,11 +63,14 @@
       var pct = function (v) { return Math.max(0, Math.min(100, v / max * 100)).toFixed(1) + '%'; };
       var track = c.el('div', { class: 'hof-track', role: 'meter', 'aria-valuemin': 0, 'aria-valuemax': Math.round(max), 'aria-valuenow': Math.round(rep.score), 'aria-label': 'Hall of Fame score' });
       track.appendChild(c.el('div', { class: 'hof-fill', style: { width: pct(rep.score) } }));
-      [['finalist', 'FINALIST'], ['inducted', 'INDUCTED'], ['firstBallot', 'FIRST BALLOT']].forEach(function (t) {
-        var tick = c.el('div', { class: 'hof-tick' + (rep.score >= V[t[0]] ? ' passed' : ''), style: { left: pct(V[t[0]]) } }, c.el('span', { class: 'hof-tick-label', text: t[1] + ' ' + V[t[0]] }));
+      [['finalist', 'FINALIST'], ['inducted', 'INDUCTED'], ['firstBallot', '1ST BALLOT']].forEach(function (t, i) {
+        var tick = c.el('div', { class: 'hof-tick' + (rep.score >= V[t[0]] ? ' passed' : '') + (i % 2 ? ' hof-tick-low' : ''), style: { left: pct(V[t[0]]) } }, c.el('span', { class: 'hof-tick-label', text: t[1] + ' ' + V[t[0]] }));
+        Kit.tip(tick, t[1] + ' at ' + V[t[0]] + ' points');
         track.appendChild(tick);
       });
-      var val = c.el('div', { class: 'row row-between mt-1' }, c.el('span', { class: 'small txt-grey', text: 'HOF SCORE' }), Kit.numEl(String(Math.round(rep.score)), 'Base × ' + (rep.multiplier || 1) + ' (walk-on ×1.15, UDFA ×1.10)', 'txt-gold big'));
+      var scoreEl = Kit.numEl(String(Math.round(rep.score)), 'Base × ' + (rep.multiplier || 1) + ' (walk-on ×1.15, UDFA ×1.10)', 'txt-gold big hof-score');
+      scoreEl.setAttribute('data-hof', String(Math.round(rep.score)));
+      var val = c.el('div', { class: 'row row-between mt-1' }, c.el('span', { class: 'small txt-grey', text: 'HOF SCORE' }), scoreEl);
       return c.el('div', { class: 'hof-meter' }, val, track);
     }
 
@@ -189,8 +192,17 @@
     }
 
     render();
+    // an auto-settled HOF ack (autoPlayCareer / settlePending) never passed through the button: record the career once
+    var recTimer = root.setTimeout(function () {
+      recTimer = null;
+      var st = store.state;
+      if (destroyed || !st || st.stage !== 'RETIRED' || (st.pending && st.pending.kind === 'DECISION')) return;
+      var rep = report(st);
+      rep.retiredYear = st.flags && st.flags.legacy && st.flags.legacy.retiredYear || st.year;
+      writeRecord(st, rep);
+    }, 0);
     unsub = store.subscribe(function () { render(); });
-    return { el: el, destroy: function () { destroyed = true; if (unsub) unsub(); unsub = null; } };
+    return { el: el, destroy: function () { destroyed = true; if (unsub) unsub(); unsub = null; if (recTimer) root.clearTimeout(recTimer); } };
   }
 
   Screens.legacy = factory;

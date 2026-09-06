@@ -173,7 +173,7 @@
     return {
       el: el,
       destroy: function () { destroyed = true; stop(); if (unsub) unsub(); unsub = null; },
-      onKey: function (ev) { if (ev.key === 'Enter' && !ev.repeat) { var b = el.querySelector('[data-action="continue"], [data-action="start-draft"]'); if (b) { b.click(); return true; } } return false; }
+      onKey: function (ev) { if (ev.target && ev.target !== root.document.body && ev.target !== root.document.documentElement) return false; if (ev.key === 'Enter' && !ev.repeat) { var b = el.querySelector('[data-action="continue"], [data-action="start-draft"]'); if (b) { b.click(); return true; } } return false; }
     };
   }
 

@@ -444,7 +444,7 @@
         }) }));
       }
       if (inSeason && !state.pending) {
-        buttons.push(c.button({ label: 'SIM TO END OF SEASON', kind: 'ghost', small: true, action: 'sim-season', onClick: function () {
+        buttons.push(c.button({ label: 'SIM TO END OF SEASON', kind: 'ghost', action: 'sim-season', onClick: function () {
           c.confirm({ title: 'Sim to the end of the season?', text: 'Every remaining game is played with auto kicks. Training is chosen for you.', okLabel: 'SIM SEASON' })
             .onOk(Kit.safe(function () { var line = dispatch('autoPlaySeason', {}); if (line) c.announce('Season over: ' + (line.teamRecord || '')); }));
         } }));
@@ -518,7 +518,7 @@
     function bracketCard(state) {
       var b = Kit.bracketEl(state);
       if (!b) return null;
-      return c.card({ title: state.season.playoffs.name || 'PLAYOFFS', icon: 'trophy', body: b, footer: [c.button({ label: 'STANDINGS', kind: 'ghost', small: true, onClick: function () { R.go('standings', { tab: 'bracket' }); } })] });
+      return c.card({ title: state.season.playoffs.name || 'PLAYOFFS', icon: 'trophy', body: b, footer: [c.button({ label: 'STANDINGS', kind: 'ghost', onClick: function () { R.go('standings', { tab: 'bracket' }); } })] });
     }
 
     function metersCard(state) {
@@ -543,7 +543,7 @@
         return c.el('span', { class: 'row grow hub-msg' + (m.read ? '' : ' unread') }, Kit.avatar(m.avatar || m.from, 24),
           c.el('span', { class: 'col grow', style: 'gap:0' }, c.el('span', { class: 'small txt-sky', text: Kit.senderName(m.from) + ' · ' + Kit.weekLabel(m.year, m.week) }), c.el('span', { class: 'small hub-msg-text', text: m.text })));
       }, { empty: 'No messages yet.' });
-      return c.card({ title: 'INBOX', icon: 'envelope', right: unread ? Kit.tip(c.chip(unread + ' NEW', 'red'), 'Unread messages') : null, body: list, footer: [c.button({ label: 'OPEN INBOX', kind: 'ghost', small: true, icon: 'envelope', action: 'inbox', onClick: function () { R.go('inbox'); } })] });
+      return c.card({ title: 'INBOX', icon: 'envelope', right: unread ? Kit.tip(c.chip(unread + ' NEW', 'red'), 'Unread messages') : null, body: list, footer: [c.button({ label: 'OPEN INBOX', kind: 'ghost', icon: 'envelope', action: 'inbox', onClick: function () { R.go('inbox'); } })] });
     }
 
     function elsewhereCard(state) {
@@ -581,6 +581,7 @@
       el: el,
       destroy: function () { destroyed = true; if (unsub) unsub(); unsub = null; },
       onKey: function (ev) {
+        if (ev.target && ev.target !== root.document.body && ev.target !== root.document.documentElement) return false;
         if (ev.key === 'Enter' && !ev.repeat) {
           var b = el.querySelector('.card-footer .btn-primary');
           if (b) { b.click(); return true; }

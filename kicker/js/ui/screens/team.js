@@ -122,7 +122,7 @@
       parts.push(coachCard(state, t));
       parts.push(c.el('div', { class: 'grid-2 team-cards' }, stadiumCard(state, t), ratingsCard(state, t)));
       parts.push(contractCard(state));
-      parts.push(c.el('div', { class: 'btn-row' }, c.button({ label: 'SCHEDULE', kind: 'ghost', small: true, icon: 'clock', onClick: function () { R.go('schedule'); } }), c.button({ label: 'STANDINGS', kind: 'ghost', small: true, icon: 'flag', onClick: function () { R.go('standings'); } })));
+      parts.push(c.el('div', { class: 'btn-row' }, c.button({ label: 'SCHEDULE', kind: 'ghost', icon: 'clock', onClick: function () { R.go('schedule'); } }), c.button({ label: 'STANDINGS', kind: 'ghost', icon: 'flag', onClick: function () { R.go('standings'); } })));
       c.replace(el, parts);
     }
 
