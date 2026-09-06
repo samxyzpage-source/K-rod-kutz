@@ -62,7 +62,9 @@ H.matrix(({ mode, vp }) => {
       await page.click('[data-action="import"]');
       await page.locator('.modal', { hasText: /Import this save/ }).waitFor();
       await H.clickButton(page, 'IMPORT', page.locator('.modal'));
-      await page.locator('.save-msg', { hasText: /Imported/ }).waitFor();
+      // a successful import replaces the state → Router.sync({force}) lands on the career's screen; the toast carries the message
+      await page.locator('.toast', { hasText: /Imported/ }).waitFor();
+      await H.waitForScreen(page, 'hub');
       const imported = H.stripVolatile(await H.debug(page, 'getState'));
       assert.deepEqual(imported, before, 'imported state equals the saved state');
       // debug import path too

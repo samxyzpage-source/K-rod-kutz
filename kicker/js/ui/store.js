@@ -157,10 +157,10 @@
     }
   };
 
-  Store.prototype._sync = function () {
+  Store.prototype._sync = function (force) {
     var R = RTG.UI.Router;
     if (R && typeof R.sync === 'function') {
-      try { R.sync(); } catch (e) { if (root.console) root.console.error('Router.sync failed', e); }
+      try { R.sync(force ? { force: true } : undefined); } catch (e) { if (root.console) root.console.error('Router.sync failed', e); }
     }
   };
 
@@ -221,7 +221,7 @@
 
   // ─────────────────────────── state lifecycle ───────────────────────────
 
-  /** Replace the live state (and rng), then sync + notify with fnName 'replace'. */
+  /** Replace the live state (and rng), then Router.sync({force:true}) + notify with fnName 'replace'. */
   Store.prototype.replace = function (state, rng) {
     this.state = state || null;
     if (state && !rng) rng = RTG.RNG.create(state.rngState >>> 0);
@@ -231,7 +231,7 @@
       if (!state.settings && RTG.Schema) state.settings = RTG.Schema.mirrorSettings(this.settings);
       this._validate('replace');
     }
-    this._sync();
+    this._sync(true);
     this._notify({ fnName: 'replace', result: state, args: [] });
     return state;
   };

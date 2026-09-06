@@ -199,7 +199,7 @@
     var holderSpr = Sp.get('holder', sprOpts), snapperSpr = Sp.get('snapper', sprOpts);
     var rusherSpr = Sp.get('rusher', { tint: oppTint });
     var balls = { 3: Sp.get('ball_3'), 5: Sp.get('ball_5'), 8: Sp.get('ball_8'), 11: Sp.get('ball_11') };
-    var ballSquash = Sp.get('ball_squash');
+    var ballSquash = Sp.get('ball_squash'), ballSquashV = Sp.get('ball_squash_v');
     var socks = [Sp.get('sock_0'), Sp.get('sock_1'), Sp.get('sock_2'), Sp.get('sock_3')];
     var refSpr = { up: Sp.get('ref_up'), wave: Sp.get('ref_wave'), crossed: Sp.get('ref_crossed') };
     var markerSpr = Sp.get('marker_down');
@@ -749,7 +749,7 @@
           var sw = Math.max(2, Math.round(ballSize * 0.8));
           if (!ballBehind && (phase === 'FLIGHT')) g.fillRect(ballX - (sw >> 1), shadowY, sw, 1);
         }
-        if (squash) { g.drawImage(ballSquash, ballX - 4, ballY - 2); return; }
+        if (squash) { if (doinkKind === 'post') g.drawImage(ballSquashV, ballX - (num(result.xYd, 0) < 0 ? 0 : 3), ballY - 4); else g.drawImage(ballSquash, ballX - 4, ballY - 2); return; }
         var spr = ballSize < 4.5 ? balls[3] : (ballSize < 7 ? balls[5] : (ballSize < 10 ? balls[8] : balls[11]));
         if (doinkDrop > 0.2) g.globalAlpha = clamp(1 - (doinkDrop - 0.2), 0.25, 1);
         g.drawImage(spr, ballX - (spr.width >> 1), ballY - (spr.height >> 1));
@@ -1100,7 +1100,12 @@
       if (info.done) { complete(info); return; }
       setTimer(startKick, opts.nextDelayMs !== undefined ? opts.nextDelayMs : 700);
     }
-    function dismissTutorial() { if (tut) { if (tut.parentNode) tut.parentNode.removeChild(tut); tut = null; } }
+    function dismissTutorial() {
+      if (!tut) return;
+      if (tut.parentNode) tut.parentNode.removeChild(tut);
+      tut = null;
+      root.removeEventListener('keydown', dismissTutorial, true);
+    }
     function buildTutorial() {
       var steps = [
         { icon: 'arrow-d', text: 'PULL DOWN\nfor power' },
@@ -1119,7 +1124,6 @@
         t.textContent = '';
         t.appendChild(el('div', { class: 'tut-step' }, el('span', { class: 'tut-text', text: '◄ ► AIM · SPACE ×3\npower · strike' })));
       }
-      t.addEventListener('pointerdown', function () { dismissTutorial(); });
       return t;
     }
     function startKick() {
@@ -1145,7 +1149,12 @@
           onForced: function (notice) { dismissTutorial(); lastInfo = notice.result; return notice.result && notice.result.result; },
           onDone: function () { afterKick(lastInfo); }
         });
-        if (opts.tutorial && !tut) { tut = buildTutorial(); view.el.querySelector('.kv-stage').appendChild(tut); }
+        if (opts.tutorial && !tut) {
+          tut = buildTutorial();
+          view.el.querySelector('.kv-stage').appendChild(tut);
+          view.el.addEventListener('pointerdown', dismissTutorial, true);   // first touch dismisses (non-blocking overlay)
+          root.addEventListener('keydown', dismissTutorial, true);
+        }
       } else view.next(ctx, model, info);
       if (store.autoKickAll) {
         setTimer(function () {
@@ -1191,6 +1200,7 @@
         destroyed = true;
         for (var i = 0; i < timers.length; i++) root.clearTimeout(timers[i]);
         unsub();
+        dismissTutorial();
         if (koBar) koBar.destroy();
         if (view) view.destroy();
         view = null;

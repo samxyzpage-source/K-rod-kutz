@@ -189,17 +189,21 @@
    *  - the resolved screen equals the live one → no remount (screens re-render through their subscription);
    *  - resolved 'hub' while a hub-family (FREE) screen is live → stay;
    *  - EVENT pending → stay on a FREE screen (else go 'hub'), then open the event modal (Router.eventModal);
-   *  - unregistered target → '_fallback' with params.wanted.
+   *  - unregistered target → '_fallback' with params.wanted;
+   *  - opts.force (store.replace: load / import / new career) skips the stay rules and always mounts the target.
    */
-  Router.sync = function () {
+  Router.sync = function (opts) {
+    opts = opts || {};
     var store = RTG.UI.store;
     var state = store ? store.state : null;
     var r = Router.resolve(state);
     var curId = live ? live.id : null;
     var curWanted = live && live.id === '_fallback' ? live.params.wanted : curId;
     var stay = false;
-    if (curWanted === r.id) stay = true;
-    else if (r.id === 'hub' && curWanted && FREE[curWanted]) stay = true;
+    if (!opts.force) {
+      if (curWanted === r.id) stay = true;
+      else if (r.id === 'hub' && curWanted && FREE[curWanted]) stay = true;
+    }
     if (!stay) Router.go(r.id, r.params, { replace: true });
     if (r.event && state && state.pending && typeof Router.eventModal === 'function') {
       try { Router.eventModal(state.pending.event, store); } catch (e) { if (root.console) root.console.error('event modal failed', e); }

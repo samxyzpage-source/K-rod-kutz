@@ -101,8 +101,13 @@ H.matrix(({ mode, vp }) => {
       assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('rtg.settings')).colorblind), true, 'settings persisted');
       await page.click('.switch[data-setting="colorblind"]');
       // the generic screen can play a week through the engine
-      await page.click('.tab-btn[data-tab="hub"], .rail-btn[data-nav="hub"]');
+      await page.click(vp === 'phone' ? '.tab-btn[data-tab="hub"]' : '.rail-btn[data-nav="hub"]');
       await H.waitForScreen(page, 'hub');
+      if (vp === 'phone') {
+        // the tab bar is pinned to the bottom of the viewport (sticky) even when the hub is long
+        const tb = await page.locator('.tabbar').boundingBox();
+        assert.ok(Math.abs(tb.y + tb.height - 844) <= 1, 'tab bar pinned to the viewport bottom (bottom=' + (tb.y + tb.height) + ')');
+      }
       await H.clickButton(page, 'SIM GAME');
       const played = await page.evaluate(() => { const r = RTG.Season.userGameRef(RTG.UI.store.state); return r ? r.played : 'bye'; });
       assert.ok(played === true || played === 'bye', 'game simmed');

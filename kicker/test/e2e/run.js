@@ -8,7 +8,8 @@
  *   RTG_PORT=8081 node kicker/test/e2e/run.js              # another port
  *
  * Each spec uses node:test + node:assert/strict and is also runnable directly: node kicker/test/e2e/boot.spec.js
- * (the harness starts its own server when none is listening).
+ * (the harness starts its own server when none is listening). When RTG_PORT is already taken by a server that
+ * serves /kicker/ (another engineer's spec run), that server is reused; otherwise the next free port is used.
  */
 'use strict';
 const fs = require('fs');
@@ -30,8 +31,26 @@ if (files.length === 0) {
   process.exit(0);
 }
 
+/** Start our server on H.PORT; when the port is busy, reuse the server there if it serves the app, else try the next ports. */
+async function serverFor() {
+  const http = require('http');
+  const probe = port => new Promise(resolve => {
+    const req = http.get({ host: '127.0.0.1', port, path: '/kicker/index.html', timeout: 1500 }, res => { res.resume(); resolve(res.statusCode === 200); });
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+  });
+  for (let port = H.PORT; port < H.PORT + 10; port++) {
+    try { return await H.startServer(port); }
+    catch (err) {
+      if (err.code !== 'EADDRINUSE') throw err;
+      if (await probe(port)) { console.log('e2e/run.js: reusing the server already listening on ' + port); return { port, external: true, close: async () => {} }; }
+    }
+  }
+  throw new Error('no free port in ' + H.PORT + '-' + (H.PORT + 9));
+}
+
 (async () => {
-  const srv = await H.startServer(H.PORT).catch(err => { console.error('e2e/run.js: could not start the http server on ' + H.PORT + ': ' + err.message); process.exit(2); });
+  const srv = await serverFor().catch(err => { console.error('e2e/run.js: could not start the http server: ' + err.message); process.exit(2); });
   console.log('e2e/run.js: http://127.0.0.1:' + srv.port + '/kicker/ · ' + files.length + ' spec(s)');
   let failed = 0;
   const started = Date.now();

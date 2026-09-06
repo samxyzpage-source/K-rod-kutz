@@ -137,6 +137,18 @@
     var r = E().newCareer({ seed: seed, difficulty: difficulty || 'pro', name: 'Dev Kicker' }, Date.now());
     return r;
   }
+  /** Resolve exactly one pending item with the engine's default policy (Engine.settlePending would chain through the whole offseason). */
+  function stepPending(state, rng) {
+    var pd = state.pending;
+    if (!pd) return;
+    if (pd.kind === 'EVENT') { E().chooseEvent(state, rng, 0); return; }
+    if (pd.kind === 'KICKS') { E().sessionKick(state, rng, null); return; }
+    if (pd.kind === 'DECISION') {
+      var opt = pd.decision.kind === 'DECLARE' ? 'DECLARE' : E().autoOption(state, pd.decision);
+      if (opt && typeof opt === 'object') opt = opt.optionId || opt.id;
+      E().decide(state, rng, { kind: pd.decision.kind, optionId: opt });
+    }
+  }
   function settleAll(state, rng) {
     var guard = 0;
     while (state.pending && guard++ < 20) E().settlePending(state, rng);
@@ -206,15 +218,15 @@
     combine: { label: 'Combine', run: function (o) {
       var r = newCareer(o.seed, o.diff), state = r.state, rng = r.rng;
       var guard = 0;
-      while (!(state.stage === 'DRAFT' && state.phase === 'COMBINE') && guard++ < 400) {
+      while (!(state.stage === 'DRAFT' && state.phase === 'COMBINE') && guard++ < 600) {
         if (state.game) { E().autoPlayGame(state, rng); continue; }
-        if (state.pending) { E().settlePending(state, rng); continue; }
+        if (state.pending) { stepPending(state, rng); continue; }   // one pending at a time (settlePending would play the combine too)
         if (state.phase === 'REG' || state.phase === 'POST') { E().autoPlayWeek(state, rng); continue; }
         if (state.stage === 'RETIRED') break;
         E().nextPhase(state, rng);
       }
       return r;
-    } },
+    }, screen: 'combine' },   // the shell's Router.resolve routes DECISION COMBINE_PLAN to 'offseason' (interface request); go explicitly
     game: { label: 'Game screen', run: function (o) { var r = newCareer(o.seed, o.diff); toRegWeek1(r.state, r.rng); E().train(r.state, r.rng, 'ACC'); E().startUserGame(r.state, r.rng); return r; } },
     practice: { label: 'Practice', run: function (o) { var r = newCareer(o.seed, o.diff); toRegWeek1(r.state, r.rng); return r; }, screen: 'practice' }
   };

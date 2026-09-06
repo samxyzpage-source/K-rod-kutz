@@ -2,7 +2,11 @@
  * Road to Glory: Kicker — screen 'combine' (SPEC §4.5 combine row, §2.7.5).
  * Plan card first (DECISION COMBINE_PLAN: SAFE / SHOW via dispatch('decide', {kind:'COMBINE_PLAN', optionId})),
  * then the one COMBINE_LADDER session (range ladder → accuracy set → kickoff hang) in a KickView with a
- * ladder header; ladder rungs after a miss are skipped (Draft.combineNextIdx). Done → Router.sync().
+ * ladder header; ladder rungs after a miss are skipped (Draft.combineNextIdx). When the session is done the
+ * screen shows the breakdown and CONTINUE → dispatch('nextPhase') (→ the draft).
+ *
+ * The route id stays 'combine' through all three states (Router.sync does not remount an identical id), so the
+ * screen re-renders itself from its store subscription: plan → session → done.
  */
 (function (root) {
   'use strict';
@@ -14,10 +18,10 @@
 
   function planCard(store, decision) {
     var c = C();
-    var el = c.el('div', { class: 'screen-session session-combine' });
+    var el = c.el('div', { class: 'combine-plan' });
     var payload = decision.payload || {};
     var body = c.el('div', { class: 'plan-options' });
-    (decision.options || []).forEach(function (o, i) {
+    (decision.options || []).forEach(function (o) {
       var b = c.el('button', { class: 'plan-option', type: 'button', 'data-option': o.id, onClick: function () {
         try { store.dispatch('decide', { kind: 'COMBINE_PLAN', optionId: o.id }); }
         catch (e) { c.toast(String(e.message || e), 'bad'); }
@@ -27,12 +31,11 @@
       body.appendChild(b);
     });
     var note = typeof payload.pMakeFar === 'number' ? 'Your make chance from 60+: ' + Math.round(payload.pMakeFar * 100) + '%' : '';
-    var card = c.card({ title: 'COMBINE PLAN', kind: 'gold', class: 'plan-card', body: [
+    el.appendChild(c.card({ title: 'COMBINE PLAN', kind: 'gold', class: 'plan-card', body: [
       c.el('p', { class: 'small', text: 'Range ladder 45 → 65, five accuracy kicks from the hashes, one kickoff. The ladder stops at your first miss.' }),
       note ? c.el('p', { class: 'small txt-gold', text: note }) : null,
       body
-    ] });
-    el.appendChild(card);
+    ] }));
     return { el: el, destroy: function () {} };
   }
 
@@ -78,29 +81,71 @@
     }
   }
 
-  function factory(store) {
-    var c = C();
-    var state = store.state;
-    var pd = state && state.pending;
-    if (pd && pd.kind === 'DECISION' && pd.decision && pd.decision.kind === 'COMBINE_PLAN') return planCard(store, pd.decision);
-    if (pd && pd.kind === 'KICKS') {
-      return RTG.UI.KickView.sessionScreen(store, {
-        className: 'session-combine', header: header, update: update,
-        onComplete: function (outcome) {
-          if (outcome && typeof outcome.combineScore === 'number') c.toast('Combine score ' + (outcome.combineScore > 0 ? '+' : '') + outcome.combineScore, 'gold', 3000);
-          RTG.UI.Router.sync();
-        }
-      });
+  function doneCard(store) {
+    var c = C(), state = store.state;
+    var el = c.el('div', { class: 'combine-done' });
+    var score = state.flags && typeof state.flags.combineScore === 'number' ? state.flags.combineScore : null;
+    var rows = [];
+    if (score !== null) rows.push(['COMBINE SCORE', c.el('span', { class: (score >= 0 ? 'txt-mint' : 'txt-red') + ' num', text: (score > 0 ? '+' : '') + score })]);
+    if (RTG.Draft && RTG.Draft.projection) {
+      try { var p = RTG.Draft.projection(state); if (p && p.label) rows.push(['PROJECTION', p.label]); } catch (e) { /* ignore */ }
     }
-    // DRAFT.COMBINE with nothing pending (session already played) → continue the draft flow
-    var el = c.el('div', { class: 'screen-session session-combine' });
-    el.appendChild(c.card({ title: 'COMBINE', body: [
+    el.appendChild(c.card({ title: 'COMBINE', kind: 'gold', class: 'plan-card', body: [
       c.el('p', { class: 'small', text: 'The combine is done. Next up: the draft.' }),
-      c.button({ label: 'CONTINUE ▶', kind: 'primary', onClick: function () {
+      rows.length ? c.kv(rows) : null,
+      c.button({ label: 'CONTINUE ▶', kind: 'primary', block: true, onClick: function () {
         try { store.dispatch('nextPhase'); } catch (e) { c.toast(String(e.message || e), 'bad'); RTG.UI.Router.sync(); }
       } })
     ] }));
     return { el: el, destroy: function () {} };
+  }
+
+  function modeOf(state) {
+    var pd = state && state.pending;
+    if (pd && pd.kind === 'DECISION' && pd.decision && pd.decision.kind === 'COMBINE_PLAN') return 'plan';
+    if (pd && pd.kind === 'KICKS' && pd.session && String(pd.session.kind).indexOf('COMBINE') === 0) return 'session';
+    if (state && state.stage === 'DRAFT' && state.phase === 'COMBINE' && !pd) return 'done';
+    return 'other';
+  }
+
+  function factory(store) {
+    var c = C();
+    var el = c.el('div', { class: 'screen-session session-combine' });
+    var inner = null, mode = null, destroyed = false, sessionFinished = false, unsub = null;
+
+    function swap(next) {
+      if (inner) { try { inner.destroy(); } catch (e) { /* ignore */ } if (inner.el && inner.el.parentNode) inner.el.parentNode.removeChild(inner.el); }
+      inner = next;
+      if (next && next.el) el.appendChild(next.el);
+    }
+    function render(force) {
+      if (destroyed) return;
+      var state = store.state;
+      var m = modeOf(state);
+      if (m === mode && !force) return;
+      if (mode === 'session' && !sessionFinished && !force) return;   // let the last kick's result beat finish
+      mode = m;
+      if (m === 'plan') swap(planCard(store, state.pending.decision));
+      else if (m === 'session') {
+        sessionFinished = false;
+        swap(RTG.UI.KickView.sessionScreen(store, {
+          className: 'session-combine-run', header: header, update: update,
+          onComplete: function (outcome) {
+            sessionFinished = true;
+            if (outcome && typeof outcome.combineScore === 'number') c.toast('Combine score ' + (outcome.combineScore > 0 ? '+' : '') + outcome.combineScore, 'gold', 3000);
+            render(true);
+          }
+        }));
+      } else if (m === 'done') swap(doneCard(store));
+      else { swap(null); RTG.UI.Router.sync(); }
+    }
+    unsub = store.subscribe(function () { render(false); });
+    render(true);
+    return {
+      el: el,
+      onResize: function () { if (inner && inner.onResize) inner.onResize(); },
+      destroy: function () { destroyed = true; if (unsub) unsub(); swap(null); }
+    };
   }
 
   Screens.combine = factory;

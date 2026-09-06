@@ -59,10 +59,10 @@
 
 /* banners */
 .kv-banner {
-  position: absolute; top: 24%; left: 50%; transform: translate(-50%, 0);
+  position: absolute; top: 42%; left: 50%; transform: translate(-50%, 0);
   display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border: 3px solid var(--gold, #f6c445);
   background: var(--navy, #1b1f3a); color: var(--gold, #f6c445); font-size: 16px; letter-spacing: 1px; white-space: nowrap;
-  box-shadow: 4px 4px 0 var(--ink, #101226); animation: kv-pop 0.3s steps(3) both; z-index: 3; max-width: 92%; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: 4px 4px 0 var(--ink, #101226); animation: kv-pop 0.2s steps(2) both; z-index: 3; max-width: 92%; overflow: hidden; text-overflow: ellipsis;
 }
 .kv-banner-good { border-color: var(--mint, #4dbb63); color: var(--mint, #4dbb63); }
 .kv-banner-bad { border-color: var(--red, #d8433a); color: var(--red, #d8433a); }
@@ -101,10 +101,16 @@
   .kv-strip { flex-direction: column; align-items: flex-start; }
   .kv-hud-right { flex-direction: column; align-items: flex-start; margin-top: 6px; }
   .kv-stage { order: 1; }
+  .kv-banner { top: 50%; font-size: 12px; padding: 6px 10px; border-width: 2px; }
+  .kv-sub { top: 4%; font-size: 9px; padding: 4px 8px; }
   .kv-feedback, .kv-range-panel { position: absolute; right: 0; bottom: 0; width: 34%; max-height: 40%; overflow: auto; border-left: 2px solid var(--ink, #101226); z-index: 4; }
-  .screen-kick .kick-score { position: absolute; top: 0; right: 0; z-index: 4; padding: 4px; }
+  .screen-kick .kick-score { position: absolute; left: 4px; bottom: 4px; width: 142px; z-index: 4; padding: 0; }
+  .screen-kick .kick-score .led { width: 100%; padding: 3px 4px; gap: 4px; }
+  .screen-kick .kick-score .led-score { font-size: 11px; min-width: 16px; }
+  .screen-kick .kick-score .led-clock { font-size: 8px; }
+  .screen-kick .kick-score .crest { width: 12px; height: 12px; }
   .screen-kick .kick-continue { position: absolute; right: 6px; top: 40px; z-index: 5; padding: 0; }
-  .screen-session .session-header { position: absolute; top: 0; right: 0; z-index: 4; max-width: 46%; }
+  .screen-session .session-header { position: absolute; top: 0; right: 0; z-index: 4; max-width: 52%; background: rgba(27,31,58,0.92); border: 2px solid var(--navy2, #262b4d); border-top: 0; border-right: 0; }
   .screen-session .session-ko { position: absolute; left: 100px; right: 0; bottom: 0; z-index: 4; }
 }
 
@@ -148,7 +154,7 @@
 .session-outcome { padding: 8px; font-size: 10px; text-align: center; color: var(--gold, #f6c445); }
 
 /* tutorial overlays (showcase) */
-.tut-overlay { position: absolute; inset: 0; z-index: 5; pointer-events: auto; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; background: rgba(16,18,38,0.35); }
+.tut-overlay { position: absolute; inset: 0; z-index: 5; pointer-events: none; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; background: rgba(16,18,38,0.35); }
 .tut-step { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--ink, #101226); border: 2px solid var(--gold, #f6c445); color: var(--cream, #f4e9d0); font-size: 9px; white-space: pre-line; box-shadow: 3px 3px 0 #000; }
 .tut-num { display: inline-flex; width: 14px; height: 14px; align-items: center; justify-content: center; background: var(--gold, #f6c445); color: var(--ink, #101226); font-size: 9px; }
 .tut-step .icon { color: var(--gold, #f6c445); }

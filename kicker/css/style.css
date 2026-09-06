@@ -70,7 +70,6 @@ body {
   font-family: var(--font);
   font-size: 1rem;
   line-height: 1.6;
-  overflow-x: hidden;
   -webkit-font-smoothing: none;
   text-rendering: optimizeSpeed;
 }
@@ -530,7 +529,7 @@ body.reduced-motion .ticker-inner { animation: none; }
 /* ---------- responsive visibility (kept last so it wins over the component rules) ---------- */
 @media (max-width: 899px) { .rail { display: none; } }
 @media (min-width: 900px) { .tabbar { display: none; } }
-html { overflow-x: hidden; }
+html { overflow-x: hidden; }   /* on html only: it propagates to the viewport, so body/#app stay non-scrolling and sticky bars work */
 
 /* ---------- misc ---------- */
 .no-tooltips .has-tip { cursor: default; }

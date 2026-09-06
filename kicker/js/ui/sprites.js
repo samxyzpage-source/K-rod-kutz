@@ -321,6 +321,7 @@
   def('ball_8', ['..dddd..', '.dddddd.', 'ddwwwwdd', 'dddDDddd', '.dDDDDd.', '..DDDD..']);
   def('ball_11', ['...ddddd...', '..ddddddd..', '.dddwwwddd.', 'ddddwdwdddd', 'dddddDddddd', '.dDDDDDDDd.', '..DDDDDDD..', '...DDDDD...']);
   def('ball_squash', ['.ddddddd.', 'dddwwwddd', 'dddDDDddd', '.DDDDDDD.']);
+  def('ball_squash_v', ['.dd.', 'ddd.', 'ddD.', 'dwD.', 'dwD.', 'dwD.', 'ddD.', 'dDD.', '.DD.']);
   def('ball_tee', ['..kk..', '.kkkk.']);
 
   // ───────────────────────────── crowd tiles (32×8, 2 frames) ─────────────────────────────
