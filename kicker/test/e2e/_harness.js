@@ -26,7 +26,7 @@ const E2E = __dirname;
 const KICKER = path.resolve(E2E, '..', '..');
 const ROOT = path.resolve(KICKER, '..');
 const SHOTS = path.join(E2E, 'shots');
-const PORT = Number(process.env.RTG_PORT || 8080);
+let PORT = Number(process.env.RTG_PORT || 8080);   // may move to a free port when the shared one is unusable
 
 const MODES = ['file', 'http'];
 const VIEWPORTS = {
@@ -71,11 +71,28 @@ function probe(port) {
   });
 }
 
-/** Use the runner's server when it is up, else start one in-process (specs run standalone). */
+/** Start our own server on `from` or the next free port (a shared 8080 held by another process is not trusted). */
+async function startOwnServer(from) {
+  let lastErr = null;
+  for (let port = from; port < from + 20; port++) {
+    try { const s = await startServer(port); PORT = port; return s; }
+    catch (err) { lastErr = err; if (err.code !== 'EADDRINUSE') throw err; }
+  }
+  throw lastErr || new Error('no free port from ' + from);
+}
+
+/** Use the runner's server when it is up (RTG_PORT), else start one in-process (specs run standalone). */
 async function ensureServer() {
   if (server) return server;
   if (await probe(PORT)) { server = { port: PORT, external: true, close: async () => {} }; return server; }
-  server = await startServer(PORT);
+  server = await startOwnServer(PORT);
+  return server;
+}
+
+/** The external server went away mid-run: forget it and start our own on a free port. */
+async function replaceServer() {
+  if (server && !server.external) { try { await server.close(); } catch (e) { /* ignore */ } }
+  server = await startOwnServer(PORT);
   return server;
 }
 
@@ -151,8 +168,16 @@ async function openApp(opts) {
   if (opts.blockFonts) await page.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
   let query = opts.query || '';
   if (opts.debug) query += (query ? '&' : '') + 'debug=1';
-  const url = urlFor(mode, query);
-  await page.goto(url, { waitUntil: 'load' });
+  let url = urlFor(mode, query);
+  try { await page.goto(url, { waitUntil: 'load' }); }
+  catch (err) {
+    // http only: the shared server died between specs → serve it ourselves on a free port and retry once
+    if (mode !== 'http' || !/ERR_CONNECTION_REFUSED|ERR_CONNECTION_RESET|ERR_EMPTY_RESPONSE/.test(String(err && err.message))) throw err;
+    console.log('  [harness] http server unreachable (' + url + ') — starting our own and retrying');
+    await replaceServer();
+    url = urlFor(mode, query);
+    await page.goto(url, { waitUntil: 'load' });
+  }
   await page.waitForFunction(() => window.RTG && RTG.UI && RTG.UI.store && RTG.UI.Router && RTG.UI.Router.current(), null, { timeout: 20000 });
   return { page, context, errors, foreignErrors, url, mode, vp, close: () => context.close() };
 }
@@ -220,7 +245,8 @@ function stripVolatile(state) {
 }
 
 module.exports = {
-  KICKER, ROOT, SHOTS, PORT, MODES, VIEWPORTS,
+  KICKER, ROOT, SHOTS, MODES, VIEWPORTS,
+  get PORT() { return PORT; },
   startServer, ensureServer, urlFor, missingScripts, getBrowser, closeBrowser,
   openApp, debug, waitForScreen, screenId, shot, noHorizontalScroll, clickButton, matrix, stripVolatile, assert
 };

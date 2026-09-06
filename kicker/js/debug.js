@@ -167,8 +167,9 @@
 
   /**
    * Fast-forward with the engine's auto policies until {stage, phase?, year?, week?} is reached. One engine step per
-   * iteration (settlePending / nextPhase / autoPlayWeek) so every phase — including DRAFT.DECLARE / COMBINE / DRAFT —
-   * is reachable. Throws when the target is not reached within 30 career years.
+   * iteration (settlePending {max:1} / nextPhase / autoPlayWeek / autoPlayGame) so every phase — including
+   * DRAFT.DECLARE / COMBINE (with the plan decision still pending) / DRAFT — is reachable. Throws when the target is
+   * not reached within 30 career years.
    */
   D.jumpTo = function (target) {
     if (!target || !target.stage) throw new Error('debug.jumpTo: {stage, phase?, year?, week?} is required');
@@ -181,7 +182,7 @@
       if (++guard > 5000 || st.year - startYear > 30) throw new Error('debug.jumpTo: target ' + JSON.stringify(target) + ' not reached (at ' + st.stage + '.' + st.phase + ' Y' + st.year + ' W' + st.week + ')');
       if (st.stage === 'RETIRED' && target.stage !== 'RETIRED') throw new Error('debug.jumpTo: career already over');
       if (st.game) { E.autoPlayGame(st, rng); continue; }
-      if (st.pending) { E.settlePending(st, rng); continue; }
+      if (st.pending) { E.settlePending(st, rng, { max: 1 }); continue; }   // one pending per step: DRAFT.COMBINE (plan pending) is a reachable stop
       if (st.phase === 'REG' || st.phase === 'POST') { E.autoPlayWeek(st, rng); continue; }
       if (st.stage === 'RETIRED') break;
       E.nextPhase(st, rng);

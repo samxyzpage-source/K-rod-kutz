@@ -111,7 +111,11 @@ H.matrix(({ mode, vp }) => {
       await H.clickButton(page, 'SIM GAME');
       const played = await page.evaluate(() => { const r = RTG.Season.userGameRef(RTG.UI.store.state); return r ? r.played : 'bye'; });
       assert.ok(played === true || played === 'bye', 'game simmed');
-      await H.clickButton(page, 'END WEEK');
+      // SIM GAME lands on the postgame screen (CONTINUE → endWeek); the generic hub offers END WEEK instead
+      await H.waitForScreen(page, 'postgame', 5000).catch(() => {});
+      if (await H.screenId(page) === 'postgame') { assert.ok(await page.locator('.scr-postgame .pg-board').isVisible(), 'postgame board after SIM GAME'); await H.clickButton(page, 'CONTINUE'); }
+      else await H.clickButton(page, 'END WEEK');
+      await page.waitForFunction(() => RTG.UI.store.state.week >= 2 || RTG.UI.store.state.pending !== null, null, { timeout: 8000 });
       const st2 = await H.debug(page, 'getState');
       assert.ok(st2.week >= 2 || st2.pending, 'week advanced (or an event is pending)');
       assert.deepEqual(app.errors, [], 'console errors');

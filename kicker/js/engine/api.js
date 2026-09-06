@@ -286,6 +286,30 @@
     return sync(state, rng, out);
   };
 
+  /**
+   * Mark inbox message(s) read (the UI read flag, SPEC §4.5 inbox row; 0 rng draws). `id` = one message id, an array
+   * of ids, or '*' (also null / undefined) for every unread message; unknown ids are ignored.
+   * @param {Object} state @param {Object} [rng] unused (facade signature) @param {string|string[]} [id]
+   * @returns {{n:number, unread:number}} messages newly marked read / still unread
+   */
+  Engine.markRead = function (state, rng, id) {
+    checkState(state, 'markRead');
+    var E = need(Events(), 'Events', 'markRead');
+    var box = Array.isArray(state.inbox) ? state.inbox : [], n = 0, i, j;
+    var all = id === '*' || id === undefined || id === null;
+    var ids = all ? null : (Array.isArray(id) ? id : [id]);
+    for (i = 0; i < box.length; i++) {
+      var m = box[i];
+      if (!m || m.read) continue;
+      var hit = all;
+      if (!hit) for (j = 0; j < ids.length; j++) if (ids[j] === m.id) { hit = true; break; }
+      if (hit && E.markRead(state, m.id)) n++;
+    }
+    var unread = 0;
+    for (i = 0; i < box.length; i++) if (box[i] && !box[i].read) unread++;
+    return sync(state, rng, { n: n, unread: unread });
+  };
+
   /** Next context index of a session (combine ladders skip rungs after a miss). −1 when complete. */
   function nextSessionIdx(sess) {
     var D = Draft();
@@ -498,19 +522,23 @@
     return { kind: 'DECISION', decision: dec.kind, optionId: optionId, next: out.next, result: out.result };
   }
 
-  /** Resolve every pending thing in turn. @returns {Object[]} */
+  /** Resolve every pending thing in turn (at most opts.max when given, else until nothing is pending). @returns {Object[]} */
   function settle(state, rng, opts, log) {
     opts = opts || {};
-    for (var i = 0; i < MAX_SETTLE && state.pending; i++) {
+    var limited = num(opts.max, 0) > 0;
+    var max = limited ? Math.min(opts.max, MAX_SETTLE) : MAX_SETTLE;
+    for (var i = 0; i < max && state.pending; i++) {
       var r = settleOne(state, rng, opts);
       if (log) log.push(r);
     }
-    if (state.pending) fail('autoPlay', 'could not resolve the pending ' + pendingKind(state));
+    if (state.pending && !limited) fail('autoPlay', 'could not resolve the pending ' + pendingKind(state));
     return log || [];
   }
   /**
    * Resolve everything pending with the default policy (events → choice 0, kick sessions → AI kicks, decisions →
    * Engine.autoOption); opts.eventChoice (number | fn(state, event)) and opts.decide (fn(state, decision) → optionId) override it.
+   * opts.max (n ≥ 1) resolves at most n pendings and returns without throwing when one is still pending — a chain
+   * (offseason wizard, declare → combine plan → combine kicks) can be stepped one decision at a time (RTG.debug.jumpTo).
    * @returns {Object[]} what was resolved, in order
    */
   Engine.settlePending = function (state, rng, opts) { checkState(state, 'settlePending'); checkRng(rng, 'settlePending'); return sync(state, rng, settle(state, rng, opts, [])); };

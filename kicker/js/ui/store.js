@@ -43,11 +43,11 @@
   /**
    * Functions after which the store does NOT call Router.sync(): the in-game step functions (the game / kick
    * scenes own the game loop), sessionKick (the session scenes call Router.sync() after their result beat),
-   * finishUserGame (the game screen routes to 'postgame' itself) and the hub-local training calls.
+   * finishUserGame (the game screen routes to 'postgame' itself), the hub-local training calls and markRead.
    */
   var NO_SYNC = {
     simStep: 1, simToKick: 1, applyUserKick: 1, autoKick: 1, applyUserKickoff: 1,
-    sessionKick: 1, finishUserGame: 1, train: 1, spendXp: 1, autoSpend: 1, autoOption: 1
+    sessionKick: 1, finishUserGame: 1, train: 1, spendXp: 1, autoSpend: 1, autoOption: 1, markRead: 1
   };
 
   /** Not dispatchable (they create or load a state instead of mutating one). */

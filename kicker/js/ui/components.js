@@ -627,14 +627,39 @@
     tipEl.style.left = left + 'px';
     tipEl.style.top = top + 'px';
   }
-  function hideTip() { if (tipEl) tipEl.classList.remove('show'); if (tipTimer) { root.clearTimeout(tipTimer); tipTimer = null; } }
+  function hideTip() { if (tipEl) tipEl.classList.remove('show'); if (tipTimer) { root.clearTimeout(tipTimer); tipTimer = null; } sweepTipDescs(true); }
+
+  /**
+   * The aria-describedby targets live in one shared sr-only host (#tip-descs) instead of inside the anchor, so the
+   * anchor's textContent stays clean (specs / labels read it) and nothing widens a .scroll-x. Descriptions whose
+   * anchor has left the document are swept (only entries older than 1 s, so a screen mid-build keeps its ids).
+   */
+  var tipHost = null, tipRefs = [], tipSweepAt = 0;
+  function tipDescHost() {
+    if (!tipHost || !tipHost.parentNode) { tipHost = C.el('div', { id: 'tip-descs', class: 'sr-only' }); doc.body.appendChild(tipHost); }
+    return tipHost;
+  }
+  function sweepTipDescs(force) {
+    var t = Date.now();
+    if (!force && t - tipSweepAt < 1000 && tipRefs.length < 1500) return;
+    tipSweepAt = t;
+    for (var i = tipRefs.length - 1; i >= 0; i--) {
+      var r = tipRefs[i];
+      if (t - r.at < 1000) continue;
+      var connected = r.el.isConnected !== undefined ? r.el.isConnected : doc.body.contains(r.el);
+      if (!connected) { if (r.desc.parentNode) r.desc.parentNode.removeChild(r.desc); tipRefs.splice(i, 1); }
+    }
+  }
+  C.tooltipCount = function () { return tipRefs.length; };
 
   /** Hover / focus (desktop) and 400 ms long-press (touch) tooltip; sets aria-describedby on the element. */
   C.tooltip = function (el, text) {
     if (!el) return el;
     var id = 'tip-' + (++tipCount);
     var desc = C.el('span', { id: id, class: 'sr-only', text: text });
-    el.appendChild(desc);
+    tipDescHost().appendChild(desc);
+    tipRefs.push({ el: el, desc: desc, at: Date.now() });
+    sweepTipDescs(false);
     el.setAttribute('aria-describedby', id);
     el.classList.add('has-tip');
     el.addEventListener('mouseenter', function () { showTip(el, text); });

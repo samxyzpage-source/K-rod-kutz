@@ -19,7 +19,8 @@ H.matrix(({ mode, vp }) => {
     try {
       await K.openShowcase(page, 4242);
       const g = await K.geometry(page);
-      assert.ok(g.scale >= 1 && Number.isInteger(g.scale), 'integer scale (' + g.scale + ')');
+      assert.ok(g.scale >= 2 ? Number.isInteger(g.scale) : (g.scale === 1 || g.scale >= 1.35), 'integer scale, or the fractional phone fit ≥ 1.35 (' + g.scale + ')');
+      if (vp === 'desktop') assert.ok(Number.isInteger(g.scale) && g.scale >= 2, 'desktop integer-scales (' + g.scale + ')');
       await K.mouseFlick(page, { drag: 120, dragMs: 300, flick: 60, flickMs: 80 });
       await K.waitPhase(page, 'RESULT', 8000);
       const banner = page.locator('.kv-banner');

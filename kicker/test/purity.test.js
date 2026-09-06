@@ -184,7 +184,7 @@ const CONTRACT = {
   'engine/season': { ns: 'Season', fns: ['start', 'beginRegular', 'userGameRef', 'simOtherGames', 'endWeek', 'startPostseason', 'postseasonWeek', 'finishSeason', 'offseason', 'advanceYear'] },
   'engine/career': { ns: 'Career', fns: ['showcaseSession', 'finishShowcase', 'generateCollegeOffers', 'decide', 'campBattle', 'finishSession', 'offseasonChain', 'changeTeam', 'handleActions', 'enterDraft', 'runDraft', 'enterNfl', 'retire', 'stageInfo'] },
   'engine/save': { ns: 'Save', fns: ['serialize', 'deserialize', 'migrate', 'exportString', 'importString', 'slotSummary'] },
-  'engine/api': { ns: 'Engine', fns: ['newCareer', 'train', 'spendXp', 'startUserGame', 'simStep', 'simToKick', 'applyUserKick', 'autoKick', 'applyUserKickoff', 'finishUserGame', 'endWeek', 'chooseEvent', 'sessionKick', 'decide', 'nextPhase', 'autoPlayGame', 'autoPlayWeek', 'autoPlaySeason', 'autoPlayOffseason', 'autoPlayCareer', 'save', 'load'] }
+  'engine/api': { ns: 'Engine', fns: ['newCareer', 'train', 'spendXp', 'startUserGame', 'simStep', 'simToKick', 'applyUserKick', 'autoKick', 'applyUserKickoff', 'finishUserGame', 'endWeek', 'chooseEvent', 'sessionKick', 'decide', 'nextPhase', 'autoPlayGame', 'autoPlayWeek', 'autoPlaySeason', 'autoPlayOffseason', 'autoPlayCareer', 'save', 'load', 'settlePending', 'markRead'] }
 };
 
 const RTG = load();

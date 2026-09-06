@@ -6,10 +6,6 @@
    prefers-reduced-motion / body.reduced-motion.
    ========================================================================== */
 
-/* The shell's .scroll-x is not positioned, so the absolutely positioned .sr-only tooltip anchors (C.tooltip) inside a
-   wide table extend the document's scroll width past the viewport. Scoped under .screen / .modal (shell request). */
-.screen .scroll-x, .modal .scroll-x { position: relative; }
-
 /* ---------- kit: avatars, faces, crest rows, bracket ---------- */
 .kit-avatar { flex: 0 0 auto; background: var(--navy); border: var(--border) solid var(--ink); box-sizing: content-box; }
 .kit-face { position: relative; display: inline-block; border: var(--border) solid var(--ink); box-shadow: 2px 2px 0 var(--shadow); flex: 0 0 auto; }

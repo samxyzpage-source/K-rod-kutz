@@ -168,6 +168,7 @@
         if (dk === 'OFFERS_COLLEGE') return { id: 'offers', params: {} };
         if (CONTRACT_KINDS[dk]) return { id: 'contract', params: { kind: dk } };
         if (dk === 'HOF') return { id: 'legacy', params: {} };
+        if (dk === 'COMBINE_PLAN') return { id: 'combine', params: {} };
         return { id: 'offseason', params: { kind: dk } };
       }
     }
@@ -178,6 +179,7 @@
     }
     if (state.stage === 'RETIRED') return { id: 'legacy', params: {} };
     if (state.phase === 'AWARDS') return { id: 'awards', params: {} };
+    if (state.phase === 'OFF') return { id: 'offseason', params: {} };   // the wizard's preview card (CONTINUE → nextPhase) once the chain is done
     return { id: 'hub', params: {} };
   };
 

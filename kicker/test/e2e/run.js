@@ -8,8 +8,9 @@
  *   RTG_PORT=8081 node kicker/test/e2e/run.js              # another port
  *
  * Each spec uses node:test + node:assert/strict and is also runnable directly: node kicker/test/e2e/boot.spec.js
- * (the harness starts its own server when none is listening). When RTG_PORT is already taken by a server that
- * serves /kicker/ (another engineer's spec run), that server is reused; otherwise the next free port is used.
+ * (the harness starts its own server when none is listening). The runner always serves the app itself: when
+ * RTG_PORT is taken (another spec run, a dev server) the next free port is used — a foreign server is never reused,
+ * because one that vanishes mid-run turns every http test into ERR_CONNECTION_REFUSED.
  */
 'use strict';
 const fs = require('fs');
@@ -31,22 +32,14 @@ if (files.length === 0) {
   process.exit(0);
 }
 
-/** Start our server on H.PORT; when the port is busy, reuse the server there if it serves the app, else try the next ports. */
+/** Start our own server on H.PORT or the next free port (never reuse a foreign server). */
 async function serverFor() {
-  const http = require('http');
-  const probe = port => new Promise(resolve => {
-    const req = http.get({ host: '127.0.0.1', port, path: '/kicker/index.html', timeout: 1500 }, res => { res.resume(); resolve(res.statusCode === 200); });
-    req.on('error', () => resolve(false));
-    req.on('timeout', () => { req.destroy(); resolve(false); });
-  });
-  for (let port = H.PORT; port < H.PORT + 10; port++) {
+  const from = H.PORT;
+  for (let port = from; port < from + 20; port++) {
     try { return await H.startServer(port); }
-    catch (err) {
-      if (err.code !== 'EADDRINUSE') throw err;
-      if (await probe(port)) { console.log('e2e/run.js: reusing the server already listening on ' + port); return { port, external: true, close: async () => {} }; }
-    }
+    catch (err) { if (err.code !== 'EADDRINUSE') throw err; }
   }
-  throw new Error('no free port in ' + H.PORT + '-' + (H.PORT + 9));
+  throw new Error('no free port in ' + from + '-' + (from + 19));
 }
 
 (async () => {

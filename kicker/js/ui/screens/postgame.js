@@ -76,7 +76,7 @@
     }
 
     function gradeStamp(s) {
-      if (!s.grade) return null;
+      if (!s.grade || s.played === false) return null;   // no attempts (benched / injured): no grade to stamp
       var st = c.el('div', { class: 'stamp stamp-' + s.grade + ' pg-stamp' + (Kit.reduced() ? ' stamp-instant' : ''), text: s.grade, role: 'img', 'aria-label': 'Game grade ' + s.grade, 'data-grade': s.grade });
       Kit.tip(st, 'A = perfect with 2+ attempts or a game-winner · B ≥ 85 % · C ≥ 70 % · D ≥ 50 % · a decisive miss caps at D');
       return c.el('div', { class: 'pg-stamp-wrap center' }, st);

@@ -56,7 +56,7 @@ function playGame(state, rng, firstInput) {
 test('§3.5.20 every Engine function exists', () => {
   const fns = ['newCareer', 'train', 'spendXp', 'startUserGame', 'simStep', 'simToKick', 'applyUserKick', 'autoKick', 'applyUserKickoff',
     'finishUserGame', 'endWeek', 'chooseEvent', 'sessionKick', 'decide', 'nextPhase', 'autoPlayGame', 'autoPlayWeek', 'autoPlaySeason',
-    'autoPlayOffseason', 'autoPlayCareer', 'save', 'load', 'settlePending', 'autoOption', 'autoSpend'];
+    'autoPlayOffseason', 'autoPlayCareer', 'save', 'load', 'settlePending', 'autoOption', 'autoSpend', 'markRead'];
   for (const f of fns) assert.equal(typeof Engine[f], 'function', 'Engine.' + f);
 });
 
@@ -333,4 +333,58 @@ test('applyUserKick / sessionKick accept opts.forced (debug): requested outcome,
   assert.equal(state.game.pending, null);
   assert.ok(RTG.Schema.validate(state).ok);
   assert.throws(() => Engine.applyUserKick(state, rng, null), /pending/);
+});
+
+test('markRead: dispatchable read flag — one id, an array, "*" for all; unknown ids ignored; 0 rng draws; state stays valid', () => {
+  const r = kfx.nflReg(RTG);
+  const st = r.state;
+  st.inbox = [];
+  for (let i = 0; i < 4; i++) RTG.Events.message(st, 'result', { opp: 'X' });
+  st.inbox.forEach(m => { m.read = false; });
+  assert.equal(st.inbox.length, 4);
+  const before = r.rng.state();
+  const one = J(Engine.markRead(st, r.rng, st.inbox[0].id));
+  assert.deepEqual(one, { n: 1, unread: 3 });
+  assert.equal(st.inbox[0].read, true); assert.equal(st.inbox[1].read, false);
+  assert.deepEqual(J(Engine.markRead(st, r.rng, st.inbox[0].id)), { n: 0, unread: 3 }, 'already read → 0');
+  assert.deepEqual(J(Engine.markRead(st, r.rng, 'nope')), { n: 0, unread: 3 }, 'unknown id ignored');
+  assert.deepEqual(J(Engine.markRead(st, r.rng, [st.inbox[1].id, st.inbox[2].id, 'nope'])), { n: 2, unread: 1 });
+  assert.deepEqual(J(Engine.markRead(st, r.rng, '*')), { n: 1, unread: 0 });
+  assert.deepEqual(J(Engine.markRead(st, r.rng)), { n: 0, unread: 0 }, 'undefined = all');
+  assert.equal(r.rng.state(), before, 'no rng draws');
+  assert.equal(st.rngState, r.rng.state());
+  ok(st, 'after markRead');
+  assert.throws(() => Engine.markRead(null, r.rng, 'x'), /CareerState/);
+});
+
+test('settlePending opts.max steps a chain one pending at a time (declare → combine plan → combine kicks) instead of chaining the whole offseason', () => {
+  const { state, rng } = Engine.newCareer({ name: 'Step Kicker', archetype: 'CANNON', difficulty: 'pro', seed: 77 }, 1757000000000);
+  Engine.autoPlayCareer(state, rng, { untilStage: 'COLLEGE' });
+  // play college seasons until the DECLARE decision shows up
+  let guard = 0, seen = [];
+  while (guard++ < 400) {
+    if (state.pending && state.pending.kind === 'DECISION' && state.pending.decision.kind === 'DECLARE') break;
+    if (state.pending) { const log = Engine.settlePending(state, rng, { max: 1 }); assert.equal(log.length, 1, 'exactly one pending resolved per step'); seen.push(log[0].kind); continue; }
+    if (state.phase === 'REG' || state.phase === 'POST') { Engine.autoPlayWeek(state, rng); continue; }
+    Engine.nextPhase(state, rng);
+  }
+  assert.ok(state.pending && state.pending.decision.kind === 'DECLARE', 'reached the DECLARE decision (' + state.stage + '.' + state.phase + ')');
+  const step1 = Engine.settlePending(state, rng, { max: 1 });
+  assert.equal(step1.length, 1); assert.equal(step1[0].decision, 'DECLARE');
+  assert.equal(state.stage + '.' + state.phase, 'DRAFT.COMBINE');
+  assert.ok(state.pending && state.pending.kind === 'DECISION' && state.pending.decision.kind === 'COMBINE_PLAN', 'the plan decision is pending (not auto-resolved)');
+  const step2 = Engine.settlePending(state, rng, { max: 1 });
+  assert.equal(step2[0].decision, 'COMBINE_PLAN');
+  assert.ok(state.pending && state.pending.kind === 'KICKS', 'the combine session is pending');
+  const step3 = Engine.settlePending(state, rng, { max: 1 });
+  assert.equal(step3[0].kind, 'KICKS');
+  assert.equal(state.pending, null);
+  assert.equal(typeof state.flags.combineScore, 'number');
+  assert.equal(state.stage + '.' + state.phase, 'DRAFT.DRAFT', 'finishCombine moves the phase on; the draft is not run yet');
+  ok(state, 'after stepping the chain');
+  // max:1 with nothing pending is a no-op; nextPhase runs the draft
+  assert.deepEqual(J(Engine.settlePending(state, rng, { max: 1 })), []);
+  Engine.nextPhase(state, rng);
+  assert.ok(state.stage === 'NFL' || (state.stage === 'DRAFT' && state.pending), 'the draft ran: ' + state.stage + '.' + state.phase);
+  ok(state, 'after the draft');
 });

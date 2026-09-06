@@ -3,8 +3,8 @@
  *
  * Inbox: chat-bubble list of state.inbox (newest at the bottom, auto-scrolled) with procedural pixel avatars per
  * sender kind (coach / agent / gm / press / fan / family — RTG.UI.Kit.avatar), sender filter pills, unread dots.
- * Opening the screen marks the messages read through RTG.Events.markRead (a UI read-flag; there is no Engine entry
- * point — see interface requests) followed by store.touch('markRead', n, {noSync:true}) so the hub badge updates.
+ * Opening the screen marks every message read through dispatch('markRead', '*') (Engine.markRead; NO_SYNC in the
+ * store, so the route never changes) — subscribers see fnName 'markRead' and the hub badge updates.
  *
  * Event modal: replaces the shell's generic Router.eventModal hook. app.js assigns the hook at boot (after this file
  * has run), so the hook is installed as an accessor property: the shell's assignment is kept as the fallback and this
@@ -143,10 +143,11 @@
 
     function markAllRead() {
       var state = store.state;
-      if (!state || !RTG.Events || typeof RTG.Events.markRead !== 'function') return;
-      var n = 0;
-      (state.inbox || []).forEach(function (m) { if (!m.read && RTG.Events.markRead(state, m.id)) n++; });
-      if (n) store.touch('markRead', n, { noSync: true });
+      if (!state) return;
+      var unread = (state.inbox || []).filter(function (m) { return m && !m.read; }).length;
+      if (!unread) return;
+      try { store.dispatch('markRead', '*'); }
+      catch (e) { if (root.console) root.console.error('markRead failed', e); }
     }
 
     function bubble(m) {

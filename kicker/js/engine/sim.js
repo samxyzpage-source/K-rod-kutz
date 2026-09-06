@@ -960,26 +960,53 @@
     return { items: items, total: total, mult: mult };
   }
 
-  /** Post-game headline via Events.headline (1 draw) — the tag follows the story of the day. */
-  function makeHeadline(state, rng, gs, summary) {
-    var E = Events();
-    if (!E || !isFn(E.headline)) return null;
-    var H = S().summary, line = summary.userLine, rows = summary.kicks, fifty = KT().pressure.longDistFrom;
+  /**
+   * Pure: the post-game headline tag from the kicker's OWN line (the team result is only the fallback, and is always
+   * returned as `secondary`). Order: game_winner → decisive_miss → perfect_day (every FG and PAT made, FGA ≥
+   * Tuning.sim.summary.perfectMinFga) → bad_day (FG% ≤ badDayPct on ≥ badDayMinFga FGA) → doink / blocked /
+   * fifty_plus (from the kick rows, `key` = that row) → postgame_win / postgame_loss (a tie reads as a loss).
+   * @param {{userLine:Object, kicks?:Object[], decisiveMiss?:boolean, won?:boolean, tied?:boolean}} summary
+   * @returns {{tag:string, secondary:string, key:Object|null}}
+   */
+  Sim.headlineTag = function (summary) {
+    var H = S().summary, line = summary.userLine || {}, rows = summary.kicks || [], fifty = KT().pressure.longDistFrom;
+    var fga = num(line.fga, 0), fgm = num(line.fgm, 0), pat = num(line.pat, 0), patMade = num(line.patMade, 0);
+    var secondary = summary.won ? 'postgame_win' : 'postgame_loss';
     var tag = null, key = null, i;
-    if (line.gw > 0) tag = 'game_winner';
+    if (num(line.gw, 0) > 0) tag = 'game_winner';
     else if (summary.decisiveMiss) tag = 'decisive_miss';
-    else if (line.fga >= H.perfectMinFga && line.fgm === line.fga && line.patMade === line.pat) tag = 'perfect_day';
-    else if (line.fga >= H.badDayMinFga && line.fgm <= line.fga * H.badDayPct) tag = 'bad_day';
+    else if (fga >= H.perfectMinFga && fgm === fga && patMade === pat) tag = 'perfect_day';
+    else if (fga >= H.badDayMinFga && fgm <= fga * H.badDayPct) tag = 'bad_day';
     for (i = 0; i < rows.length && !tag; i++) if (DOINKS[rows[i].outcome]) { tag = 'doink'; key = rows[i]; }
     for (i = 0; i < rows.length && !tag; i++) if (rows[i].outcome === 'BLOCKED') { tag = 'blocked'; key = rows[i]; }
     for (i = 0; i < rows.length && !tag; i++) if (rows[i].type === 'FG' && rows[i].made && rows[i].distance >= fifty) { tag = 'fifty_plus'; key = rows[i]; }
-    if (!tag) tag = summary.won ? 'postgame_win' : 'postgame_loss';
+    return { tag: tag || secondary, secondary: secondary, key: key };
+  };
+
+  /** The `{line}` slot text for a user line: '2-for-3' (+ ' and 2-for-2 on PATs' when PATs were kicked; PAT-only days read '3-for-3 on PATs'). */
+  Sim.lineText = function (line) {
+    line = line || {};
+    var fga = num(line.fga, 0), fgm = num(line.fgm, 0), pat = num(line.pat, 0), patMade = num(line.patMade, 0);
+    if (!fga && !pat) return '0-for-0';
+    if (!fga) return patMade + '-for-' + pat + ' on PATs';
+    var s = fgm + '-for-' + fga;
+    if (pat) s += ' and ' + patMade + '-for-' + pat + ' on PATs';
+    return s;
+  };
+
+  /** Post-game headline via Events.headline (1 draw) — the tag follows the kicker's day (Sim.headlineTag). */
+  function makeHeadline(state, rng, gs, summary) {
+    var E = Events();
+    if (!E || !isFn(E.headline)) return null;
+    var line = summary.userLine, rows = summary.kicks;
+    var pick = Sim.headlineTag(summary), tag = pick.tag, key = pick.key;
     var oppSide = other(gs.userSide), oppTeam = teamOf(state, gs, oppSide);
     var us = gs.score[gs.userSide], them = gs.score[oppSide];
     var vars = {
       opp: oppTeam ? (oppTeam.school || oppTeam.name) : gs[oppSide + 'Id'],
       score: (summary.won ? 'W ' : (summary.tied ? 'T ' : 'L ')) + us + '-' + them,
       dist: key ? key.distance : (line.long || (rows.length ? rows[rows.length - 1].distance : 0)),
+      line: Sim.lineText(line), secondary: pick.secondary,
       week: gs.week, won: summary.won, tied: summary.tied, fgm: line.fgm, fga: line.fga, gw: line.gw
     };
     if (line.fga) vars.pct = Math.round(PERCENT * line.fgm / line.fga) + ' %';

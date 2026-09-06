@@ -111,7 +111,7 @@
   function factory(store) {
     var c = C();
     var el = c.el('div', { class: 'screen-session session-combine' });
-    var inner = null, mode = null, destroyed = false, sessionFinished = false, unsub = null;
+    var inner = null, mode = null, destroyed = false, sessionFinished = false, unsub = null, lateTimer = null;
 
     function swap(next) {
       if (inner) { try { inner.destroy(); } catch (e) { /* ignore */ } if (inner.el && inner.el.parentNode) inner.el.parentNode.removeChild(inner.el); }
@@ -123,7 +123,13 @@
       var state = store.state;
       var m = modeOf(state);
       if (m === mode && !force) return;
-      if (mode === 'session' && !sessionFinished && !force) return;   // let the last kick's result beat finish
+      if (mode === 'session' && !sessionFinished && !force) {
+        // let the last kick's result beat finish; when the session ended without the view's completion (forced or
+        // rapid kicks through RTG.debug), swap to the done card once the beat had its chance
+        if (!lateTimer) lateTimer = root.setTimeout(function () { lateTimer = null; if (!destroyed && !sessionFinished) { sessionFinished = true; render(true); } }, 1500);
+        return;
+      }
+      if (lateTimer) { root.clearTimeout(lateTimer); lateTimer = null; }
       mode = m;
       if (m === 'plan') swap(planCard(store, state.pending.decision));
       else if (m === 'session') {
@@ -144,7 +150,7 @@
     return {
       el: el,
       onResize: function () { if (inner && inner.onResize) inner.onResize(); },
-      destroy: function () { destroyed = true; if (unsub) unsub(); swap(null); }
+      destroy: function () { destroyed = true; if (lateTimer) root.clearTimeout(lateTimer); if (unsub) unsub(); swap(null); }
     };
   }
 

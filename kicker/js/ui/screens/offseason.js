@@ -5,7 +5,7 @@
  * TRAINING_BLOCKS (3 × 70·moraleMult XP into one attribute or the bank), REDSHIRT, DECLARE (projection card from
  * RTG.Draft.projection + eligibility), TRANSFER (portal offers via Kit.offerCard + STAY), RETIRE (one more year /
  * retire / ring chase), OFFSEASON_PLAN / CAMP and any other decision kind not owned by contract / draft / legacy /
- * offers (generic option buttons). Each step → dispatch('decide', {kind, optionId, extra}) (the store syncs). When the
+ * offers / combine (generic option buttons). Each step → dispatch('decide', {kind, optionId, extra}) (the store syncs). When the
  * chain has ended and nothing is pending, the "next season preview" card (age, team, rival, contract year) with
  * CONTINUE → dispatch('nextPhase'). An offseason EVENT shows a re-open button for the modal.
  */
@@ -195,21 +195,12 @@
       c.replace(el, parts);
     }
 
-    // A pending COMBINE_PLAN routes here (Router.resolve: any other DECISION → offseason); the combine screen owns
-    // the plan card, so hand over once it is registered (deferred: never Router.go inside a factory).
-    var fwdTimer = null;
-    function forwardCombine() {
-      var pd = store.state && store.state.pending;
-      if (pd && pd.kind === 'DECISION' && pd.decision.kind === 'COMBINE_PLAN' && R.has('combine') && R.current() !== 'combine' && !fwdTimer) {
-        fwdTimer = root.setTimeout(function () { fwdTimer = null; if (!destroyed) R.go('combine', {}, { replace: true }); }, 0);
-      }
-    }
+    // A pending COMBINE_PLAN routes to 'combine' (Router.resolve), which owns the plan card.
     render();
-    forwardCombine();
-    unsub = store.subscribe(function () { render(); forwardCombine(); });
+    unsub = store.subscribe(function () { render(); });
     return {
       el: el,
-      destroy: function () { destroyed = true; if (unsub) unsub(); unsub = null; if (fwdTimer) root.clearTimeout(fwdTimer); },
+      destroy: function () { destroyed = true; if (unsub) unsub(); unsub = null; },
       onKey: function (ev) { if (ev.target && ev.target !== root.document.body && ev.target !== root.document.documentElement) return false; if (ev.key === 'Enter' && !ev.repeat) { var b = el.querySelector('[data-action="continue"], .card-footer .btn-primary'); if (b) { b.click(); return true; } } return false; }
     };
   }

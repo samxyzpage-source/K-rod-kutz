@@ -26,7 +26,8 @@ for (const mode of H.MODES) {
       try {
         await K.openShowcase(page, 77);
         const g = await K.geometry(page);
-        assert.ok(Number.isInteger(g.scale) && g.scale >= 1, 'integer scale ' + g.scale);
+        assert.ok(g.scale >= 2 ? Number.isInteger(g.scale) : (g.scale === 1 || g.scale >= 1.35), 'integer scale, or the fractional phone fit ≥ 1.35 (' + g.scale + ')');
+        if (cs.label === 'portrait') assert.ok(g.rect.w >= g.innerWidth * 0.8, 'the portrait scene fills the phone width (' + g.rect.w + ' of ' + g.innerWidth + ')');
         assert.ok(g.rect.x >= 0 && g.rect.x + g.rect.w <= g.innerWidth + 0.5, 'canvas inside the viewport horizontally');
         assert.ok(g.rect.y >= 0 && g.rect.y + g.rect.h <= g.innerHeight + 0.5, 'canvas inside the viewport vertically (' + g.rect.y + '+' + g.rect.h + ' vs ' + g.innerHeight + ')');
         assert.equal(g.landscape, cs.label === 'landscape', 'orientation by container aspect');

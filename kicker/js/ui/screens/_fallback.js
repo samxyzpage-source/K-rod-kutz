@@ -261,7 +261,7 @@
         buttons.push(C.button({ label: 'START SEASON', kind: 'primary', onClick: safe(function () { dispatch('nextPhase'); render(); }) }));
       } else if (ph === 'AWARDS') {
         var aw = state.season && state.season.awardsList || [];
-        body.push(C.list(aw.filter(function (a) { return a && a.isUser !== false; }).slice(0, 8), function (a) { return C.el('span', { class: 'small' }, (a.name || a.id) + (a.winnerName ? ' — ' + a.winnerName : '')); }, { empty: 'No awards this season.' }));
+        body.push(C.list(aw.filter(function (a) { return a && a.isUser !== false; }).slice(0, 8), function (a) { return C.el('span', { class: 'small' }, (a.name || a.id) + (a.kickerName ? ' — ' + a.kickerName : '')); }, { empty: 'No awards this season.' }));
         buttons.push(C.button({ label: 'CONTINUE', kind: 'primary', onClick: safe(function () { dispatch('nextPhase'); render(); }) }));
       } else {
         body.push(C.el('p', { class: 'txt-grey small', text: 'Nothing pending. Continue to the next phase.' }));

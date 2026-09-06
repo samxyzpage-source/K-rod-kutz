@@ -10,14 +10,14 @@
   var RTG = root.RTG = root.RTG || {};
   RTG.UI = RTG.UI || {};
 
-  var W = 192, H = 80;
+  var W = 192, H = 112, TOP = 32;   // TOP: extra night-sky rows above the dusk bands — the logo lives there, clear of the uprights
 
   function factory(store) {
     var C = RTG.UI.C, Router = RTG.UI.Router, P = RTG.UI.Palette;
     var el = C.el('div', { class: 'screen screen-full title-screen' });
     var raf = 0, destroyed = false, t0 = 0, wobble = 0, wobbleTarget = 0, lastWobble = 0;
     var stars = [];
-    for (var i = 0; i < 18; i++) stars.push({ x: store.uiRng.int(0, W - 1), y: store.uiRng.int(0, 28), p: store.uiRng.float(0, 6.28) });
+    for (var i = 0; i < 26; i++) stars.push({ x: store.uiRng.int(0, W - 1), y: store.uiRng.int(0, TOP + 24), p: store.uiRng.float(0, 6.28) });
 
     var canvas = C.el('canvas', { class: 'title-canvas', width: W, height: H, role: 'img', 'aria-label': 'Goalposts at dusk, a football on a tee' });
     var ctx = canvas.getContext('2d');
@@ -27,16 +27,19 @@
 
     function draw(now) {
       var pal = P.current();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      // the night sky above the dusk bands (the logo sits here)
+      ctx.fillStyle = pal.night; ctx.fillRect(0, 0, W, TOP + 1);
+      ctx.fillStyle = pal.chalk;
+      for (var s = 0; s < stars.length; s++) {
+        var st = stars[s];
+        if (Math.sin(now / 700 + st.p) > 0.1) ctx.fillRect(st.x, st.y, 1, 1);
+      }
+      ctx.translate(0, TOP);
       // sky bands (flat, no gradients)
       var bands = [pal.night, pal.navy, pal.dusk, pal.dusk2, pal.sunset];
       var bh = Math.ceil(52 / bands.length);
       for (var b = 0; b < bands.length; b++) { ctx.fillStyle = bands[b]; ctx.fillRect(0, b * bh, W, bh + 1); }
-      // stars twinkle
-      ctx.fillStyle = pal.chalk;
-      for (var s = 0; s < stars.length; s++) {
-        var st = stars[s];
-        if (st.y < 24 && Math.sin(now / 700 + st.p) > 0.1) ctx.fillRect(st.x, st.y, 1, 1);
-      }
       // sun sliver
       ctx.fillStyle = pal.gold; ctx.fillRect(150, 44, 14, 3); ctx.fillRect(152, 42, 10, 2);
       // stands silhouette
@@ -45,7 +48,7 @@
       // field with stripes
       for (var f = 0; f < 4; f++) { ctx.fillStyle = f % 2 ? pal.grass2 : pal.grass; ctx.fillRect(0, 54 + f * 7, W, 7); }
       ctx.fillStyle = pal.chalk;
-      for (var y = 56; y < H; y += 7) ctx.fillRect(0, y, W, 1);
+      for (var y = 56; y < H - TOP; y += 7) ctx.fillRect(0, y, W, 1);
       // uprights
       ctx.fillStyle = pal.chalk;
       ctx.fillRect(72, 14, 2, 42); ctx.fillRect(118, 14, 2, 42); ctx.fillRect(72, 30, 48, 2); ctx.fillRect(95, 30, 2, 26);
@@ -60,6 +63,7 @@
       ctx.fillStyle = pal.ink;
       ctx.fillRect(84, 60, 3, 3); ctx.fillRect(83, 63, 5, 6); ctx.fillRect(82, 69, 2, 4); ctx.fillRect(87, 69, 2, 4);
       ctx.fillStyle = pal.cream; ctx.fillRect(84, 60, 3, 1);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
 
     function frame(now) {

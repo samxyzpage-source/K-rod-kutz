@@ -69,7 +69,9 @@ then `Router.sync()` (or `store.load('auto')` with `?load=auto`). With `?debug=1
 5. **`Router.sync()`** is called after every dispatch **except** these in-scene functions, whose calling scene owns
    the transition: `simStep, simToKick, applyUserKick, autoKick, applyUserKickoff` (game loop), `sessionKick`
    (session scenes call `Router.sync()` after their result beat), `finishUserGame` (the game screen goes to
-   `postgame` itself), `train, spendXp, autoSpend, autoOption` (never change the route).
+   `postgame` itself), `train, spendXp, autoSpend, autoOption, markRead` (never change the route). The inbox marks
+   messages read with `dispatch('markRead', '*')` (`Engine.markRead(state, rng, id | ids | '*')`); subscribers see
+   `fnName === 'markRead'` and may skip a re-render.
 6. Subscribers are notified **after** the sync (a screen destroyed by the sync is already unsubscribed).
 7. Engine errors propagate (they are programming errors); wrap UI handlers that may hit a precondition and toast.
 
@@ -109,8 +111,9 @@ and `<html>`: `.cb .hc .reduced-motion .font-scale-125 .font-scale-150 .left-foo
 `CAMP → campbattle`, `COMBINE_* → combine`, anything else (`HALFTIME70 / PRACTICE / TRYOUT`) → `kick`
 (`{mode:'session', session}`); `EVENT` → `{id:'hub', event:true}` (keep the current hub-family screen, open the
 modal); `DECISION` → `OFFERS_COLLEGE → offers`, `UDFA / FREE_AGENCY / EXTENSION / TAG / CUT_NOTICE / MIN → contract`
-(`{kind}`), `HOF → legacy`, everything else → `offseason` (`{kind}`); stage `DRAFT`: phase `DRAFT → draft`,
-`COMBINE → combine`, else `offseason`; stage `RETIRED → legacy`; phase `AWARDS → awards`; otherwise `hub`.
+(`{kind}`), `HOF → legacy`, `COMBINE_PLAN → combine` (the combine screen owns the plan card), everything else →
+`offseason` (`{kind}`); stage `DRAFT`: phase `DRAFT → draft`,
+`COMBINE → combine`, else `offseason`; stage `RETIRED → legacy`; phase `AWARDS → awards`; phase `OFF → offseason` (the wizard's preview card once the chain is done); otherwise `hub`.
 
 **Stay rules** (`Router.sync`): the resolved id equals the live one → no remount (screens re-render through their
 subscription); resolved `hub` while a `FREE` screen is live → stay; `EVENT` → stay on a `FREE` screen (else go
@@ -165,7 +168,7 @@ All return `HTMLElement`s styled by `css/style.css`.
 | `crest(teamOrId, size=32)` | procedural pixel crest (shape + motif by `fnv1a32(id)`, team colours); accepts a team object or id (state lookup, then static data) |
 | `pixelAvatar(look, size)` | player `look {skin, hair, boot}`; palettes in `C.LOOK` |
 | `sparkline(canvas, values, {min, max, color})` | pixel polyline |
-| `tooltip(el, text)` | hover / focus / 400 ms long-press; sets `aria-describedby`; honours `settings.tooltips` |
+| `tooltip(el, text)` | hover / focus / 400 ms long-press; sets `aria-describedby`; honours `settings.tooltips`. The description span lives in one shared `#tip-descs` sr-only host (not inside `el`, so `el.textContent` stays clean and nothing widens a `.scroll-x`); entries whose anchor left the document are swept (`C.tooltipCount()` for tests) |
 | `icon(name, size=12)` | inline SVG from a pixel string: `wind rain snow dome star trophy envelope boot heart clock arrow-l/r/u/d check x home team train stats more dice save sun cloud money ball flag ice bolt gear trash`; `weatherIcon(weather, wind)` picks one |
 | `screen({title, back, right, class, children})` | `.screen` with a `.screen-head` (back button → `Router.back()`) |
 | `team(id)` / `teamName(id)` / `teamAbbr(id)` | read-only lookups |
@@ -223,7 +226,7 @@ All synchronous; every mutation re-renders through the store. `RTG.debug.strict 
 |---|---|
 | `getState()` / `setState(state)` | deep clone / validate + reindex + replace (+ autosave) |
 | `newCareer({seed, difficulty, archetype, name, look, foot, hometown})` → state | |
-| `jumpTo({stage, phase?, year?, week?})` → state | one engine step per iteration (`autoPlayGame` if a game is open, `settlePending` if pending, `autoPlayWeek` in REG/POST, else `nextPhase`), so `DRAFT.DECLARE / COMBINE / DRAFT`, `AWARDS`, `PRE` are all reachable; throws after 30 career years |
+| `jumpTo({stage, phase?, year?, week?})` → state | one engine step per iteration (`autoPlayGame` if a game is open, `settlePending({max:1})` — ONE pending — if pending, `autoPlayWeek` in REG/POST, else `nextPhase`), so `DRAFT.DECLARE`, `DRAFT.COMBINE` (with the plan decision still pending, i.e. the combine screen's plan card), `DRAFT.DRAFT`, `AWARDS`, `PRE` are all reachable stops; throws after 30 career years |
 | `forceKick({outcome, sub?, side?, blockReturnTd?} | {power, aim, quality, holdMs?} | {timing})` → KickResult | game pending: `Kick.resolve(…, {forced})` + `Sim.applyKick`; session: writes `session.results[idx]`, runs `Career.finishSession/resume` when done (mirrors `Engine.sessionKick`); a triple is a normal dispatch. **Subscribers get `{fnName:'applyUserKick'|'sessionKick', result, forced:true}`** — kick scenes must render that result when they are waiting for input |
 | `autoKick(bool)` / `autoKickEnabled()` | sets `store.autoKickAll` |
 | `simGame()` `simWeek(opts)` `simSeason(opts)` `simOffseason(opts)` `simCareer({untilStage, maxYears})` `settle(opts)` `nextPhase()` | `autoPlay*` / `settlePending` dispatches |
@@ -247,7 +250,7 @@ Tokens: `--navy --navy-2 (--navy2 alias) --cream --ink --grass --grass-2 --chalk
 
 | Group | Classes |
 |---|---|
-| Layout | `#app .topbar .screen-host .tabbar .rail .rail-left .rail-right .chromeless .screen .screen-full .screen-head .screen-title .screen-head-right .section-title .stack .stack-2 .grid-2 .grid-3 .row .row-between .row-wrap .col .grow .scroll-x` |
+| Layout | `#app .topbar .screen-host .tabbar .rail .rail-left .rail-right .chromeless .screen .screen-full .screen-kick .screen-session (canvas screens: max-width none, no centred column) .screen-head .screen-title .screen-head-right .section-title .stack .stack-2 .grid-2 .grid-3 .row .row-between .row-wrap .col .grow .scroll-x (position: relative)` |
 | Buttons | `.btn .btn-primary .btn-secondary .btn-danger .btn-ghost .btn-team .btn-sm .btn-block .btn-row .btn-row-tight .active .btn.pill .pills` (pills: ghost buttons used as radio choices) |
 | Cards | `.card .card-title .card-title-right .card-body .card-footer .card-gold .card-red .card-sky .card-mint .card-team .card-flat .card-selectable .card-selected` |
 | Chips / meters | `.chip .chip-gold/-red/-mint/-sky/-grey/-team/-dark .chips .delta .meter .meter-label .meter-blocks .blk .on .meter-value .meter-red/-mint/-sky/-team .meters-row .bar .bar-track .bar-fill .bar-pot .bar-value .stars .crest .avatar .icon` |
@@ -298,4 +301,5 @@ them to the screen (e.g. `.game-screen .pill`) — global selectors in a later s
 | `debug.forceKick` on sessions | mirrors `Engine.sessionKick` bookkeeping in debug.js | no engine entry point accepts a forced outcome (interface request: `Engine.sessionKick(state, rng, input, opts{forced})` / `Engine.applyUserKick(…, opts)`) |
 | Settings extras | `haptics`, `keys` added | §4.5 settings row lists haptics (§4.8) and key remap |
 | `?load=auto` | boot resumes the autosave directly | test convenience |
+| Integration pass | `Router.resolve` routes a pending `COMBINE_PLAN` to `combine`; `Engine.markRead` is dispatchable (NO_SYNC); `C.tooltip` keeps its description in `#tip-descs`; `debug.jumpTo` settles one pending per step; `.screen-kick / .screen-session` full width and `.scroll-x { position: relative }` live in `style.css` | the U2 / U3 interface requests |
 | Palette extras | `--team-text`, `--navy2` alias, shell colours | readable team text on navy; kick.css referenced `--navy2` |

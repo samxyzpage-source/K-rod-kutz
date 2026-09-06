@@ -494,6 +494,42 @@ test('two-minute drill: trailing by 2 at 2:00 with the ball starts the script; p
   assert.ok(g.gs.driveLog.some((r) => r.result === 'PLAY'), 'plays are logged');
 });
 
+test('headlineTag: the tag follows the kicker\'s own line, the team result is only the secondary tag; lineText renders the real line', () => {
+  const H = Tuning.sim.summary;
+  const line = (o) => Object.assign({ fga: 0, fgm: 0, pat: 0, patMade: 0, long: 0, gw: 0, tf: 0 }, o);
+  const tag = (o, extra) => Sim.headlineTag(Object.assign({ userLine: line(o), kicks: [], won: false, tied: false }, extra || {}));
+  // a perfect day in a team loss is still a perfect day (never bad_day / postgame_loss)
+  let r = tag({ fga: 2, fgm: 2, pat: 3, patMade: 3 });
+  assert.equal(r.tag, 'perfect_day'); assert.equal(r.secondary, 'postgame_loss');
+  assert.equal(tag({ fga: H.perfectMinFga, fgm: H.perfectMinFga }, { won: true }).tag, 'perfect_day');
+  // a missed PAT spoils the perfect day but is not a bad day either → the team result
+  assert.equal(tag({ fga: 2, fgm: 2, pat: 2, patMade: 1 }, { won: true }).tag, 'postgame_win');
+  assert.equal(tag({ fga: 2, fgm: 2, pat: 2, patMade: 1 }).tag, 'postgame_loss');
+  // bad_day only at ≤ badDayPct on ≥ badDayMinFga attempts (a 2-of-3 day in a loss is a plain loss)
+  assert.equal(tag({ fga: 2, fgm: 1 }, { won: true }).tag, 'bad_day', '1-for-2 is a bad day even in a win');
+  assert.equal(tag({ fga: 3, fgm: 1 }).tag, 'bad_day');
+  assert.equal(tag({ fga: 3, fgm: 2 }).tag, 'postgame_loss');
+  assert.equal(tag({ fga: 1, fgm: 0 }).tag, H.badDayMinFga <= 1 ? 'bad_day' : 'postgame_loss', 'a single miss is not a bad day (badDayMinFga ' + H.badDayMinFga + ')');
+  // decisive miss / game-winner beat everything
+  assert.equal(tag({ fga: 3, fgm: 2 }, { decisiveMiss: true }).tag, 'decisive_miss');
+  assert.equal(tag({ fga: 1, fgm: 0 }, { decisiveMiss: true }).tag, 'decisive_miss');
+  assert.equal(tag({ fga: 2, fgm: 2, gw: 1 }, { won: true }).tag, 'game_winner');
+  // kick-row tags when the line is neither perfect nor bad
+  const rows = [{ type: 'FG', made: true, distance: 33, outcome: 'GOOD' }, { type: 'FG', made: false, distance: 44, outcome: 'DOINK_OUT' }, { type: 'FG', made: true, distance: 52, outcome: 'GOOD' }];
+  r = tag({ fga: 3, fgm: 2 }, { kicks: rows, won: true });
+  assert.equal(r.tag, 'doink'); assert.equal(r.key.distance, 44);
+  r = tag({ fga: 3, fgm: 2 }, { kicks: [rows[0], { type: 'FG', made: false, distance: 40, outcome: 'BLOCKED' }, rows[2]] });
+  assert.equal(r.tag, 'blocked');
+  r = tag({ fga: 3, fgm: 2 }, { kicks: [rows[0], { type: 'FG', made: false, distance: 40, outcome: 'WIDE_L' }, rows[2]] });
+  assert.equal(r.tag, 'fifty_plus'); assert.equal(r.key.distance, 52);
+  // the {line} slot is the real line, never the template fallback
+  assert.equal(Sim.lineText(line({ fga: 3, fgm: 2 })), '2-for-3');
+  assert.equal(Sim.lineText(line({ fga: 2, fgm: 2, pat: 2, patMade: 2 })), '2-for-2 and 2-for-2 on PATs');
+  assert.equal(Sim.lineText(line({ pat: 3, patMade: 3 })), '3-for-3 on PATs');
+  assert.equal(Sim.lineText(line({})), '0-for-0');
+  assert.equal(Sim.lineText(null), '0-for-0');
+});
+
 test('finishGame: summary shape, schedule/results written once, meters/xp applied, state.game cleared, weekGameDone, headline', (t) => {
   if (!hasData) { t.skip('team data not loaded'); return; }
   const g = gfx.startUserGame(RTG, { seed: 14 });
