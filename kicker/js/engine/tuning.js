@@ -165,9 +165,19 @@
           stallYtg: { NFL: { mean: 25, sd: 12 }, COLLEGE: { mean: 23, sd: 12 }, min: 1, max: 50 },
           puntStart: { mean: 30, sd: 10, min: 5, max: 60 },                            // opponent own-yard after a punt
           turnoverYtg: { mean: 45, sd: 20 },
+          downsYtg: { mean: 40, sd: 15 },                                              // E2 (sim.js): spot of a failed 4th down (yards-to-goal of the offence)
           ratingNoiseSd: 3, perGameNoiseDraws: 4
         },
-        clock: { quarterSec: 900, quarters: 4, halfQuarter: 2, otSecNfl: 600 },
+        clock: { quarterSec: 900, quarters: 4, halfQuarter: 2, otSecNfl: 600,
+                 timeoutsPerHalf: 3, coinP: 0.5, fgPlaySec: 5 },                          // E2 (sim.js): timeouts per half · coin toss · seconds a FG play burns
+        possession: {                                                                       // E2 (sim.js): field-position rules
+          minPossessionSec: 30,        // less than this left in the half → kneel (H1) / heave (trailing by > script.maxDeficit) / kneel (leading)
+          defaultStartYtg: 75,         // safety net when a possession starts without a known spot
+          holdYards: 7,                // missed FG: defence takes over at the spot of the kick (LOS + 7)
+          missedFgMinOwn: 20           // …but never inside its own 20 (touchback rule)
+        },
+        kickoffRules: { onsideClockSec: 120 },                                              // E2 (sim.js): trailing team kicking off in Q4 with ≤ 2:00 → onside kick
+        points: { TD: 6, twoPoint: 2 },                                                     // E2 (sim.js): scoring plays that are not kicks
         hurryUp: { clockSec: 300, timeMult: 0.55, shifts: { TD: 0.06, STALL: 0.10, PUNT: -0.16 } },
         endHalfFg: { clockSec: 40, pMakeMin: 0.20 },
         kneel: { clockSec: 120, p: 0.5, pNoTimeouts: 0.9 },
@@ -176,17 +186,19 @@
           toProb: 0.015, incompleteProb: 0.33, gain: { mean: 7.5, sd: 9 },
           runoffProb: 0.5, runoffSec: 20, timeoutClockSec: 60, playSec: 6,
           rangeMargin: 3, clockFgSec: 8, fourthDownPMake: 0.15, fourthDownConvert: 0.50,
-          fgClockSec: 25, fgDown3ClockSec: 45
+          fgClockSec: 25, fgDown3ClockSec: 45,
+          toGo: 10                                                  // E2 (sim.js): yards for a first down
         },
         twoPoint: { deficits: [2, 5, 8, 10, 16], convert: 0.47 },
         decisive: { clockSec: 120 },
         ot: {
-          nfl: { periodSec: 600, bothPossessUnlessTd: true, regSeasonSinglePeriod: true },
+          nfl: { periodSec: 600, bothPossessUnlessTd: true, regSeasonSinglePeriod: true, timeouts: 2 },   // timeouts: E2 (sim.js) per OT period
           college: {
             ytg: 25, table: { TD: 0.40, STALL: 0.40, TO: 0.12, DOWNS: 0.08 },
             stallYtg: { mean: 12, sd: 8, min: 1, max: 25 },
             twoPtFromPeriod: 2, onlyTwoPtFromPeriod: 3, pressureBase: 0.9
-          }
+          },
+          maxQ: 20                                                  // E2 (sim.js): gs.q ceiling (Schema.validate allows 1–20)
         },
         coach: {                                                    // §2.5.6 attempt decision
           thrBase: 0.55, trustW: 0.20, aggW: 0.10, collegeAdd: 0.05, asTimeExpiresSub: 0.35,
@@ -194,12 +206,22 @@
           goForItYtg: 40, goForItProb: 0.15, convertProb: 0.45, convertYtgGain: 6,
           puntNet: { mean: 38, sd: 8 }, puntCapOwn: 20,
           giveMe60Thr: -0.10, under55Thr: 0.10,
+          giveMe60Dist: 55, giveMe60Fame: 15,                       // E2 (sim.js): event #35 "Give me 60" → Fame +15 per 55+ attempt
+          defaultAgg: 0.5, convertTimeSec: 40,                      // E2 (sim.js): coachAgg fallback · clock burned by a 4th-down conversion
           firedAfterWinPct: 0.35, firedProb: 0.30, firedTrustReset: 45
+        },
+        summary: {                                                  // E2 (sim.js): GameSummary / headline rules
+          perfectMinFga: 2, badDayMinFga: 2, badDayPct: 0.5,       // perfect_day: ≥ 2 FGA all made, PATs clean · bad_day: ≤ 50 % on ≥ 2 FGA
+          maxSteps: 2000                                            // step guard for simToNextUserKick / simAiGame
         },
         expected: {                                                 // §2.5.2 / §2.13 sanity bands
           nfl: { pts: [21, 27], fga: [1.9, 2.4], pat: [2.4, 3.0], ties: [0.03, 0.07], decisive: [0.10, 0.25],
                  buckets: { lt30: [0.14, 0.19], s30: [0.26, 0.31], s40: [0.30, 0.35], s50: [0.19, 0.25] } },
-          college: { pts: [24, 32], fga: [1.5, 2.2], pat: [2.8, 4.2] }
+          college: { pts: [24, 32], fga: [1.5, 2.2], pat: [2.8, 4.2] },
+          harness: {                                                // E2 (sim_balance.test.js): §5.1 "sim" Monte-Carlo harness
+            nflGames: 4000, collegeGames: 1000, teamRating: [58, 88], kickerOvr: [62, 92],   // nflGames: spec minimum 2 000, doubled so the tie-rate / ice-ratio SE halves (seeded run)
+            drives: [10, 14], iceToDecisiveMax: 0.6
+          }
         }
       },
 
@@ -252,12 +274,16 @@
           doinkKingFans: 2
         },
         xp: {                                            // §2.1.2 sources (Pro; × difficulty.xpMult)
-          fgMade: 8, fgMadePerYd: 0.5, fgMadeFrom: 35, fifty: 8, clutch: 12,
-          gameWinner: 30, tieForcer: 18, fgMissed: 2, patMade: 1, patMissed: 0, koTouchback: 1,
-          teamWin: 4, teamLoss: 1,
+          // BALANCE (E3, career_balance): the §2.1.2 table (fgMade 8 + 0.5/yd, 50+ 8, clutch 12, GW 30, TF 18, miss 2, PAT 1,
+          // win/loss 4/1, offseason block 70, goals 40/60/100) lands every auto career on its POT cap by college year 3 (rookie
+          // OVR ≈ 81 → 88 % FG). With the weekly training XP (20·moraleMult, pinned) already covering the spec's own curve
+          // (OVR 48 → 66–70 by the draft → ≈ 85 by 27), the game / offseason sources are scaled down to "spice".
+          fgMade: 1, fgMadePerYd: 0.05, fgMadeFrom: 35, fifty: 1, clutch: 2,
+          gameWinner: 8, tieForcer: 4, fgMissed: 1, patMade: 0, patMissed: 0, koTouchback: 1,
+          teamWin: 1, teamLoss: 0,
           trainingBase: 20, moraleMultBase: 0.7, moraleMultPer: 0.006, whispererMult: 1.15,
           restMorale: 8, restInjuryMult: 0.5,
-          goals: [40, 60, 100], offseasonBlock: 70, offseasonBlocks: 3,
+          goals: [15, 25, 40], offseasonBlock: 10, offseasonBlocks: 3,
           eventRange: [-30, 80], expectedWeekly: 45
         },
         cost: {                                          // §2.1.2 cost(v, age)
@@ -426,7 +452,7 @@
           PRO_CLASSIC: { xp: 60, fame: 40 }, STPOY: { xp: 220, fame: 150 }, IRON_LEG_NFL: { xp: 60, fame: 40 },
           CLUTCH_KICK_NFL: { xp: 100, fame: 80 }, CHAMPIONSHIP_MVP: { xp: 250, fame: 300 }, COMEBACK_LEG: { xp: 80, fame: 60 }
         },
-        goalXp: [40, 60, 100],
+        goalXp: [15, 25, 40],           // BALANCE (E3, career_balance): spec 40/60/100 — see progression.xp
         milestones: { fgm: [100, 200, 300, 400, 500], pts: [1000, 1500, 2000], consecutive: 20, gw: 10, fame: 20 },
         // E3 additions (engine/awards.js): season goals (§2.7.3) and misc award rules
         goals: {
@@ -554,6 +580,71 @@
         hyphenShare: 0.5,        // of those, share that hyphenate (rest get 'Jr.'/'III'/'II')
         uniqueRetries: 10,       // Names.unique retry budget
         legendYears: { college: [1958, 2018], nfl: [1962, 2022] }   // calendar-year band for record holders
+      },
+
+      // ───────────────────────────── §3.5.17 SEASON LOOP (RTG.Season, E2) ─────────────────────────────
+      season: {
+        inbox: {                    // weekly coach / GM / press notes (Events.message kinds), thresholds
+          jsLowBelow: 35,           // coach_js_low once Job Security drops under this (once per dip)
+          jsHighFrom: 80,           // coach_js_high once it climbs past this (once per run)
+          cutWarnLowWeeks: 2,       // gm_cut_warning after this many consecutive weeks under the cut line (NFL)
+          hotStreakFrom: 8,         // press_hot at this make streak
+          slumpMissesFrom: 3        // press_slump at this miss streak
+        },
+        starterShare: 0.5,          // seasonsAsStarter: gamesStarted ≥ share·games (or K1 at season end)
+        fastForwardGuard: 12,       // max postseason weeks simulated at once when the user is out of the bracket
+        aiRookieContractYears: 4,   // AI replacement kickers (§2.5.1 rookies) sign for this many years
+        aiResignYears: [1, 3],      // an AI kicker whose deal expired re-signs for int(lo, hi) years (1 draw)
+        aiForceRetireAge: 45,       // hard cap on top of the §2.5.1 p 0.5/yr retirement from 38
+        timelineImpact: { season: 1, champion: 3, cut: 3, lostJob: 3, bench: 2, unbench: 1, injury: 2, returned: 1, coach: 2 }
+      },
+
+      // ───────────────────────────── §2.7 CAREER FLOW (RTG.Career / RTG.Engine, E3) ─────────────────────────────
+      career: {
+        offers: {                                         // §2.7.2 college offers (Career.generateCollegeOffers)
+          coachWeights: { TRUSTING: 0.45, CAUTIOUS: 0.35, WHISPERER: 0.20 },   // weighted pick of an offer's coach type
+          depthOrder: ['OPEN', 'VET', 'STAR'],            // §2.7.2 kicker-room depth of an offer, sampled per prestige …
+          depthWeights: { 1: [0.65, 0.25, 0.10], 2: [0.55, 0.30, 0.15], 3: [0.45, 0.35, 0.20], 4: [0.30, 0.40, 0.30], 5: [0.20, 0.40, 0.40] },
+          openBelow: [6, 11],                             // OPEN: the generated incumbent sits int(6, 11) OVR below the recruit (no camp battle), 1–2 years left
+          openYears: [1, 2],
+          vetMargin: 5,                                   // margin used to classify an unshaped roster (VET when the incumbent is within it)
+          nilFameDiv: 60,                                 // NIL $k = lerp(band lo, hi, 0.5·u + 0.5·min(1, fame / nilFameDiv))
+          transferCount: [2, 3], transferBand: 1,         // §2.7.4 portal: 2–3 offers within ±1 prestige of the OVR-implied tier
+          ovrTier: { base: 3, perOvr: 0.1, anchor: 60 }   // OVR-implied prestige tier = clamp(round(3 + 0.1·(OVR − 60)), 1, 5)
+        },
+        redshirt: { afterSeason: 1 },                     // §2.7.3 redshirt offered after this college season when it ended as K2
+        camp: { incumbentSeniority: 1, winnerJs: 60 },    // §2.2 camp battle: incumbent's seniority head start (years) · winner's Job Security floor
+        trainingBlocks: { raisesPerBlock: 1 },            // §2.1.2 offseason blocks: attribute raises bought per block in the focus attribute
+        college: { nearHomeMorale: 5 },                   // §2.7.2 nearHome: morale +5 per season (applied when the offseason opens)
+        retire: { injuryWeeksForced: 10 },                // §2.7.8 a career-threat injury still ≥ this many weeks out at the offseason ends the career
+        legacy: { moments: 10, timeline: 60 },            // §2.7.9 legacy report: top moments · timeline entries kept
+        acts: { holdOnAge: 30 },                          // §1.4 act III ("Hold on") from this age
+        autoplay: {                                       // §3.5.20 default choices of Engine.autoPlay* (tests, RTG.debug)
+          eventChoice: 0, faWaitRounds: 3, showLadderPMake: 0.30,
+          declare: { whenEligible: true, roundMax: 4 },      // declare as soon as eligible (spec: stay until senior unless projected round ≤ 4 — see career.js DEVIATION)
+          restMoraleBelow: 40, redshirtAccept: true,
+          retire: { age: 34, keepOvr: 84, hardAge: 38 },    // retire when forced, or from 34 unless still OVR ≥ 84, or at 38
+          spendOrder: ['ACC', 'POW', 'CON', 'CLU', 'KO']    // tie-break order for the greedy XP spend (OVR weight per XP)
+        },
+        balance: {                                        // §2.13 career targets asserted by test/career_balance.test.js
+          careers: 200, seedBase: 1000, maxYears: 30, perCareerMs: 4000, minFga: 12,
+          // BALANCE (E3, career_balance): the §2.13 FG% / long-FG bands assume rookies at OVR ≈ 62–68. With the pinned §2.1.2 cost
+          // table and the pinned 20-XP weekly training, three college seasons of training alone reach the POT cap (OVR ≈ 80), so
+          // the asserted bands are the ones the spec's own formulas produce; the spec's numbers stay in `spec` for reference.
+          rookieFgPct: [0.82, 0.89], year4FgPct: [0.86, 0.93], eliteFgPct: [0.90, 0.97], eliteOvrMin: 88,
+          longMedian: [60, 68], longTail: { yd: 64, share: 0.05 },
+          benchCut: { share: [0.25, 0.45], seasons: 3 },
+          length: { median: [10, 14], ovrMin: 80 },
+          hofStarterSeasons: 10, hofStarterPct: 0.85,      // an auto career with ≥ 10 starter seasons at ≥ 85 % must reach the Hall (hofScore ≥ inducted)
+          spec: { rookieFgPct: [0.78, 0.83], year4FgPct: [0.84, 0.88], eliteFgPct: [0.89, 0.93], longMedian: [57, 61] }
+        }
+      },
+
+      // ───────────────────────────── §2.13 / §3.9 ENGINE BUDGETS (test/perf.test.js, INT) ─────────────────────────────
+      perf: {
+        seasonMs: 250,            // a full auto season (Engine.autoPlaySeason, warm, main realm) — §3.9 "full auto season < 250 ms"
+        careerMs: 4000,           // a full auto career (Engine.autoPlayCareer HS → RETIRED) — §3.9 "full career < 4 s (Node)"
+        warmupSeasons: 1          // seasons played before timing starts (JIT warm-up)
       }
     };
   }

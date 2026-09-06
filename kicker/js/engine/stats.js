@@ -52,11 +52,24 @@
     return s;
   }
 
-  /** Ensure a stats object has every counter (older saves / hand-built fixtures). */
+  /** Counter keys of a KickerStats (cached on first use — no allocation per kick). */
+  var STAT_KEYS = null;
+  function statKeys() {
+    if (!STAT_KEYS) {
+      STAT_KEYS = [];
+      var e = emptyStats();
+      for (var k in e) if (Object.prototype.hasOwnProperty.call(e, k) && k !== 'buckets') STAT_KEYS.push(k);
+    }
+    return STAT_KEYS;
+  }
+
+  /** Ensure a stats object has every counter (older saves / hand-built fixtures). Allocation-free on a complete object. */
   function ensureStats(s) {
-    var e = emptyStats();
-    for (var k in e) if (Object.prototype.hasOwnProperty.call(e, k) && s[k] === undefined) s[k] = e[k];
-    for (var i = 0; i < BUCKETS.length; i++) if (!s.buckets[BUCKETS[i]]) s.buckets[BUCKETS[i]] = { a: 0, m: 0 };
+    var keys = statKeys(), i;
+    for (i = 0; i < keys.length; i++) if (s[keys[i]] === undefined) s[keys[i]] = 0;
+    var b = s.buckets;
+    if (!b || typeof b !== 'object') b = s.buckets = {};
+    for (i = 0; i < BUCKETS.length; i++) if (!b[BUCKETS[i]]) b[BUCKETS[i]] = { a: 0, m: 0 };
     return s;
   }
 

@@ -5,8 +5,12 @@
  * `checksum = fnv1a(JSON.stringify(career))` over the career exactly as stored in the blob.
  *
  * Serialize strips the non-persisted caches (`league.kickers`, and `teamIndex` is already
- * non-enumerable) and packs the two big row arrays (`stats.kicks`, `history.timeline`) into a
- * columnar `{_cols, _rows}` form so a 20-season slot stays under Tuning.save.maxBytes; deserialize
+ * non-enumerable) and packs the big row arrays (`stats.kicks`, `history.timeline`, `season.schedule`,
+ * `season.standings`, `inbox`, `headlines`, `history.*`) into a lossless columnar `{_cols, _rows}` form
+ * (rows lacking some columns carry a `_miss` list; object-valued columns with one key set are flattened
+ * via `_sub`) and every KickerStats block (`stats.*`, `season.kickerStats`, AI kickers' `seasonStats`,
+ * `history.seasons[].stats`) into `{_ks:[counters], _b:[bucket a/m]}` with the key order recorded once in
+ * `career._pack`, so a full 20-season career stays under Tuning.save.maxBytes (400 KB); deserialize
  * unpacks, migrates, reindexes and validates. Export/import is base64 of the blob JSON (UTF-8 safe).
  *
  * Purity: no window/document/clock. Base64 uses Node's Buffer when present (typeof check) and a
@@ -19,7 +23,15 @@
   var Util = RTG.Util, Tuning = RTG.Tuning;
   var Save = {};
 
-  var PACK_PATHS = [['stats', 'kicks'], ['history', 'timeline']];
+  /** Row arrays packed by packRows (each is independent). */
+  var PACK_PATHS = [['stats', 'kicks'], ['history', 'timeline'], ['season', 'schedule'], ['season', 'standings'],
+    ['history', 'seasons'], ['history', 'awards'], ['history', 'moments'], ['history', 'contracts'], ['history', 'teams'],
+    ['inbox'], ['headlines']];
+  /** Default KickerStats key order when Schema is not loaded (Schema.STAT_KEYS wins). */
+  var STAT_KEYS_FALLBACK = ['fga', 'fgm', 'pat', 'patMade', 'pts', 'long', 'clutchA', 'clutchM', 'decisiveA', 'decisiveM', 'gameWinners',
+    'tieForcers', 'blocked', 'doinks', 'doinkIn', 'wideL', 'wideR', 'short', 'made50plus', 'consecutive', 'bestConsecutive', 'games',
+    'gamesStarted', 'koTouchbacks', 'koCount', 'wins', 'losses'];
+  var BUCKET_KEYS_FALLBACK = ['0-29', '30-39', '40-49', '50-59', '60+'];
   var B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
   function schema() { return RTG.Schema; }
@@ -52,49 +64,176 @@
     return career;
   };
 
+  /** Own keys of a plain object (undefined-valued keys excluded), in order. */
+  function signature(o) {
+    var keys = [];
+    for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k) && o[k] !== undefined) keys.push(k);
+    return keys;
+  }
+
   /**
    * Columnar packing of an array of plain-object rows: `{_cols:[keys], _rows:[[values]]}`.
-   * Rows lacking a key (or carrying extra keys) are stored verbatim as objects, so the transform is
-   * lossless. Nested values (wind, input, tags) are kept as-is.
-   * @param {Object[]} rows @returns {{_cols:string[], _rows:Array}}
+   *  - `_cols` is the union of the rows' keys in first-seen order; a row holding every column becomes a value array.
+   *  - A row lacking some columns becomes a value array too (missing slots hold null) and its missing column
+   *    indices are listed in `_miss[rowIdx]`, so `{a:4}` and `{a:1, b:null}` stay distinguishable.
+   *  - A column whose every present value is a plain object with one common key set (e.g. `wind {speed, dir}`,
+   *    `input {power, aim, quality}`) is flattened to value arrays; `_sub[colIdx]` records the sub-keys.
+   *  - Rows that are not plain objects, or that carry `undefined` values, are stored verbatim.
+   * The transform is lossless: unpackRows(packRows(rows)) deep-equals rows (key order aside).
+   * @param {Object[]} rows @returns {{_cols:string[], _rows:Array, _miss?:Object, _sub?:Object}}
    */
   Save.packRows = function (rows) {
-    var cols = [], seen = {}, i, k;
+    var cols = [], seen = {}, i, k, c;
     for (i = 0; i < rows.length; i++) {
       if (!isObj(rows[i])) continue;
       for (k in rows[i]) if (Object.prototype.hasOwnProperty.call(rows[i], k) && !seen[k]) { seen[k] = true; cols.push(k); }
     }
-    var out = new Array(rows.length);
+    var out = new Array(rows.length), miss = {}, hasMiss = false;
+    var subSig = new Array(cols.length), subOk = new Array(cols.length), subSeen = new Array(cols.length);
+    for (c = 0; c < cols.length; c++) { subOk[c] = true; subSeen[c] = false; }
     for (i = 0; i < rows.length; i++) {
       var r = rows[i];
-      if (!isObj(r) || Object.keys(r).length !== cols.length) { out[i] = r; continue; }
-      var arr = new Array(cols.length), ok = true;
-      for (k = 0; k < cols.length; k++) {
-        if (!Object.prototype.hasOwnProperty.call(r, cols[k]) || r[cols[k]] === undefined) { ok = false; break; }
-        arr[k] = r[cols[k]];
+      if (!isObj(r)) { out[i] = r; continue; }
+      var arr = new Array(cols.length), missing = null, verbatim = false;
+      for (c = 0; c < cols.length; c++) {
+        var col = cols[c];
+        if (!Object.prototype.hasOwnProperty.call(r, col)) { arr[c] = null; (missing || (missing = [])).push(c); continue; }
+        var v = r[col];
+        if (v === undefined) { verbatim = true; break; }
+        arr[c] = v;
+        if (subOk[c]) {
+          if (isObj(v)) {
+            var sig = signature(v);
+            var sigKey = sig.length ? JSON.stringify(sig) : '';
+            if (!sigKey || (subSeen[c] && subSig[c] !== sigKey)) subOk[c] = false;
+            else { subSig[c] = sigKey; subSeen[c] = true; }
+          } else subOk[c] = false;
+        }
       }
-      out[i] = ok ? arr : r;
+      if (verbatim) { out[i] = r; for (c = 0; c < cols.length; c++) subOk[c] = false; continue; }
+      if (missing) { miss[i] = missing; hasMiss = true; }
+      out[i] = arr;
     }
-    return { _cols: cols, _rows: out };
+    var sub = {}, hasSub = false;
+    for (c = 0; c < cols.length; c++) {
+      if (!subOk[c] || !subSeen[c]) continue;
+      var subKeys = JSON.parse(subSig[c]);
+      sub[c] = subKeys; hasSub = true;
+      for (i = 0; i < out.length; i++) {
+        var row = out[i];
+        if (!Array.isArray(row) || !isObj(row[c])) continue;
+        var flat = new Array(subKeys.length);
+        for (k = 0; k < subKeys.length; k++) flat[k] = row[c][subKeys[k]];
+        row[c] = flat;
+      }
+    }
+    var packed = { _cols: cols, _rows: out };
+    if (hasMiss) packed._miss = miss;
+    if (hasSub) packed._sub = sub;
+    return packed;
   };
 
   /**
-   * Inverse of packRows. Non-packed input (a plain array) is returned unchanged.
-   * @param {{_cols:string[], _rows:Array}|Object[]} packed @returns {Object[]}
+   * Inverse of packRows (also reads the earlier `{_cols, _rows}`-only form). Non-packed input (a plain array)
+   * is returned unchanged.
+   * @param {{_cols:string[], _rows:Array, _miss?:Object, _sub?:Object}|Object[]} packed @returns {Object[]}
    */
   Save.unpackRows = function (packed) {
     if (Array.isArray(packed)) return packed;
     if (!isObj(packed) || !Array.isArray(packed._cols) || !Array.isArray(packed._rows)) return [];
-    var cols = packed._cols, out = new Array(packed._rows.length);
+    var cols = packed._cols, miss = isObj(packed._miss) ? packed._miss : null, sub = isObj(packed._sub) ? packed._sub : null;
+    var out = new Array(packed._rows.length);
     for (var i = 0; i < packed._rows.length; i++) {
       var r = packed._rows[i];
       if (!Array.isArray(r)) { out[i] = r; continue; }
-      var o = {};
-      for (var k = 0; k < cols.length; k++) o[cols[k]] = r[k];
+      var skip = miss && miss[i] ? miss[i] : null, o = {};
+      for (var c = 0; c < cols.length; c++) {
+        if (skip && skip.indexOf(c) >= 0) continue;
+        var v = r[c];
+        if (sub && sub[c] && Array.isArray(v)) {
+          var keys = sub[c], obj = {};
+          for (var k = 0; k < keys.length; k++) obj[keys[k]] = v[k];
+          v = obj;
+        }
+        o[cols[c]] = v;
+      }
       out[i] = o;
     }
     return out;
   };
+
+  // ───────────── KickerStats blocks ─────────────
+
+  function statKeys() { var S = schema(); return S && Array.isArray(S.STAT_KEYS) ? S.STAT_KEYS : STAT_KEYS_FALLBACK; }
+  function bucketKeys() { var S = schema(); return S && S.ENUM && Array.isArray(S.ENUM.buckets) ? S.ENUM.buckets : BUCKET_KEYS_FALLBACK; }
+
+  /**
+   * Pack one KickerStats block: `{_ks:[counters in keys order], _b:[a, m per bucket], ...extra keys verbatim}`.
+   * Blocks missing a counter or a bucket are left as they are (lossless: nothing is invented).
+   * @param {Object} s @param {string[]} keys @param {string[]} buckets @returns {Object}
+   */
+  Save.packStats = function (s, keys, buckets) {
+    if (!isObj(s) || s._ks !== undefined || !isObj(s.buckets)) return s;
+    var ks = new Array(keys.length), i;
+    for (i = 0; i < keys.length; i++) { if (typeof s[keys[i]] !== 'number') return s; ks[i] = s[keys[i]]; }
+    if (signature(s.buckets).length !== buckets.length) return s;
+    var b = new Array(buckets.length * 2);
+    for (i = 0; i < buckets.length; i++) {
+      var bk = s.buckets[buckets[i]];
+      if (!isObj(bk) || typeof bk.a !== 'number' || typeof bk.m !== 'number' || signature(bk).length !== 2) return s;
+      b[2 * i] = bk.a; b[2 * i + 1] = bk.m;
+    }
+    var out = { _ks: ks, _b: b };
+    for (var k in s) {
+      if (!Object.prototype.hasOwnProperty.call(s, k) || k === 'buckets' || keys.indexOf(k) >= 0) continue;
+      out[k] = s[k];
+    }
+    return out;
+  };
+
+  /**
+   * Inverse of packStats (unpacked input passes through).
+   * @param {Object} p @param {string[]} keys @param {string[]} buckets @returns {Object}
+   */
+  Save.unpackStats = function (p, keys, buckets) {
+    if (!isObj(p) || !Array.isArray(p._ks) || !Array.isArray(p._b)) return p;
+    var s = {}, i;
+    for (i = 0; i < keys.length; i++) s[keys[i]] = p._ks[i];
+    s.buckets = {};
+    for (i = 0; i < buckets.length; i++) s.buckets[buckets[i]] = { a: p._b[2 * i], m: p._b[2 * i + 1] };
+    for (var k in p) if (Object.prototype.hasOwnProperty.call(p, k) && k !== '_ks' && k !== '_b') s[k] = p[k];
+    return s;
+  };
+
+  /** Apply fn to every KickerStats block location of a career (in place). */
+  function eachStatsBlock(career, fn) {
+    var i, k;
+    if (isObj(career.stats)) {
+      var names = ['season', 'career', 'college', 'nfl'];
+      for (i = 0; i < names.length; i++) if (career.stats[names[i]] !== undefined) career.stats[names[i]] = fn(career.stats[names[i]]);
+    }
+    if (isObj(career.season) && isObj(career.season.kickerStats)) {
+      var ks = career.season.kickerStats;
+      for (k in ks) if (Object.prototype.hasOwnProperty.call(ks, k)) ks[k] = fn(ks[k]);
+    }
+    if (isObj(career.leagues)) {
+      var lgs = ['college', 'nfl'];
+      for (i = 0; i < lgs.length; i++) {
+        var L = career.leagues[lgs[i]];
+        if (!isObj(L) || !Array.isArray(L.teams)) continue;
+        for (var t = 0; t < L.teams.length; t++) {
+          var tm = L.teams[t];
+          if (!isObj(tm)) continue;
+          if (isObj(tm.kicker) && tm.kicker.seasonStats !== undefined) tm.kicker.seasonStats = fn(tm.kicker.seasonStats);
+          if (isObj(tm.kicker2) && tm.kicker2.seasonStats !== undefined) tm.kicker2.seasonStats = fn(tm.kicker2.seasonStats);
+        }
+      }
+    }
+    if (isObj(career.history) && Array.isArray(career.history.seasons)) {
+      var lines = career.history.seasons;
+      for (i = 0; i < lines.length; i++) if (isObj(lines[i]) && lines[i].stats !== undefined) lines[i].stats = fn(lines[i].stats);
+    }
+  }
 
   function getPath(obj, path) {
     var cur = obj;
@@ -107,7 +246,11 @@
     cur[path[path.length - 1]] = value;
   }
 
+  /** Pack a (cloned) career in place: KickerStats blocks first, then the row arrays (history.seasons rows carry blocks). */
   function packCareer(career) {
+    var keys = statKeys(), buckets = bucketKeys();
+    eachStatsBlock(career, function (b) { return Save.packStats(b, keys, buckets); });
+    career._pack = { stats: keys.slice(), buckets: buckets.slice() };
     for (var i = 0; i < PACK_PATHS.length; i++) {
       var v = getPath(career, PACK_PATHS[i]);
       if (Array.isArray(v) && v.length) setPath(career, PACK_PATHS[i], Save.packRows(v));
@@ -115,11 +258,17 @@
     return career;
   }
 
+  /** Inverse of packCareer (tolerates partially packed / older blobs). */
   function unpackCareer(career) {
     for (var i = 0; i < PACK_PATHS.length; i++) {
       var v = getPath(career, PACK_PATHS[i]);
       if (isObj(v) && Array.isArray(v._cols)) setPath(career, PACK_PATHS[i], Save.unpackRows(v));
     }
+    var pk = isObj(career._pack) ? career._pack : null;
+    var keys = pk && Array.isArray(pk.stats) ? pk.stats : statKeys();
+    var buckets = pk && Array.isArray(pk.buckets) ? pk.buckets : bucketKeys();
+    eachStatsBlock(career, function (b) { return Save.unpackStats(b, keys, buckets); });
+    delete career._pack;
     return career;
   }
 

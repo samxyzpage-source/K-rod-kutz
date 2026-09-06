@@ -468,7 +468,7 @@
 
   /**
    * Wait one free-agency round (§2.7.7): each existing offer is withdrawn with p 0.35, a new offer appears
-   * with p 0.4 (from teams not already offering). Mutates and returns the decision.
+   * with p 0.4 (from teams not already in the round — a team that just withdrew does not re-offer). Mutates and returns the decision.
    * Draws: per offer chance 1 · new-offer chance 1 (+ team weighted 1, FA years 1, aav 1 when it fires).
    * @param {Object} state @param {RNG} rng @param {Object} decision from generateOffers @returns {Object} decision
    */
@@ -480,7 +480,7 @@
     for (var i = 0; i < pl.offers.length; i++) {
       if (!rng.chance(F.withdrawProb)) kept.push(pl.offers[i]);                           // draw per offer
     }
-    var exclude = kept.map(function (o) { return o.teamId; });
+    var exclude = pl.offers.map(function (o) { return o.teamId; });   // teams already in the round (kept or withdrawn) do not re-offer
     if (rng.chance(F.newOfferProb)) {                                                       // draw: new offer?
       var pool = offerPool(state, mode, exclude, pl);
       if (pool.length) {
@@ -748,14 +748,14 @@
 
   /**
    * Pay this season's money into history.earnings (§2.7.7): salary = (total − signing bonus)/years, the
-   * signing bonus in year 1, college NIL ($k/yr → $M). Idempotent per contract year (contract.paidThrough).
+   * signing bonus in year 1, college NIL ($k/yr → $M, 3 decimals). Idempotent per contract year (contract.paidThrough).
    * @param {Object} state @returns {{salary:number, bonus:number, nil:number, total:number}}
    */
   Contracts.payoutSeason = function (state) {
     var p = state.player;
     var c = p.contract;
     var out = { salary: 0, bonus: 0, nil: 0, total: 0 };
-    if (p.league === 'COLLEGE' && p.nil > 0) out.nil = round1(p.nil / K_PER_M);
+    if (p.league === 'COLLEGE' && p.nil > 0) out.nil = Util.roundN(p.nil / K_PER_M, 3);
     if (c && c.years > 0 && c.yearIdx < c.years && c.aav > 0) {
       var paidThrough = typeof c.paidThrough === 'number' ? c.paidThrough : -1;
       if (paidThrough < c.yearIdx) {
@@ -767,8 +767,8 @@
         c.paidThrough = c.yearIdx;
       }
     }
-    out.total = round1(out.salary + out.bonus + out.nil);
-    state.history.earnings = round1((state.history.earnings || 0) + out.total);
+    out.total = Util.roundN(out.salary + out.bonus + out.nil, 3);
+    state.history.earnings = Util.roundN((state.history.earnings || 0) + out.total, 3);
     return out;
   };
 

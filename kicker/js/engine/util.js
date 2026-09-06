@@ -39,8 +39,9 @@
    * Round to n decimals.
    * @param {number} x @param {number} n @returns {number}
    */
+  var POW10 = [1, 10, 100, 1000, 10000, 100000, 1000000];
   Util.roundN = function (x, n) {
-    var m = Math.pow(10, n);
+    var m = n >= 0 && n < POW10.length ? POW10[n] : Math.pow(10, n);
     return Math.round(x * m) / m;
   };
 
@@ -76,12 +77,35 @@
   };
 
   /**
-   * Deep clone via JSON (drops functions/undefined; state must be JSON-safe anyway).
+   * Deep clone with JSON semantics (functions / undefined dropped from objects and nulled in arrays,
+   * non-finite numbers → null, prototypes ignored; state must be JSON-safe anyway). A direct recursive
+   * copy is several times faster than JSON.parse(JSON.stringify(...)) for the small objects the engine
+   * clones per kick (kicker snapshots, modifiers, flags); the result equals the JSON round trip.
    * @template T @param {T} obj @returns {T}
    */
   Util.deepClone = function (obj) {
-    return obj === undefined ? undefined : JSON.parse(JSON.stringify(obj));
+    return obj === undefined ? undefined : cloneJson(obj, true);
   };
+  function cloneJson(v, top) {
+    var t = typeof v;
+    if (v === null || t === 'string' || t === 'boolean') return v;
+    if (t === 'number') return isFinite(v) ? v : null;
+    if (t === 'undefined' || t === 'function' || t === 'symbol') return top ? undefined : null;
+    if (typeof v.toJSON === 'function') return cloneJson(v.toJSON(), top);
+    if (Array.isArray(v)) {
+      var arr = new Array(v.length);
+      for (var i = 0; i < v.length; i++) arr[i] = cloneJson(v[i], false);
+      return arr;
+    }
+    var out = {};
+    for (var k in v) {
+      if (!Object.prototype.hasOwnProperty.call(v, k)) continue;
+      var x = v[k], tx = typeof x;
+      if (tx === 'undefined' || tx === 'function' || tx === 'symbol') continue;
+      out[k] = cloneJson(x, false);
+    }
+    return out;
+  }
 
   /**
    * 32-bit FNV-1a hash of the UTF-8 encoding of a string.
