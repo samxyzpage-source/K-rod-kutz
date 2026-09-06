@@ -12,8 +12,8 @@
  *
  * RTG.Schema.validate runs after every dispatch (RTG.debug.strict) and is asserted at every checkpoint; the run must
  * produce zero console / page errors (shell AND kick-scene files). Runs on file:// and http at 390×844 and 1280×800;
- * two of the four combinations switch to reduced motion after the first game (real input, instant flights) so the
- * whole spec stays within a few minutes.
+ * after the first game every combination switches to reduced motion (real input, instant flights); two of the four
+ * restore the full animation for the NFL game so every animated beat runs at least once per mode.
  */
 'use strict';
 const { test, after } = require('node:test');
@@ -245,7 +245,21 @@ async function clickDecision(page, kind, o) {
     case 'RETIRE':
       if (!(await first(o.retire ? '[data-action="opt-RETIRE"]' : '[data-action="opt-ONE_MORE_YEAR"]'))) assert.ok(await first('[data-action^="opt-"]'));
       return;
-    case 'EXTENSION': assert.equal(scr, 'contract'); assert.ok(await first('[data-action="accept"]'), 'ACCEPT on the extension card'); return;
+    case 'EXTENSION': {
+      assert.equal(scr, 'contract');
+      // COUNTER once (the +AAV counter through its modal) — the card comes back as EXTENSION when the offer stands, or
+      // free agency follows when it is withdrawn; a second visit (COUNTER disabled) accepts
+      const counter = page.locator('.scr-contract [data-action="counter"]:not([disabled])');
+      if (!o.countered && await counter.count()) {
+        o.countered = true;
+        await counter.click();
+        await page.locator('.modal').last().waitFor({ state: 'visible', timeout: 5000 });
+        await page.locator('.modal').last().locator('.modal-buttons .btn').first().click();
+        return;
+      }
+      assert.ok(await first('[data-action="accept"]'), 'ACCEPT on the extension card');
+      return;
+    }
     case 'FREE_AGENCY': case 'MIN': case 'UDFA':
       if (await first('[data-action^="sign-"]')) { await confirmIf('SIGN'); return; }
       if (await first('[data-action="wait"]')) return;
@@ -324,7 +338,7 @@ async function finishSeasonForReal(page, vp, app, shots, o) {
 H.matrix(({ mode, vp }) => {
   const fast = (mode === 'file' && vp === 'desktop') || (mode === 'http' && vp === 'phone');
   const shots = mode === 'http';
-  test(`full_career ${mode} ${vp}: title → showcase → college → draft → NFL → legacy → title through the real screens${fast ? ' (reduced motion after the first game)' : ''}`, async () => {
+  test(`full_career ${mode} ${vp}: title → showcase → college → draft → NFL → legacy → title through the real screens${fast ? '' : ' (full motion for the NFL game)'}`, async () => {
     const app = await H.openApp({ mode, viewport: vp });
     const { page } = app;
     try {
@@ -394,8 +408,9 @@ H.matrix(({ mode, vp }) => {
       b = await brief(page);
       assert.ok(b.week === 2 || (b.pending && b.pending.kind !== 'EVENT'), 'week advanced to 2 (' + b.week + ')');
       await checkpoint(page, app, 'week 1 done');
-      if (fast) await page.evaluate(() => RTG.UI.store.setSetting('reducedMotion', true));
-      await page.evaluate(() => RTG.UI.store.setSetting('autoPat', 'safe'));
+      // from here on the flights are instant (real input, instant animation); the "real" combinations restore the full
+      // motion for the NFL game below so every animated beat runs at least once per mode
+      await page.evaluate(() => { RTG.UI.store.setSetting('reducedMotion', true); RTG.UI.store.setSetting('autoPat', 'safe'); });
 
       // ── the middle of the season on simWeek; the first bye and the last REG week for real
       let byePlayed = false;
@@ -443,9 +458,11 @@ H.matrix(({ mode, vp }) => {
       await page.waitForFunction(() => { const p = RTG.UI.store.state.pending; return !!(p && p.kind === 'KICKS'); }, null, { timeout: 10000 });
       const combineKicks = await forceSession(page, 'combine');
       assert.ok(combineKicks >= 6, 'combine session played (' + combineKicks + ' kicks)');
-      await page.locator('.session-combine .combine-done').waitFor({ state: 'visible', timeout: 15000 });
+      // the last kick closes the session: the engine moves on to DRAFT.DRAFT and the screen hands over to the draft
+      // (the combine's done card only shows when the phase stays at COMBINE)
+      await page.waitForFunction(() => RTG.UI.store.state.phase === 'DRAFT' || !!document.querySelector('.combine-done'), null, { timeout: 15000 });
       assert.equal(typeof (await H.debug(page, 'getState')).flags.combineScore, 'number', 'combine score recorded');
-      await H.clickButton(page, 'CONTINUE ▶', page.locator('.combine-done'));
+      if (await page.locator('.combine-done').count()) await H.clickButton(page, 'CONTINUE ▶', page.locator('.combine-done'));
       await page.waitForFunction(() => RTG.UI.store.state.stage === 'DRAFT' && RTG.UI.store.state.phase === 'DRAFT', null, { timeout: 10000 });
       await checkpoint(page, app, 'combine done');
 
@@ -491,6 +508,7 @@ H.matrix(({ mode, vp }) => {
         await page.waitForFunction(() => RTG.UI.store.state.phase === 'REG', null, { timeout: 10000 });
       }
       await page.evaluate(() => RTG.UI.store.setSetting('inputMode', 'meter'));
+      if (!fast) await page.evaluate(() => RTG.UI.store.setSetting('reducedMotion', false));
       let nflWeek = null;
       for (let g = 0; g < 4 && !nflWeek; g++) {
         b = await brief(page);
@@ -498,7 +516,7 @@ H.matrix(({ mode, vp }) => {
         else { await H.debug(page, 'simWeek'); await settleEvents(page); }
       }
       assert.ok(nflWeek && nflWeek.hasGame, 'an NFL game was played for real');
-      await page.evaluate(() => RTG.UI.store.setSetting('inputMode', 'flick'));
+      await page.evaluate(() => { RTG.UI.store.setSetting('inputMode', 'flick'); RTG.UI.store.setSetting('reducedMotion', true); });
       await checkpoint(page, app, 'NFL game');
 
       // ── seasons on simSeason; every contract / retire card for real; retire as soon as it is offered after 3 seasons
@@ -515,7 +533,7 @@ H.matrix(({ mode, vp }) => {
         }
         b = await brief(page);
         if (b.phase === 'REG' || b.phase === 'POST') { await H.debug(page, 'simSeason'); nflSeasons++; }
-        r = await walkOffseason(page, app, { retire: nflSeasons >= 3, declare: true });
+        r = await walkOffseason(page, app, { retire: nflSeasons >= 3, declare: true, countered: cards.indexOf('EXTENSION') >= 0 });
         cards = cards.concat(r.seen);
         if (r.out === 'legacy') retired = true;
         if (r.seen.indexOf('EXTENSION') >= 0 || r.seen.indexOf('FREE_AGENCY') >= 0) { const cs = await H.screenId(page); if (shots && cs !== 'legacy') await H.shot(page, 'full_after_contract_' + vp); }
@@ -550,6 +568,14 @@ H.matrix(({ mode, vp }) => {
       assert.ok(await page.locator('.title-screen').isVisible(), 'back on the title');
       assert.ok(await page.locator('.title-summary').count() === 1, 'the title offers CONTINUE for the autosaved career');
       noErrors(app, 'end');
+    } catch (e) {
+      // where did it stop? (screen, state signature, a screenshot) — printed before the assertion propagates
+      try {
+        const where = await page.evaluate(() => { const s = RTG.UI.store.state; return { screen: RTG.UI.Router.current(), wanted: RTG.UI.Router.params() && RTG.UI.Router.params().wanted, stage: s && s.stage + '.' + s.phase + ' Y' + s.year + ' W' + s.week, pending: s && s.pending ? s.pending.kind + ':' + (s.pending.decision ? s.pending.decision.kind : s.pending.session ? s.pending.session.kind : s.pending.event ? s.pending.event.id : '') : null, game: !!(s && s.game), modal: !!document.querySelector('.modal'), toast: (document.querySelector('.toast') || {}).textContent || '' }; });
+        console.log('  full_career ' + mode + ' ' + vp + ' FAILED at ' + JSON.stringify(where) + '\n  errors: ' + JSON.stringify(app.errors.concat(app.foreignErrors)).slice(0, 600));
+        await H.shot(page, 'full_FAILED_' + mode + '_' + vp);
+      } catch (e2) { /* ignore */ }
+      throw e;
     } finally { await app.close(); }
   });
 }, H.MODES, ['phone', 'desktop']);

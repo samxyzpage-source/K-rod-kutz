@@ -51,6 +51,8 @@ body.hc, html.hc {
   --night: #000; --shadow: #fff; --team-1: #ff0; --team-2: #fff; --team-ink: #000;
 }
 body.hc .card, body.hc .btn, body.hc .chip, body.hc .modal, body.hc .topbar, body.hc .tabbar { border-color: #fff; }
+/* high contrast paints --red / --mint / --chalk all white: anything on those backgrounds must read in ink */
+body.hc .chip-red, body.hc .chip-mint, body.hc .chip-sky, body.hc .chip-gold, body.hc .banner-bad, body.hc .banner-good, body.hc .btn-danger, body.hc .btn-primary, body.hc .toast-bad, body.hc .toast-good, body.hc .toast-gold { color: var(--ink); }
 
 /* ---------- base ---------- */
 html { font-size: 10px; -webkit-text-size-adjust: 100%; background: var(--navy); }
@@ -266,7 +268,7 @@ html.is-landscape .tab-label { display: none; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 
 /* ---------- meters (5 blocks) ---------- */
-.meter { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.meter { display: flex; align-items: center; gap: 8px; min-height: 24px; min-width: 0; }
 .meter-label { flex: 0 0 5.5em; font-size: 0.85em; color: var(--grey); text-transform: uppercase; }
 .meter-blocks { display: inline-flex; gap: 3px; }
 .blk { display: inline-block; width: 14px; height: 12px; background: var(--navy); border: var(--border) solid var(--ink); }
@@ -278,6 +280,8 @@ html.is-landscape .tab-label { display: none; }
 .meter-value { min-width: 2.5em; text-align: right; }
 .meters-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; }
 @media (max-width: 359px) { .meters-row { grid-template-columns: 1fr; } }
+/* a scaled-up font does not fit two meters (label + 5 blocks + value) side by side on a phone */
+@media (max-width: 699px) { html.font-scale-125 .meters-row, html.font-scale-150 .meters-row { grid-template-columns: 1fr; } }
 
 /* ---------- bars (attributes) ---------- */
 .bar { display: flex; align-items: center; gap: 8px; min-height: 20px; }

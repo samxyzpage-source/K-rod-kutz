@@ -64,6 +64,8 @@ body.hc, html.hc {
   --night: #000; --shadow: #fff; --team-1: #ff0; --team-2: #fff; --team-ink: #000;
 }
 body.hc .card, body.hc .btn, body.hc .chip, body.hc .modal, body.hc .topbar, body.hc .tabbar { border-color: #fff; }
+/* high contrast paints --red / --mint / --chalk all white: anything on those backgrounds must read in ink */
+body.hc .chip-red, body.hc .chip-mint, body.hc .chip-sky, body.hc .chip-gold, body.hc .banner-bad, body.hc .banner-good, body.hc .btn-danger, body.hc .btn-primary, body.hc .toast-bad, body.hc .toast-good, body.hc .toast-gold { color: var(--ink); }
 
 /* ---------- base ---------- */
 html { font-size: 10px; -webkit-text-size-adjust: 100%; background: var(--navy); }
@@ -279,7 +281,7 @@ html.is-landscape .tab-label { display: none; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 
 /* ---------- meters (5 blocks) ---------- */
-.meter { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.meter { display: flex; align-items: center; gap: 8px; min-height: 24px; min-width: 0; }
 .meter-label { flex: 0 0 5.5em; font-size: 0.85em; color: var(--grey); text-transform: uppercase; }
 .meter-blocks { display: inline-flex; gap: 3px; }
 .blk { display: inline-block; width: 14px; height: 12px; background: var(--navy); border: var(--border) solid var(--ink); }
@@ -291,6 +293,8 @@ html.is-landscape .tab-label { display: none; }
 .meter-value { min-width: 2.5em; text-align: right; }
 .meters-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; }
 @media (max-width: 359px) { .meters-row { grid-template-columns: 1fr; } }
+/* a scaled-up font does not fit two meters (label + 5 blocks + value) side by side on a phone */
+@media (max-width: 699px) { html.font-scale-125 .meters-row, html.font-scale-150 .meters-row { grid-template-columns: 1fr; } }
 
 /* ---------- bars (attributes) ---------- */
 .bar { display: flex; align-items: center; gap: 8px; min-height: 20px; }
@@ -511,7 +515,7 @@ body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::aft
 .title-screen { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; padding: 0 0 var(--safe-b); }
 .title-hero { position: relative; width: 100%; max-width: 640px; margin: 0 auto; border-bottom: var(--border) solid var(--ink); }
 .title-canvas { width: 100%; height: auto; }
-.title-logo { position: absolute; left: 0; right: 0; top: 14%; text-align: center; text-shadow: 3px 3px 0 var(--ink); line-height: 1.2; pointer-events: none; }
+.title-logo { position: absolute; left: 0; right: 0; top: 4%; text-align: center; text-shadow: 3px 3px 0 var(--ink); line-height: 1.2; pointer-events: none; }   /* in the night-sky band above the uprights (title.js TOP) */
 .title-logo-1 { display: block; font-size: 1.4em; color: var(--gold); letter-spacing: 0.05em; }
 .title-logo-2 { display: block; font-size: 3.2em; color: var(--chalk); margin-top: 6px; }
 @media (min-width: 600px) { .title-logo-1 { font-size: 2em; } .title-logo-2 { font-size: 4.4em; } }
@@ -575,13 +579,18 @@ html { overflow-x: hidden; }   /* on html only: it propagates to the viewport, s
 .screen-kick .kick-continue { flex: 0 0 auto; padding: 4px 8px 8px; display: flex; justify-content: center; }
 .screen-kick .kick-ko { flex: 0 0 auto; padding: 6px; }
 
+/* toasts on the canvas screens sit in the sky band, never on the ball, the power bar or the feedback line */
+#app.chromeless[data-screen="kick"] ~ .toast-host, #app.chromeless[data-screen="showcase"] ~ .toast-host,
+#app.chromeless[data-screen="campbattle"] ~ .toast-host, #app.chromeless[data-screen="combine"] ~ .toast-host { top: 22%; bottom: auto; }
+
 /* ───────────────────────────── the kick view ───────────────────────────── */
 .kickview { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; width: 100%; position: relative; }
 .kv-stage {
   flex: 1 1 auto; min-height: 200px; min-width: 0; position: relative; overflow: hidden;
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: flex-start; justify-content: center;   /* the field sits right under the HUD; the leftover band below holds the hint */
   background: var(--night, #12142a);
 }
+html.is-desktop .kv-stage { align-items: center; }
 .kv-stage canvas.rtg-canvas {
   image-rendering: pixelated; image-rendering: crisp-edges;
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
@@ -595,7 +604,7 @@ html { overflow-x: hidden; }   /* on html only: it propagates to the viewport, s
 .kv-strip { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .kv-chip {
   display: inline-flex; align-items: center; gap: 3px; padding: 3px 6px; border: 2px solid var(--navy2, #262b4d);
-  background: var(--navy2, #262b4d); color: var(--cream, #f4e9d0); font-size: 9px; line-height: 1.2; letter-spacing: 0.5px;
+  background: var(--navy2, #262b4d); color: var(--cream, #f4e9d0); font-size: max(9px, 0.85em); line-height: 1.2; letter-spacing: 0.5px;
   white-space: nowrap; font-variant-numeric: tabular-nums;
 }
 .kv-chip.chip-gold { background: var(--gold, #f6c445); border-color: var(--gold, #f6c445); color: var(--ink, #101226); }
@@ -629,9 +638,9 @@ html { overflow-x: hidden; }   /* on html only: it propagates to the viewport, s
 }
 .kv-sub-iced { border-color: var(--sky, #7fc7ff); color: var(--sky, #7fc7ff); animation: kv-pop 0.3s steps(3) both, kv-blink 0.5s steps(2) 3; }
 .kv-sub-clutch { border-color: var(--red, #d8433a); color: var(--red, #d8433a); }
-.kv-hint { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); font-size: 9px; color: var(--cream, #f4e9d0); opacity: 0.85; letter-spacing: 1px; white-space: nowrap; background: rgba(16,18,38,0.6); padding: 2px 6px; }
+.kv-hint { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); font-size: max(9px, 0.85em); color: var(--cream, #f4e9d0); opacity: 0.85; letter-spacing: 1px; white-space: nowrap; background: rgba(16,18,38,0.6); padding: 2px 6px; }
 .kv-skip { position: absolute; bottom: 6px; right: 6px; font-size: 8px; color: var(--grey, #8a8f9e); letter-spacing: 1px; }
-.kv-feedback { flex: 0 0 auto; padding: 4px 8px; font-size: 9px; line-height: 1.5; color: var(--cream, #f4e9d0); background: var(--navy2, #262b4d); border-top: 2px solid var(--ink, #101226); min-height: 14px; }
+.kv-feedback { flex: 0 0 auto; padding: 4px 8px; font-size: max(9px, 0.85em); line-height: 1.5; color: var(--cream, #f4e9d0); background: var(--navy2, #262b4d); border-top: 2px solid var(--ink, #101226); min-height: 14px; }
 .kv-feedback-line { color: var(--gold, #f6c445); }
 .kv-feedback-coach { color: var(--cream, #f4e9d0); opacity: 0.85; font-size: 8px; }
 .kv-range-panel { flex: 0 0 auto; padding: 6px 8px; background: var(--ink, #101226); border-top: 2px solid var(--gold, #f6c445); font-size: 9px; }
@@ -679,7 +688,7 @@ html { overflow-x: hidden; }   /* on html only: it propagates to the viewport, s
 .ko-result { margin-top: 6px; font-size: 9px; color: var(--cream, #f4e9d0); }
 
 /* ───────────────────────────── session screens (showcase / camp / combine) ───────────────────────────── */
-.session-title { font-size: 10px; color: var(--gold, #f6c445); letter-spacing: 1px; margin: 0 0 4px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.session-title { font-size: max(10px, 0.95em); color: var(--gold, #f6c445); letter-spacing: 1px; margin: 0 0 4px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
 .slot-strip { display: flex; gap: 4px; flex-wrap: wrap; }
 .slot {
   display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 2px 4px;
@@ -709,7 +718,7 @@ html { overflow-x: hidden; }   /* on html only: it propagates to the viewport, s
 
 /* tutorial overlays (showcase) */
 .tut-overlay { position: absolute; inset: 0; z-index: 5; pointer-events: none; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; background: rgba(16,18,38,0.35); }
-.tut-step { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--ink, #101226); border: 2px solid var(--gold, #f6c445); color: var(--cream, #f4e9d0); font-size: 9px; white-space: pre-line; box-shadow: 3px 3px 0 #000; }
+.tut-step { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--ink, #101226); border: 2px solid var(--gold, #f6c445); color: var(--cream, #f4e9d0); font-size: max(9px, 0.85em); white-space: pre-line; box-shadow: 3px 3px 0 #000; }
 .tut-num { display: inline-flex; width: 14px; height: 14px; align-items: center; justify-content: center; background: var(--gold, #f6c445); color: var(--ink, #101226); font-size: 9px; }
 .tut-step .icon { color: var(--gold, #f6c445); }
 .tut-wind { align-self: flex-end; margin-right: 8px; }
@@ -18770,6 +18779,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     }
     if (state.stage === 'RETIRED') return { id: 'legacy', params: {} };
     if (state.phase === 'AWARDS') return { id: 'awards', params: {} };
+    if (state.phase === 'OFF') return { id: 'offseason', params: {} };   // the wizard's preview card (CONTINUE → nextPhase) once the chain is done
     return { id: 'hub', params: {} };
   };
 
@@ -22129,7 +22139,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var stageWrap = el('div', { class: 'session-stage' });
     var koSlot = el('div', { class: 'session-ko', hidden: true });
     rootEl.appendChild(header); rootEl.appendChild(stageWrap); rootEl.appendChild(koSlot);
-    var view = null, koBar = null, destroyed = false, timers = [], tut = null, headerEl = null, lastInfo = null;
+    var view = null, koBar = null, destroyed = false, timers = [], tut = null, headerEl = null, lastInfo = null, koLocked = false;
 
     function setTimer(fn, ms) { var id = root.setTimeout(function () { if (!destroyed) fn(); }, ms); timers.push(id); }
     function session() { var s = store.state; return s && s.pending && s.pending.kind === 'KICKS' ? s.pending.session : null; }
@@ -22155,6 +22165,17 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       if (!info) { RTG.UI.Router.sync(); return; }
       if (info.done) { complete(info); return; }
       setTimer(startKick, opts.nextDelayMs !== undefined ? opts.nextDelayMs : 700);
+    }
+    /** Keep the tutorial overlay on the canvas rectangle (the stage can be wider / taller than the scene). */
+    function fitTutorial() {
+      if (!tut || !view) return;
+      var cvs = view.canvas, stage = tut.parentNode;
+      if (!cvs || !stage) return;
+      var w = cvs.offsetWidth, h = cvs.offsetHeight, sw = stage.clientWidth, sh = stage.clientHeight;
+      if (!w || !sw) return;
+      var dx = Math.max(0, Math.round((sw - w) / 2)), dy = Math.max(0, cvs.offsetTop);
+      tut.style.left = dx + 'px'; tut.style.right = dx + 'px';
+      tut.style.top = dy + 'px'; tut.style.bottom = Math.max(0, sh - dy - h) + 'px';
     }
     function dismissTutorial() {
       if (!tut) return;
@@ -22208,6 +22229,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
         if (opts.tutorial && !tut) {
           tut = buildTutorial();
           view.el.querySelector('.kv-stage').appendChild(tut);
+          fitTutorial();
           view.el.addEventListener('pointerdown', dismissTutorial, true);   // first touch dismisses (non-blocking overlay)
           root.addEventListener('keydown', dismissTutorial, true);
         }
@@ -22227,7 +22249,9 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       var KO = num(ctx.kicker && ctx.kicker.attrs && ctx.kicker.attrs.KO, 50);
       if (view) view.next(ctx, K.geometry ? null : null, info);
       var reduced = reducedMotion(store.settings);
+      koLocked = false;
       koBar = KickView.kickoffBar(koSlot, { KO: KO, reduced: reduced, label: (info.label || 'KICKOFF') + ' — TAP IN THE GREEN', onLock: function (timing) {
+        koLocked = true;
         var r = store.dispatch('sessionKick', { timing: timing });
         var txt = KickView.kickoffText(r.result);
         koSlot.appendChild(el('div', { class: 'ko-result', text: txt }));
@@ -22238,8 +22262,16 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     }
     function onStore(info) {
       if (destroyed) return;
-      // a forced kickoff (RTG.debug.forceKick with a KO context) dispatches sessionKick without the view
-      if (info.fnName === 'sessionKick' && koBar && !view) { afterKick(info.result); }
+      // a kickoff resolved from outside the bar (RTG.debug.forceKick / sessionKick(null) on a KO context, with or
+      // without a mounted view): show the result and move on exactly like the bar's own tap
+      if (info.fnName === 'sessionKick' && koBar && !koLocked) {
+        koLocked = true;
+        var txt = KickView.kickoffText(info.result && info.result.result);
+        koSlot.appendChild(el('div', { class: 'ko-result', text: txt }));
+        announce(txt);
+        var r = info.result;
+        setTimer(function () { afterKick(r); }, reducedMotion(store.settings) ? 300 : 900);
+      }
     }
     var unsub = store.subscribe(onStore);
 
@@ -22251,7 +22283,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     return {
       el: rootEl,
       view: function () { return view; },
-      onResize: function () { if (view) view.resize(); },
+      onResize: function () { if (view) { view.resize(); fitTutorial(); } },
       destroy: function () {
         destroyed = true;
         for (var i = 0; i < timers.length; i++) root.clearTimeout(timers[i]);
@@ -22623,14 +22655,14 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
   var RTG = root.RTG = root.RTG || {};
   RTG.UI = RTG.UI || {};
 
-  var W = 192, H = 80;
+  var W = 192, H = 112, TOP = 32;   // TOP: extra night-sky rows above the dusk bands — the logo lives there, clear of the uprights
 
   function factory(store) {
     var C = RTG.UI.C, Router = RTG.UI.Router, P = RTG.UI.Palette;
     var el = C.el('div', { class: 'screen screen-full title-screen' });
     var raf = 0, destroyed = false, t0 = 0, wobble = 0, wobbleTarget = 0, lastWobble = 0;
     var stars = [];
-    for (var i = 0; i < 18; i++) stars.push({ x: store.uiRng.int(0, W - 1), y: store.uiRng.int(0, 28), p: store.uiRng.float(0, 6.28) });
+    for (var i = 0; i < 26; i++) stars.push({ x: store.uiRng.int(0, W - 1), y: store.uiRng.int(0, TOP + 24), p: store.uiRng.float(0, 6.28) });
 
     var canvas = C.el('canvas', { class: 'title-canvas', width: W, height: H, role: 'img', 'aria-label': 'Goalposts at dusk, a football on a tee' });
     var ctx = canvas.getContext('2d');
@@ -22640,16 +22672,19 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
 
     function draw(now) {
       var pal = P.current();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      // the night sky above the dusk bands (the logo sits here)
+      ctx.fillStyle = pal.night; ctx.fillRect(0, 0, W, TOP + 1);
+      ctx.fillStyle = pal.chalk;
+      for (var s = 0; s < stars.length; s++) {
+        var st = stars[s];
+        if (Math.sin(now / 700 + st.p) > 0.1) ctx.fillRect(st.x, st.y, 1, 1);
+      }
+      ctx.translate(0, TOP);
       // sky bands (flat, no gradients)
       var bands = [pal.night, pal.navy, pal.dusk, pal.dusk2, pal.sunset];
       var bh = Math.ceil(52 / bands.length);
       for (var b = 0; b < bands.length; b++) { ctx.fillStyle = bands[b]; ctx.fillRect(0, b * bh, W, bh + 1); }
-      // stars twinkle
-      ctx.fillStyle = pal.chalk;
-      for (var s = 0; s < stars.length; s++) {
-        var st = stars[s];
-        if (st.y < 24 && Math.sin(now / 700 + st.p) > 0.1) ctx.fillRect(st.x, st.y, 1, 1);
-      }
       // sun sliver
       ctx.fillStyle = pal.gold; ctx.fillRect(150, 44, 14, 3); ctx.fillRect(152, 42, 10, 2);
       // stands silhouette
@@ -22658,7 +22693,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       // field with stripes
       for (var f = 0; f < 4; f++) { ctx.fillStyle = f % 2 ? pal.grass2 : pal.grass; ctx.fillRect(0, 54 + f * 7, W, 7); }
       ctx.fillStyle = pal.chalk;
-      for (var y = 56; y < H; y += 7) ctx.fillRect(0, y, W, 1);
+      for (var y = 56; y < H - TOP; y += 7) ctx.fillRect(0, y, W, 1);
       // uprights
       ctx.fillStyle = pal.chalk;
       ctx.fillRect(72, 14, 2, 42); ctx.fillRect(118, 14, 2, 42); ctx.fillRect(72, 30, 48, 2); ctx.fillRect(95, 30, 2, 26);
@@ -22673,6 +22708,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       ctx.fillStyle = pal.ink;
       ctx.fillRect(84, 60, 3, 3); ctx.fillRect(83, 63, 5, 6); ctx.fillRect(82, 69, 2, 4); ctx.fillRect(87, 69, 2, 4);
       ctx.fillStyle = pal.cream; ctx.fillRect(84, 60, 3, 1);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
 
     function frame(now) {
@@ -23603,7 +23639,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
               Kit.tip(c.button({ label: 'GRIND', kind: 'secondary', icon: 'train', action: 'grind', onClick: function () { R.go('training'); } }), 'Pick a training focus for the week')));
           }
         }
-        return c.card({ title: title, kind: post ? 'gold' : 'sky', body: body, footer: actionButtons(state, ref) });
+        return c.card({ title: title, kind: post ? 'gold' : 'sky', body: body, footer: actionButtons(state, ref).filter(function (b) { return post || b.getAttribute('data-action') !== 'train'; }) });   // the bye card's REST / GRIND already cover training
       }
       var opp = Kit.team(ref.oppId);
       title = 'WEEK ' + state.week + ' · ' + Kit.kindLabel(ref.kind);
@@ -24695,7 +24731,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     }
 
     function gradeStamp(s) {
-      if (!s.grade) return null;
+      if (!s.grade || s.played === false) return null;   // no attempts (benched / injured): no grade to stamp
       var st = c.el('div', { class: 'stamp stamp-' + s.grade + ' pg-stamp' + (Kit.reduced() ? ' stamp-instant' : ''), text: s.grade, role: 'img', 'aria-label': 'Game grade ' + s.grade, 'data-grade': s.grade });
       Kit.tip(st, 'A = perfect with 2+ attempts or a game-winner · B ≥ 85 % · C ≥ 70 % · D ≥ 50 % · a decisive miss caps at D');
       return c.el('div', { class: 'pg-stamp-wrap center' }, st);
@@ -25892,7 +25928,9 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     });
     var sc = headerEl.querySelector('.combine-score');
     if (sc && RTG.Draft && RTG.Draft.combineBreakdown) {
-      try { var b = RTG.Draft.combineBreakdown(sess); sc.textContent = 'SCORE ' + (b.score > 0 ? '+' : '') + b.score; } catch (e) { /* ignore */ }
+      var played = sess.results.filter(function (r) { return !!r; }).length;
+      if (!played) sc.textContent = '';                                   // the empty breakdown clamps to the floor — meaningless before a kick
+      else { try { var b = RTG.Draft.combineBreakdown(sess); sc.textContent = 'SCORE ' + (b.score > 0 ? '+' : '') + b.score; } catch (e) { /* ignore */ } }
     }
   }
 
@@ -25908,8 +25946,14 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     el.appendChild(c.card({ title: 'COMBINE', kind: 'gold', class: 'plan-card', body: [
       c.el('p', { class: 'small', text: 'The combine is done. Next up: the draft.' }),
       rows.length ? c.kv(rows) : null,
-      c.button({ label: 'CONTINUE ▶', kind: 'primary', block: true, onClick: function () {
-        try { store.dispatch('nextPhase'); } catch (e) { c.toast(String(e.message || e), 'bad'); RTG.UI.Router.sync(); }
+      c.button({ label: 'CONTINUE ▶', kind: 'primary', block: true, action: 'continue', onClick: function () {
+        // phase COMBINE (an engine that leaves the transition to nextPhase) → nextPhase, whose sync routes to the draft
+        // screen; phase DRAFT (Career.finishCombine moved it) → straight to the draft screen — never nextPhase here,
+        // that would run the draft and skip DRAFT DAY / the ticker
+        var st = store.state;
+        if (st && st.stage === 'DRAFT' && st.phase === 'COMBINE') {
+          try { store.dispatch('nextPhase'); } catch (e) { c.toast(String(e.message || e), 'bad'); RTG.UI.Router.sync(); }
+        } else RTG.UI.Router.go('draft', {}, { replace: true });
       } })
     ] }));
     return { el: el, destroy: function () {} };
@@ -25919,6 +25963,9 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var pd = state && state.pending;
     if (pd && pd.kind === 'DECISION' && pd.decision && pd.decision.kind === 'COMBINE_PLAN') return 'plan';
     if (pd && pd.kind === 'KICKS' && pd.session && String(pd.session.kind).indexOf('COMBINE') === 0) return 'session';
+    // 'done' only while the phase is still COMBINE; Career.finishCombine moves the phase to DRAFT as the last kick
+    // lands (career.test.js asserts it), so the normal path goes straight to the draft screen (DRAFT DAY card, which
+    // shows the combine breakdown) through Router.sync — the done card is the fallback for an engine that waits
     if (state && state.stage === 'DRAFT' && state.phase === 'COMBINE' && !pd) return 'done';
     return 'other';
   }

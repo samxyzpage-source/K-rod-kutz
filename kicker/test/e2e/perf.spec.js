@@ -96,9 +96,16 @@ for (const mode of H.MODES) {
       assert.ok(heap1 - heap0 < 20, 'heap growth < 20 MB after 300 game sims (' + (heap1 - heap0).toFixed(1) + ' MB)');
       assert.ok(simMs < 60000, '300 sims through the store finish within a minute (' + simMs + ' ms)');
 
-      // a real kick: frame cost p95 of the kick scene while it animates
-      await openGame(page);
-      const reached = await toKick(page);
+      // a real kick: frame cost p95 of the kick scene while it animates (a fresh K1 career — after 300 auto games the
+      // kicker may be benched or between teams; a game may also end without a user kick, so try a few weeks)
+      await H.debug(page, 'newCareer', { seed: 4242, name: 'Perf Kicker', archetype: 'CANNON' });
+      await H.debug(page, 'jumpTo', { stage: 'COLLEGE', phase: 'REG', week: 1 });
+      let reached = false;
+      for (let w = 0; w < 6 && !reached; w++) {
+        await openGame(page);
+        reached = await toKick(page);
+        if (!reached) { await page.evaluate(() => { const s = RTG.UI.store.state; if (s.game) RTG.UI.store.dispatch('autoPlayGame'); }); await page.waitForTimeout(100); await H.debug(page, 'simWeek'); await H.debug(page, 'settle'); }
+      }
       assert.ok(reached, 'reached a user kick');
       await K.waitPhase(page, 'SETUP', 8000);
       await H.debug(page, 'perfReset');

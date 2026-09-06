@@ -77,7 +77,9 @@
     });
     var sc = headerEl.querySelector('.combine-score');
     if (sc && RTG.Draft && RTG.Draft.combineBreakdown) {
-      try { var b = RTG.Draft.combineBreakdown(sess); sc.textContent = 'SCORE ' + (b.score > 0 ? '+' : '') + b.score; } catch (e) { /* ignore */ }
+      var played = sess.results.filter(function (r) { return !!r; }).length;
+      if (!played) sc.textContent = '';                                   // the empty breakdown clamps to the floor — meaningless before a kick
+      else { try { var b = RTG.Draft.combineBreakdown(sess); sc.textContent = 'SCORE ' + (b.score > 0 ? '+' : '') + b.score; } catch (e) { /* ignore */ } }
     }
   }
 
@@ -93,8 +95,14 @@
     el.appendChild(c.card({ title: 'COMBINE', kind: 'gold', class: 'plan-card', body: [
       c.el('p', { class: 'small', text: 'The combine is done. Next up: the draft.' }),
       rows.length ? c.kv(rows) : null,
-      c.button({ label: 'CONTINUE ▶', kind: 'primary', block: true, onClick: function () {
-        try { store.dispatch('nextPhase'); } catch (e) { c.toast(String(e.message || e), 'bad'); RTG.UI.Router.sync(); }
+      c.button({ label: 'CONTINUE ▶', kind: 'primary', block: true, action: 'continue', onClick: function () {
+        // phase COMBINE (an engine that leaves the transition to nextPhase) → nextPhase, whose sync routes to the draft
+        // screen; phase DRAFT (Career.finishCombine moved it) → straight to the draft screen — never nextPhase here,
+        // that would run the draft and skip DRAFT DAY / the ticker
+        var st = store.state;
+        if (st && st.stage === 'DRAFT' && st.phase === 'COMBINE') {
+          try { store.dispatch('nextPhase'); } catch (e) { c.toast(String(e.message || e), 'bad'); RTG.UI.Router.sync(); }
+        } else RTG.UI.Router.go('draft', {}, { replace: true });
       } })
     ] }));
     return { el: el, destroy: function () {} };
@@ -104,6 +112,9 @@
     var pd = state && state.pending;
     if (pd && pd.kind === 'DECISION' && pd.decision && pd.decision.kind === 'COMBINE_PLAN') return 'plan';
     if (pd && pd.kind === 'KICKS' && pd.session && String(pd.session.kind).indexOf('COMBINE') === 0) return 'session';
+    // 'done' only while the phase is still COMBINE; Career.finishCombine moves the phase to DRAFT as the last kick
+    // lands (career.test.js asserts it), so the normal path goes straight to the draft screen (DRAFT DAY card, which
+    // shows the combine breakdown) through Router.sync — the done card is the fallback for an engine that waits
     if (state && state.stage === 'DRAFT' && state.phase === 'COMBINE' && !pd) return 'done';
     return 'other';
   }

@@ -476,7 +476,7 @@
               Kit.tip(c.button({ label: 'GRIND', kind: 'secondary', icon: 'train', action: 'grind', onClick: function () { R.go('training'); } }), 'Pick a training focus for the week')));
           }
         }
-        return c.card({ title: title, kind: post ? 'gold' : 'sky', body: body, footer: actionButtons(state, ref) });
+        return c.card({ title: title, kind: post ? 'gold' : 'sky', body: body, footer: actionButtons(state, ref).filter(function (b) { return post || b.getAttribute('data-action') !== 'train'; }) });   // the bye card's REST / GRIND already cover training
       }
       var opp = Kit.team(ref.oppId);
       title = 'WEEK ' + state.week + ' · ' + Kit.kindLabel(ref.kind);

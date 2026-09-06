@@ -21,13 +21,19 @@
 .screen-kick .kick-continue { flex: 0 0 auto; padding: 4px 8px 8px; display: flex; justify-content: center; }
 .screen-kick .kick-ko { flex: 0 0 auto; padding: 6px; }
 
+/* toasts on the kick-scene screens sit in the sky band, never on the ball, the power bar or the feedback line
+   (not on the combine: its plan card is a DOM card whose options live where the sky would be) */
+#app.chromeless[data-screen="kick"] ~ .toast-host, #app.chromeless[data-screen="showcase"] ~ .toast-host,
+#app.chromeless[data-screen="campbattle"] ~ .toast-host { top: 22%; bottom: auto; }
+
 /* ───────────────────────────── the kick view ───────────────────────────── */
 .kickview { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; width: 100%; position: relative; }
 .kv-stage {
   flex: 1 1 auto; min-height: 200px; min-width: 0; position: relative; overflow: hidden;
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: flex-start; justify-content: center;   /* the field sits right under the HUD; the leftover band below holds the hint */
   background: var(--night, #12142a);
 }
+html.is-desktop .kv-stage { align-items: center; }
 .kv-stage canvas.rtg-canvas {
   image-rendering: pixelated; image-rendering: crisp-edges;
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
@@ -41,7 +47,7 @@
 .kv-strip { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .kv-chip {
   display: inline-flex; align-items: center; gap: 3px; padding: 3px 6px; border: 2px solid var(--navy2, #262b4d);
-  background: var(--navy2, #262b4d); color: var(--cream, #f4e9d0); font-size: 9px; line-height: 1.2; letter-spacing: 0.5px;
+  background: var(--navy2, #262b4d); color: var(--cream, #f4e9d0); font-size: max(9px, 0.85em); line-height: 1.2; letter-spacing: 0.5px;
   white-space: nowrap; font-variant-numeric: tabular-nums;
 }
 .kv-chip.chip-gold { background: var(--gold, #f6c445); border-color: var(--gold, #f6c445); color: var(--ink, #101226); }
@@ -75,9 +81,9 @@
 }
 .kv-sub-iced { border-color: var(--sky, #7fc7ff); color: var(--sky, #7fc7ff); animation: kv-pop 0.3s steps(3) both, kv-blink 0.5s steps(2) 3; }
 .kv-sub-clutch { border-color: var(--red, #d8433a); color: var(--red, #d8433a); }
-.kv-hint { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); font-size: 9px; color: var(--cream, #f4e9d0); opacity: 0.85; letter-spacing: 1px; white-space: nowrap; background: rgba(16,18,38,0.6); padding: 2px 6px; }
+.kv-hint { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); font-size: max(9px, 0.85em); color: var(--cream, #f4e9d0); opacity: 0.85; letter-spacing: 1px; white-space: nowrap; background: rgba(16,18,38,0.6); padding: 2px 6px; }
 .kv-skip { position: absolute; bottom: 6px; right: 6px; font-size: 8px; color: var(--grey, #8a8f9e); letter-spacing: 1px; }
-.kv-feedback { flex: 0 0 auto; padding: 4px 8px; font-size: 9px; line-height: 1.5; color: var(--cream, #f4e9d0); background: var(--navy2, #262b4d); border-top: 2px solid var(--ink, #101226); min-height: 14px; }
+.kv-feedback { flex: 0 0 auto; padding: 4px 8px; font-size: max(9px, 0.85em); line-height: 1.5; color: var(--cream, #f4e9d0); background: var(--navy2, #262b4d); border-top: 2px solid var(--ink, #101226); min-height: 14px; }
 .kv-feedback-line { color: var(--gold, #f6c445); }
 .kv-feedback-coach { color: var(--cream, #f4e9d0); opacity: 0.85; font-size: 8px; }
 .kv-range-panel { flex: 0 0 auto; padding: 6px 8px; background: var(--ink, #101226); border-top: 2px solid var(--gold, #f6c445); font-size: 9px; }
@@ -125,14 +131,14 @@
 .ko-result { margin-top: 6px; font-size: 9px; color: var(--cream, #f4e9d0); }
 
 /* ───────────────────────────── session screens (showcase / camp / combine) ───────────────────────────── */
-.session-title { font-size: 10px; color: var(--gold, #f6c445); letter-spacing: 1px; margin: 0 0 4px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.session-title { font-size: max(10px, 0.95em); color: var(--gold, #f6c445); letter-spacing: 1px; margin: 0 0 4px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
 .slot-strip { display: flex; gap: 4px; flex-wrap: wrap; }
 .slot {
   display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 2px 4px;
   border: 2px solid var(--navy2, #262b4d); background: var(--navy2, #262b4d); color: var(--cream, #f4e9d0); font-size: 8px; line-height: 1.2; font-variant-numeric: tabular-nums;
 }
-.slot .slot-d { font-size: 9px; }
-.slot .slot-r { font-size: 8px; }
+.slot .slot-d { font-size: max(9px, 0.85em); }
+.slot .slot-r { font-size: max(8px, 0.75em); }
 .slot.current { border-color: var(--gold, #f6c445); box-shadow: 2px 2px 0 var(--ink, #101226); }
 .slot.made { border-color: var(--mint, #4dbb63); color: var(--mint, #4dbb63); }
 .slot.miss { border-color: var(--red, #d8433a); color: var(--red, #d8433a); }
@@ -140,22 +146,22 @@
 .slot.rival.made { background: var(--ink, #101226); }
 .camp-board { display: flex; flex-direction: column; gap: 3px; }
 .camp-row { display: flex; align-items: center; gap: 6px; }
-.camp-row .camp-name { width: 64px; font-size: 8px; color: var(--cream, #f4e9d0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.camp-row .camp-name { width: 64px; font-size: max(8px, 0.8em); color: var(--cream, #f4e9d0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .camp-row .camp-name.you { color: var(--gold, #f6c445); }
-.camp-row .camp-tally { margin-left: auto; font-size: 10px; color: var(--gold, #f6c445); font-variant-numeric: tabular-nums; }
+.camp-row .camp-tally { margin-left: auto; font-size: max(10px, 0.95em); color: var(--gold, #f6c445); font-variant-numeric: tabular-nums; }
 .ladder-part { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
-.ladder-part .ladder-label { font-size: 8px; width: 46px; color: var(--grey, #8a8f9e); }
+.ladder-part .ladder-label { font-size: max(8px, 0.8em); width: 46px; color: var(--grey, #8a8f9e); }
 .plan-card { max-width: 420px; margin: 24px auto; padding: 8px; }
 .plan-options { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .plan-option { border: 2px solid var(--navy2, #262b4d); background: var(--navy2, #262b4d); padding: 8px; text-align: left; color: var(--cream, #f4e9d0); cursor: pointer; font: inherit; box-shadow: 3px 3px 0 var(--ink, #101226); }
 .plan-option:hover, .plan-option:focus-visible { border-color: var(--gold, #f6c445); outline: none; }
-.plan-option .plan-label { font-size: 11px; color: var(--gold, #f6c445); display: block; margin-bottom: 4px; }
-.plan-option .plan-detail { font-size: 9px; line-height: 1.5; }
+.plan-option .plan-label { font-size: max(11px, 1em); color: var(--gold, #f6c445); display: block; margin-bottom: 4px; }
+.plan-option .plan-detail { font-size: max(9px, 0.85em); line-height: 1.5; }
 .session-outcome { padding: 8px; font-size: 10px; text-align: center; color: var(--gold, #f6c445); }
 
 /* tutorial overlays (showcase) */
 .tut-overlay { position: absolute; inset: 0; z-index: 5; pointer-events: none; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; background: rgba(16,18,38,0.35); }
-.tut-step { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--ink, #101226); border: 2px solid var(--gold, #f6c445); color: var(--cream, #f4e9d0); font-size: 9px; white-space: pre-line; box-shadow: 3px 3px 0 #000; }
+.tut-step { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--ink, #101226); border: 2px solid var(--gold, #f6c445); color: var(--cream, #f4e9d0); font-size: max(9px, 0.85em); white-space: pre-line; box-shadow: 3px 3px 0 #000; }
 .tut-num { display: inline-flex; width: 14px; height: 14px; align-items: center; justify-content: center; background: var(--gold, #f6c445); color: var(--ink, #101226); font-size: 9px; }
 .tut-step .icon { color: var(--gold, #f6c445); }
 .tut-wind { align-self: flex-end; margin-right: 8px; }

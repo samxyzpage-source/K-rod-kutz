@@ -1079,7 +1079,7 @@
     var stageWrap = el('div', { class: 'session-stage' });
     var koSlot = el('div', { class: 'session-ko', hidden: true });
     rootEl.appendChild(header); rootEl.appendChild(stageWrap); rootEl.appendChild(koSlot);
-    var view = null, koBar = null, destroyed = false, timers = [], tut = null, headerEl = null, lastInfo = null;
+    var view = null, koBar = null, destroyed = false, timers = [], tut = null, headerEl = null, lastInfo = null, koLocked = false;
 
     function setTimer(fn, ms) { var id = root.setTimeout(function () { if (!destroyed) fn(); }, ms); timers.push(id); }
     function session() { var s = store.state; return s && s.pending && s.pending.kind === 'KICKS' ? s.pending.session : null; }
@@ -1105,6 +1105,17 @@
       if (!info) { RTG.UI.Router.sync(); return; }
       if (info.done) { complete(info); return; }
       setTimer(startKick, opts.nextDelayMs !== undefined ? opts.nextDelayMs : 700);
+    }
+    /** Keep the tutorial overlay on the canvas rectangle (the stage can be wider / taller than the scene). */
+    function fitTutorial() {
+      if (!tut || !view) return;
+      var cvs = view.canvas, stage = tut.parentNode;
+      if (!cvs || !stage) return;
+      var w = cvs.offsetWidth, h = cvs.offsetHeight, sw = stage.clientWidth, sh = stage.clientHeight;
+      if (!w || !sw) return;
+      var dx = Math.max(0, Math.round((sw - w) / 2)), dy = Math.max(0, cvs.offsetTop);
+      tut.style.left = dx + 'px'; tut.style.right = dx + 'px';
+      tut.style.top = dy + 'px'; tut.style.bottom = Math.max(0, sh - dy - h) + 'px';
     }
     function dismissTutorial() {
       if (!tut) return;
@@ -1158,6 +1169,7 @@
         if (opts.tutorial && !tut) {
           tut = buildTutorial();
           view.el.querySelector('.kv-stage').appendChild(tut);
+          fitTutorial();
           view.el.addEventListener('pointerdown', dismissTutorial, true);   // first touch dismisses (non-blocking overlay)
           root.addEventListener('keydown', dismissTutorial, true);
         }
@@ -1177,7 +1189,9 @@
       var KO = num(ctx.kicker && ctx.kicker.attrs && ctx.kicker.attrs.KO, 50);
       if (view) view.next(ctx, K.geometry ? null : null, info);
       var reduced = reducedMotion(store.settings);
+      koLocked = false;
       koBar = KickView.kickoffBar(koSlot, { KO: KO, reduced: reduced, label: (info.label || 'KICKOFF') + ' — TAP IN THE GREEN', onLock: function (timing) {
+        koLocked = true;
         var r = store.dispatch('sessionKick', { timing: timing });
         var txt = KickView.kickoffText(r.result);
         koSlot.appendChild(el('div', { class: 'ko-result', text: txt }));
@@ -1188,8 +1202,16 @@
     }
     function onStore(info) {
       if (destroyed) return;
-      // a forced kickoff (RTG.debug.forceKick with a KO context) dispatches sessionKick without the view
-      if (info.fnName === 'sessionKick' && koBar && !view) { afterKick(info.result); }
+      // a kickoff resolved from outside the bar (RTG.debug.forceKick / sessionKick(null) on a KO context, with or
+      // without a mounted view): show the result and move on exactly like the bar's own tap
+      if (info.fnName === 'sessionKick' && koBar && !koLocked) {
+        koLocked = true;
+        var txt = KickView.kickoffText(info.result && info.result.result);
+        koSlot.appendChild(el('div', { class: 'ko-result', text: txt }));
+        announce(txt);
+        var r = info.result;
+        setTimer(function () { afterKick(r); }, reducedMotion(store.settings) ? 300 : 900);
+      }
     }
     var unsub = store.subscribe(onStore);
 
@@ -1201,7 +1223,7 @@
     return {
       el: rootEl,
       view: function () { return view; },
-      onResize: function () { if (view) view.resize(); },
+      onResize: function () { if (view) { view.resize(); fitTutorial(); } },
       destroy: function () {
         destroyed = true;
         for (var i = 0; i < timers.length; i++) root.clearTimeout(timers[i]);

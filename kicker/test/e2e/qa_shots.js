@@ -37,11 +37,13 @@ async function toKick(page) {
   return false;
 }
 
+/** Answer pending EVENTs (choice 0 through the modal); decisions and kick sessions are left to walk(). */
 async function settle(page) {
   for (let i = 0; i < 6; i++) {
     const b = await page.evaluate(() => { const s = RTG.UI.store.state; return s && s.pending ? s.pending.kind : null; });
-    if (!b) return;
-    if (b === 'EVENT') { const m = page.locator('.styled-event [data-action="choice-0"]'); if (await m.count()) { await m.click(); await page.waitForTimeout(80); continue; } }
+    if (b !== 'EVENT') return;
+    const m = page.locator('.styled-event [data-action="choice-0"]');
+    if (await m.count()) { await m.click(); await page.waitForTimeout(80); continue; }
     await H.debug(page, 'settle', { max: 1 });
   }
 }
@@ -49,7 +51,8 @@ async function settle(page) {
 /** Walk the pending decisions one by one (default option) until `stop(brief)` is true or nothing is left. */
 async function walk(page, stop) {
   for (let g = 0; g < 80; g++) {
-    const b = await page.evaluate(() => { const s = RTG.UI.store.state, p = s.pending; return { stage: s.stage, phase: s.phase, kind: p ? p.kind : null, dec: p && p.decision ? p.decision.kind : null, sess: p && p.session ? p.session.kind : null }; });
+    const b = await page.evaluate(() => { const s = RTG.UI.store.state, p = s.pending; return { stage: s.stage, phase: s.phase, year: s.year, week: s.week, kind: p ? p.kind : null, dec: p && p.decision ? p.decision.kind : null, sess: p && p.session ? p.session.kind : null }; });
+    if (process.env.QA_TRACE) console.log('    walk ' + g + ': ' + b.stage + '.' + b.phase + ' Y' + b.year + ' W' + b.week + (b.kind ? ' [' + b.kind + ':' + (b.dec || b.sess || '') + ']' : ''));
     if (stop(b)) return b;
     if (b.kind === 'EVENT') { await settle(page); continue; }
     if (b.kind) { await H.debug(page, 'settle', { max: 1 }); continue; }
@@ -124,7 +127,15 @@ async function run(size) {
     await shot(page, 'newcareer', size);
     await kickScene(page, size);
     // offers
-    for (let i = 0; i < 5; i++) await H.debug(page, 'forceKick', { outcome: i % 2 ? 'WIDE_R' : 'GOOD' });
+    // the rest of the showcase (kickScene played two kicks for real): force alternating makes / misses until the session ends
+    for (let i = 0; i < 8; i++) {
+      const left = await page.evaluate(() => { const p = RTG.UI.store.state.pending; return p && p.kind === 'KICKS' ? p.session.contexts.length - p.session.results.length : 0; });
+      if (!left) break;
+      await K.waitSetup(page, 6 - left, 15000).catch(() => {});
+      await H.debug(page, 'forceKick', { outcome: i % 2 ? 'WIDE_R' : 'GOOD' });
+      await page.waitForTimeout(150);
+    }
+    await page.waitForFunction(() => !(RTG.UI.store.state.pending && RTG.UI.store.state.pending.kind === 'KICKS'), null, { timeout: 15000 });
     await page.evaluate(() => RTG.UI.Router.sync());
     await H.waitForScreen(page, 'offers');
     await page.waitForTimeout(200);
@@ -190,9 +201,11 @@ async function run(size) {
       await page.locator('button[data-action="watch"]').click().catch(() => {});
       await shot(page, 'game_watch', size);
     }
-    await page.evaluate(() => { const s = RTG.UI.store.state; if (s.game) RTG.UI.store.dispatch('autoPlayGame'); });
+    // finish the game: the postgame screen rebuilds its summary from store.lastDispatch (autoPlayGame) when it is opened directly
+    await page.evaluate(() => { const S = RTG.UI.store; if (S.state.game) { S.dispatch('autoPlayGame'); RTG.UI.Router.go('postgame', {}, { replace: true }); } });
     await page.waitForTimeout(200);
     await H.waitForScreen(page, 'postgame', 10000).catch(() => {});
+    await page.waitForTimeout(400);
     await shot(page, 'postgame', size);
     // browsing screens
     await H.debug(page, 'go', 'schedule'); await H.waitForScreen(page, 'schedule'); await shot(page, 'schedule', size);
@@ -211,7 +224,6 @@ async function run(size) {
     await H.debug(page, 'go', 'practice'); await H.waitForScreen(page, 'practice'); await page.waitForTimeout(400); await shot(page, 'practice', size);
     // end of season: bye card, bracket, awards
     await H.debug(page, 'go', 'hub');
-    await walk(page, b2 => b2.phase === 'REG' && false);   // no-op guard (keeps the API shape)
     for (let g = 0; g < 20; g++) {
       const s = await page.evaluate(() => { const st = RTG.UI.store.state; return { phase: st.phase, week: st.week, bye: !RTG.Season.userGameRef(st), pending: !!st.pending }; });
       if (s.phase !== 'REG') break;
@@ -233,15 +245,26 @@ async function run(size) {
     await H.waitForScreen(page, 'offseason'); await shot(page, 'offseason_blocks', size);
     await walk(page, b2 => b2.dec === 'DECLARE' || b2.dec === 'TRANSFER' || b2.dec === 'REDSHIRT');
     await H.waitForScreen(page, 'offseason'); await shot(page, 'offseason_decision', size);
-    // to the declare card (more seasons on auto)
-    let d = await walk(page, b2 => b2.dec === 'DECLARE');
-    for (let g = 0; g < 4 && !(d && d.dec === 'DECLARE'); g++) { await H.debug(page, 'simSeason'); d = await walk(page, b2 => b2.dec === 'DECLARE'); }
-    await H.waitForScreen(page, 'offseason'); await shot(page, 'offseason_declare', size);
-    await page.locator('[data-action="opt-DECLARE"]').click();
+    // to the declare card (more seasons on auto). A strong leg from here on, so the draft / pro screens are reachable
+    // for this seed (a weak recruit goes undrafted, fails the tryouts and is forced to retire before any of them).
+    await H.debug(page, 'setAttrs', { POW: 92, ACC: 90, CON: 88, CLU: 86, KO: 86 });
+    const stopAtDeclare = b2 => b2.dec === 'DECLARE' || b2.stage === 'DRAFT' || b2.stage === 'RETIRED';
+    let d = await walk(page, stopAtDeclare);
+    for (let g = 0; g < 4 && !(d && stopAtDeclare(d)); g++) {
+      const st = await page.evaluate(() => ({ stage: RTG.UI.store.state.stage, phase: RTG.UI.store.state.phase }));
+      if ((st.stage === 'COLLEGE' || st.stage === 'NFL') && (st.phase === 'PRE' || st.phase === 'REG' || st.phase === 'POST')) await H.debug(page, 'simSeason');
+      d = await walk(page, stopAtDeclare);
+    }
+    if (!d || d.stage === 'RETIRED') throw new Error('qa_shots: the career ended before the draft (' + JSON.stringify(d) + ')');
+    if (d.dec === 'DECLARE') {
+      await H.waitForScreen(page, 'offseason'); await shot(page, 'offseason_declare', size);
+      await page.locator('[data-action="opt-DECLARE"]').click();
+    } else console.log('  (senior auto-declared: no declare card for this seed)');
+    await walk(page, b2 => b2.dec === 'COMBINE_PLAN' || b2.kind === 'KICKS' || b2.phase === 'DRAFT');
     await H.waitForScreen(page, 'combine');
     await page.waitForTimeout(150);
     await shot(page, 'combine_plan', size);
-    await page.locator('.plan-option[data-option="SHOW"]').click();
+    if (await page.locator('.plan-option[data-option="SHOW"]').count()) await page.locator('.plan-option[data-option="SHOW"]').click();
     await K.waitPhase(page, 'SETUP', 10000);
     await page.waitForTimeout(300);
     await shot(page, 'combine', size);
@@ -249,10 +272,9 @@ async function run(size) {
     await page.waitForTimeout(400);
     await shot(page, 'combine_mid', size);
     await H.debug(page, 'settle');
-    await page.locator('.combine-done').waitFor({ state: 'visible', timeout: 15000 });
-    await shot(page, 'combine_done', size);
-    await H.clickButton(page, 'CONTINUE ▶', page.locator('.combine-done'));
-    await H.waitForScreen(page, 'draft');
+    await page.waitForFunction(() => RTG.UI.store.state.phase === 'DRAFT' || !!document.querySelector('.combine-done'), null, { timeout: 15000 });
+    if (await page.locator('.combine-done').count()) { await shot(page, 'combine_done', size); await H.clickButton(page, 'CONTINUE ▶', page.locator('.combine-done')); }
+    await H.waitForScreen(page, 'draft', 15000);
     await shot(page, 'draft_pre', size);
     await page.locator('[data-action="start-draft"]').click();
     await page.waitForTimeout(700);
@@ -266,6 +288,11 @@ async function run(size) {
     await walk(page, b2 => b2.dec === 'UDFA' || (b2.stage === 'NFL' && !b2.kind));
     if ((await H.screenId(page)) === 'contract' || (await page.locator('.scr-draft .pro-offer').count())) await shot(page, 'udfa', size);
     await walk(page, b2 => b2.stage === 'NFL' && !b2.kind);
+    // the draft screen stays up after the ticker (nothing pending, no dispatch): CONTINUE hands over to the pro hub
+    if ((await H.screenId(page)) !== 'hub') {
+      const cont = page.locator('.scr-draft [data-action="continue"]');
+      if (await cont.count()) await cont.first().click(); else await page.evaluate(() => RTG.UI.Router.sync({ force: true }));
+    }
     await H.waitForScreen(page, 'hub');
     await shot(page, 'hub_nfl', size);
     // an NFL contract card: seasons on auto until an EXTENSION / FREE_AGENCY / TAG decision (rookie deal ends)
