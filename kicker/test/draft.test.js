@@ -47,7 +47,7 @@ test('draftValue formula on the prospect fixture', () => {
   const p = state.player, V = D.value;
   const ovr = RTG.Player.ovr(p.attrs);
   const team = Schema.teamIn(state.leagues.college, p.teamId);
-  const want = V.ovrW * ovr + V.powW * p.attrs.POW + V.cluW * p.attrs.CLU + V.fameW * RTG.Player.fameTier(p.fame) * V.fameTierMult
+  const want = (V.offset || 0) + V.ovrW * ovr + V.powW * p.attrs.POW + V.cluW * p.attrs.CLU + V.fameW * RTG.Player.fameTier(p.fame) * V.fameTierMult
     + V.fgW * (state.stats.college.fgm / state.stats.college.fga * 100 - V.fgAnchor) + 2 + D.offers.prestigeBumpPer * (team.prestige - D.offers.prestigeAnchor);
   near(Draft.draftValue(state), want, 0.01);
   // walk-on penalty only below OVR 70
@@ -61,7 +61,7 @@ test('draftValue formula on the prospect fixture', () => {
   // no college attempts → FG term is 0
   const z = cfx.draftProspect(RTG, { fga: 0, fgm: 0 });
   z.stats.career = Schema.emptyKickerStats();
-  const zWant = V.ovrW * ovr + V.powW * p.attrs.POW + V.cluW * p.attrs.CLU + V.fameW * RTG.Player.fameTier(p.fame) * V.fameTierMult
+  const zWant = (V.offset || 0) + V.ovrW * ovr + V.powW * p.attrs.POW + V.cluW * p.attrs.CLU + V.fameW * RTG.Player.fameTier(p.fame) * V.fameTierMult
     + D.offers.prestigeBumpPer * (team.prestige - D.offers.prestigeAnchor);
   near(Draft.draftValue(z), zWant, 0.01, 'no attempts');
 });

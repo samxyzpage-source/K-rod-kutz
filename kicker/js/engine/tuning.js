@@ -55,7 +55,7 @@
           weatherMult: { clear: 1.00, dome: 1.00, heat: 1.01, rain: 0.97, fog: 1.00, cold: 0.95, snow: 0.93 },
           tempPenaltyPerDeg: 0.002, tempPenaltyBelowF: 40,   // (1 − 0.002·max(0, 40 − tempF)) outdoors
           altitudeMult: 1.03,
-          windAlongPerMph: 0.30,               // rangeAdd += 0.30·windAlong
+          windAlongPerMph: 0.15,               // rangeAdd += 0.15·windAlong (SPEC BUMP: was 0.30 — 20 mph tail = +3 yd, keeps career longs near the record book)
           KCB: 4.942,                          // XBAR / tan(34°)
           launchDeg: 34, tanLaunch: 0.6745,    // h(D) = tan(34°)·D·(1 − D/carry)
           rneedMinD: 8,                        // D ≤ KCB+1 → treat as 8
@@ -203,6 +203,7 @@
         coach: {                                                    // §2.5.6 attempt decision
           thrBase: 0.55, trustW: 0.20, aggW: 0.10, collegeAdd: 0.05, asTimeExpiresSub: 0.35,
           thrMin: 0.15, thrMax: 0.60, defaultTrust01: 0.5, rangeMargin: 3,
+          longAttemptFrom: 57, longAttemptAdd: 0.20,                 // SPEC BUMP: coaches want extra confidence before a 58+ yd try
           goForItYtg: 40, goForItProb: 0.15, convertProb: 0.45, convertYtgGain: 6,
           puntNet: { mean: 38, sd: 8 }, puntCapOwn: 20,
           giveMe60Thr: -0.10, under55Thr: 0.10,
@@ -256,7 +257,7 @@
           SOCCER: { POW: [56, 4], ACC: [46, 4], CON: [46, 4], CLU: [46, 5], KO: [62, 4] }
         },
         creation: { attrMin: 30, attrMax: 75, starPer: 4, starBase: 3, defaultStars: 3 },
-        pot: { mean: 80, sd: 8, min: 60, max: 99, starBonus: { 2: -3, 3: 0, 4: 3, 5: 6 } },
+        pot: { mean: 88, sd: 6, min: 62, max: 99, starBonus: { 2: -3, 3: 0, 4: 3, 5: 6 } },
         form: { decay: 0.7, sdBase: 3.5, sdConDiv: 130, max: 6, sharpAt: 3, watchAt: -3 },
         traits: {
           max: 3, creationProb: 0.25,
@@ -274,20 +275,19 @@
           doinkKingFans: 2
         },
         xp: {                                            // §2.1.2 sources (Pro; × difficulty.xpMult)
-          // BALANCE (E3, career_balance): the §2.1.2 table (fgMade 8 + 0.5/yd, 50+ 8, clutch 12, GW 30, TF 18, miss 2, PAT 1,
-          // win/loss 4/1, offseason block 70, goals 40/60/100) lands every auto career on its POT cap by college year 3 (rookie
-          // OVR ≈ 81 → 88 % FG). With the weekly training XP (20·moraleMult, pinned) already covering the spec's own curve
-          // (OVR 48 → 66–70 by the draft → ≈ 85 by 27), the game / offseason sources are scaled down to "spice".
-          fgMade: 1, fgMadePerYd: 0.05, fgMadeFrom: 35, fifty: 1, clutch: 2,
-          gameWinner: 8, tieForcer: 4, fgMissed: 1, patMade: 0, patMissed: 0, koTouchback: 1,
-          teamWin: 1, teamLoss: 0,
+          // SPEC BUMP (orchestrator, §0.4): rewards are ~60 % of the §2.1.2 table (a made kick must still feel rewarding),
+          // and saturation is fixed at the root: higher POT (pot.mean 88) and a steeper cost curve (cost 20 + 2.2/pt + 2.5/pt over 80),
+          // fitted so a full career's XP (~15k) is roughly the cost of maxing every attribute by age ~30.
+          fgMade: 5, fgMadePerYd: 0.3, fgMadeFrom: 35, fifty: 5, clutch: 8,
+          gameWinner: 20, tieForcer: 12, fgMissed: 1, patMade: 1, patMissed: 0, koTouchback: 1,
+          teamWin: 3, teamLoss: 1,
           trainingBase: 20, moraleMultBase: 0.7, moraleMultPer: 0.006, whispererMult: 1.15,
           restMorale: 8, restInjuryMult: 0.5,
-          goals: [15, 25, 40], offseasonBlock: 10, offseasonBlocks: 3,
+          goals: [30, 45, 75], offseasonBlock: 50, offseasonBlocks: 3,
           eventRange: [-30, 80], expectedWeekly: 45
         },
         cost: {                                          // §2.1.2 cost(v, age)
-          base: 12, over50: 0.6, over80: 2.0, focusMult: 0.75,
+          base: 30, over50: 2.2, over70: 6.5, over80: 3.0, focusMult: 0.75,   // SPEC BUMP: was 12 / 0.6 / — / 2.0 — gentle below 70 (college growth), steep above (elite by ~30)
           ageMult: [
             { maxAge: 22, mult: 0.85 }, { maxAge: 26, mult: 1.00 }, { maxAge: 30, mult: 1.20 },
             { maxAge: 33, mult: 1.60 }, { maxAge: 36, mult: 2.40 }, { maxAge: 999, mult: 3.50 }
@@ -354,7 +354,7 @@
         },
         camp: {                                            // §2.2 camp battle
           distances: [32, 38, 44, 48, 52, 55], pressure: 0.3,
-          makeW: 10, trustW: 0.2, seniorityW: 3, rivalTrust: 50, loserJs: 35, triggerOvrMargin: 5
+          makeW: 10, trustW: 0.2, seniorityW: 3, rivalTrust: 50, loserJs: 35, triggerOvrMargin: 2   // SPEC BUMP: was 5 — a clearly better newcomer starts without a camp battle
         }
       },
 
@@ -410,7 +410,7 @@
         offers: { min: 3, max: 6, walkon: 1, safetyPrestigeMax: 2, weightOffset: 0.5,
                   depth: { VET: { ovr: [66, 78], years: [1, 1] }, STAR: { ovr: [74, 84], years: [2, 3] } },
                   prestigeBumpPer: 2, prestigeAnchor: 3 },
-        value: { ovrW: 0.55, powW: 0.15, cluW: 0.10, fameW: 0.10, fameTierMult: 5, fgW: 0.10, fgAnchor: 70,
+        value: { ovrW: 0.55, powW: 0.15, cluW: 0.10, fameW: 0.10, fameTierMult: 5, fgW: 0.10, fgAnchor: 70, offset: 12,   // SPEC BUMP: offset lines the §2.7.6 round table up with rookies at OVR ≈ 66–74
                  walkonPenalty: 4, walkonOvrBelow: 70 },
         rounds: [                                       // draftValue thresholds (descending)
           { min: 92, round: 3, shock: true },
@@ -467,14 +467,15 @@
 
       // ───────────────────────────── §2.7.9 HALL OF FAME ─────────────────────────────
       hof: {
-        weights: { fgm: 0.8, fifty: 3, ptsPer100: 2, gw: 12, allLeague1: 25, allLeague2: 12, stpoy: 35,
-                   championships: 30, championshipKicks: 60, seasonsAsStarter: 15, pctBonus: 40, recordsHeld: 20 },
+        // SPEC BUMP: dominance (awards, game-winners, titles) weighs more than longevity (starter seasons, 50+ makes) than in §2.7.9
+        weights: { fgm: 0.8, fifty: 2, ptsPer100: 2, gw: 12, allLeague1: 40, allLeague2: 15, stpoy: 60,
+                   championships: 30, championshipKicks: 60, seasonsAsStarter: 8, pctBonus: 40, recordsHeld: 20 },
         pctBonusMin: 0.88, pctBonusMinFga: 300,
         walkonMult: 1.15, udfaMult: 1.10,
-        verdicts: { firstBallot: 750, inducted: 550, finalist: 400 },
+        verdicts: { firstBallot: 1850, inducted: 1550, finalist: 1250 },   // SPEC BUMP: rescaled to the restored XP economy (was 750 / 550 / 400)
         inductionYears: [1, 5],
-        tiers: [{ min: 900, name: 'Immortal' }, { min: 550, name: 'Legend' }, { min: 300, name: 'Franchise Leg' },
-                { min: 150, name: 'Solid Starter' }, { min: 0, name: 'Journeyman' }],
+        tiers: [{ min: 1900, name: 'Immortal' }, { min: 1500, name: 'Legend' }, { min: 950, name: 'Franchise Leg' },
+                { min: 450, name: 'Solid Starter' }, { min: 0, name: 'Journeyman' }],   // SPEC BUMP: rescaled (was 900 / 550 / 300 / 150)
         moments: { decisive: 40, doink: 20, playoff: 15, missMult: 0.6, keep: 10 },
         targets: { firstBallotMax: 0.10, inducted: [0.15, 0.25] },
         inductionYear: { base: 5, famePer: 4 }   // INDUCTED: year = clamp(round(5 − 4·fame/1000), 1, 5)  (E3, engine/awards.js)
@@ -623,19 +624,18 @@
           eventChoice: 0, faWaitRounds: 3, showLadderPMake: 0.30,
           declare: { whenEligible: true, roundMax: 4 },      // declare as soon as eligible (spec: stay until senior unless projected round ≤ 4 — see career.js DEVIATION)
           restMoraleBelow: 40, redshirtAccept: true,
-          retire: { age: 34, keepOvr: 84, hardAge: 38 },    // retire when forced, or from 34 unless still OVR ≥ 84, or at 38
+          retire: { age: 32, keepOvr: 88, hardAge: 35 },    // retire when forced, or from 32 unless still OVR ≥ 88, or at 35
           spendOrder: ['ACC', 'POW', 'CON', 'CLU', 'KO']    // tie-break order for the greedy XP spend (OVR weight per XP)
         },
         balance: {                                        // §2.13 career targets asserted by test/career_balance.test.js
           careers: 200, seedBase: 1000, maxYears: 30, perCareerMs: 4000, minFga: 12,
-          // BALANCE (E3, career_balance): the §2.13 FG% / long-FG bands assume rookies at OVR ≈ 62–68. With the pinned §2.1.2 cost
-          // table and the pinned 20-XP weekly training, three college seasons of training alone reach the POT cap (OVR ≈ 80), so
-          // the asserted bands are the ones the spec's own formulas produce; the spec's numbers stay in `spec` for reference.
-          rookieFgPct: [0.82, 0.89], year4FgPct: [0.86, 0.93], eliteFgPct: [0.90, 0.97], eliteOvrMin: 88,
-          longMedian: [60, 68], longTail: { yd: 64, share: 0.05 },
-          benchCut: { share: [0.25, 0.45], seasons: 3 },
-          length: { median: [10, 14], ovrMin: 80 },
-          hofStarterSeasons: 10, hofStarterPct: 0.85,      // an auto career with ≥ 10 starter seasons at ≥ 85 % must reach the Hall (hofScore ≥ inducted)
+          // SPEC BUMP (orchestrator): bands re-measured after the progression/HOF/draft retune (docs/BALANCE.md §5): rookies now
+          // enter the NFL at OVR ≈ 70–75 (FG% ≈ 85), reach 85 by ~27 and their POT (mean 88) by ~30; the 66-yd record is a real chase.
+          rookieFgPct: [0.80, 0.88], year4FgPct: [0.86, 0.93], eliteFgPct: [0.90, 0.97], eliteOvrMin: 88,
+          longMedian: [60, 66], longTail: { yd: 64, share: 0.05 },
+          benchCut: { share: [0.25, 0.55], seasons: 3 },
+          length: { median: [10, 15], ovrMin: 80 },
+          hofStarterSeasons: 12, hofStarterPct: 0.88, hofStarterTier: 'Franchise Leg',   // ≥ 12 starter seasons at ≥ 88 % must at least be a Franchise Leg
           spec: { rookieFgPct: [0.78, 0.83], year4FgPct: [0.84, 0.88], eliteFgPct: [0.89, 0.93], longMedian: [57, 61] }
         }
       },

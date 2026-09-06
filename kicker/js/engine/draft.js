@@ -207,7 +207,7 @@
     var prestige = team && typeof team.prestige === 'number' ? team.prestige : O.prestigeAnchor;
     var combine = state.flags && typeof state.flags.combineScore === 'number' ? state.flags.combineScore : 0;
     var walkon = !!((p.flags && p.flags.WALKON) || (state.flags && state.flags.WALKON));
-    var v = V.ovrW * ovr + V.powW * p.attrs.POW + V.cluW * p.attrs.CLU
+    var v = (V.offset || 0) + V.ovrW * ovr + V.powW * p.attrs.POW + V.cluW * p.attrs.CLU
       + V.fameW * Player.fameTier(p.fame) * V.fameTierMult
       + V.fgW * (collegeFgPct(state) * PCT - V.fgAnchor)
       + combine

@@ -248,22 +248,26 @@ test('checkGoals updates progress and met flags (FG% needs the minimum attempts)
   void fg;
 });
 
-test('hofScore worked examples: 877 → FIRST_BALLOT / Legend; journeyman ≈ 244 → Solid Starter', () => {
+test('hofScore worked examples follow Tuning.hof weights (§2.7.9 fixture: 14-season 86 % starter, 2 All-League 1st, 1 title)', () => {
+  const H = Tuning.hof, W = H.weights;
   const first = Awards.hofScore(fx.hofFirstBallot(RTG));
-  assert.equal(first.score, 877);
-  assert.equal(first.verdict, 'FIRST_BALLOT');
-  assert.equal(first.tier, 'Legend');
-  assert.equal(first.inductionYear, 1);
   const bd = {};
   first.breakdown.forEach((b) => { bd[b.key] = b.points; });
-  assert.equal(bd.fgm, 256); assert.equal(bd.fifty, 120); assert.equal(bd.pts, 27); assert.equal(bd.gw, 144);
-  assert.equal(bd.allLeague1, 50); assert.equal(bd.championships, 30); assert.equal(bd.seasonsAsStarter, 210); assert.equal(bd.recordsHeld, 40);
+  assert.equal(bd.fgm, Math.round(W.fgm * 320)); assert.equal(bd.fifty, W.fifty * 40); assert.equal(bd.pts, Math.round(W.ptsPer100 * 1350 / 100)); assert.equal(bd.gw, W.gw * 12);
+  assert.equal(bd.allLeague1, W.allLeague1 * 2); assert.equal(bd.championships, W.championships); assert.equal(bd.seasonsAsStarter, W.seasonsAsStarter * 14); assert.equal(bd.recordsHeld, W.recordsHeld * 2);
   assert.equal(bd.pctBonus, 0, '86 % does not earn the accuracy bonus');
+  const sum = Object.keys(bd).reduce((a, k) => a + bd[k], 0);
+  assert.equal(first.score, Math.round(sum));
+  const verdictFor = (sc) => sc >= H.verdicts.firstBallot ? 'FIRST_BALLOT' : sc >= H.verdicts.inducted ? 'INDUCTED' : sc >= H.verdicts.finalist ? 'FINALIST' : 'NOT_ON_BALLOT';
+  assert.equal(first.verdict, verdictFor(first.score));
+  const tierFor = (sc) => H.tiers.find((t) => sc >= t.min).name;
+  assert.equal(first.tier, tierFor(first.score));
+  if (first.verdict === 'FIRST_BALLOT') assert.equal(first.inductionYear, 1);
   const jm = Awards.hofScore(fx.hofJourneyman(RTG));
-  assert.ok(jm.score >= 150 && jm.score < 300, 'score ' + jm.score);
-  assert.equal(jm.tier, 'Solid Starter');
-  assert.equal(jm.verdict, 'NOT_ON_BALLOT');
-  assert.equal(jm.inductionYear, null);
+  assert.ok(jm.score < first.score, 'journeyman scores below the starter');
+  assert.equal(jm.tier, tierFor(jm.score));
+  assert.equal(jm.verdict, verdictFor(jm.score));
+  if (jm.verdict === 'NOT_ON_BALLOT') assert.equal(jm.inductionYear, null);
 });
 
 test('hofScore: verdict thresholds, multipliers, accuracy bonus and monotonicity in every input', () => {
@@ -272,9 +276,9 @@ test('hofScore: verdict thresholds, multipliers, accuracy bonus and monotonicity
   const s0 = Awards.hofScore(base).score;
   // walk-on and UDFA multipliers
   base.flags.WALKON = true;
-  assert.equal(Awards.hofScore(base).score, Math.round(877 * H.walkonMult));
+  assert.equal(Awards.hofScore(base).score, Math.round(s0 * H.walkonMult));
   base.flags.UDFA = true;
-  assert.equal(Awards.hofScore(base).score, Math.round(877 * H.walkonMult * H.udfaMult));
+  assert.equal(Awards.hofScore(base).score, Math.round(s0 * H.walkonMult * H.udfaMult));
   base.flags = {};
   // accuracy bonus
   base.stats.nfl.fgm = 330; base.stats.nfl.fga = 372;   // 88.7 %

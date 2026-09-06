@@ -107,7 +107,7 @@
   Player.costToRaise = function (attr, value, age, focus) {
     var c = Tuning.progression.cost;
     var isFocus = focus === true || (typeof focus === 'string' && focus === attr);
-    var base = c.base + c.over50 * Math.max(0, value - 50) + c.over80 * Math.max(0, value - 80);
+    var base = c.base + c.over50 * Math.max(0, value - 50) + (c.over70 || 0) * Math.max(0, value - 70) + c.over80 * Math.max(0, value - 80);
     return Math.round(base * Player.ageMult(age) * (isFocus ? c.focusMult : 1));
   };
 

@@ -579,7 +579,7 @@ test('retire → LegacyReport {tier, hof, line, moments, records, docTitle, time
   assert.deepEqual(J(Career.stageInfo(r.state)), { act: 4, label: 'Legacy', stage: 'RETIRED', phase: 'LEGACY' });
   // verdict thresholds
   const mk = (score) => score >= V.firstBallot ? 'FIRST_BALLOT' : (score >= V.inducted ? 'INDUCTED' : (score >= V.finalist ? 'FINALIST' : 'NOT_ON_BALLOT'));
-  assert.equal(mk(750), 'FIRST_BALLOT'); assert.equal(mk(749), 'INDUCTED'); assert.equal(mk(550), 'INDUCTED'); assert.equal(mk(549), 'FINALIST'); assert.equal(mk(400), 'FINALIST'); assert.equal(mk(399), 'NOT_ON_BALLOT');
+  assert.equal(mk(V.firstBallot), 'FIRST_BALLOT'); assert.equal(mk(V.firstBallot - 1), 'INDUCTED'); assert.equal(mk(V.inducted), 'INDUCTED'); assert.equal(mk(V.inducted - 1), 'FINALIST'); assert.equal(mk(V.finalist), 'FINALIST'); assert.equal(mk(V.finalist - 1), 'NOT_ON_BALLOT');
 });
 
 // ═══════════════════════════════ event actions ═══════════════════════════════

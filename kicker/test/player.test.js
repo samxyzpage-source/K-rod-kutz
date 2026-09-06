@@ -56,26 +56,25 @@ test('ageMult table', () => {
   assert.equal(Player.ageMult(45), 3.5);
 });
 
-test('costToRaise worked examples (§2.1.2) and the focus discount', () => {
-  assert.equal(Player.costToRaise('ACC', 60, 24), 18);
-  assert.equal(Player.costToRaise('ACC', 75, 24), 27);
-  assert.equal(Player.costToRaise('ACC', 85, 24), 43);
-  assert.equal(Player.costToRaise('ACC', 90, 24), 56);
-  assert.equal(Player.costToRaise('POW', 40, 24), 12);
-  assert.equal(Player.costToRaise('ACC', 60, 18), Math.round(18 * 0.85));
-  assert.equal(Player.costToRaise('ACC', 60, 35), Math.round(18 * 2.4));
-  assert.equal(Player.costToRaise('ACC', 60, 24, true), Math.round(18 * 0.75));
-  assert.equal(Player.costToRaise('ACC', 60, 24, 'ACC'), Math.round(18 * 0.75));
-  assert.equal(Player.costToRaise('ACC', 60, 24, 'POW'), 18);
-  assert.equal(Player.costToRaise('ACC', 60, 24, 'REST'), 18);
+test('costToRaise follows Tuning.progression.cost (base + over50 + over70 + over80, age and focus multipliers)', () => {
+  const c = RTG.Tuning.progression.cost;
+  const nominal = (v) => c.base + c.over50 * Math.max(0, v - 50) + (c.over70 || 0) * Math.max(0, v - 70) + c.over80 * Math.max(0, v - 80);
+  for (const v of [40, 50, 60, 69, 70, 75, 80, 85, 90, 98]) assert.equal(Player.costToRaise('ACC', v, 24), Math.round(nominal(v)), 'v=' + v);
+  assert.ok(Player.costToRaise('ACC', 60, 24) < Player.costToRaise('ACC', 75, 24) && Player.costToRaise('ACC', 75, 24) < Player.costToRaise('ACC', 85, 24), 'monotone');
+  assert.equal(Player.costToRaise('POW', 40, 24), c.base, 'flat below 50');
+  assert.equal(Player.costToRaise('ACC', 60, 18), Math.round(nominal(60) * 0.85), 'age ≤ 22 ×0.85');
+  assert.equal(Player.costToRaise('ACC', 60, 35), Math.round(nominal(60) * 2.4), 'age 34–36 ×2.4');
+  assert.equal(Player.costToRaise('ACC', 60, 24, 'ACC'), Math.round(nominal(60) * c.focusMult), 'focus discount');
+  assert.equal(Player.costToRaise('ACC', 60, 24, 'POW'), Math.round(nominal(60)), 'other focus: no discount');
 });
 
 test('spendXp respects XP balance, POT cap, the 99 ceiling and the focus discount', () => {
   const p = pfx.player(RTG, { attrs: { ACC: 60 }, pot: { ACC: 61 }, age: 24, xp: 100 });
   let r = Player.spendXp(p, 'ACC');
-  deq(r, { ok: true, cost: 18, newValue: 61 });
-  assert.equal(p.xp, 82);
-  assert.equal(p.xpSpent, 18);
+  const c60 = Player.costToRaise('ACC', 60, 24);
+  deq(r, { ok: true, cost: c60, newValue: 61 });
+  assert.equal(p.xp, 100 - c60);
+  assert.equal(p.xpSpent, c60);
   assert.equal(p.attrs.ACC, 61);
   r = Player.spendXp(p, 'ACC');
   assert.equal(r.ok, false);
@@ -90,10 +89,10 @@ test('spendXp respects XP balance, POT cap, the 99 ceiling and the focus discoun
   assert.equal(Player.spendXp(p, 'XYZ').reason, 'BAD_ATTR');
   p.attrs.CON = 60; p.pot.CON = 99;
   r = Player.spendXp(p, 'CON', { focus: 'CON' });
-  assert.equal(r.cost, Math.round(18 * 0.75));
+  assert.equal(r.cost, Math.round(Player.costToRaise('CON', 60, 24) * RTG.Tuning.progression.cost.focusMult));
 });
 
-test('create: archetype means, creation clamp 30–75, POT ~N(80,8) in 60–99, trait rate ≈ 25 %, fixed draw order', () => {
+test('create: archetype means, creation clamp 30–75, POT ~N(pot.mean, pot.sd) clamped, trait rate ≈ 25 %, fixed draw order', () => {
   const P = Tuning.progression;
   for (const arch of ['CANNON', 'SURGEON', 'ICEMAN', 'SOCCER']) {
     const rng = RTG.RNG.create(100);
@@ -116,7 +115,7 @@ test('create: archetype means, creation clamp 30–75, POT ~N(80,8) in 60–99, 
       assert.equal(p.teamId, null);
     }
     for (const a of Player.ATTRS) assert.ok(Math.abs(sums[a] / N - P.archetypes[arch][a][0]) < 0.6, arch + ' ' + a + ' mean ' + sums[a] / N);
-    assert.ok(Math.abs(potSum / (N * 5) - 80) < 0.7);
+    assert.ok(Math.abs(potSum / (N * 5) - P.pot.mean) < 0.7);
     assert.ok(Math.abs(traits / N - 0.25) < 0.03, arch + ' trait rate ' + traits / N);
     if (arch === 'CANNON') assert.ok(bigLeg / traits > 0.45, 'Cannon BIG_LEG share ' + bigLeg / traits);
     if (arch === 'ICEMAN') assert.ok(ice / traits > 0.45, 'Iceman ICE_VEINS share ' + ice / traits);

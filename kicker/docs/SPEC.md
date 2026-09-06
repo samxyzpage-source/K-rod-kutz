@@ -64,6 +64,7 @@
 | D16 | Kickoffs | Simulated by default; optional one-tap timing mini-event (`settings.playKickoffs`). Dynamic-kickoff analog (touchback to the 30 NFL / 25 college). | Brief: "simulated or a simplified mini-event". |
 | D17 | Rounds | Kickers go rounds 3–7 or UDFA; 1 % "first-round shock" event at draftValue ≥ 92. | Realism (systems) + fantasy. |
 | D18 | State mutation | In place via API; `Schema.validate` runs after every dispatch when `debug` is on. No per-week deep clones. | Perf + simplicity. |
+| D19 | Progression economy (post-integration spec bump) | POT ~ N(88, 6); `cost = 30 + 2.2·(v−50) + 6.5·(v−70) + 3.0·(v−80)`; game/offseason XP at ≈ 60 % of the §2.1.2 table (training 20 unchanged); tailwind range bonus 0.15 yd/mph; coach threshold +0.20 from 57 yd; camp battle only when the incumbent is within 2 OVR; HOF weights favour dominance and verdict/tier thresholds rescaled (1850 / 1550 / 1250 · 1900 / 1500 / 950 / 450); draft value +12 offset. Measured bands live in `Tuning.career.balance`; full rationale and tables in `docs/BALANCE.md` §5.2. | The §2.13 bands were unattainable under the original constants: every auto career hit its potential by NFL year 1 and retired first-ballot with 12 k XP unspent, leaving the Training screen dead for 15 seasons. |
 
 ---
 

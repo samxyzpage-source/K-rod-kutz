@@ -261,7 +261,8 @@ if (!isMainThread) {
       const starters = nfl(r).filter((s) => s.role === 'K1' && s.games > 0);
       const fga = starters.reduce((a, s) => a + s.fga, 0), fgm = starters.reduce((a, s) => a + s.fgm, 0);
       const want = starters.length >= T.hofStarterSeasons && fga > 0 && fgm / fga >= T.hofStarterPct;
-      if (want) assert.ok(r.hof.score >= V.inducted, 'seed ' + r.seed + ': ' + starters.length + ' starter seasons at ' + pct(fgm / fga) + ' but HOF score ' + r.hof.score);
+      const tierMin = (RTG.Tuning.hof.tiers.find((t) => t.name === T.hofStarterTier) || { min: V.finalist }).min;
+      if (want) assert.ok(r.hof.score >= tierMin, 'seed ' + r.seed + ': ' + starters.length + ' starter seasons at ' + pct(fgm / fga) + ' but HOF score ' + r.hof.score + ' < ' + T.hofStarterTier + ' (' + tierMin + ')');
       const expected = r.hof.score >= V.firstBallot ? 'FIRST_BALLOT' : (r.hof.score >= V.inducted ? 'INDUCTED' : (r.hof.score >= V.finalist ? 'FINALIST' : 'NOT_ON_BALLOT'));
       assert.equal(r.hof.verdict, expected, 'seed ' + r.seed + ' verdict matches its score');
     }

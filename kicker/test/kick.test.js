@@ -101,8 +101,8 @@ test('range modifiers: weather, temperature (outdoors only), altitude, traits, w
   near(mk({ traits: ['BIG_LEG'] }) - base, 2, 1e-9, 'BIG_LEG +2');
   near(mk({ traits: ['DOME_BABY'] }) - base, -1, 1e-9, 'DOME_BABY −1 outdoors');
   near(mk({ traits: ['DOME_BABY'], weather: 'dome' }) - base, 0, 1e-9, 'DOME_BABY neutral indoors');
-  near(mk({ wind: { speed: 20, dir: 0 } }) - base, 6, 1e-9, '20 mph tailwind +6 yd');
-  near(mk({ wind: { speed: 20, dir: 180 } }) - base, -6, 1e-9, '20 mph headwind −6 yd');
+  near(mk({ wind: { speed: 20, dir: 0 } }) - base, 20 * RTG.Tuning.kick.range.windAlongPerMph, 1e-9, '20 mph tailwind adds windAlongPerMph per mph');
+  near(mk({ wind: { speed: 20, dir: 180 } }) - base, -20 * RTG.Tuning.kick.range.windAlongPerMph, 1e-9, '20 mph headwind subtracts windAlongPerMph per mph');
   near(mk({ wind: { speed: 20, dir: 90 } }) - base, 0, 1e-9, 'pure crosswind adds nothing');
   const snowCold = mk({ weather: 'snow', tempF: 30 }) / base;
   near(mk({ weather: 'snow', tempF: 30, traits: ['COLD_WEATHER'] }) / base, 1 - (1 - snowCold) / 2, 1e-9, 'COLD_WEATHER halves the penalty');

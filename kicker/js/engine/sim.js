@@ -659,7 +659,7 @@
    * §2.5.6 threshold: 0.55 − 0.20·trust01 − 0.10·coachAgg (+0.05 college), clamped 0.15..0.60, with the
    * event #35 flags (giveMe60 −0.10 / under55 +0.10) for the user. End-of-half kicks use §2.5.3's flat 0.20.
    */
-  function coachThreshold(gs, state, side, asTimeExpires) {
+  function coachThreshold(gs, state, side, asTimeExpires, dist) {
     var C = S().coach;
     if (asTimeExpires) return S().endHalfFg.pMakeMin;
     var team = teamOf(state, gs, side);
@@ -667,6 +667,7 @@
     var trust01 = isUser ? clamp(num(state.player.trust, C.defaultTrust01 * PERCENT), 0, PERCENT) / PERCENT : C.defaultTrust01;
     var agg = team ? num(team.coachAgg, C.defaultAgg) : C.defaultAgg;
     var thr = C.thrBase - C.trustW * trust01 - C.aggW * agg + (gs.league === 'COLLEGE' ? C.collegeAdd : 0);
+    if (dist !== undefined && C.longAttemptFrom !== undefined && dist >= C.longAttemptFrom) thr += num(C.longAttemptAdd, 0);   // very long tries need extra confidence
     if (isUser && state.flags) {
       if (state.flags.giveMe60) thr += C.giveMe60Thr;
       if (state.flags.under55) thr += C.under55Thr;
@@ -680,7 +681,7 @@
     var asTimeExpires = hasClock(gs) && timeLeftInHalf(gs) <= S().endHalfFg.clockSec;
     var ctx = buildCtx(gs, state, rng, side, { type: 'FG', distance: dist, asTimeExpires: asTimeExpires });   // hash 1 · wind 2
     var m = Kick().model(ctx, null);
-    var thr = coachThreshold(gs, state, side, asTimeExpires);
+    var thr = coachThreshold(gs, state, side, asTimeExpires, dist);
     var stallText = 'Drive stalls at ' + spotText(ytg);
     if (dist <= m.maxFG + C.rangeMargin && m.pMake >= thr) {
       return attemptKick(gs, state, rng, side, ctx, { text: stallText + ' - ' + dist + '-yd FG attempt', prefix: stallText });
