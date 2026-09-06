@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1b1f3a">
+  <meta name="description" content="Road to Glory: Kicker — a Retro Bowl-style career game where you are the leg. From high-school showcase to the Hall of Fame, one kick at a time.">
+  <title>Road to Glory: Kicker</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%231b1f3a'/%3E%3Crect x='2' y='2' width='2' height='9' fill='%23f2f2e6'/%3E%3Crect x='12' y='2' width='2' height='9' fill='%23f2f2e6'/%3E%3Crect x='2' y='6' width='12' height='2' fill='%23f2f2e6'/%3E%3Crect x='7' y='8' width='2' height='6' fill='%23f2f2e6'/%3E%3Crect x='6' y='10' width='4' height='4' fill='%23a0522d'/%3E%3Crect x='7' y='9' width='2' height='6' fill='%23a0522d'/%3E%3Crect x='7' y='11' width='2' height='2' fill='%23f4e9d0'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/kick.css">
+  <link rel="stylesheet" href="css/screens.css">
+</head>
+<body>
+  <div id="app"></div>
+  <div id="live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+  <noscript>
+    <div class="noscript">ROAD TO GLORY: KICKER needs JavaScript. Enable it and reload — there is nothing to download and no account.</div>
+  </noscript>
+
+  <!-- engine (order is a contract: SPEC §3.2 / test/load.js ORDER) -->
+  <script src="js/00_namespace.js"></script>
+  <script src="js/engine/tuning.js"></script>
+  <script src="js/engine/util.js"></script>
+  <script src="js/engine/rng.js"></script>
+  <script src="js/engine/schema.js"></script>
+  <script src="js/data/blocklist.js"></script>
+  <script src="js/data/names.js"></script>
+  <script src="js/data/colleges.js"></script>
+  <script src="js/data/nfl.js"></script>
+  <script src="js/data/records.js"></script>
+  <script src="js/data/awards.js"></script>
+  <script src="js/data/events.js"></script>
+  <script src="js/data/headlines.js"></script>
+  <script src="js/engine/names.js"></script>
+  <script src="js/engine/weather.js"></script>
+  <script src="js/engine/player.js"></script>
+  <script src="js/engine/kick.js"></script>
+  <script src="js/engine/schedule.js"></script>
+  <script src="js/engine/standings.js"></script>
+  <script src="js/engine/sim.js"></script>
+  <script src="js/engine/stats.js"></script>
+  <script src="js/engine/awards.js"></script>
+  <script src="js/engine/events.js"></script>
+  <script src="js/engine/contracts.js"></script>
+  <script src="js/engine/draft.js"></script>
+  <script src="js/engine/season.js"></script>
+  <script src="js/engine/career.js"></script>
+  <script src="js/engine/save.js"></script>
+  <script src="js/engine/api.js"></script>
+
+  <!-- ui core -->
+  <script src="js/ui/storage.js"></script>
+  <script src="js/ui/palette.js"></script>
+  <script src="js/ui/store.js"></script>
+  <script src="js/ui/router.js"></script>
+  <script src="js/ui/components.js"></script>
+  <script src="js/ui/sprites.js"></script>
+  <script src="js/ui/canvas.js"></script>
+  <script src="js/ui/audio.js"></script>
+  <script src="js/ui/input.js"></script>
+  <script src="js/ui/kickview.js"></script>
+
+  <!-- screens (each registers itself with RTG.UI.Router) -->
+  <script src="js/ui/screens/_fallback.js"></script>
+  <script src="js/ui/screens/title.js"></script>
+  <script src="js/ui/screens/newcareer.js"></script>
+  <script src="js/ui/screens/showcase.js"></script>
+  <script src="js/ui/screens/offers.js"></script>
+  <script src="js/ui/screens/hub.js"></script>
+  <script src="js/ui/screens/inbox.js"></script>
+  <script src="js/ui/screens/training.js"></script>
+  <script src="js/ui/screens/game.js"></script>
+  <script src="js/ui/screens/kick.js"></script>
+  <script src="js/ui/screens/postgame.js"></script>
+  <script src="js/ui/screens/schedule.js"></script>
+  <script src="js/ui/screens/standings.js"></script>
+  <script src="js/ui/screens/team.js"></script>
+  <script src="js/ui/screens/stats.js"></script>
+  <script src="js/ui/screens/records.js"></script>
+  <script src="js/ui/screens/awards.js"></script>
+  <script src="js/ui/screens/offseason.js"></script>
+  <script src="js/ui/screens/combine.js"></script>
+  <script src="js/ui/screens/draft.js"></script>
+  <script src="js/ui/screens/contract.js"></script>
+  <script src="js/ui/screens/campbattle.js"></script>
+  <script src="js/ui/screens/timeline.js"></script>
+  <script src="js/ui/screens/legacy.js"></script>
+  <script src="js/ui/screens/settings.js"></script>
+  <script src="js/ui/screens/saves.js"></script>
+  <script src="js/ui/screens/practice.js"></script>
+
+  <!-- boot -->
+  <script src="js/ui/app.js"></script>
+  <script src="js/debug.js"></script>
+</body>
+</html>
