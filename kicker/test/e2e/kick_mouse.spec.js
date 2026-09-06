@@ -55,9 +55,11 @@ H.matrix(({ mode, vp }) => {
     try {
       await K.openShowcase(page, 4243);
       const g = await K.geometry(page);
-      // D_full = 0.32 × css height (portrait) / 0.45 (landscape); pull well past it
-      const full = (g.landscape ? 0.45 : 0.32) * g.cssHeight;
-      const drag = Math.max(200, Math.ceil(full * 1.2));
+      // D_full = 0.32 × css height (portrait) / 0.45 (landscape), capped by the room below the ball (a finger cannot
+      // leave the screen); pull past it but stay inside the viewport
+      const room = g.innerHeight - g.ball.y;
+      const full = Math.min((g.landscape ? 0.45 : 0.32) * g.cssHeight, Math.max(60, room - 12));
+      const drag = Math.min(room - 6, Math.max(Math.ceil(full * 1.2), 200));
       await K.mouseFlick(page, { drag: drag, dragMs: 300, flick: 60, flickMs: 80 });
       await K.waitPhase(page, 'RESULT', 8000);
       const st = await H.debug(page, 'getState');

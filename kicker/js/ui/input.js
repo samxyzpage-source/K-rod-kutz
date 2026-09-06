@@ -42,7 +42,7 @@
   var CONST = {
     grabRadiusCss: 96, powerMax: 1.15, aimMax: 12,
     dFullPortrait: 0.32, dFullLandscape: 0.45,
-    ring: 32, flickWindowMs: 120, flickMinSamples: 6, powerWindowMs: 300,
+    ring: 32, flickWindowMs: 120, flickMinSamples: 6, powerWindowMs: 300, dFullMinCss: 60, dFullMarginCss: 12,
     noFlickVy: -0.12, weakSpeed: 0.35, yankSpeed: 2.2, weakMult: 0.85, yankPenalty: 0.15,
     rmsPerpDiv: 14, holdFromP: 0.95, holdMs: 1200, noCancelP: 0.20,
     mishit: { power: 0.5, aimSd: 2, quality: 0.3 }, cancelQuality: 0.5,
@@ -85,9 +85,14 @@
       var idx = (head - count + i + N * 2) % N;
       return idx;
     }
+    var roomBelow = 0;   // css px from the ball to the bottom of the viewport, measured at pointerdown
     function dFull() {
       var h = call(opts.cssHeight) || canvasEl.clientHeight || 320;
-      return (call(opts.landscape) ? CONST.dFullLandscape : CONST.dFullPortrait) * h;
+      var d = (call(opts.landscape) ? CONST.dFullLandscape : CONST.dFullPortrait) * h;
+      // DEVIATION (playability): a finger cannot leave the screen, so full power must be reachable within the
+      // room below the ball (iPhone 12 portrait leaves ~100 px). Cap D_full at that room minus a margin.
+      if (roomBelow > 0) d = Math.min(d, Math.max(CONST.dFullMinCss, roomBelow - CONST.dFullMarginCss));
+      return d;
     }
     function isActive() { return opts.active ? !!opts.active() : true; }
 
@@ -148,6 +153,8 @@
       var b = call(opts.ballAt) || { x: r.width / 2, y: r.height * 0.78 };
       var dx = px - b.x, dy = py - b.y;
       if (dx * dx + dy * dy > CONST.grabRadiusCss * CONST.grabRadiusCss) return;
+      var vh = root.innerHeight || (root.document && root.document.documentElement.clientHeight) || 0;
+      roomBelow = vh ? vh - (rectTop + b.y) : 0;
       pointerId = e.pointerId !== undefined ? e.pointerId : 1;
       try { if (canvasEl.setPointerCapture) canvasEl.setPointerCapture(pointerId); } catch (err) { /* ignore */ }
       if (e.preventDefault) e.preventDefault();
@@ -260,7 +267,9 @@
         canvasEl.removeEventListener('lostpointercapture', onCancel);
         root.removeEventListener('blur', onCancel);
       },
-      reset: function () { stopClock(); releaseCapture(); state = 'IDLE'; pulling = false; P = 0; peakP = 0; lean = -1; count = 0; head = 0; },
+      reset: function () { stopClock(); releaseCapture(); state = 'IDLE'; pulling = false; P = 0; peakP = 0; lean = -1; count = 0; head = 0; roomBelow = 0; },
+      /** The current D_full in css px (after the viewport-room cap); 0 before the first pointerdown. */
+      dFull: function () { return roomBelow ? dFull() : 0; },
       pulling: function () { return pulling; },
       power: function () { return P; },
       lean: function () { return lean < 0 ? 0 : lean; },
