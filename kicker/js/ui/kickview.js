@@ -140,6 +140,7 @@
     var settings = opts.settings || (store && store.settings) || {};
     var uiRng = opts.uiRng || (store && store.uiRng) || null;
     var Sp = Sprites(); Sp.init();
+    if (Audio() && typeof Audio().init === 'function') Audio().init();   // registers the one-time gesture unlock (idempotent)
     var Cv = RTG.UI.Canvas;
     var Inp = RTG.UI.Input;
     var K = RTG.Kick;
