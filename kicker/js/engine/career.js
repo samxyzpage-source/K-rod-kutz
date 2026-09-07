@@ -578,7 +578,10 @@
     f.combine = { ladderMakes: br.ladderMakes, accMakes: br.accMakes, hang: Util.roundN(br.hang, 2), score: br.score, plan: sess.plan || f.combinePlan || 'SHOW' };
     if (state.stage === 'DRAFT') state.phase = 'DRAFT';
     var text = '{last} at the combine: ladder ' + br.ladderMakes + '/' + Tuning.draft.combine.ladder.length + ', accuracy ' + br.accMakes + '/' + Tuning.draft.combine.accKicks + ', hang ' + Util.roundN(br.hang, 2) + ' s';
-    headline(state, rng, 'draft', { text: text, round: '?', n: br.ladderMakes });                     // 1 draw
+    var ladder = Tuning.draft.combine.ladder;
+    var hv = { text: text, round: '?', n: br.ladderMakes };
+    if (br.ladderMakes > 0) { hv.combine = true; hv.dist = ladder[Math.min(br.ladderMakes, ladder.length) - 1]; }   // "Combine buzz: … nails the 55"
+    headline(state, rng, 'draft', hv);                                                                   // 1 draw
     timeline(state, 'COMBINE', 'Combine score ' + (br.score >= 0 ? '+' : '') + br.score, 1);
     return { kind: 'COMBINE', ladderMakes: br.ladderMakes, accMakes: br.accMakes, hang: br.hang, score: br.score };
   }
@@ -686,7 +689,7 @@
       option('SAFE', 'Play it safe — stop at ' + CB.safeStop, 'Range ladder ends at ' + CB.safeStop + ' yd; no miss on the tape'),
       option('SHOW', 'Show them the ' + CB.ladder[CB.ladder.length - 1], 'Kick the whole ladder until a miss (pMake at ' + CB.ladder[CB.ladder.length - 1] + ': ' + Math.round(far * PCT) + ' %)')
     ]));
-    headline(state, rng, 'draft', { text: '{last} ' + (auto ? 'runs out of eligibility and heads to' : 'declares for') + ' the draft', round: '?' });   // 1 draw
+    headline(state, rng, 'draft', { text: '{last} ' + (auto ? 'runs out of eligibility and heads to' : 'declares for') + ' the draft', round: '?', declared: true });   // 1 draw
     message(state, 'press_draft', {});
     timeline(state, 'DECLARED', auto ? 'Senior season over — off to the draft' : 'Declared for the draft', 2);
   }
@@ -753,7 +756,7 @@
     if (res.invites && res.invites.payload && res.invites.payload.offers.length) {
       state.phase = 'UDFA';
       setPending(state, res.invites);
-      headline(state, rng, 'draft', { text: '{last} goes undrafted; ' + res.invites.payload.offers.length + ' teams call with camp invites' });   // 1 draw
+      headline(state, rng, 'draft', { text: '{last} goes undrafted; ' + res.invites.payload.offers.length + ' teams call with camp invites', undrafted: true });   // 1 draw
       timeline(state, 'UNDRAFTED', 'Undrafted — ' + res.invites.payload.offers.length + ' camp invites', 2);
       res.next = 'UDFA';
       return res;
@@ -761,7 +764,7 @@
     var sess = D.tryout(state, rng);
     state.phase = 'UDFA';
     state.pending = { kind: 'KICKS', session: sess };
-    headline(state, rng, 'draft', { text: '{last} goes undrafted; one minicamp tryout on the calendar' });   // 1 draw
+    headline(state, rng, 'draft', { text: '{last} goes undrafted; one minicamp tryout on the calendar', undrafted: true });   // 1 draw
     timeline(state, 'UNDRAFTED', 'Undrafted — minicamp tryout', 2);
     res.next = 'TRYOUT';
     return res;

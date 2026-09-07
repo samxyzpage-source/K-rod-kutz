@@ -1,7 +1,8 @@
 /**
  * kick_touch.spec (SPEC §5.2): the same flick through real touch events (CDP Input.dispatchTouchEvent →
- * pointerType 'touch') on iPhone 12 portrait and landscape (844×390); the canvas fits the viewport (integer
- * scale, fully inside the viewport) and document.documentElement.scrollWidth <= innerWidth.
+ * pointerType 'touch') on iPhone 12 portrait and landscape (844×390), plus a 375×667 small phone; the canvas fits the
+ * viewport (integer scale — or, on the small phone where 1× would leave a 192-px scene, the fractional fit ≥ 1.35 that
+ * fills ≥ 85 % of the width — fully inside the viewport) and document.documentElement.scrollWidth <= innerWidth.
  */
 'use strict';
 const { test, after } = require('node:test');
@@ -15,7 +16,9 @@ after(async () => { await H.closeBrowser(); });
 const IPHONE = devices['iPhone 12'];
 const CASES = [
   { label: 'portrait', viewport: { width: IPHONE.viewport.width, height: IPHONE.viewport.height, hasTouch: true, isMobile: true }, dpr: IPHONE.deviceScaleFactor },
-  { label: 'landscape', viewport: { width: 844, height: 390, hasTouch: true, isMobile: true }, dpr: IPHONE.deviceScaleFactor }
+  { label: 'landscape', viewport: { width: 844, height: 390, hasTouch: true, isMobile: true }, dpr: IPHONE.deviceScaleFactor },
+  // iPhone SE / small Android class: the integer fit would be 1× (a 192-px scene on a 375-px screen) → fractional fit
+  { label: 'small', viewport: { width: 375, height: 667, hasTouch: true, isMobile: true }, dpr: 2, fractional: true }
 ];
 
 for (const mode of H.MODES) {
@@ -27,7 +30,11 @@ for (const mode of H.MODES) {
         await K.openShowcase(page, 77);
         const g = await K.geometry(page);
         assert.ok(g.scale >= 2 ? Number.isInteger(g.scale) : (g.scale === 1 || g.scale >= 1.35), 'integer scale, or the fractional phone fit ≥ 1.35 (' + g.scale + ')');
-        if (cs.label === 'portrait') assert.ok(g.rect.w >= g.innerWidth * 0.8, 'the portrait scene fills the phone width (' + g.rect.w + ' of ' + g.innerWidth + ')');
+        if (cs.label !== 'landscape') assert.ok(g.rect.w >= g.innerWidth * 0.8, 'the portrait scene fills the phone width (' + g.rect.w + ' of ' + g.innerWidth + ')');
+        if (cs.fractional) {
+          assert.ok(g.scale >= 1.35 && g.scale < 2 && !Number.isInteger(g.scale), 'small phone: fractional fit in [1.35, 2) instead of 1× (' + g.scale + ')');
+          assert.ok(g.rect.w >= g.innerWidth * 0.85, 'small phone: the scene fills ≥ 85 % of the width (' + g.rect.w + ' of ' + g.innerWidth + ')');
+        }
         assert.ok(g.rect.x >= 0 && g.rect.x + g.rect.w <= g.innerWidth + 0.5, 'canvas inside the viewport horizontally');
         assert.ok(g.rect.y >= 0 && g.rect.y + g.rect.h <= g.innerHeight + 0.5, 'canvas inside the viewport vertically (' + g.rect.y + '+' + g.rect.h + ' vs ' + g.innerHeight + ')');
         assert.equal(g.landscape, cs.label === 'landscape', 'orientation by container aspect');

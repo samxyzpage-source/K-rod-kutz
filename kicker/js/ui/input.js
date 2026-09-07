@@ -18,7 +18,9 @@
  *
  * §4.6 rules implemented verbatim: pointerdown within 96 css px of the ball → PULL and the play clock starts;
  * P = clamp(dy / D_full, 0, 1.15), D_full = 0.32·cssHeight (portrait) or 0.45·cssHeight (landscape); lean =
- * floor(P·3); 32-sample ring buffer; flick segment = last 120 ms or last 6 samples, whichever is larger;
+ * floor(P·3); 32-sample ring buffer; flick segment = last 120 ms or last 6 samples, whichever is larger — but never
+ * starting before the pull's reversal (DEVIATION: the deepest sample of the last 300 ms is where the flick begins; a
+ * fast pull that snaps straight up would otherwise drag downward samples into the window and read as WEAK);
  * v.y > −0.12 → mishit {0.5, N(0, 2°), 0.3}; aim = clamp(atan2(vx, −vy)·180/π, −12, 12) (mirrored when
  * left-footed); speed < 0.35 → power ×0.85 (WEAK); speed > 2.2 → quality −0.15 (YANKED);
  * quality = 1 − clamp(rmsPerp / 14, 0, 1) − yank; P ≥ 0.95 held > 1.2 s → holdMs; no cancel after P > 0.20
@@ -208,21 +210,25 @@
 
     function computeFlick(tEnd) {
       // flick segment: samples within the last 120 ms, or the last 6 samples, whichever is the larger set
-      var n = count, first = n - 1;
-      var tLast = st[at(n - 1)];
-      for (var i = n - 1; i >= 0; i--) { if (tLast - st[at(i)] <= CONST.flickWindowMs) first = i; else break; }
+      var n = count, last = n - 1, first = last;
+      var tLast = st[at(last)];
+      for (var i = last; i >= 0; i--) { if (tLast - st[at(i)] <= CONST.flickWindowMs) first = i; else break; }
       var byCount = Math.max(0, n - CONST.flickMinSamples);
       if (byCount < first) first = byCount;
-      var last = n - 1;
+      // power = the pull depth where the flick began: the deepest point reached in the last powerWindowMs before
+      // the release (the flick itself starts after the reversal, so its own samples sit above the bottom)
+      var deepestQ = first, dF = dFull();
+      for (var q = last; q >= 0; q--) { if (tLast - st[at(q)] > CONST.powerWindowMs) break; if (sy[at(q)] > sy[at(deepestQ)]) deepestQ = q; }
+      // DEVIATION (fairness, see the header): the segment never starts before that reversal. A fast pull that snaps
+      // straight into the flick would otherwise carry its last downward samples into the 120 ms window, and the chord
+      // across the turn would read as WEAK (or, pulled hard enough, as no flick at all).
+      if (deepestQ > first) first = deepestQ;
       var i0 = at(first), i1 = at(last);
       var dt = st[i1] - st[i0];
       var vx = 0, vy = 0;
       if (dt > 0) { vx = (sx[i1] - sx[i0]) / dt; vy = (sy[i1] - sy[i0]) / dt; }
       if (vy > CONST.noFlickVy || dt <= 0) { mishit('mishit'); return; }
-      // power = the pull depth where the flick began: the deepest point reached in the last powerWindowMs before
-      // the release (the flick itself starts after the reversal, so its own samples sit above the bottom)
-      var deepest = i0, dF = dFull();
-      for (var q = n - 1; q >= 0; q--) { var kq = at(q); if (tLast - st[kq] > CONST.powerWindowMs) break; if (sy[kq] > sy[deepest]) deepest = kq; }
+      var deepest = at(deepestQ);
       var power = clamp((sy[deepest] - y0) / dF, 0, CONST.powerMax);
       var flickStartT = st[deepest];
       var aim = Math.atan2(vx, -vy) * 180 / Math.PI;

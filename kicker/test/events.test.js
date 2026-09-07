@@ -573,6 +573,29 @@ test('headline(): 1 draw, cond-filtered, pushed to state.headlines (cap 40), rin
   assertValid(s);
 });
 
+test('draft headlines: the round / pick lines need a real draft result; declare, combine and undrafted contexts get their own lines, never "round ?"', () => {
+  const s = efx.collegeReg(RTG);
+  const rng = rngOf(23);
+  const draw = (vars) => { s.recentHeadlineIds = []; return Events.headline(s, rng, 'draft', vars); };
+  for (let i = 0; i < 30; i++) {
+    const dec = draw({ declared: true, round: '?', text: '{last} declares for the draft' });
+    assert.ok(/DECLARED/.test(dec.text) && !/round \?|pick 120|\bDRAFTED:/.test(dec.text), dec.text);
+    const comb = draw({ combine: true, dist: 55, round: '?', n: 3, text: '{last} at the combine' });
+    assert.ok(/Combine buzz/.test(comb.text) && /55/.test(comb.text) && !/round \?/.test(comb.text), comb.text);
+    const und = draw({ undrafted: true, text: '{last} goes undrafted' });
+    assert.ok(/UNDRAFTED/.test(und.text) && !/round \?/.test(und.text), und.text);
+    // no facts at all (a join after the draft): the caller's text, never a round / pick template
+    const bare = draw({ round: '?', text: '{last} joins the team' });
+    assert.equal(bare.tpl, 'gen:draft'); assert.ok(/joins the team/.test(bare.text) && !/\?/.test(bare.text), bare.text);
+    // a real result: the round is named, no fallbacks leak
+    const got = draw({ round: 3, pick: 65, team: 'Boston Harbormen' });
+    assert.ok(/round 3|round-3/.test(got.text) && !/\?/.test(got.text), got.text);
+    assert.ok(!/\?/.test(draw({ round: 1, pick: 12, team: 'Boston Harbormen' }).text));
+    assert.ok(!/\?/.test(draw({ round: 7, pick: 240, team: 'Boston Harbormen' }).text));
+  }
+  assertValid(s);
+});
+
 // ───────────────────────────── inbox ─────────────────────────────
 
 test('message bank: ≥ 60 templates across coach/agent/gm/press/fan/family kinds', () => {

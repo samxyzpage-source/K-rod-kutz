@@ -34,6 +34,8 @@
   var isNfl = function (c) { return c.league === 'NFL'; };
   var isCollege = function (c) { return c.league !== 'NFL'; };
   var isRookie = function (c) { return !!c.rookie; };
+  /** A real draft result is on the context (round ≥ 1); the declare / combine steps pass round: '?'. */
+  function drafted(c) { return Number(c.round) >= 1; }
   var isSnow = function (c) { return c.weather === 'snow' || !!c.snow; };
   var isRain = function (c) { return c.weather === 'rain'; };
   var isPlayoff = function (c) { return !!c.playoff; };
@@ -211,15 +213,17 @@
     h('ct9', 'contract', '{last} inks {years}-year deal; fine print includes "no more billboard shoots"'),
 
     // ── draft (9)
-    h('dr1', 'draft', 'DRAFTED: {team} select {last} in round {round}, pick {pick}; room goes quiet then polite'),
-    h('dr2', 'draft', 'A kicker in round {round}! {team} take {last}; analysts "have questions"'),
-    h('dr3', 'draft', '{last} hears his name in round {round}; mom "cried, obviously"'),
+    // the round / pick lines need a real draft result (c.round ≥ 1): the declare, combine and undrafted steps also
+    // draw from this tag and would otherwise announce "round ?, pick 120" with the college as {team}
+    h('dr1', 'draft', 'DRAFTED: {team} select {last} in round {round}, pick {pick}; room goes quiet then polite', { cond: drafted }),
+    h('dr2', 'draft', 'A kicker in round {round}! {team} take {last}; analysts "have questions"', { cond: drafted }),
+    h('dr3', 'draft', '{last} hears his name in round {round}; mom "cried, obviously"', { cond: drafted }),
     h('dr4', 'draft', 'SHOCK PICK: {team} take kicker {last} in the FIRST ROUND; draft room "openly laughing, then not"', { cond: function (c) { return Number(c.round) === 1; } }),
     h('dr5', 'draft', 'Late-round leg: {team} grab {last} in round {round}; "value pick", says a man with a spreadsheet', { cond: function (c) { return Number(c.round) >= 6; } }),
     h('dr6', 'draft', 'UNDRAFTED: {last} watches 257 names go by, none his; phone "should ring soon"', { cond: function (c) { return !!c.undrafted; } }),
     h('dr7', 'draft', 'Combine buzz: {last} nails the {dist} at pro day, scouts "adjust pencil"', { cond: function (c) { return !!c.combine; } }),
     h('dr8', 'draft', 'DECLARED: {last} leaves {team} for the draft; campus "loses a leg, keeps the memories"', { cond: function (c) { return !!c.declared; } }),
-    h('dr9', 'draft', '{last} heads to {team} as a round-{round} pick; incumbent kicker "updating LinkedIn"'),
+    h('dr9', 'draft', '{last} heads to {team} as a round-{round} pick; incumbent kicker "updating LinkedIn"', { cond: drafted }),
 
     // ── fa (7)
     h('fa1', 'fa', 'FREE AGENT LEG: {last} hits the market; {n} teams "interested", 30 teams "not"'),

@@ -579,9 +579,10 @@ html { overflow-x: hidden; }   /* on html only: it propagates to the viewport, s
 .screen-kick .kick-continue { flex: 0 0 auto; padding: 4px 8px 8px; display: flex; justify-content: center; }
 .screen-kick .kick-ko { flex: 0 0 auto; padding: 6px; }
 
-/* toasts on the canvas screens sit in the sky band, never on the ball, the power bar or the feedback line */
+/* toasts on the kick-scene screens sit in the sky band, never on the ball, the power bar or the feedback line
+   (not on the combine: its plan card is a DOM card whose options live where the sky would be) */
 #app.chromeless[data-screen="kick"] ~ .toast-host, #app.chromeless[data-screen="showcase"] ~ .toast-host,
-#app.chromeless[data-screen="campbattle"] ~ .toast-host, #app.chromeless[data-screen="combine"] ~ .toast-host { top: 22%; bottom: auto; }
+#app.chromeless[data-screen="campbattle"] ~ .toast-host { top: 22%; bottom: auto; }
 
 /* ───────────────────────────── the kick view ───────────────────────────── */
 .kickview { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; width: 100%; position: relative; }
@@ -694,8 +695,8 @@ html.is-desktop .kv-stage { align-items: center; }
   display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 34px; height: 30px; padding: 2px 4px;
   border: 2px solid var(--navy2, #262b4d); background: var(--navy2, #262b4d); color: var(--cream, #f4e9d0); font-size: 8px; line-height: 1.2; font-variant-numeric: tabular-nums;
 }
-.slot .slot-d { font-size: 9px; }
-.slot .slot-r { font-size: 8px; }
+.slot .slot-d { font-size: max(9px, 0.85em); }
+.slot .slot-r { font-size: max(8px, 0.75em); }
 .slot.current { border-color: var(--gold, #f6c445); box-shadow: 2px 2px 0 var(--ink, #101226); }
 .slot.made { border-color: var(--mint, #4dbb63); color: var(--mint, #4dbb63); }
 .slot.miss { border-color: var(--red, #d8433a); color: var(--red, #d8433a); }
@@ -703,17 +704,17 @@ html.is-desktop .kv-stage { align-items: center; }
 .slot.rival.made { background: var(--ink, #101226); }
 .camp-board { display: flex; flex-direction: column; gap: 3px; }
 .camp-row { display: flex; align-items: center; gap: 6px; }
-.camp-row .camp-name { width: 64px; font-size: 8px; color: var(--cream, #f4e9d0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.camp-row .camp-name { width: 64px; font-size: max(8px, 0.8em); color: var(--cream, #f4e9d0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .camp-row .camp-name.you { color: var(--gold, #f6c445); }
-.camp-row .camp-tally { margin-left: auto; font-size: 10px; color: var(--gold, #f6c445); font-variant-numeric: tabular-nums; }
+.camp-row .camp-tally { margin-left: auto; font-size: max(10px, 0.95em); color: var(--gold, #f6c445); font-variant-numeric: tabular-nums; }
 .ladder-part { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
-.ladder-part .ladder-label { font-size: 8px; width: 46px; color: var(--grey, #8a8f9e); }
+.ladder-part .ladder-label { font-size: max(8px, 0.8em); width: 46px; color: var(--grey, #8a8f9e); }
 .plan-card { max-width: 420px; margin: 24px auto; padding: 8px; }
 .plan-options { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .plan-option { border: 2px solid var(--navy2, #262b4d); background: var(--navy2, #262b4d); padding: 8px; text-align: left; color: var(--cream, #f4e9d0); cursor: pointer; font: inherit; box-shadow: 3px 3px 0 var(--ink, #101226); }
 .plan-option:hover, .plan-option:focus-visible { border-color: var(--gold, #f6c445); outline: none; }
-.plan-option .plan-label { font-size: 11px; color: var(--gold, #f6c445); display: block; margin-bottom: 4px; }
-.plan-option .plan-detail { font-size: 9px; line-height: 1.5; }
+.plan-option .plan-label { font-size: max(11px, 1em); color: var(--gold, #f6c445); display: block; margin-bottom: 4px; }
+.plan-option .plan-detail { font-size: max(9px, 0.85em); line-height: 1.5; }
 .session-outcome { padding: 8px; font-size: 10px; text-align: center; color: var(--gold, #f6c445); }
 
 /* tutorial overlays (showcase) */
@@ -5104,6 +5105,8 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
   var isNfl = function (c) { return c.league === 'NFL'; };
   var isCollege = function (c) { return c.league !== 'NFL'; };
   var isRookie = function (c) { return !!c.rookie; };
+  /** A real draft result is on the context (round ≥ 1); the declare / combine steps pass round: '?'. */
+  function drafted(c) { return Number(c.round) >= 1; }
   var isSnow = function (c) { return c.weather === 'snow' || !!c.snow; };
   var isRain = function (c) { return c.weather === 'rain'; };
   var isPlayoff = function (c) { return !!c.playoff; };
@@ -5281,15 +5284,17 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     h('ct9', 'contract', '{last} inks {years}-year deal; fine print includes "no more billboard shoots"'),
 
     // ── draft (9)
-    h('dr1', 'draft', 'DRAFTED: {team} select {last} in round {round}, pick {pick}; room goes quiet then polite'),
-    h('dr2', 'draft', 'A kicker in round {round}! {team} take {last}; analysts "have questions"'),
-    h('dr3', 'draft', '{last} hears his name in round {round}; mom "cried, obviously"'),
+    // the round / pick lines need a real draft result (c.round ≥ 1): the declare, combine and undrafted steps also
+    // draw from this tag and would otherwise announce "round ?, pick 120" with the college as {team}
+    h('dr1', 'draft', 'DRAFTED: {team} select {last} in round {round}, pick {pick}; room goes quiet then polite', { cond: drafted }),
+    h('dr2', 'draft', 'A kicker in round {round}! {team} take {last}; analysts "have questions"', { cond: drafted }),
+    h('dr3', 'draft', '{last} hears his name in round {round}; mom "cried, obviously"', { cond: drafted }),
     h('dr4', 'draft', 'SHOCK PICK: {team} take kicker {last} in the FIRST ROUND; draft room "openly laughing, then not"', { cond: function (c) { return Number(c.round) === 1; } }),
     h('dr5', 'draft', 'Late-round leg: {team} grab {last} in round {round}; "value pick", says a man with a spreadsheet', { cond: function (c) { return Number(c.round) >= 6; } }),
     h('dr6', 'draft', 'UNDRAFTED: {last} watches 257 names go by, none his; phone "should ring soon"', { cond: function (c) { return !!c.undrafted; } }),
     h('dr7', 'draft', 'Combine buzz: {last} nails the {dist} at pro day, scouts "adjust pencil"', { cond: function (c) { return !!c.combine; } }),
     h('dr8', 'draft', 'DECLARED: {last} leaves {team} for the draft; campus "loses a leg, keeps the memories"', { cond: function (c) { return !!c.declared; } }),
-    h('dr9', 'draft', '{last} heads to {team} as a round-{round} pick; incumbent kicker "updating LinkedIn"'),
+    h('dr9', 'draft', '{last} heads to {team} as a round-{round} pick; incumbent kicker "updating LinkedIn"', { cond: drafted }),
 
     // ── fa (7)
     h('fa1', 'fa', 'FREE AGENT LEG: {last} hits the market; {n} teams "interested", 30 teams "not"'),
@@ -15694,7 +15699,10 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     f.combine = { ladderMakes: br.ladderMakes, accMakes: br.accMakes, hang: Util.roundN(br.hang, 2), score: br.score, plan: sess.plan || f.combinePlan || 'SHOW' };
     if (state.stage === 'DRAFT') state.phase = 'DRAFT';
     var text = '{last} at the combine: ladder ' + br.ladderMakes + '/' + Tuning.draft.combine.ladder.length + ', accuracy ' + br.accMakes + '/' + Tuning.draft.combine.accKicks + ', hang ' + Util.roundN(br.hang, 2) + ' s';
-    headline(state, rng, 'draft', { text: text, round: '?', n: br.ladderMakes });                     // 1 draw
+    var ladder = Tuning.draft.combine.ladder;
+    var hv = { text: text, round: '?', n: br.ladderMakes };
+    if (br.ladderMakes > 0) { hv.combine = true; hv.dist = ladder[Math.min(br.ladderMakes, ladder.length) - 1]; }   // "Combine buzz: … nails the 55"
+    headline(state, rng, 'draft', hv);                                                                   // 1 draw
     timeline(state, 'COMBINE', 'Combine score ' + (br.score >= 0 ? '+' : '') + br.score, 1);
     return { kind: 'COMBINE', ladderMakes: br.ladderMakes, accMakes: br.accMakes, hang: br.hang, score: br.score };
   }
@@ -15802,7 +15810,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       option('SAFE', 'Play it safe — stop at ' + CB.safeStop, 'Range ladder ends at ' + CB.safeStop + ' yd; no miss on the tape'),
       option('SHOW', 'Show them the ' + CB.ladder[CB.ladder.length - 1], 'Kick the whole ladder until a miss (pMake at ' + CB.ladder[CB.ladder.length - 1] + ': ' + Math.round(far * PCT) + ' %)')
     ]));
-    headline(state, rng, 'draft', { text: '{last} ' + (auto ? 'runs out of eligibility and heads to' : 'declares for') + ' the draft', round: '?' });   // 1 draw
+    headline(state, rng, 'draft', { text: '{last} ' + (auto ? 'runs out of eligibility and heads to' : 'declares for') + ' the draft', round: '?', declared: true });   // 1 draw
     message(state, 'press_draft', {});
     timeline(state, 'DECLARED', auto ? 'Senior season over — off to the draft' : 'Declared for the draft', 2);
   }
@@ -15869,7 +15877,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     if (res.invites && res.invites.payload && res.invites.payload.offers.length) {
       state.phase = 'UDFA';
       setPending(state, res.invites);
-      headline(state, rng, 'draft', { text: '{last} goes undrafted; ' + res.invites.payload.offers.length + ' teams call with camp invites' });   // 1 draw
+      headline(state, rng, 'draft', { text: '{last} goes undrafted; ' + res.invites.payload.offers.length + ' teams call with camp invites', undrafted: true });   // 1 draw
       timeline(state, 'UNDRAFTED', 'Undrafted — ' + res.invites.payload.offers.length + ' camp invites', 2);
       res.next = 'UDFA';
       return res;
@@ -15877,7 +15885,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var sess = D.tryout(state, rng);
     state.phase = 'UDFA';
     state.pending = { kind: 'KICKS', session: sess };
-    headline(state, rng, 'draft', { text: '{last} goes undrafted; one minicamp tryout on the calendar' });   // 1 draw
+    headline(state, rng, 'draft', { text: '{last} goes undrafted; one minicamp tryout on the calendar', undrafted: true });   // 1 draw
     timeline(state, 'UNDRAFTED', 'Undrafted — minicamp tryout', 2);
     res.next = 'TRYOUT';
     return res;
@@ -20646,7 +20654,9 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
  *
  * §4.6 rules implemented verbatim: pointerdown within 96 css px of the ball → PULL and the play clock starts;
  * P = clamp(dy / D_full, 0, 1.15), D_full = 0.32·cssHeight (portrait) or 0.45·cssHeight (landscape); lean =
- * floor(P·3); 32-sample ring buffer; flick segment = last 120 ms or last 6 samples, whichever is larger;
+ * floor(P·3); 32-sample ring buffer; flick segment = last 120 ms or last 6 samples, whichever is larger — but never
+ * starting before the pull's reversal (DEVIATION: the deepest sample of the last 300 ms is where the flick begins; a
+ * fast pull that snaps straight up would otherwise drag downward samples into the window and read as WEAK);
  * v.y > −0.12 → mishit {0.5, N(0, 2°), 0.3}; aim = clamp(atan2(vx, −vy)·180/π, −12, 12) (mirrored when
  * left-footed); speed < 0.35 → power ×0.85 (WEAK); speed > 2.2 → quality −0.15 (YANKED);
  * quality = 1 − clamp(rmsPerp / 14, 0, 1) − yank; P ≥ 0.95 held > 1.2 s → holdMs; no cancel after P > 0.20
@@ -20836,21 +20846,25 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
 
     function computeFlick(tEnd) {
       // flick segment: samples within the last 120 ms, or the last 6 samples, whichever is the larger set
-      var n = count, first = n - 1;
-      var tLast = st[at(n - 1)];
-      for (var i = n - 1; i >= 0; i--) { if (tLast - st[at(i)] <= CONST.flickWindowMs) first = i; else break; }
+      var n = count, last = n - 1, first = last;
+      var tLast = st[at(last)];
+      for (var i = last; i >= 0; i--) { if (tLast - st[at(i)] <= CONST.flickWindowMs) first = i; else break; }
       var byCount = Math.max(0, n - CONST.flickMinSamples);
       if (byCount < first) first = byCount;
-      var last = n - 1;
+      // power = the pull depth where the flick began: the deepest point reached in the last powerWindowMs before
+      // the release (the flick itself starts after the reversal, so its own samples sit above the bottom)
+      var deepestQ = first, dF = dFull();
+      for (var q = last; q >= 0; q--) { if (tLast - st[at(q)] > CONST.powerWindowMs) break; if (sy[at(q)] > sy[at(deepestQ)]) deepestQ = q; }
+      // DEVIATION (fairness, see the header): the segment never starts before that reversal. A fast pull that snaps
+      // straight into the flick would otherwise carry its last downward samples into the 120 ms window, and the chord
+      // across the turn would read as WEAK (or, pulled hard enough, as no flick at all).
+      if (deepestQ > first) first = deepestQ;
       var i0 = at(first), i1 = at(last);
       var dt = st[i1] - st[i0];
       var vx = 0, vy = 0;
       if (dt > 0) { vx = (sx[i1] - sx[i0]) / dt; vy = (sy[i1] - sy[i0]) / dt; }
       if (vy > CONST.noFlickVy || dt <= 0) { mishit('mishit'); return; }
-      // power = the pull depth where the flick began: the deepest point reached in the last powerWindowMs before
-      // the release (the flick itself starts after the reversal, so its own samples sit above the bottom)
-      var deepest = i0, dF = dFull();
-      for (var q = n - 1; q >= 0; q--) { var kq = at(q); if (tLast - st[kq] > CONST.powerWindowMs) break; if (sy[kq] > sy[deepest]) deepest = kq; }
+      var deepest = at(deepestQ);
       var power = clamp((sy[deepest] - y0) / dF, 0, CONST.powerMax);
       var flickStartT = st[deepest];
       var aim = Math.atan2(vx, -vy) * 180 / Math.PI;

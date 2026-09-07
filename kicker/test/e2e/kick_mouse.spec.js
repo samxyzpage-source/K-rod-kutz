@@ -1,8 +1,8 @@
 /**
  * kick_mouse.spec (SPEC §5.2): on the showcase, page.mouse presses on the ball, drags down 120 px over 300 ms,
  * flicks up 60 px in 80 ms and releases → the result banner is visible; getState().pending.session.results.length
- * === 1 with input.power within 0.5–1.15 and auto === false. Overswing: a 200 px drag → feedback.power ===
- * 'OVERSWING'. Runs on file:// and http at the phone and desktop viewports.
+ * === 1 with input.power within 0.5–1.15 and auto === false. Overswing: a drag to the bottom of the viewport (past
+ * D_full) → power > 1 and feedback.power === 'OVERSWING'. Runs on file:// and http at the phone and desktop viewports.
  */
 'use strict';
 const { test, after } = require('node:test');
@@ -56,11 +56,13 @@ H.matrix(({ mode, vp }) => {
     try {
       await K.openShowcase(page, 4243);
       const g = await K.geometry(page);
-      // D_full = 0.32 × css height (portrait) / 0.45 (landscape), capped by the room below the ball (a finger cannot
-      // leave the screen); pull past it but stay inside the viewport
+      // D_full = 0.32 × css height (portrait) / 0.45 (landscape), capped at the room below the ball minus 12 px (a
+      // finger cannot leave the screen). Pulling to 4 px above the viewport's bottom edge is therefore always past
+      // D_full — by 8 px when the room cap binds (desktop), by a lot when 0.32 × height binds (phone) — and power
+      // clamps at 1.15, so the exact depth does not matter.
       const room = g.innerHeight - g.ball.y;
-      const full = Math.min((g.landscape ? 0.45 : 0.32) * g.cssHeight, Math.max(60, room - 12));
-      const drag = Math.min(room - 6, Math.max(Math.ceil(full * 1.2), 200));
+      const drag = Math.floor(room - 4);
+      assert.ok(drag >= 60, 'room below the ball for an overswing (' + room + ' px)');
       await K.mouseFlick(page, { drag: drag, dragMs: 300, flick: 60, flickMs: 80 });
       await K.waitPhase(page, 'RESULT', 8000);
       const st = await H.debug(page, 'getState');

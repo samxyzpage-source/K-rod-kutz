@@ -282,11 +282,15 @@ test('eligibility: 3 seasons (redshirt excluded); seniors (4 non-redshirt / 5) a
   assert.equal(r3b.state.pending.decision.kind, 'COMBINE_PLAN');
   assert.deepEqual(J(r3b.state.pending.decision.options.map((o) => o.id)), ['SAFE', 'SHOW']);
   assert.equal(r3b.state.flags.declared, r3b.state.year);
+  const hDec = r3b.state.headlines[r3b.state.headlines.length - 1];
+  assert.ok(hDec && hDec.tag === 'draft' && /DECLARED/.test(hDec.text) && !/round \?|\bDRAFTED:/.test(hDec.text), 'declare headline: ' + (hDec && hDec.text));
   // senior → no decision
   const r4 = kfx.collegeOff(RTG, { seasons: 4 });
   const out = Career.enterDraft(r4.state, r4.rng);
   assert.equal(out.declared, true); assert.equal(out.senior, true);
   assert.equal(r4.state.phase, 'COMBINE'); assert.equal(r4.state.pending.decision.kind, 'COMBINE_PLAN');
+  const hSen = r4.state.headlines[r4.state.headlines.length - 1];
+  assert.ok(hSen && /DECLARED/.test(hSen.text) && !/round \?/.test(hSen.text), 'senior declare headline: ' + (hSen && hSen.text));
   ok(r4.state, 'senior → combine');
 });
 
@@ -304,6 +308,10 @@ test('COMBINE_PLAN → Draft.combineSession (SAFE stops the ladder at 55); the f
   assert.equal(typeof r.state.flags.combineScore, 'number');
   assert.ok(Math.abs(r.state.flags.combineScore) <= Tuning.draft.combine.clamp);
   assert.equal(r.state.phase, 'DRAFT'); assert.equal(r.state.pending, null);
+  const hC = r.state.headlines[r.state.headlines.length - 1];
+  assert.ok(hC && hC.tag === 'draft' && /Combine buzz|at the combine/.test(hC.text) && !/round \?|\bDRAFTED:/.test(hC.text), 'combine headline: ' + (hC && hC.text));
+  const makes = r.state.flags.combine.ladderMakes;
+  if (makes > 0) assert.ok(new RegExp(String(Tuning.draft.combine.ladder[Math.min(makes, Tuning.draft.combine.ladder.length) - 1])).test(hC.text), 'names the last ladder make: ' + hC.text);
   ok(r.state, 'combine done');
 });
 
@@ -667,8 +675,12 @@ test('runDraft: drafted → rookie deal + enterNfl (NFL.PRE, next year, changeTe
   d.phase = 'DRAFT';
   const year0 = d.year, age0 = d.player.age;
   const rng = RTG.RNG.create(2);
+  const nh0 = d.headlines.length;
   const res = Career.runDraft(d, rng);
   assert.equal(res.undrafted, false); assert.equal(res.next, 'NFL'); assert.equal(res.round, 4);
+  const drafted = d.headlines.slice(nh0);
+  assert.ok(drafted.some((h) => /round 4|round-4/.test(h.text)), 'the draft headline names the round: ' + drafted.map((h) => h.text).join(' | '));
+  assert.ok(drafted.every((h) => !/round \?/.test(h.text)), 'no unfilled round: ' + drafted.map((h) => h.text).join(' | '));
   assert.equal(d.stage, 'NFL'); assert.equal(d.phase, 'PRE'); assert.equal(d.year, year0 + 1); assert.equal(d.player.age, age0 + 1);
   assert.equal(d.player.league, 'NFL'); assert.equal(d.player.teamId, res.teamId);
   assert.equal(d.player.contract.type, 'ROOKIE'); assert.equal(d.player.contract.round, 4); assert.equal(d.player.contract.aav, R.byRound[4].aav); assert.equal(d.player.contract.years, R.years);
@@ -683,8 +695,10 @@ test('runDraft: drafted → rookie deal + enterNfl (NFL.PRE, next year, changeTe
   const u = cfx.draftProspect(RTG, { combineScore: 0 });
   u.flags.combineScore = 62 - RTG.Draft.draftValue(u);
   u.phase = 'DRAFT';
+  const nhu = u.headlines.length;
   const ures = Career.runDraft(u, RTG.RNG.create(3));
   assert.equal(ures.undrafted, true); assert.equal(ures.next, 'UDFA');
+  assert.ok(u.headlines.slice(nhu).some((h) => /UNDRAFTED/.test(h.text)) && u.headlines.slice(nhu).every((h) => !/round \?|\bDRAFTED:/.test(h.text)), 'undrafted headline: ' + u.headlines.slice(nhu).map((h) => h.text).join(' | '));
   assert.equal(u.phase, 'UDFA'); assert.equal(u.pending.decision.kind, 'UDFA');
   const invite = u.pending.decision.payload.offers[0];
   const uo = Engine.decide(u, RTG.RNG.create(3), { kind: 'UDFA', optionId: invite.id });
@@ -697,7 +711,9 @@ test('runDraft: drafted → rookie deal + enterNfl (NFL.PRE, next year, changeTe
   // undrafted → tryout → fail twice → forced retirement; pass → invites
   const t = cfx.draftProspect(RTG, { player: { attrs: { POW: 50, ACC: 50, CON: 50, CLU: 50, KO: 50 } }, fga: 40, fgm: 24 });
   t.flags.combineScore = -8; t.phase = 'DRAFT';
+  const nht = t.headlines.length;
   const tres = Career.runDraft(t, RTG.RNG.create(4));
+  assert.ok(t.headlines.slice(nht).some((h) => /UNDRAFTED/.test(h.text)), 'tryout path headline: ' + t.headlines.slice(nht).map((h) => h.text).join(' | '));
   assert.equal(tres.next, 'TRYOUT'); assert.equal(t.pending.session.kind, 'TRYOUT'); assert.equal(t.phase, 'UDFA');
   kfx.fillSession(t.pending.session, [false, false, false, true, true, false]);
   const fail = Career.finishSession(t, RTG.RNG.create(4));
