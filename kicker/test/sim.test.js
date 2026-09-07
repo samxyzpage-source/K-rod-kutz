@@ -648,3 +648,44 @@ test('fixtures: every named moment is a valid, JSON-safe state', (t) => {
     assert.equal(state.game, gs);
   }
 });
+
+test('QA1-05 / QA1-14: the drive log names teams by abbreviation, punt spots read "own N" / "the N" (never own 51+), XP rows are whole numbers', (t) => {
+  if (!hasData) { t.skip('team data not loaded'); return; }
+  const g = gfx.startUserGame(RTG, { seed: 31 });
+  const { state, gs } = g;
+  const home = Schema.teamById(state, gs.homeId), away = Schema.teamById(state, gs.awayId);
+  assert.equal(gs.homeAbbr, home.abbr); assert.equal(gs.awayAbbr, away.abbr);
+  const toss = gs.driveLog[0];
+  assert.ok(toss.text.indexOf(' wins the toss') > 0 && (toss.text.indexOf(home.abbr) === 0 || toss.text.indexOf(away.abbr) === 0), 'toss line starts with an abbreviation: ' + toss.text);
+  const idIsAbbr = gs.homeId === home.abbr;   // the NFL fixture rows use the abbreviation as the id
+  if (!idIsAbbr) assert.ok(toss.text.indexOf(gs.homeId) < 0 && toss.text.indexOf(gs.awayId) < 0, 'no internal id in the text');
+  const line = Sim.driveLogLine(gs, toss);
+  assert.ok(line.indexOf(' · ' + (toss.side === 'home' ? home.abbr : away.abbr) + ' · ') > 0, 'driveLogLine prefixes the abbreviation: ' + line);
+  const { summary } = gfx.playGame(RTG, g);
+  const rows = summary.drives;
+  assert.ok(rows.length > 10);
+  for (const r of rows) {
+    if (!idIsAbbr) assert.ok(r.text.indexOf(gs.homeId) < 0 && r.text.indexOf(gs.awayId) < 0, 'no id in: ' + r.text);
+    assert.ok(!/own (5[1-9]|[6-9][0-9])/.test(r.text), 'impossible own-yard spot: ' + r.text);
+    if (/takes over at|punt, /.test(r.text)) assert.ok(/(own [0-9]+|the [0-9]+)/.test(r.text), 'punt spot text: ' + r.text);
+  }
+  assert.ok(summary.xp.items.every((i) => Number.isInteger(i.xp)), 'integer XP rows: ' + JSON.stringify(summary.xp.items));
+  assert.equal(summary.xp.total, Math.round(summary.xp.items.reduce((a, i) => a + i.xp, 0) * summary.xp.mult), 'total = round(sum × mult)');
+});
+
+test('QA1-05: a college game (ids differ from abbreviations) logs abbreviations only', (t) => {
+  if (!hasData) { t.skip('team data not loaded'); return; }
+  const r = RTG.Engine.newCareer({ name: 'Log Tester', seed: 777 }, 0);
+  const { state, rng } = r;
+  while (state.pending) RTG.Engine.settlePending(state, rng, { max: 1 });
+  RTG.Engine.nextPhase(state, rng);
+  if (state.phase !== 'REG') RTG.Engine.nextPhase(state, rng);
+  while (state.pending) RTG.Engine.settlePending(state, rng, { max: 1 });
+  const ref = RTG.Season.userGameRef(state);
+  assert.ok(ref, 'a week-1 game');
+  const gs = Sim.startGame(state, rng, { league: ref.league, gameId: ref.gameId });
+  assert.ok(gs.homeId !== gs.homeAbbr && gs.awayId !== gs.awayAbbr, 'college ids differ from the abbreviations: ' + gs.homeId + ' / ' + gs.homeAbbr);
+  assert.ok(gs.driveLog[0].text.indexOf(gs.homeId) < 0 && gs.driveLog[0].text.indexOf(gs.awayId) < 0, 'toss line without ids: ' + gs.driveLog[0].text);
+  assert.ok(/^[A-Z0-9]{2,5} wins the toss/.test(gs.driveLog[0].text), gs.driveLog[0].text);
+  assert.ok(Sim.driveLogLine(gs, gs.driveLog[0]).indexOf(gs.homeId) < 0, 'driveLogLine without ids');
+});

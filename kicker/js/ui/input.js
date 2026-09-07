@@ -45,6 +45,7 @@
     grabRadiusCss: 96, powerMax: 1.15, aimMax: 12,
     dFullPortrait: 0.32, dFullLandscape: 0.45,
     ring: 32, flickWindowMs: 120, flickMinSamples: 6, powerWindowMs: 300, dFullMinCss: 60, dFullMarginCss: 12,
+    reversalTolCss: 2, pauseGapMs: 60,
     noFlickVy: -0.12, weakSpeed: 0.35, yankSpeed: 2.2, weakMult: 0.85, yankPenalty: 0.15,
     rmsPerpDiv: 14, holdFromP: 0.95, holdMs: 1200, noCancelP: 0.20,
     mishit: { power: 0.5, aimSd: 2, quality: 0.3 }, cancelQuality: 0.5,
@@ -69,7 +70,7 @@
     var head = 0, count = 0;
     var pointerId = null, pulling = false, P = 0, peakP = 0, lean = -1, lastTick = 0;
     var x0 = 0, y0 = 0, rectLeft = 0, rectTop = 0;
-    var holdSince = 0, everPulled = false;
+    var holdSince = 0, holdEnd = 0, everPulled = false;   // hold at full draw: first sample with P ≥ 0.95 … first sample back under it (the flick)
     var clockStart = 0, clockTotal = 0, clockTimer = 0;
     var destroyed = false;
     var state = 'IDLE';
@@ -91,9 +92,10 @@
     function dFull() {
       var h = call(opts.cssHeight) || canvasEl.clientHeight || 320;
       var d = (call(opts.landscape) ? CONST.dFullLandscape : CONST.dFullPortrait) * h;
-      // DEVIATION (playability): a finger cannot leave the screen, so full power must be reachable within the
-      // room below the ball (iPhone 12 portrait leaves ~100 px). Cap D_full at that room minus a margin.
-      if (roomBelow > 0) d = Math.min(d, Math.max(CONST.dFullMinCss, roomBelow - CONST.dFullMarginCss));
+      // DEVIATION (playability): a finger cannot leave the screen, so the whole power range — the overswing zone
+      // included (P up to powerMax) — must be reachable within the room below the ball. Cap D_full so that
+      // powerMax · D_full still fits in that room minus a margin (a landscape phone leaves ~150 px under the ball).
+      if (roomBelow > 0) d = Math.min(d, Math.max(CONST.dFullMinCss, (roomBelow - CONST.dFullMarginCss) / CONST.powerMax));
       return d;
     }
     function isActive() { return opts.active ? !!opts.active() : true; }
@@ -161,7 +163,7 @@
       try { if (canvasEl.setPointerCapture) canvasEl.setPointerCapture(pointerId); } catch (err) { /* ignore */ }
       if (e.preventDefault) e.preventDefault();
       x0 = px; y0 = py; head = 0; count = 0;
-      P = 0; peakP = 0; lean = -1; lastTick = 0; holdSince = 0; everPulled = false;
+      P = 0; peakP = 0; lean = -1; lastTick = 0; holdSince = 0; holdEnd = 0; everPulled = false;
       push(px, py, now());
       state = 'PULL'; pulling = true;
       startClock();
@@ -173,7 +175,11 @@
       P = clamp(dy / dFull(), 0, CONST.powerMax);
       if (P > peakP) peakP = P;
       if (P > 0.02) everPulled = true;
-      if (P >= CONST.holdFromP) { if (!holdSince) holdSince = t; } else holdSince = 0;
+      // hesitation clock: starts when P first reaches the full-draw line, stops at the first sample back under it
+      // (that sample IS the flick — the flick samples run through here too, so the clock must never be zeroed by
+      // them); easing back up and pulling again restarts it
+      if (P >= CONST.holdFromP) { if (!holdSince || holdEnd) { holdSince = t; holdEnd = 0; } }
+      else if (holdSince && !holdEnd) holdEnd = t;
       var l = Math.min(3, Math.floor(P * 3));
       var tick = Math.floor(P * 10 + 1e-9);
       if (tick !== lastTick) { lastTick = tick; call(opts.onTick, tick * 10); }
@@ -215,14 +221,22 @@
       for (var i = last; i >= 0; i--) { if (tLast - st[at(i)] <= CONST.flickWindowMs) first = i; else break; }
       var byCount = Math.max(0, n - CONST.flickMinSamples);
       if (byCount < first) first = byCount;
-      // power = the pull depth where the flick began: the deepest point reached in the last powerWindowMs before
-      // the release (the flick itself starts after the reversal, so its own samples sit above the bottom)
-      var deepestQ = first, dF = dFull();
-      for (var q = last; q >= 0; q--) { if (tLast - st[at(q)] > CONST.powerWindowMs) break; if (sy[at(q)] > sy[at(deepestQ)]) deepestQ = q; }
+      // power = the pull depth where the flick began, i.e. the reversal: walk back from the release while the
+      // samples keep getting deeper (a 2-px jitter tolerance) — that is the bottom of the pull whatever its age
+      // (a player who draws, aims for a second and then flicks leaves no samples during the pause, so a time
+      // window would skip the bottom and read power off the first flick sample instead). A deeper sample inside
+      // the last powerWindowMs still wins (a fast pull snapping straight into the flick).
+      var deepestQ = last, dF = dFull();
+      for (var q = last - 1; q >= 0; q--) { if (sy[at(q)] >= sy[at(deepestQ)] - CONST.reversalTolCss) { if (sy[at(q)] > sy[at(deepestQ)]) deepestQ = q; } else break; }
+      for (var q2 = last; q2 >= 0; q2--) { if (tLast - st[at(q2)] > CONST.powerWindowMs) break; if (sy[at(q2)] > sy[at(deepestQ)]) deepestQ = q2; }
       // DEVIATION (fairness, see the header): the segment never starts before that reversal. A fast pull that snaps
       // straight into the flick would otherwise carry its last downward samples into the 120 ms window, and the chord
-      // across the turn would read as WEAK (or, pulled hard enough, as no flick at all).
-      if (deepestQ > first) first = deepestQ;
+      // across the turn would read as WEAK (or, pulled hard enough, as no flick at all). After a pause at the bottom
+      // (no samples while the finger is still) the chord starts at the first moving sample instead, so the time the
+      // finger rested is not counted as flick time.
+      var startQ = deepestQ;
+      if (deepestQ < last && st[at(deepestQ + 1)] - st[at(deepestQ)] > CONST.pauseGapMs) startQ = deepestQ + 1;
+      if (startQ > first) first = startQ;
       var i0 = at(first), i1 = at(last);
       var dt = st[i1] - st[i0];
       var vx = 0, vy = 0;
@@ -230,7 +244,6 @@
       if (vy > CONST.noFlickVy || dt <= 0) { mishit('mishit'); return; }
       var deepest = at(deepestQ);
       var power = clamp((sy[deepest] - y0) / dF, 0, CONST.powerMax);
-      var flickStartT = st[deepest];
       var aim = Math.atan2(vx, -vy) * 180 / Math.PI;
       if (call(opts.leftFooted)) aim = -aim;
       aim = clamp(aim, -CONST.aimMax, CONST.aimMax);
@@ -248,7 +261,9 @@
       }
       var rms = m ? Math.sqrt(sum / m) : 0;
       var quality = clamp(1 - clamp(rms / CONST.rmsPerpDiv, 0, 1) - yank, 0, 1);
-      var hold = holdSince && (flickStartT - holdSince) > CONST.holdMs ? Math.round(flickStartT - holdSince) : 0;
+      // hesitation (§4.6): time spent at P ≥ 0.95 before the flick started (the first sample back under the line)
+      var hEnd = holdEnd || tEnd;
+      var hold = holdSince && (hEnd - holdSince) > CONST.holdMs ? Math.round(hEnd - holdSince) : 0;
       out.power = clamp(power, 0, CONST.powerMax); out.aim = aim; out.quality = quality; out.holdMs = hold;
       meta.kind = 'flick'; meta.speed = speed; meta.rmsPerp = rms; meta.weak = weak; meta.yanked = yanked; meta.samples = last - first + 1; meta.windowMs = dt;
       release();
@@ -353,15 +368,20 @@
       aim = clamp(aim + dir * M.nudgeDeg, -CONST.aimMax, CONST.aimMax);
       call(opts.onAim, aim);
     }
+    function keys() { var k = call(opts.keys); return k && typeof k === 'object' ? k : DEFAULT_KEYS; }
     function keyDir(e) {
-      var k = e.key || e.code;
-      if (k === 'ArrowLeft' || k === 'a' || k === 'A' || k === 'KeyA') return -1;
-      if (k === 'ArrowRight' || k === 'd' || k === 'D' || k === 'KeyD') return 1;
+      var k = keys();
+      if (Input.keyMatches(e, k.left || DEFAULT_KEYS.left)) return -1;
+      if (Input.keyMatches(e, k.right || DEFAULT_KEYS.right)) return 1;
+      // A / D stay as aliases of the arrows while the arrows are the configured keys (§4.6)
+      var raw = e.key || e.code;
+      if ((k.left || DEFAULT_KEYS.left) === 'ArrowLeft' && (raw === 'a' || raw === 'A' || raw === 'KeyA')) return -1;
+      if ((k.right || DEFAULT_KEYS.right) === 'ArrowRight' && (raw === 'd' || raw === 'D' || raw === 'KeyD')) return 1;
       return 0;
     }
     function isPress(e) {
-      var k = e.key || e.code;
-      return k === ' ' || k === 'Spacebar' || k === 'Space' || k === 'Enter';
+      var k = keys();
+      return Input.keyMatches(e, k.confirm || DEFAULT_KEYS.confirm) || Input.keyMatches(e, k.confirmAlt || DEFAULT_KEYS.confirmAlt);
     }
     function editable(e) {
       var t = e.target;

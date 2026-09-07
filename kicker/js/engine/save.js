@@ -631,6 +631,7 @@
       calendarYear: Tuning.schedule.firstYear + year - 1,
       stage: c.stage || '',
       phase: c.phase || '',
+      week: typeof c.week === 'number' ? c.week : 0,
       ovr: ovrOf(p.attrs),
       age: typeof p.age === 'number' ? p.age : 0,
       league: p.league || null,

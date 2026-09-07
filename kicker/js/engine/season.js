@@ -382,7 +382,7 @@
   function weekOpenMessages(state) {
     var p = state.player, C = Contracts();
     if (!userInLeague(state) || state.season.league !== 'NFL') return;
-    if (num(p.nflSeasons, 0) === 0) message(state, 'agent_rookie', {});
+    if (num(p.nflSeasons, 0) === 0) message(state, 'agent_rookie', { years: p.contract ? num(p.contract.years, 0) || undefined : undefined });
     else if (C && isFn(C.inFinalYear) && C.inFinalYear(state)) message(state, 'agent_final_year', {});
   }
 
@@ -568,7 +568,9 @@
   function jobChecks(state, rng, jsRes, report) {
     var p = state.player, kind = state.season.league, TI = TSea().timelineImpact;
     if (!jsRes) return;
-    if (jsRes.benched && p.role === 'K2' && !p.flags.benchNoted) {
+    // only a NEW bench (K1 → K2 this week) is news; a backup who never held the job (camp loss, STAR room) is not "benched"
+    var newlyBenched = jsRes.justBenched !== undefined ? !!jsRes.justBenched : !!jsRes.benched;
+    if (newlyBenched && p.role === 'K2' && !p.flags.benchNoted) {
       p.flags.benchNoted = true;
       report.bench = true;
       message(state, 'coach_bench', {});
@@ -1027,23 +1029,30 @@
     team.DEF = clamp(Math.round(D.keep * num(team.DEF, anchor) + D.anchorW * (anchor + rng.gauss(0, D.sd))), L.ratingMin, L.ratingMax);   // 2
   }
 
-  /** A §2.5.1 replacement rookie: ovr N(60, 5), age 22, attrs = ovr + N(0, 4). Draws: name 3–4 · ovr 2 · attrs 10. */
-  function makeRookie(rng) {
+  /**
+   * A §2.5.1 replacement rookie: ovr N(60, 5), attrs = ovr + N(0, 4); age 22 (NFL) or a college freshman
+   * (Tuning.league.aiKicker.college.rookieAge). Draws: name 3–4 · ovr 2 · attrs 10.
+   */
+  function makeRookie(rng, kind) {
     var K = Tuning.league.aiKicker, N = Names();
     var name = N && isFn(N.player) ? N.player(rng).full : 'Rookie Kicker';
     var ovr = clamp(Math.round(rng.gauss(K.rookie.mean, K.rookie.sd)), K.attrMin, K.attrMax);
     var attrs = {};
     for (var i = 0; i < ATTRS.length; i++) attrs[ATTRS[i]] = clamp(Math.round(ovr + rng.gauss(0, K.attrSd)), K.attrMin, K.attrMax);
-    return { name: name, age: K.rookie.age, ovr: ovr, attrs: attrs, contractYears: TSea().aiRookieContractYears, seasonStats: emptyKickerStats() };
+    var age = kind === 'COLLEGE' && K.college ? K.college.rookieAge : K.rookie.age;
+    return { name: name, age: age, ovr: ovr, attrs: attrs, contractYears: TSea().aiRookieContractYears, seasonStats: emptyKickerStats() };
   }
 
   /**
    * §2.5.1 AI kicker year: age +1, contract −1 (expired → re-sign int(1, 3), 1 draw), −1 POW/yr from 34 (ovr
    * recomputed), retire at 38+ (p 0.5, 1 draw) / ovr < 55 / age ≥ 45 → replaced by a rookie (Schema.setKicker
-   * re-blends ST). Every team keeps at least one AI kicker.
+   * re-blends ST). College legs are students: at Tuning.league.aiKicker.college.leaveAge their eligibility is up
+   * and a freshman takes the slot (0 draws — deterministic). Every team keeps at least one AI kicker.
    */
   function aiKickerYear(state, lg, rng, report) {
     var K = Tuning.league.aiKicker, R = TSea().aiResignYears, S = Schema();
+    var kind = lg.kind || (state.leagues && lg === state.leagues.college ? 'COLLEGE' : 'NFL');
+    var college = kind === 'COLLEGE';
     var slots = ['kicker', 'kicker2'];
     for (var i = 0; i < lg.teams.length; i++) {
       var team = lg.teams[i];
@@ -1056,15 +1065,16 @@
         if (k.age >= K.declineFrom && k.attrs) k.attrs.POW = clamp(num(k.attrs.POW, 50) - 1, K.attrMin, K.attrMax);
         if (k.attrs) k.ovr = clamp(ovrOf(k.attrs), K.attrMin, K.attrMax);
         var retire = k.age >= TSea().aiForceRetireAge || k.ovr < K.retireOvrBelow;
+        if (college && K.college && k.age >= K.college.leaveAge) retire = true;              // eligibility over (0 draws)
         if (!retire && k.age >= K.retireAge) retire = rng.chance(K.retireProb);               // 1 draw
         if (!retire) continue;
-        var rookie = makeRookie(rng);                                                         // 15–16 draws
+        var rookie = makeRookie(rng, kind);                                                   // 15–16 draws
         report.retirements.push({ teamId: team.id, name: k.name, age: k.age, ovr: k.ovr, slot: slots[s] });
         report.rookies.push({ teamId: team.id, name: rookie.name, ovr: rookie.ovr, slot: slots[s] });
         if (S && isFn(S.setKicker)) S.setKicker(lg, team.id, rookie, slots[s]); else team[slots[s]] = rookie;
       }
       if (!team.kicker && !team.kicker2) {
-        var extra = makeRookie(rng);
+        var extra = makeRookie(rng, kind);
         var slot = userInLeague(state) && state.player.teamId === team.id ? 'kicker2' : 'kicker';
         if (S && isFn(S.setKicker)) S.setKicker(lg, team.id, extra, slot); else team[slot] = extra;
         report.rookies.push({ teamId: team.id, name: extra.name, ovr: extra.ovr, slot: slot });

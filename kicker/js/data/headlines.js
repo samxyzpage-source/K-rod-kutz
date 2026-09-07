@@ -9,7 +9,7 @@
  *           weather, dist, made, iced, playoff, rivalry, snow, rookie, walkon}
  * RTG.Data.messages  : {[kind]: [{id, from, avatar?, text}]}   (≥ 60 templates)
  *   kinds: coach_form_sharp coach_form_watch coach_js_high coach_js_low coach_hot_seat coach_bench coach_unbench
- *          coach_win coach_loss coach_pregame coach_camp coach_rest
+ *          coach_win coach_loss coach_pregame coach_welcome coach_camp coach_rest
  *          agent_final_year agent_extension agent_fa agent_tag agent_rookie agent_market agent_cut
  *          gm_welcome gm_cut_warning gm_trade gm_release
  *          press_request press_slump press_hot press_draft
@@ -212,6 +212,14 @@
     h('ct8', 'contract', 'VET MINIMUM: {last} signs for scraps to keep kicking; "scraps kick too", he says', { cond: function (c) { return !!c.min; } }),
     h('ct9', 'contract', '{last} inks {years}-year deal; fine print includes "no more billboard shoots"'),
 
+    // ── commit (6) — college commitments (COMMIT / WALKON): no money, no years; {team} is the school
+    h('cm1', 'commit', 'COMMITTED: {last} picks {team}; {city} "gains a leg, keeps its expectations low"'),
+    h('cm2', 'commit', '{last} signs with {team}; {coach} "excited to have a kicker who kicks"'),
+    h('cm3', 'commit', 'Walk-on {last} joins {team}; no scholarship, "just a bag and a leg"', { cond: function (c) { return !!c.walkon; } }),
+    h('cm4', 'commit', 'SIGNED: {last} commits to {team} after the showcase; scholarship "mostly for the leg"', { cond: function (c) { return !c.walkon; } }),
+    h('cm5', 'commit', '{team} land kicker {last}; recruiting site rates the pickup "fine"'),
+    h('cm6', 'commit', 'Recruit {last} is heading to {city}; the punter "already nervous"'),
+
     // ── draft (9)
     // the round / pick lines need a real draft result (c.round ≥ 1): the declare, combine and undrafted steps also
     // draw from this tag and would otherwise announce "round ?, pick 120" with the college as {team}
@@ -379,6 +387,11 @@
       m('coach_pregame', 'cp2', 'coach', "Wind's supposed to be a factor at {opp}. We'll adjust the range. Don't be a hero."),
       m('coach_pregame', 'cp3', 'coach', "Big game. Same swing. If I call for a long one, it's because I believe. Don't make me a liar.")
     ],
+    coach_welcome: [
+      m('coach_welcome', 'cwl1', 'coach', "Welcome to {team}. Kickers kick. Don't talk to the punter about feelings."),
+      m('coach_welcome', 'cwl2', 'coach', "Glad you picked us. Camp opens Monday. Bring the leg, leave the highlight reel."),
+      m('coach_welcome', 'cwl3', 'coach', "You're a {team} kicker now. The job is simple: make the ones I call. I call a lot.")
+    ],
     coach_camp: [
       m('coach_camp', 'cc1', 'coach', "Six kicks Thursday. You and the other guy. Best leg starts. Simple."),
       m('coach_camp', 'cc2', 'coach', "Camp battle's on. I don't care who wins. I care that somebody does.")
@@ -407,7 +420,7 @@
       m('agent_tag', 'at2', 'agent', "Franchise tag. It's a compliment wrapped in a handcuff. We'll talk options.")
     ],
     agent_rookie: [
-      m('agent_rookie', 'ar1', 'agent', "Rookie deal is signed. Four years. Now go be worth more than it."),
+      m('agent_rookie', 'ar1', 'agent', "Rookie deal is signed. {years} years. Now go be worth more than it."),
       m('agent_rookie', 'ar2', 'agent', "Welcome to the league. Your contract is small. Your leg is not. Prove it.")
     ],
     agent_market: [

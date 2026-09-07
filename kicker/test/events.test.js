@@ -674,3 +674,15 @@ test('§3.5.14 surface', () => {
   }
   assert.ok(Array.isArray(Data.events) && Data.eventsById && Array.isArray(Data.headlines) && Data.messages && Array.isArray(Data.awards));
 });
+
+test('QA1-04 / QA1-06: coach_welcome renders without an opponent slot; agent_rookie names the real deal length', () => {
+  const s = efx.collegeReg(RTG);
+  for (let i = 0; i < 6; i++) {
+    const m = Events.message(s, 'coach_welcome', { team: 'Sonoran Tech' });
+    assert.ok(m && m.from === 'coach' && m.text.indexOf('the opponent') < 0 && m.text.indexOf('{') < 0, m.text);
+  }
+  const ar = Events.message(s, 'agent_rookie', { years: 3 });
+  assert.ok(ar.text.indexOf('Four years') < 0, ar.text);
+  if (ar.tpl === 'ar1') assert.ok(ar.text.indexOf('3 years') >= 0, ar.text);
+  assert.ok((RTG.Data.headlinesByTag.commit || []).length >= 4, 'a commit pool exists');
+});

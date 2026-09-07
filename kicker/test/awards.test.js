@@ -319,3 +319,9 @@ test('hofScore: verdict thresholds, multipliers, accuracy bonus and monotonicity
   c.stats.college.fgm = 500; c.stats.career.fgm = 820;
   assert.equal(Awards.hofScore(c).score, s0);
 });
+
+test('QA1-15: the HOF breakdown labels say Pro (only NFL kicks count toward the Hall)', () => {
+  const labels = Awards.hofScore(fx.hofFirstBallot(RTG)).breakdown.map((b) => b.label);
+  deq(labels.slice(0, 4), ['Pro FGM', 'Pro 50+ makes', 'Pro points / 100', 'Pro game-winners']);
+  assert.ok(labels.every((l) => !/^Career FGM/.test(l)));
+});

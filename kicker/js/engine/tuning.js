@@ -567,6 +567,7 @@
                    st: { mean: 70, sd: 5 }, coachAgg: [0.3, 0.8] },
         aiKicker: {
           age: [22, 36], ovrSd: 7, attrSd: 4, attrMin: 30, attrMax: 99,
+          college: { age: [18, 22], rookieAge: 18, leaveAge: 23 },   // college legs are students: freshmen at 18, eligibility over at 23 (replaced by a freshman)
           collegeAnchorBase: 52, collegeAnchorPerPrestige: 4, nflAnchor: 74,
           contractYears: [1, 4], declineFrom: 34, retireAge: 38, retireProb: 0.5, retireOvrBelow: 55,
           rookie: { mean: 60, sd: 5, age: 22 }

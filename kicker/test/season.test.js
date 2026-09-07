@@ -561,6 +561,7 @@ test('advanceYear: age +1 (ageTick once), coach churn, both leagues drift within
   const others = college.teams.filter((tm) => tm.id !== p.teamId);
   const oldK = others[0].kicker, badK = others[1].kicker, expK = others[2].kicker;
   oldK.age = Tuning.season.aiForceRetireAge - 1; badK.attrs = { POW: 40, ACC: 40, CON: 40, CLU: 40, KO: 40 }; expK.contractYears = 1;
+  expK.age = Tuning.league.aiKicker.college.age[0];   // a freshman: stays for the re-sign check (seniors graduate at the tick)
   const oldName = oldK.name, badName = badK.name;
   // ageTick is idempotent within the year
   const bc = Season.ageTick(state, rng);
@@ -579,7 +580,7 @@ test('advanceYear: age +1 (ageTick once), coach churn, both leagues drift within
     assert.ok(tm.DEF >= Tuning.league.ratingMin && tm.DEF <= Tuning.league.ratingMax, tm.id + ' DEF');
     assert.ok(tm.kicker || tm.kicker2, 'every team keeps an AI kicker');
   }
-  assert.ok(rep.retirements.some((r) => r.teamId === others[0].id) && others[0].kicker.name !== oldName && others[0].kicker.age === Tuning.league.aiKicker.rookie.age, 'the 45-year-old retired for a 22-year-old rookie');
+  assert.ok(rep.retirements.some((r) => r.teamId === others[0].id) && others[0].kicker.name !== oldName && others[0].kicker.age === Tuning.league.aiKicker.college.rookieAge, 'the 45-year-old retired for a college freshman (' + others[0].kicker.age + ')');
   assert.ok(rep.retirements.some((r) => r.teamId === others[1].id) && others[1].kicker.name !== badName, 'ovr < 55 → replaced');
   assert.ok(others[2].kicker.contractYears >= Tuning.season.aiResignYears[0] && others[2].kicker.contractYears <= Tuning.season.aiResignYears[1], 'an expired deal is re-signed');
   assert.ok(rep.rookies.length >= 2);
@@ -625,4 +626,30 @@ test('runtime: a full college season < 250 ms (engine in the main context; the v
     + (stash.collegeMs === undefined ? '?' : stash.collegeMs.toFixed(0)) + ' ms, NFL ' + (stash.nflMs === undefined ? '?' : stash.nflMs.toFixed(0)) + ' ms');
   assert.ok(warm.ms < 250, 'full college season (warm) ' + warm.ms.toFixed(0) + ' ms < 250 ms');
   if (stash.collegeMs !== undefined) assert.ok(stash.collegeMs < 2000, 'vm-harness season under a sanity bound: ' + stash.collegeMs.toFixed(0) + ' ms');
+});
+
+// ═══════════════════════════════ QA1-03: college AI kickers are students ═══════════════════════════════
+
+test('QA1-03: college AI kickers are 18–22 at creation (NFL 22–36) and leave at Tuning.league.aiKicker.college.leaveAge for a freshman', () => {
+  const K = Tuning.league.aiKicker;
+  const state = schemaFx.hsShowcase(RTG, { seed: 21 });
+  const ages = (lg) => lg.teams.filter((t) => t.kicker).map((t) => t.kicker.age).concat(lg.teams.filter((t) => t.kicker2).map((t) => t.kicker2.age));
+  const col = ages(state.leagues.college), nfl = ages(state.leagues.nfl);
+  assert.ok(col.every((a) => a >= K.college.age[0] && a <= K.college.age[1]), 'college ages ' + Math.min.apply(null, col) + '–' + Math.max.apply(null, col));
+  assert.ok(nfl.every((a) => a >= K.age[0] && a <= K.age[1]), 'NFL ages ' + Math.min.apply(null, nfl) + '–' + Math.max.apply(null, nfl));
+  assert.ok(col.some((a) => a <= 19) && nfl.some((a) => a >= 30), 'the two ranges really differ');
+  // a college kicker at the eligibility limit is replaced by a freshman at the yearly tick (no rng draws involved)
+  const st = enrol(RTG, 'COLLEGE', { seed: 22 });
+  const rng = RTG.RNG.create(22);
+  Season.start(st, rng);
+  const other = st.leagues.college.teams.filter((t) => t.id !== st.player.teamId)[0];
+  other.kicker.age = K.college.leaveAge - 1; other.kicker.attrs = { POW: 80, ACC: 80, CON: 80, CLU: 80, KO: 80 }; other.kicker.ovr = 80;
+  const oldName = other.kicker.name;
+  Season.finishSeason(st, rng);
+  const rep = Season.advanceYear(st, rng);
+  assert.ok(rep.retirements.some((r) => r.teamId === other.id), 'the senior graduated');
+  assert.ok(other.kicker.name !== oldName && other.kicker.age === K.college.rookieAge, 'a freshman took the slot');
+  const after = ages(st.leagues.college);
+  assert.ok(after.every((a) => a < K.college.leaveAge), 'nobody older than the eligibility limit after the tick (max ' + Math.max.apply(null, after) + ')');
+  ok(st, 'college year 2');
 });

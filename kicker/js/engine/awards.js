@@ -446,11 +446,12 @@
     var recs = 0, rn = (state.records && state.records.nfl) || {};
     for (var k in rn) if (Object.prototype.hasOwnProperty.call(rn, k) && rn[k].isUser) recs++;
     var pctOk = num(st.fga, 0) >= H.pctBonusMinFga && fgPct(st) >= H.pctBonusMin ? 1 : 0;
+    // labels say "Pro": the Hall only counts NFL kicks (stats.nfl), never the college line
     var rows = [
-      ['fgm', 'Career FGM', num(st.fgm, 0), W.fgm],
-      ['fifty', '50+ makes', num(st.made50plus, 0), W.fifty],
-      ['pts', 'Points / 100', num(st.pts, 0) / 100, W.ptsPer100],
-      ['gw', 'Game-winners', num(st.gameWinners, 0), W.gw],
+      ['fgm', 'Pro FGM', num(st.fgm, 0), W.fgm],
+      ['fifty', 'Pro 50+ makes', num(st.made50plus, 0), W.fifty],
+      ['pts', 'Pro points / 100', num(st.pts, 0) / 100, W.ptsPer100],
+      ['gw', 'Pro game-winners', num(st.gameWinners, 0), W.gw],
       ['allLeague1', 'All-League 1st', countAwards(state, 'ALL_LEAGUE_1'), W.allLeague1],
       ['allLeague2', 'All-League 2nd', countAwards(state, 'ALL_LEAGUE_2'), W.allLeague2],
       ['stpoy', 'ST Player of the Year', countAwards(state, 'STPOY'), W.stpoy],

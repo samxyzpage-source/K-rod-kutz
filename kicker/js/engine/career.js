@@ -11,8 +11,9 @@
  *
  * State extensions (all JSON-safe, all optional):
  *   state.flags.showcase        {makes, kicks, stars, ovr, results:[{distance, made}]}
- *   state.flags.offseason       the wizard chain {key, year, league, steps[], idx, done, log[], resigned, talksFailed,
- *                               transferred, noOffers}   (Career.offseasonChain; stale chains are replaced by key)
+ *   state.flags.offseason       the wizard chain {key, year, league, steps[], idx, done, log[], skipped[] (indices of steps
+ *                               that produced nothing for the player), resigned, talksFailed, transferred, noOffers}
+ *                               (Career.offseasonChain; stale chains are replaced by key)
  *   state.flags.noOfferSeasons  consecutive offseasons that ended without an NFL contract (forced retirement at 2)
  *   state.flags.skipGame        {year, week, reason, restoreRole?}   (HOLDOUT / SKIP_GAME actions; honoured by RTG.Engine)
  *   state.flags.transferRequested · declared · combinePlan · combineScore · combine · draftResult · springLeague
@@ -193,7 +194,9 @@
     delete sflags(state).ultimatum;
     delete sflags(state).rivalCold;
   }
-  var REASON_TAG = { TRANSFER: 'transfer', TRADE: 'trade', DRAFTED: 'draft', COMMIT: 'contract', WALKON: 'contract' };
+  // COMMIT / WALKON draw from the college 'commit' pool: the NFL 'contract' pool announces money and years, which a
+  // $0 scholarship / walk-on never has (its unfilled {money}/{years} slots would print the "$1.0M / 2-year" fallbacks)
+  var REASON_TAG = { TRANSFER: 'transfer', TRADE: 'trade', DRAFTED: 'draft', COMMIT: 'commit', WALKON: 'commit' };
   function tagForReason(reason) { return REASON_TAG[reason] || 'fa'; }
 
   /**
@@ -328,7 +331,7 @@
     var weights = C.depthWeights[num(team.prestige, 3)] || C.depthWeights[3];
     var depth = rng.weighted(C.depthOrder, function (d) { return weights[C.depthOrder.indexOf(d)]; });   // 1 draw
     var anchor = Tuning.league.aiKicker.collegeAnchorBase + Tuning.league.aiKicker.collegeAnchorPerPrestige * num(team.prestige, 3);
-    var k = S && isFn(S.createAiKicker) ? S.createAiKicker(rng, anchor)
+    var k = S && isFn(S.createAiKicker) ? S.createAiKicker(rng, anchor, 'COLLEGE')
       : { name: 'Incumbent', age: 20, ovr: anchor, attrs: { POW: anchor, ACC: anchor, CON: anchor, CLU: anchor, KO: anchor }, contractYears: 1, seasonStats: null };
     var target, years;
     if (depth === 'STAR') { target = rng.int(D.STAR.ovr[0], D.STAR.ovr[1]); years = rng.int(D.STAR.years[0], D.STAR.years[1]); }
@@ -488,7 +491,7 @@
     state.history.contracts.push({ year: state.year, league: 'COLLEGE', teamId: team.id, type: type, years: years, aav: 0, total: 0,
       gtdPct: 0, signingBonus: 0, round: null, endYear: null, reason: type });
     state.stage = 'COLLEGE';
-    message(state, 'coach_pregame', { team: teamName(team) });
+    message(state, 'coach_welcome', { team: teamName(team) });      // a PRE note: no opponent exists yet for a pregame line
     var Se = need(Season(), 'Season', 'decide');
     Se.start(state, rng);
     return { enrolled: true, transferred: false, teamId: team.id };
@@ -516,7 +519,7 @@
     if (!rival) {
       var anchor = p.league === 'NFL' ? Tuning.league.aiKicker.nflAnchor
         : Tuning.league.aiKicker.collegeAnchorBase + Tuning.league.aiKicker.collegeAnchorPerPrestige * num(team.prestige, 3);
-      rival = S && isFn(S.createAiKicker) ? S.createAiKicker(rng, anchor) : { name: 'Walk-on Kicker', age: 20, ovr: 55, attrs: { POW: 55, ACC: 55, CON: 55, CLU: 55, KO: 55 }, contractYears: 1 };
+      rival = S && isFn(S.createAiKicker) ? S.createAiKicker(rng, anchor, p.league) : { name: 'Walk-on Kicker', age: 20, ovr: 55, attrs: { POW: 55, ACC: 55, CON: 55, CLU: 55, KO: 55 }, contractYears: 1 };
       if (p.role === 'K1') team.kicker2 = rival; else team.kicker = rival;
     }
     var contexts = [], rivalResults = [];
@@ -555,6 +558,7 @@
       p.role = 'K2';
       p.js = soft(C.loserJs);
       pflags(state).benched = true;                                    // §2.2: js ≥ 40 (or a cold rival) wins the job back
+      pflags(state).benchNoted = true;                                 // the camp loss is announced here: no "BENCHED" headline at the first endWeek
     }
     if (team) arrangeRoster(state, p.league, team, p.role);
     var rivalName = sess.rival ? sess.rival.name : 'the other leg';
@@ -1112,12 +1116,17 @@
   /** Run chain steps until one sets a pending or the chain ends. */
   function advanceChain(state, rng, ch) {
     var guard = ch.steps.length + 2;
+    if (!Array.isArray(ch.skipped)) ch.skipped = [];
     while (!ch.done && guard-- > 0) {
       if (state.pending) return ch;
       if (ch.idx >= ch.steps.length) { ch.done = true; break; }
-      var id = ch.steps[ch.idx++];
+      var idx = ch.idx, id = ch.steps[ch.idx++];
+      var stageBefore = state.stage, doneBefore = ch.done;
       STEPS[id](state, rng, ch);
       ch.log.push(id);
+      // a step that set nothing pending, changed no stage and did not close / replace the chain never happened for the
+      // player (no card, no event): remember it so the wizard's stepper can show it as skipped instead of done
+      if (!state.pending && state.stage === stageBefore && ch.done === doneBefore && sflags(state).offseason === ch) ch.skipped.push(idx);
       if (sflags(state).offseason !== ch) return ch;                                                  // a step replaced / dropped the chain (REDRAFT, spring league)
     }
     return ch;
@@ -1147,7 +1156,7 @@
       if (pflags(state).nearHome) p.morale = soft(p.morale + TC().college.nearHomeMorale);
     }
     var ch = { key: key, year: state.year, league: p.league || (state.season && state.season.league) || 'COLLEGE', steps: stepsFor(state), idx: 0, done: false,
-      log: [], resigned: false, talksFailed: false, transferred: false, noOffers: false, events: 0, portal: false };
+      log: [], skipped: [], resigned: false, talksFailed: false, transferred: false, noOffers: false, events: 0, portal: false };
     f.offseason = ch;
     advanceChain(state, rng, ch);
     return ch;

@@ -115,6 +115,8 @@
   function deficit(gs, side) { return gs.score[other(side)] - gs.score[side]; }
   function scoreText(gs) { return gs.homeId + ' ' + gs.score.home + ' - ' + gs.awayId + ' ' + gs.score.away; }
   function spotText(ytg) { return ytg > FIELD_YARDS / 2 ? 'own ' + (FIELD_YARDS - ytg) : 'the ' + ytg; }
+  /** Display name of a side for the drive log: the team abbreviation (gs.homeAbbr / awayAbbr), never the internal id. */
+  function nameOf(gs, side) { return gs[side + 'Abbr'] || gs[side + 'Id']; }
   function sideOfCtx(gs, ctx) { return ctx && ctx.game && ctx.game.teamId === gs.awayId ? 'away' : 'home'; }
 
   // ═══════════════════════════════ clock ═══════════════════════════════
@@ -221,7 +223,7 @@
     if (gs.league === 'COLLEGE') {
       gs.ot = { period: 1, mode: 'COLLEGE', firstPossession: first, bothPossessed: false, possessions: 0 };
       gs.clock = 0; gs.pendingKickoff = null;
-      pushLog(gs, first, 'Overtime - ' + gs[first + 'Id'] + ' starts from the ' + O.college.ytg, O.college.ytg, 'OT_START');
+      pushLog(gs, first, 'Overtime - ' + nameOf(gs, first) + ' starts from the ' + O.college.ytg, O.college.ytg, 'OT_START');
       newPossession(gs, first, O.college.ytg);
       return ev(gs, 'OT_START', 'Overtime: alternating possessions from the ' + O.college.ytg, { side: first });
     }
@@ -230,7 +232,7 @@
     gs.timeouts = { home: O.nfl.timeouts, away: O.nfl.timeouts };
     gs.possession = first; gs.ball = null;
     gs.pendingKickoff = { side: other(first) };
-    pushLog(gs, first, 'Overtime - ' + gs[first + 'Id'] + ' wins the toss and receives', 0, 'OT_START');
+    pushLog(gs, first, 'Overtime - ' + nameOf(gs, first) + ' wins the toss and receives', 0, 'OT_START');
     return ev(gs, 'OT_START', 'Overtime: ' + scoreText(gs), { side: first });
   }
 
@@ -393,7 +395,7 @@
         gs.timeouts[opp] = gs.timeouts[opp] - 1;
         gs.iced = true;
         ctx = icedCtx(gs, state, rng, side, ctx);
-        pushLog(gs, opp, 'Timeout ' + gs[opp + 'Id'] + ' - icing the kicker', ctx.distance - KT().distance.losToKick, 'ICE');
+        pushLog(gs, opp, 'Timeout ' + nameOf(gs, opp) + ' - icing the kicker', ctx.distance - KT().distance.losToKick, 'ICE');
       }
     }
     if (ctx.isUser) {
@@ -401,7 +403,7 @@
       var text = opts.text || kickLabel(ctx) + ' attempt';
       if (gs.iced) {
         gs.announce = { type: 'USER_KICK', text: text, side: side };
-        return ev(gs, 'ICE_TIMEOUT', 'ICED! ' + gs[opp + 'Id'] + ' calls timeout before the ' + kickLabel(ctx), { side: side, ctx: ctx });
+        return ev(gs, 'ICE_TIMEOUT', 'ICED! ' + nameOf(gs, opp) + ' calls timeout before the ' + kickLabel(ctx), { side: side, ctx: ctx });
       }
       return ev(gs, 'USER_KICK', text, { side: side, ctx: ctx });
     }
@@ -606,13 +608,13 @@
     if (!gs.ball) newPossession(gs, side, P.defaultStartYtg);
     if (timeLeftInHalf(gs) <= P.minPossessionSec) {
       var d = deficit(gs, side);
-      if (inFirstHalf(gs)) return runOutClock(gs, rng, side, gs[side + 'Id'] + ' runs out the half', 'KNEEL');
+      if (inFirstHalf(gs)) return runOutClock(gs, rng, side, nameOf(gs, side) + ' runs out the half', 'KNEEL');
       if (gs.ot || d > S().script.maxDeficit) return runOutClock(gs, rng, side, 'Hail Mary falls incomplete - time expires', 'HEAVE');
       if (d < 0) return runOutClock(gs, rng, side, 'Victory formation', 'KNEEL');
       // Q4, tied or trailing by ≤ 3: the two-minute drill plays out the final seconds
     }
     if (shouldStartScript(gs, side)) return initScript(gs, rng, side);
-    if (shouldKneel(gs, rng, side)) return runOutClock(gs, rng, side, 'Victory formation - ' + gs[side + 'Id'] + ' kneels it out', 'KNEEL');
+    if (shouldKneel(gs, rng, side)) return runOutClock(gs, rng, side, 'Victory formation - ' + nameOf(gs, side) + ' kneels it out', 'KNEEL');
     var outcome = rollOutcome(gs, rng, side);                                                    // draw 1
     var dt = driveTime(gs, rng, side, outcome);                                                  // draws 2, 3
     var straddled = advanceClock(gs, dt);
@@ -625,13 +627,13 @@
     var D = S().drive, opp = other(side), spot, own, text;
     switch (outcome) {
       case 'TD':
-        return scoreTouchdown(gs, state, rng, side, 'Touchdown drive by ' + gs[side + 'Id']);
+        return scoreTouchdown(gs, state, rng, side, 'Touchdown drive by ' + nameOf(gs, side));
       case 'STALL':
         return handleStall(gs, state, rng, side);
       case 'PUNT':
         own = clamp(Math.round(rng.gauss(D.puntStart.mean, D.puntStart.sd)), D.puntStart.min, D.puntStart.max);   // draws 4, 5
         gs.stats[side].punts++;
-        text = 'Punt - ' + gs[opp + 'Id'] + ' takes over at own ' + own;
+        text = 'Punt - ' + nameOf(gs, opp) + ' takes over at ' + spotText(FIELD_YARDS - own);
         pushLog(gs, side, text, FIELD_YARDS - own, 'PUNT');
         return flipPossession(gs, state, rng, opp, FIELD_YARDS - own, ev(gs, 'DRIVE', text, { side: side, result: 'PUNT' }));
       case 'TO':
@@ -707,7 +709,7 @@
     }
     var own = clamp(Math.round(FIELD_YARDS - ytg - rng.gauss(C.puntNet.mean, C.puntNet.sd)), C.puntCapOwn, D.puntStart.max);   // draws: punt
     gs.stats[side].punts++;
-    var puntText = stallText + ' - punt, ' + gs[opp + 'Id'] + ' at own ' + own;
+    var puntText = stallText + ' - punt, ' + nameOf(gs, opp) + ' at ' + spotText(FIELD_YARDS - own);
     pushLog(gs, side, puntText, ytg, 'PUNT');
     return flipPossession(gs, state, rng, opp, FIELD_YARDS - own, ev(gs, 'DRIVE', puntText, { side: side, result: 'PUNT' }));
   }
@@ -720,7 +722,7 @@
       : clamp(Math.round(rng.gauss(T.ytg.mean, T.ytg.sd)), 1, FIELD_YARDS - 1);                    // draws (only without a known spot)
     gs.script = { ytg: ytg, down: 1, toGo: T.toGo, plays: 0, timeouts: gs.timeouts[side] };
     var d = deficit(gs, side);
-    var text = 'Two-minute drill - ' + gs[side + 'Id'] + ' from ' + spotText(ytg) + ', ' + Util.fmtClock(gs.clock) + ' left, '
+    var text = 'Two-minute drill - ' + nameOf(gs, side) + ' from ' + spotText(ytg) + ', ' + Util.fmtClock(gs.clock) + ' left, '
       + (d === 0 ? 'tied' : 'down ' + d);
     pushLog(gs, side, text, ytg, 'SCRIPT');
     return ev(gs, 'DRIVE', text, { side: side, result: 'SCRIPT' });
@@ -810,7 +812,7 @@
     var items = [];
     for (var k in O.table) if (hasOwn.call(O.table, k)) items.push({ k: k, w: O.table[k] });
     var outcome = rng.weighted(items, 'w').k;                                                      // draw 1
-    if (outcome === 'TD') return scoreTouchdown(gs, state, rng, side, 'Overtime touchdown by ' + gs[side + 'Id']);
+    if (outcome === 'TD') return scoreTouchdown(gs, state, rng, side, 'Overtime touchdown by ' + nameOf(gs, side));
     if (outcome === 'STALL') {
       var Y = O.stallYtg;
       var ytg = clamp(Math.round(rng.gauss(Y.mean, Y.sd)), Y.min, Y.max);                          // draws 2, 3
@@ -947,7 +949,7 @@
       if (r.type === 'PAT') { add(r.made ? 'PAT good' : 'PAT missed', r.made ? X.patMade : X.patMissed); continue; }
       if (r.type !== 'FG') continue;
       if (!r.made) { add(D + '-yd FG missed', X.fgMissed); continue; }
-      add(D + '-yd FG made', Util.round1(X.fgMade + X.fgMadePerYd * Math.max(0, D - X.fgMadeFrom)));
+      add(D + '-yd FG made', Math.round(X.fgMade + X.fgMadePerYd * Math.max(0, D - X.fgMadeFrom)));
       if (D >= fifty) add('50+ bonus', X.fifty);
       if (has(r.tags, 'clutch')) add('Clutch make', X.clutch);
       if (has(r.tags, 'gameWinner')) add('GAME-WINNER', X.gameWinner);
@@ -1078,12 +1080,13 @@
     var recv = rng.chance(C.coinP) ? 'home' : 'away';                                                     // coin toss
     var gs = Schema().createGameState({
       id: g.id, league: g.league, week: g.week, kind: g.kind, homeId: home.id, awayId: away.id, userSide: userSide,
+      homeAbbr: home.abbr || home.id, awayAbbr: away.abbr || away.id,
       weather: { weather: wx.weather, tempF: wx.tempF, wind: { speed: wx.wind.speed, dir: wx.wind.dir }, surface: wx.surface, altitude: !!wx.altitude, dome: !!wx.dome },
       offRating: off, defRating: def, timeouts: C.timeoutsPerHalf, receivedFirst: recv
     });
     gs.announce = null;
     gs.meta = { gw: null, tf: null, koTouchbacks: 0, metersAtStart: userSide && state.player ? metersOf(state.player) : null };
-    pushLog(gs, recv, gs[recv + 'Id'] + ' wins the toss and receives', 0, 'TOSS');
+    pushLog(gs, recv, nameOf(gs, recv) + ' wins the toss and receives', 0, 'TOSS');
     if (userSide) state.game = gs;
     return gs;
   };
@@ -1254,7 +1257,7 @@
     var period = otN > 0 ? 'OT' + (otN > 1 ? otN : '') : 'Q' + q;
     var showClock = !(gs.ot && gs.ot.mode === 'COLLEGE' && otN > 0);
     var parts = [period + (showClock ? ' ' + Util.fmtClock(clock) : '')];
-    if (e.side && (e.side === 'home' || e.side === 'away')) parts.push(gs[e.side + 'Id'] || e.side);
+    if (e.side && (e.side === 'home' || e.side === 'away')) parts.push(nameOf(gs, e.side) || e.side);
     parts.push(e.text || '');
     return parts.join(' · ');
   };

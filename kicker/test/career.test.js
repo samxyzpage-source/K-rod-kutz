@@ -787,3 +787,60 @@ test('stageInfo acts (§1.4) and finishSession without a session throws', () => 
   assert.throws(() => Career.finishSession(nfl, RTG.RNG.create(1)), /no pending kick session/);
   assert.throws(() => Career.campBattle(kfx.newCareer(RTG).state, RTG.RNG.create(1)), /no team/);
 });
+
+// ═══════════════════════════════ QA round 1 regressions ═══════════════════════════════
+
+test('QA1-01 / QA1-04: a college commitment is a \'commit\' headline without money or years, and the coach note is a welcome (no {opp})', () => {
+  const r = kfx.collegePre(RTG, { seed: 777 });
+  const hl = r.state.headlines[r.state.headlines.length - 1];
+  assert.equal(hl.tag, 'commit', 'the commitment headline comes from the commit pool: ' + hl.text);
+  assert.ok(!/\$|\bdeal\b|-year/.test(hl.text), 'no dollar figure / deal / years in a /bin/bash commitment: ' + hl.text);
+  assert.ok(!r.state.headlines.some((h) => h.tag === 'contract'), 'no NFL contract headline for a college commit');
+  const note = r.state.inbox.filter((m) => m.kind === 'coach_welcome' || (m.tpl && m.tpl.indexOf('cwl') === 0))[0];
+  assert.ok(note, 'coach_welcome note in the inbox');
+  assert.ok(note.text.indexOf('the opponent') < 0 && note.text.indexOf('{') < 0, 'no unfilled opponent slot: ' + note.text);
+  assert.ok(!r.state.inbox.some((m) => /the opponent/.test(m.text)), 'no coach_pregame fallback text in PRE');
+  // a walk-on gets the walk-on flavour (cond walkon) and still no money
+  const w = kfx.newCareer(RTG, { seed: 777, archetype: 'CANNON' });
+  kfx.fillSession(w.state.pending.session, [false, false, false, false, false, false]);
+  Career.finishSession(w.state, w.rng);
+  assert.equal(w.state.flags.WALKON, true);
+  Engine.decide(w.state, w.rng, { kind: 'OFFERS_COLLEGE', optionId: w.state.pending.decision.options[0].id });
+  const wh = w.state.headlines.filter((h) => h.tag === 'commit')[0];
+  assert.ok(wh && !/\$/.test(wh.text), 'walk-on commit headline without money: ' + (wh && wh.text));
+  ok(r.state, 'committed');
+});
+
+test('QA1-16: losing the camp battle marks the bench as noted — the first endWeek posts no "BENCHED: loses the job" headline', () => {
+  const x = kfx.campBattle(RTG, { seed: 4, role: 'K2' });
+  x.session.rival.results = x.session.rival.results.map((r) => Object.assign({}, r, { made: true }));
+  kfx.fillSession(x.session, [false, false, false, false, false, false]);
+  const out = Career.finishSession(x.state, x.rng);
+  assert.equal(out.won, false); assert.equal(x.state.player.role, 'K2');
+  assert.equal(x.state.player.flags.benched, true); assert.equal(x.state.player.flags.benchNoted, true, 'the camp loss is the bench notice');
+  const benchBefore = x.state.headlines.filter((h) => h.tag === 'bench').length;
+  const cbBefore = x.state.inbox.filter((m) => m.tpl === 'cb1' || m.tpl === 'cb2').length;
+  RTG.Season.beginRegular(x.state, x.rng);
+  const rep = Engine.autoPlayWeek(x.state, x.rng);
+  assert.equal(rep.bench, false, 'not "benched" again for a backup who never held the job');
+  assert.equal(x.state.headlines.filter((h) => h.tag === 'bench').length, benchBefore, 'no second bench headline');
+  assert.equal(x.state.inbox.filter((m) => m.tpl === 'cb1' || m.tpl === 'cb2').length, cbBefore, 'no second coach_bench note');
+  ok(x.state, 'week 1 as K2');
+});
+
+test('QA1-12: the offseason chain records the steps that never produced a card (ch.skipped) — the stepper must not tick them', () => {
+  const r = kfx.collegeOff(RTG, { seasons: 1, js: 70, trust: 70 });
+  const ch = Career.offseasonChain(r.state, r.rng);
+  assert.ok(Array.isArray(ch.skipped));
+  const seen = runChain(r.state, r.rng);
+  assert.equal(ch.done, true);
+  assert.equal(ch.skipped.length, ch.log.length - seen.length, 'every executed step either pended something or is skipped');
+  assert.ok(ch.skipped.indexOf(0) < 0 && ch.skipped.indexOf(1) < 0, 'BODY_CHECK / TRAINING_BLOCKS always happen');
+  assert.ok(ch.skipped.every((i) => i >= 0 && i < ch.steps.length && ch.log[i] === ch.steps[i]));
+  // a DECLARE that moves the stage is never a skipped step
+  const j = kfx.collegeOff(RTG, { seasons: 3, js: 70, trust: 70 });
+  const cj = Career.offseasonChain(j.state, j.rng);
+  runChain(j.state, j.rng, 'DECLARE');
+  assert.equal(j.state.stage, 'DRAFT');
+  assert.ok(cj.skipped.indexOf(cj.steps.indexOf('DECLARE')) < 0, 'DECLARE happened');
+});

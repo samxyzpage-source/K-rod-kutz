@@ -372,10 +372,12 @@
    * Generate an AI kicker (§2.5.1). Draws: name (Names.player 3–4), age 1, ovr 2, attrs 5×2, contract 1.
    * @param {RNG} rng @param {number} anchor ovr anchor (college 52 + 4·prestige, NFL 74) @returns {AIKicker}
    */
-  Schema.createAiKicker = function (rng, anchor) {
+  Schema.createAiKicker = function (rng, anchor, kind) {
     var K = Tuning.league.aiKicker;
     var nm = names().player(rng);
-    var age = rng.int(K.age[0], K.age[1]);
+    // college legs are students (Tuning.league.aiKicker.college.age, 18–22); the pro range is 22–36 (§2.5.1)
+    var range = kind === 'COLLEGE' && K.college ? K.college.age : K.age;
+    var age = rng.int(range[0], range[1]);
     var ovr = Util.clamp(Math.round(rng.gauss(anchor, K.ovrSd)), K.attrMin, K.attrMax);
     var attrs = {};
     for (var i = 0; i < ATTRS.length; i++) {
@@ -443,7 +445,7 @@
     team.surface = surfaceFor(team, rng);
     var K = L.aiKicker;
     var anchor = isCollege ? K.collegeAnchorBase + K.collegeAnchorPerPrestige * team.prestige : K.nflAnchor;
-    team.kicker = Schema.createAiKicker(rng, anchor);
+    team.kicker = Schema.createAiKicker(rng, anchor, league);
     team.ST = Math.round(L.stBlend * team.ST + (1 - L.stBlend) * team.kicker.ovr);
     team.coach = names().coach(rng);
     return team;
@@ -699,6 +701,7 @@
       week: opts.week || 1,
       kind: ENUM.gameKinds.indexOf(opts.kind) >= 0 ? opts.kind : 'REG',
       homeId: opts.homeId, awayId: opts.awayId,
+      homeAbbr: opts.homeAbbr || null, awayAbbr: opts.awayAbbr || null,   // display names for the drive log (ids are internal)
       userSide: opts.userSide === 'home' || opts.userSide === 'away' ? opts.userSide : null,
       score: { home: 0, away: 0 },
       q: 1, clock: C.quarterSec, half: 1,

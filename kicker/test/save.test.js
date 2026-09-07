@@ -206,6 +206,7 @@ test('slotSummary fields', () => {
   assert.equal(sum.age, s.player.age); assert.equal(sum.league, 'NFL'); assert.equal(sum.seed, s.seed);
   assert.equal(sum.difficulty, s.difficulty); assert.equal(sum.v, RTG.SAVE_VERSION); assert.equal(sum.app, RTG.VERSION);
   assert.equal(sum.calendarYear, Schema.calendarYear(s.year));
+  assert.equal(sum.week, s.week, 'the week rides along for the CONTINUE summary');
   // works on the older fixture without migrating
   const old = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'save_v0.json'), 'utf8'));
   const os = Save.slotSummary(old);

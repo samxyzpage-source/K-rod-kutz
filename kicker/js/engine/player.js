@@ -456,7 +456,8 @@
     if (p.js < J.cutBelow) p.flags.jsLowWeeks = (p.flags.jsLowWeeks || 0) + 1;
     else delete p.flags.jsLowWeeks;
     var lowWeeks = p.flags.jsLowWeeks || 0;
-    return { js: p.js, benched: benched || p.role === 'K2' && !!p.flags.benched, cutWarning: lowWeeks >= J.cutWeeks, delta: Util.round1(p.js - before), lowWeeks: lowWeeks };
+    // benched: on the bench right now (sticky); justBenched: lost the K1 job in THIS update (the only "news")
+    return { js: p.js, benched: benched || p.role === 'K2' && !!p.flags.benched, justBenched: benched, cutWarning: lowWeeks >= J.cutWeeks, delta: Util.round1(p.js - before), lowWeeks: lowWeeks };
   };
 
   // ───────────────────────────── per-kick meters ─────────────────────────────
