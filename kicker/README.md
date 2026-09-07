@@ -31,6 +31,10 @@ phones and desktops.
 - `Space` / `Enter` #1 starts the power meter, #2 locks it, then an accuracy needle sweeps; #3 strikes — a centre hit is
   PURE, the needle's offset becomes aim error.
 - `Space` / `Enter` also skips the flight (after 300 ms) and the result beat.
+- All four bindings are remappable under Settings → KEYS (`A` / `D` stay aim aliases only while the arrows are unremapped).
+- On a **flick** kick the confirm key is a keyboard fallback: it switches that scene to the meter sequence, so a
+  keyboard-only player never gets stuck on a kick that needs a pointer. `Escape` on a kick screen opens Settings and
+  comes straight back to the pending kick.
 
 **Everywhere else**: `Tab` reaches every button, `Enter` activates the primary button of a screen (CONTINUE, START THE
 DRAFT…), `Escape` closes modals and returns from a browsing screen to the hub, `←` / `→` browse offer cards. On phones
@@ -58,7 +62,8 @@ setting (OFF = you kick every PAT, SAFE = automatic unless the game is on the li
 ### Seeds
 
 Every career is deterministic for its seed (numbers or words — `31337`, `road to glory`): the same seed gives the same
-showcase, the same offers, the same weather and the same AI kickers, so two players can compare choices. Leave the seed
+showcase, the same offers, the same weather, the same AI kickers and the same suggested name / look / hometown, so
+two players can compare choices (anything you pick by hand on the New Career form is kept when you change the seed). Leave the seed
 empty (or press RANDOM) for a fresh one; the seed is shown on the title screen and on the legacy report (tap to copy).
 
 ### Saves and export
@@ -68,7 +73,10 @@ empty (or press RANDOM) for a fresh one; the seed is shown on the title screen a
 - **Export** turns a save into a text string (copy it anywhere); **Import** pastes one back. Saves carry a checksum and a
   version: a tampered or newer-version save is refused with a message.
 - Settings (`rtg.settings`) and the cross-career records board (`rtg.records`, shown on the title ticker and the legacy
-  screen) persist separately from careers. In private browsing everything lives in memory for the session.
+  screen) persist separately from careers. Settings are **not** part of a save: loading a career applies the settings you
+  are playing with now, not the ones it was saved with.
+- In private browsing — or when storage is full — everything lives in memory for the session: the game says so with a
+  warning, and those saves stay loadable until you close the tab (they are gone afterwards).
 
 ## Project layout
 

@@ -811,6 +811,29 @@ test('QA1-01 / QA1-04: a college commitment is a \'commit\' headline without mon
   ok(r.state, 'committed');
 });
 
+test('QA1-16: the camp-loss headline never says "loses kicking job to the backup" — it names the kicker who won it', () => {
+  // A K2 behind a VET incumbent never held the job; a K1 who loses camp lost it to a NAMED team-mate, not "the backup".
+  for (const role of ['K1', 'K2']) {
+    const seenIds = {};
+    for (let seed = 1; seed <= 20; seed++) {
+      const c = kfx.campBattle(RTG, { seed, role });
+      c.session.rival.results = c.session.rival.results.map((r) => Object.assign({}, r, { made: true }));
+      kfx.fillSession(c.session, [false, false, false, false, false, false]);
+      const out = Career.finishSession(c.state, c.rng);
+      assert.equal(out.won, false);
+      const hl = c.state.headlines[c.state.headlines.length - 1];
+      assert.equal(hl.tag, 'bench', hl.text);
+      assert.ok(hl.text.indexOf('to the backup') < 0, role + ': "to the backup" copy for a camp loss: ' + hl.text);
+      assert.notEqual(hl.tpl, 'be1', role + ': be1 must be gated out of camp losses: ' + hl.text);
+      if (role === 'K2') assert.ok(hl.tpl !== 'be5', 'a K2 never "lost" the job: ' + hl.text);
+      assert.ok(hl.text.indexOf('{') < 0, 'no unfilled slot: ' + hl.text);
+      if (hl.text.indexOf(out.rival) >= 0) seenIds.named = true;
+      seenIds[hl.tpl] = true;
+    }
+    assert.ok(seenIds.named, role + ': at least one camp-loss headline names the rival kicker');
+  }
+});
+
 test('QA1-16: losing the camp battle marks the bench as noted — the first endWeek posts no "BENCHED: loses the job" headline', () => {
   const x = kfx.campBattle(RTG, { seed: 4, role: 'K2' });
   x.session.rival.results = x.session.rival.results.map((r) => Object.assign({}, r, { made: true }));

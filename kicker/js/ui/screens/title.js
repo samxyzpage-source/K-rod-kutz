@@ -12,6 +12,34 @@
 
   var W = 192, H = 112, TOP = 32;   // TOP: extra night-sky rows above the dusk bands — the logo lives there, clear of the uprights
 
+  var STAGE_NAME = { HS: 'High school', COLLEGE: 'College', DRAFT: 'Draft', NFL: 'Pro', RETIRED: 'Retired' };
+  var PHASE_NAME = {
+    SHOWCASE: 'Showcase', OFFERS: 'Offers',
+    PRE: 'Preseason', REG: 'Season', POST: 'Playoffs', AWARDS: 'Awards', OFF: 'Offseason',
+    DECLARE: 'Declare', COMBINE: 'Combine', DRAFT: 'Draft day', UDFA: 'Undrafted',
+    LEGACY: ''
+  };
+
+  /** Longest make as text — an em dash until a field goal has actually been made (mirrors RTG.UI.Kit.longText,
+      which loads after this file; the records ticker must never print 'LONG 0'). */
+  function longText(long) {
+    var Kit = RTG.UI.Kit;
+    if (Kit && typeof Kit.longText === 'function') return Kit.longText(long);
+    var v = Number(long) || 0;
+    return v > 0 ? String(v) : '—';
+  }
+
+  /** Human copy for a save summary's stage/phase/week — never the raw enum ('Y1 COLLEGE.REG'). */
+  function whereText(summary) {
+    var stage = STAGE_NAME[summary.stage] || summary.stage || '';
+    var phase = PHASE_NAME[summary.phase];
+    if (phase === undefined) phase = summary.phase ? String(summary.phase).toLowerCase() : '';
+    // REG / POST carry a week number, which reads better than the phase name
+    if ((summary.phase === 'REG' || summary.phase === 'POST') && summary.week > 0) phase = 'Week ' + summary.week;
+    if (!stage) return phase;
+    return phase ? stage + ' · ' + phase : stage;
+  }
+
   function factory(store) {
     var C = RTG.UI.C, Router = RTG.UI.Router, P = RTG.UI.Palette;
     var el = C.el('div', { class: 'screen screen-full title-screen' });
@@ -94,7 +122,7 @@
     menu.appendChild(cont);
     if (summary) {
       menu.appendChild(C.el('div', { class: 'title-summary small txt-grey', 'data-summary': '1' },
-        summary.name + ' · ' + (summary.team || 'no team') + ' · Y' + summary.year + ' ' + summary.stage + '.' + summary.phase + ' · OVR ' + summary.ovr + ' · ' + C.fmt.ago(summary.savedAt)));
+        summary.name + ' · ' + (summary.team || 'no team') + ' · Y' + summary.year + ' ' + whereText(summary) + ' · OVR ' + summary.ovr + ' · ' + C.fmt.ago(summary.savedAt)));
     }
     menu.appendChild(C.button({ label: 'LOAD', kind: 'secondary', block: true, icon: 'save', onClick: function () { Router.go('saves'); } }));
     menu.appendChild(C.button({ label: 'SETTINGS', kind: 'secondary', block: true, icon: 'gear', onClick: function () { Router.go('settings'); } }));
@@ -102,7 +130,7 @@
     // records ticker
     var rec = store.getRecords();
     var best = rec.careers.slice().sort(function (a, b) { return (b.hof || 0) - (a.hof || 0); }).slice(0, 6);
-    var tickerText = best.length ? best.map(function (c) { return (c.name || '?') + ' · ' + (c.tier || '') + ' · HOF ' + (c.hof || 0) + ' · ' + (c.fgm || 0) + ' FGM · LONG ' + (c.long || 0); }).join('   ★   ')
+    var tickerText = best.length ? best.map(function (c) { return (c.name || '?') + ' · ' + (c.tier || '') + ' · HOF ' + (c.hof || 0) + ' · ' + (c.fgm || 0) + ' FGM · LONG ' + longText(c.long); }).join('   ★   ')
       : 'NO LEGENDS YET · EVERY KICK COUNTS · THE POST IS NOT YOUR FRIEND · GO KICK SOMETHING';
     var ticker = C.el('div', { class: 'ticker', 'aria-label': 'Best careers' }, C.el('div', { class: 'ticker-inner', text: tickerText + '   ★   ' + tickerText }));
 

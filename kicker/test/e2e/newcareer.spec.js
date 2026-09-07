@@ -122,3 +122,59 @@ H.matrix(({ mode, vp }) => {
     } finally { await app.close(); }
   });
 }, H.MODES, ['phone', 'desktop']);
+
+for (const mode of H.MODES) {
+  test(`newcareer ${mode} desktop: Enter in the name field starts the career (QA1-04)`, async () => {
+    const app = await H.openApp({ mode, viewport: 'desktop' });
+    const { page } = app;
+    try {
+      await H.clickButton(page, 'NEW CAREER');
+      await H.waitForScreen(page, 'newcareer');
+      await page.fill('#nc-name', 'Enter Tester');
+      // typing is unaffected: the keys land in the field, not in a shell shortcut
+      await page.focus('#nc-name');
+      await page.keyboard.type('!');
+      assert.equal(await page.inputValue('#nc-name'), 'Enter Tester!', 'plain typing still reaches the field');
+      await page.keyboard.press('Backspace');
+      await page.keyboard.press('Enter');
+      await H.waitForScreen(page, 'showcase', 5000);
+      const st = await H.debug(page, 'getState');
+      assert.equal(st.player.name.full, 'Enter Tester', 'Enter submitted the form');
+      assert.deepEqual(app.errors, [], 'console errors');
+    } finally { await app.close(); }
+  });
+
+  test(`newcareer ${mode} desktop: the same seed gives the same default hometown and look (QA1-09)`, async () => {
+    async function defaults(seed) {
+      const app = await H.openApp({ mode, viewport: 'desktop' });
+      try {
+        await app.page.evaluate(() => RTG.UI.Router.go('newcareer'));
+        await H.waitForScreen(app.page, 'newcareer');
+        await app.page.fill('#nc-seed', String(seed));
+        await app.page.dispatchEvent('#nc-seed', 'input');
+        await app.page.waitForTimeout(50);
+        return await app.page.evaluate(() => ({
+          home: document.getElementById('nc-home').value,
+          name: document.getElementById('nc-name').value,
+          look: Array.prototype.map.call(document.querySelectorAll('.swatches'), r => Array.prototype.findIndex.call(r.children, b => b.classList.contains('active'))).join(',')
+        }));
+      } finally { await app.close(); }
+    }
+    const a = await defaults(777), b = await defaults(777), c = await defaults(778);
+    assert.deepEqual(a, b, 'seed 777 twice → identical hometown / name / look defaults');
+    assert.notDeepEqual(a, c, 'a different seed gives different defaults');
+
+    // a hand-picked hometown survives a later seed change
+    const app = await H.openApp({ mode, viewport: 'desktop' });
+    try {
+      await app.page.evaluate(() => RTG.UI.Router.go('newcareer'));
+      await H.waitForScreen(app.page, 'newcareer');
+      await app.page.selectOption('#nc-home', { index: 3 });
+      await app.page.fill('#nc-seed', '777');
+      await app.page.dispatchEvent('#nc-seed', 'input');
+      await app.page.waitForTimeout(50);
+      assert.equal(await app.page.evaluate(() => document.getElementById('nc-home').value), '3', 'the player choice wins over the seed default');
+      assert.deepEqual(app.errors, [], 'console errors');
+    } finally { await app.close(); }
+  });
+}

@@ -545,9 +545,13 @@
 
   /**
    * Close the user's season: build the SeasonLine (snapshot of `stats.season`), append it to
-   * `history.seasons`, run the season-end records check (FG% and career-seasons records), then
-   * reset `stats.season` and the in-season streak counters. Awards for the year must already be
-   * in `history.awards` (Season.finishSeason calls Awards.compute first).
+   * `history.seasons`, run the season-end records check (FG% and career-seasons records) and reset
+   * the in-season streak counters. Awards for the year must already be in `history.awards`
+   * (Season.finishSeason calls Awards.compute first).
+   *
+   * `stats.season` is deliberately NOT cleared here: the finished line has to stay readable on the
+   * awards / stats / hub screens through AWARDS, the offseason wizard and the draft. `Season.start`
+   * zeroes it when the next season opens (that is the only writer of the empty block).
    * @param {CareerState} state @returns {SeasonLine} (+ `milestones` from the records check)
    */
   Stats.finishSeason = function (state) {
@@ -568,7 +572,6 @@
     };
     state.history.seasons.push(line);
     line.milestones = Stats.checkRecords(state, null, null, { final: true });
-    state.stats.season = emptyStats();
     p.missStreak = 0;
     p.makeStreak = 0;
     return line;

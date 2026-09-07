@@ -23,13 +23,32 @@
     var el = c.el('div', { class: 'screen scr-timeline' });
     var unsub = null, destroyed = false;
 
-    function contractFor(state, year) {
+    /**
+     * The contract that covered `year`, with its yearIdx moved to that season (history.contracts stores the deal as
+     * signed — yearIdx 0 — so without this every node reads "year 1/N", and the NOW card contradicts the team
+     * screen). The live player contract wins for the season in progress: it is the one that has been ticked.
+     */
+    function contractFor(state, year, now) {
+      var live = state.player && state.player.contract;
+      if (now && live) return live;
       var list = state.history.contracts || [], best = null;
       for (var i = 0; i < list.length; i++) {
         var ct = list[i];
         if (ct.year <= year && (ct.endYear === null || ct.endYear === undefined || ct.endYear >= year)) best = ct;
       }
-      return best;
+      if (!best) return null;
+      if (live && live.type === best.type && Kit.num(live.startYear, best.year) === best.year) return atYear(live, year, live.startYear);
+      return atYear(best, year, best.year);
+    }
+
+    /** A shallow copy of `ct` whose yearIdx is the season `year` of that deal (clamped to its length). */
+    function atYear(ct, year, startYear) {
+      var years = Math.max(1, Kit.num(ct.years, 1));
+      var idx = Math.min(Math.max(0, year - Kit.num(startYear, year)), years - 1);
+      var copy = {};
+      for (var k in ct) if (Object.prototype.hasOwnProperty.call(ct, k)) copy[k] = ct[k];
+      copy.yearIdx = idx;
+      return copy;
     }
 
     function moments(state, year) {
@@ -54,7 +73,7 @@
     function node(state, l, opts) {
       opts = opts || {};
       var year = l.year, s = l.stats || {};
-      var ct = contractFor(state, year);
+      var ct = contractFor(state, year, opts.now);
       var head = c.el('div', { class: 'row tl-head' }, c.crest(l.teamId, 36),
         c.el('div', { class: 'col grow', style: 'gap:2px' },
           c.el('strong', { class: 'ellipsis', text: (opts.now ? 'NOW · ' : '') + Kit.calYear(year) + ' · ' + (l.teamName || Kit.teamName(l.teamId)) }),
@@ -62,12 +81,12 @@
       var line = c.el('div', { class: 'row row-wrap small tl-line' },
         Kit.numEl(l.teamRecord || Kit.recordOf(state, l.teamId) || '—', 'Team record'),
         Kit.numEl('FG ' + Kit.num(s.fgm) + '/' + Kit.num(s.fga) + ' (' + Kit.pctText(s.fgm, s.fga) + ')', 'Field goals', 'txt-gold'),
-        Kit.numEl('LONG ' + Kit.num(s.long), 'Longest make'),
+        Kit.numEl('LONG ' + Kit.longText(s.long), 'Longest make'),
         l.grade ? Kit.tip(c.chip('GRADE ' + l.grade, l.grade === 'A' || l.grade === 'B' ? 'mint' : l.grade === 'C' ? 'grey' : 'red'), 'Season grade') : null,
         playoffChip(l));
       var awards = (l.awards || []).map(function (id) { return Kit.tip(c.el('span', { class: 'tl-award' }, c.icon('trophy', 14)), Kit.awardName(id)); });
       var chips = c.el('div', { class: 'chips mt-1' }, awards.length ? c.el('span', { class: 'row tl-awards' }, awards, c.el('span', { class: 'small txt-grey', text: awards.length + ' award' + (awards.length === 1 ? '' : 's') })) : null,
-        ct ? Kit.tip(c.chip(Kit.contractText(ct).split(' · ').slice(0, 2).join(' · '), ct.type === 'ROOKIE' || ct.type === 'UDFA' ? 'sky' : ct.type === 'TAG' ? 'red' : ct.type === 'VET' ? 'gold' : 'grey', 'money'), (ct.reason || ct.type) + ' · signed Y' + ct.year + (ct.total ? ' · ' + c.fmt.money(ct.total) + ' total' : '')) : null,
+        ct ? Kit.tip(c.chip(Kit.contractText(ct).split(' · ').slice(0, 2).join(' · '), ct.type === 'ROOKIE' || ct.type === 'UDFA' ? 'sky' : ct.type === 'TAG' ? 'red' : ct.type === 'VET' ? 'gold' : 'grey', 'money'), (ct.reason || ct.type) + ' · signed Y' + Kit.num(ct.year, Kit.num(ct.startYear, year)) + ' · year ' + (Kit.num(ct.yearIdx) + 1) + '/' + Kit.num(ct.years, 1) + (ct.total ? ' · ' + c.fmt.money(ct.total) + ' total' : '')) : null,
         typeof l.salary === 'number' && l.salary ? Kit.tip(c.chip(c.fmt.money(l.salary), 'grey'), 'Paid this season') : null);
       var ms = moments(state, year);
       var det = c.el('details', { class: 'tl-moments', open: opts.open ? '' : null });

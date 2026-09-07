@@ -279,6 +279,25 @@ test('(b) autoPlayCareer seeds 1..5 reach RETIRED with JSON-safe, valid states t
   }
 });
 
+test('(f) QA1-01/04/06/16: no headline or inbox line ships an unfilled {slot} or a placeholder number', () => {
+  assert.equal(careers.size, SEEDS.length, 'the (b) careers ran');
+  const bad = [];
+  for (const seed of SEEDS) {
+    const { state } = careers.get(seed);
+    for (const h of state.headlines) {
+      if (/[{}]/.test(h.text)) bad.push('seed ' + seed + ' headline ' + h.tpl + ': ' + h.text);
+      // a college commitment / walk-on never announces money or a deal length (QA1-01)
+      if (h.tag === 'commit' && /\$|-year|\bdeal\b/.test(h.text)) bad.push('seed ' + seed + ' commit headline with money: ' + h.text);
+    }
+    for (const m of state.inbox) {
+      if (/[{}]/.test(m.text)) bad.push('seed ' + seed + ' message ' + m.tpl + ': ' + m.text);
+      if (/the opponent/.test(m.text)) bad.push('seed ' + seed + ' unfilled {opp}: ' + m.text);   // QA1-04
+      if (/Four years/.test(m.text)) bad.push('seed ' + seed + ' hard-coded deal length: ' + m.text);   // QA1-06
+    }
+  }
+  assert.deepEqual(bad.slice(0, 8), [], bad.length + ' bad lines');
+});
+
 test('(c) the state after every season of those careers survives a JSON round trip (checked inside the (b) runs)', () => {
   assert.equal(careers.size, SEEDS.length, 'the (b) careers ran');
   for (const seed of SEEDS) {

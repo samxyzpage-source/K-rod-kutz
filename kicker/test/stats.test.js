@@ -259,7 +259,7 @@ test('milestones fire exactly once and add fame', () => {
   assert.ok(Schema.validate(s).ok);
 });
 
-test('finishSeason builds a SeasonLine, appends history, resets the season sheet and streaks', () => {
+test('finishSeason builds a SeasonLine, appends history, KEEPS the season sheet readable (QA1-02) and resets the streaks', () => {
   const s = fx.cleanCollege(RTG);
   for (let i = 0; i < 10; i++) rec(s, { distance: 30 + i * 3, outcome: i === 7 ? 'WIDE_L' : 'GOOD' });
   s.history.awards.push({ year: s.year, league: 'COLLEGE', id: 'ALL_CONF_1', name: 'All-Conference First Team K', teamId: s.player.teamId });
@@ -277,7 +277,10 @@ test('finishSeason builds a SeasonLine, appends history, resets the season sheet
   deq(line.awards, ['ALL_CONF_1'], 'weekly awards are not season awards');
   assert.equal(line.teamRecord, '8-4'); assert.equal(line.champion, false); assert.equal(line.playoffResult, '');
   assert.equal(line.grade, 'A'); assert.equal(line.salary, 0);
-  assert.equal(s.stats.season.fga, 0, 'season sheet reset');
+  // QA1-02: the finished line has to stay readable on the awards / stats / hub screens through AWARDS, the
+  // offseason wizard and the draft — Season.start is the only place that zeroes it.
+  assert.equal(s.stats.season.fga, 10, 'season sheet is NOT cleared by finishSeason');
+  assert.equal(s.stats.season.fgm, 9);
   assert.equal(s.stats.career.fga, 10, 'career keeps the totals');
   assert.equal(s.player.makeStreak, 0);
   assert.ok(Array.isArray(line.milestones));

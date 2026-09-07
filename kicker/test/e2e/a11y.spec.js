@@ -93,6 +93,109 @@ H.matrix(({ mode, vp }) => {
   });
 }, H.MODES, ['phone', 'desktop']);
 
+test('a11y http phone: the cb / hc palettes clear 4.5:1 and keep mint and red apart (QA2-09, QA2-11)', async () => {
+  const app = await H.openApp({ mode: 'http', viewport: 'phone' });
+  const { page } = app;
+  try {
+    await H.debug(page, 'jumpTo', { stage: 'COLLEGE', phase: 'REG', week: 1, seed: 4242 });
+    await H.waitForScreen(page, 'hub');
+    const read = mode => page.evaluate(m => {
+      RTG.UI.store.setSetting('colorblind', m === 'cb');
+      RTG.UI.store.setSetting('highContrast', m === 'hc');
+      const cs = getComputedStyle(document.documentElement);
+      const tok = k => cs.getPropertyValue(k).trim();
+      const probe = document.createElement('span');
+      document.body.appendChild(probe);
+      function rgb(x) { probe.style.color = ''; probe.style.color = x; const c = getComputedStyle(probe).color.match(/\d+/g).map(Number); return c; }
+      function chan(c) { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+      function lum(x) { const r = rgb(x); return 0.2126 * chan(r[0]) + 0.7152 * chan(r[1]) + 0.0722 * chan(r[2]); }
+      function cr(a, b) { const la = lum(a), lb = lum(b); return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05); }
+      const out = {
+        mintOnNavy: cr(tok('--mint'), tok('--navy')),
+        mintOnCard: cr(tok('--mint'), tok('--navy-2')),
+        redOnNavy: cr(tok('--red'), tok('--navy')),
+        skyOnNavy: cr(tok('--sky'), tok('--navy')),
+        goldOnNavy: cr(tok('--gold'), tok('--navy')),
+        mintLum: lum(tok('--mint')), redLum: lum(tok('--red')), skyLum: lum(tok('--sky')), goldLum: lum(tok('--gold')),
+        mint: tok('--mint'), red: tok('--red'), sky: tok('--sky'), gold: tok('--gold')
+      };
+      probe.remove();
+      return out;
+    }, mode);
+
+    const cb = await read('cb');
+    for (const k of ['mintOnNavy', 'mintOnCard', 'redOnNavy', 'skyOnNavy', 'goldOnNavy']) {
+      assert.ok(cb[k] >= 4.5, 'colour-blind ' + k + ' = ' + cb[k].toFixed(2) + ' (needs ≥ 4.5 for banner / small text)');
+    }
+    const hc = await read('hc');
+    for (const k of ['mintOnNavy', 'redOnNavy', 'skyOnNavy', 'goldOnNavy']) {
+      assert.ok(hc[k] >= 4.5, 'high-contrast ' + k + ' = ' + hc[k].toFixed(2));
+    }
+    // the power bar's target (mint) and overswing (red) zones must not collapse into the same block, and the sky
+    // band must not be the same colour as the gold power fill — in greyscale as well as in colour.
+    assert.notEqual(hc.mint, hc.red, 'high contrast: mint and red are different colours');
+    assert.ok(Math.abs(hc.mintLum - hc.redLum) > 0.15, 'high contrast: mint and red differ in luminance too (' + hc.mintLum.toFixed(2) + ' vs ' + hc.redLum.toFixed(2) + ')');
+    assert.notEqual(hc.sky, hc.gold, 'high contrast: the sky band is not the gold accent');
+    assert.ok(Math.abs(hc.skyLum - hc.goldLum) > 0.15, 'high contrast: sky and gold differ in luminance');
+    // SPEC §4.1: js/ui/palette.js is the canvas's copy of the same tokens — the kick scene paints through
+    // Palette.get, so a CSS-only palette change leaves the power bar / sky band on the old colours.
+    for (const variant of ['default', 'cb', 'hc']) {
+      const drift = await page.evaluate(v => {
+        RTG.UI.store.setSetting('colorblind', v === 'cb');
+        RTG.UI.store.setSetting('highContrast', v === 'hc');
+        const MAP = { navy: '--navy', navy2: '--navy-2', cream: '--cream', ink: '--ink', grass: '--grass', grass2: '--grass-2',
+          chalk: '--chalk', gold: '--gold', red: '--red', sky: '--sky', mint: '--mint', grey: '--grey', dusk: '--dusk',
+          shadow: '--shadow', dusk2: '--dusk-2', sunset: '--sunset', night: '--night' };
+        const cs = getComputedStyle(document.documentElement);
+        const probe = document.createElement('span');
+        document.body.appendChild(probe);
+        const norm = x => { probe.style.color = ''; probe.style.color = x; return getComputedStyle(probe).color; };
+        const pal = RTG.UI.Palette.variant(v), out = [];
+        for (const tok in MAP) {
+          const css = cs.getPropertyValue(MAP[tok]).trim();
+          if (!css) continue;
+          if (norm(css) !== norm(pal[tok])) out.push(tok + ': css ' + css + ' vs palette.js ' + pal[tok]);
+        }
+        probe.remove();
+        return out;
+      }, variant);
+      assert.deepEqual(drift, [], 'palette.js mirrors the ' + variant + ' CSS tokens');
+    }
+    await page.evaluate(() => { RTG.UI.store.setSetting('highContrast', false); RTG.UI.store.setSetting('colorblind', false); });
+    assert.deepEqual(app.errors, [], 'console errors');
+  } finally { await app.close(); }
+});
+
+test('a11y http desktop: leaving Settings cancels a pending key remap (QA1-03)', async () => {
+  const app = await H.openApp({ mode: 'http', viewport: 'desktop' });
+  const { page } = app;
+  try {
+    await H.debug(page, 'jumpTo', { stage: 'COLLEGE', phase: 'REG', week: 2, seed: 4242 });
+    await H.debug(page, 'go', 'settings');
+    await H.waitForScreen(page, 'settings');
+    const before = await page.evaluate(() => RTG.UI.store.settings.keys.confirm);
+    const armed = await page.evaluate(() => {
+      const card = Array.prototype.filter.call(document.querySelectorAll('.settings-screen .card'), c => /KEYS/.test(c.textContent))[0];
+      const b = card.querySelector('button');
+      b.click();
+      return b.textContent;
+    });
+    assert.match(armed, /PRESS A KEY/, 'the row is waiting for a key');
+    await H.debug(page, 'go', 'hub');
+    await H.waitForScreen(page, 'hub');
+    await page.keyboard.press('x');
+    await page.waitForTimeout(50);
+    const after = await page.evaluate(() => {
+      const saved = RTG.UI.Storage.getJSON('rtg.settings');
+      return { live: RTG.UI.store.settings.keys.confirm, saved: saved && saved.keys ? saved.keys.confirm : null };
+    });
+    assert.equal(after.live, before, 'the stray key press did not remap the setting');
+    // rtg.settings is only written when a setting actually changes: either it was never written, or it still holds the old key
+    assert.ok(after.saved === null || after.saved === before, 'nothing was persisted (saved=' + JSON.stringify(after.saved) + ')');
+    assert.deepEqual(app.errors, [], 'console errors');
+  } finally { await app.close(); }
+});
+
 test('a11y http phone: reduced motion makes the stamp, the envelopes and the draft ticker instant', async () => {
   const app = await H.openApp({ mode: 'http', viewport: 'phone', reducedMotion: 'reduce' });
   const { page } = app;

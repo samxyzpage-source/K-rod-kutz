@@ -25,12 +25,28 @@
     var hometowns = (RTG.Data.names && RTG.Data.names.hometowns) || [];
     var rng = store.uiRng;
 
+    /**
+     * The cosmetic defaults, drawn in a fixed order from one RNG. With a seed in the field they come from
+     * RNG.create(seed) — the same seed the engine will use — so "same seed, same career" also covers the
+     * hometown (which feeds the near-home college offers and the hometown discount) and the look.
+     */
+    function rollDefaults(r) {
+      return {
+        name: RTG.Names.player(r).full,
+        look: { skin: r.int(0, 3), hair: r.int(0, 5), boot: r.int(0, 3) },
+        hometownIdx: hometowns.length ? r.int(0, hometowns.length - 1) : -1
+      };
+    }
+    /** Fields the player changed by hand: a new seed never overwrites those. */
+    var touched = { name: false, look: false, hometown: false };
+
+    var d0 = rollDefaults(rng);
     var form = {
-      name: RTG.Names.player(rng).full,
+      name: d0.name,
       archetype: 'SURGEON',
-      look: { skin: rng.int(0, 3), hair: rng.int(0, 5), boot: rng.int(0, 3) },
+      look: d0.look,
       foot: 'R',
-      hometownIdx: hometowns.length ? rng.int(0, hometowns.length - 1) : -1,
+      hometownIdx: d0.hometownIdx,
       difficulty: 'pro',
       seed: ''
     };
@@ -39,8 +55,8 @@
     el.classList.add('newcareer-screen');
 
     // ── name
-    var nameInput = C.el('input', { type: 'text', class: 'input', id: 'nc-name', maxlength: 28, autocomplete: 'off', spellcheck: 'false', value: form.name, 'aria-label': 'Player name', onInput: function () { form.name = nameInput.value; } });
-    var dice = C.button({ kind: 'secondary', icon: 'dice', label: 'DICE', ariaLabel: 'Random name', onClick: function () { form.name = RTG.Names.player(rng).full; nameInput.value = form.name; } });
+    var nameInput = C.el('input', { type: 'text', class: 'input', id: 'nc-name', maxlength: 28, autocomplete: 'off', spellcheck: 'false', value: form.name, 'aria-label': 'Player name', onInput: function () { form.name = nameInput.value; touched.name = true; } });
+    var dice = C.button({ kind: 'secondary', icon: 'dice', label: 'DICE', ariaLabel: 'Random name', onClick: function () { form.name = RTG.Names.player(rng).full; nameInput.value = form.name; touched.name = true; } });
     el.appendChild(C.el('div', { class: 'field' }, C.el('label', { class: 'field-label', 'for': 'nc-name', text: 'NAME' }), C.el('div', { class: 'input-row' }, nameInput, dice)));
 
     // ── archetypes
@@ -66,16 +82,30 @@
     // ── look
     var avatarHost = C.el('div', { class: 'look-preview' });
     function renderAvatar() { C.replace(avatarHost, C.pixelAvatar(form.look, 64)); }
+    var swatchBtns = {};
+    function syncSwatches() {
+      for (var key in swatchBtns) {
+        if (!Object.prototype.hasOwnProperty.call(swatchBtns, key)) continue;
+        var btns = swatchBtns[key];
+        for (var i = 0; i < btns.length; i++) {
+          var on = form.look[key] === i;
+          btns[i].classList.toggle('active', on);
+          btns[i].setAttribute('aria-checked', on ? 'true' : 'false');
+        }
+      }
+      renderAvatar();
+    }
     function swatchRow(key, colours, label) {
       var row = C.el('div', { class: 'swatches', role: 'radiogroup', 'aria-label': label });
       var btns = [];
       colours.forEach(function (col, i) {
         var b = C.el('button', { type: 'button', class: 'swatch', role: 'radio', style: { background: col }, 'aria-label': label + ' ' + (i + 1), onClick: function () {
-          form.look[key] = i; btns.forEach(function (x, j) { x.classList.toggle('active', j === i); x.setAttribute('aria-checked', j === i ? 'true' : 'false'); }); renderAvatar();
+          form.look[key] = i; touched.look = true; syncSwatches();
         } });
         if (form.look[key] === i) { b.classList.add('active'); b.setAttribute('aria-checked', 'true'); }
         btns.push(b); row.appendChild(b);
       });
+      swatchBtns[key] = btns;
       return C.el('div', { class: 'field' }, C.el('span', { class: 'field-label', text: label }), row);
     }
     var footBtns = {};
@@ -89,7 +119,7 @@
       C.el('div', { class: 'field' }, C.el('span', { class: 'field-label', text: 'KICKING FOOT' }), C.el('div', { class: 'pills' }, footBtns.R, footBtns.L)))) }));
 
     // ── hometown
-    var select = C.el('select', { id: 'nc-home', 'aria-label': 'Hometown', onChange: function () { form.hometownIdx = parseInt(select.value, 10); } });
+    var select = C.el('select', { id: 'nc-home', 'aria-label': 'Hometown', onChange: function () { form.hometownIdx = parseInt(select.value, 10); touched.hometown = true; } });
     hometowns.forEach(function (h, i) { select.appendChild(C.el('option', { value: String(i), text: h.city + ', ' + h.state, selected: i === form.hometownIdx })); });
     el.appendChild(C.el('div', { class: 'field' }, C.el('label', { class: 'field-label', 'for': 'nc-home', text: 'HOMETOWN' }), select));
 
@@ -114,8 +144,16 @@
     el.appendChild(C.el('div', { class: 'field' }, C.el('span', { class: 'field-label', text: 'DIFFICULTY' }), diffRow, diffDesc));
 
     // ── seed
-    var seedInput = C.el('input', { type: 'text', class: 'input', id: 'nc-seed', inputmode: 'numeric', autocomplete: 'off', placeholder: 'random', 'aria-label': 'Seed', onInput: function () { form.seed = seedInput.value.trim(); } });
-    var randomBtn = C.button({ label: 'RANDOM', kind: 'secondary', onClick: function () { form.seed = String(rng.int(1, 999999999)); seedInput.value = form.seed; } });
+    /** A seed in the field re-rolls the untouched cosmetic defaults from that seed (see rollDefaults). */
+    function applySeedDefaults() {
+      if (!form.seed) return;
+      var d = rollDefaults(RTG.RNG.create(RTG.RNG.toSeed(form.seed)));
+      if (!touched.name) { form.name = d.name; nameInput.value = d.name; }
+      if (!touched.look) { form.look = d.look; syncSwatches(); }
+      if (!touched.hometown && d.hometownIdx >= 0) { form.hometownIdx = d.hometownIdx; select.value = String(d.hometownIdx); }
+    }
+    var seedInput = C.el('input', { type: 'text', class: 'input', id: 'nc-seed', inputmode: 'numeric', autocomplete: 'off', placeholder: 'random', 'aria-label': 'Seed', onInput: function () { form.seed = seedInput.value.trim(); applySeedDefaults(); } });
+    var randomBtn = C.button({ label: 'RANDOM', kind: 'secondary', onClick: function () { form.seed = String(rng.int(1, 999999999)); seedInput.value = form.seed; applySeedDefaults(); } });
     el.appendChild(C.el('div', { class: 'field' }, C.el('label', { class: 'field-label', 'for': 'nc-seed', text: 'SEED (numbers or words — same seed, same career)' }), C.el('div', { class: 'input-row' }, seedInput, randomBtn)));
 
     // ── start
@@ -144,7 +182,13 @@
     return {
       el: el,
       destroy: function () {},
-      onKey: function (ev) { if (ev.key === 'Enter' && ev.target === nameInput) { start(); return true; } return false; }
+      keysInFields: true,   // app.js forwards keydowns from #nc-name / #nc-seed so Enter can submit the form
+      onKey: function (ev) {
+        if (ev.key !== 'Enter' || ev.repeat) return false;
+        if (ev.target !== nameInput && ev.target !== seedInput) return false;
+        start();
+        return true;
+      }
     };
   }
 

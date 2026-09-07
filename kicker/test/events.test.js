@@ -686,3 +686,32 @@ test('QA1-04 / QA1-06: coach_welcome renders without an opponent slot; agent_roo
   if (ar.tpl === 'ar1') assert.ok(ar.text.indexOf('3 years') >= 0, ar.text);
   assert.ok((RTG.Data.headlinesByTag.commit || []).length >= 4, 'a commit pool exists');
 });
+
+test('QA1-06: agent_rookie never invents a deal length — every template that prints a number gets the real one', () => {
+  const s = efx.collegeReg(RTG);
+  for (const years of [1, 3, 4, 5]) {
+    for (let i = 0; i < 8; i++) {
+      const m = Events.message(s, 'agent_rookie', { years: years });
+      assert.ok(m.text.indexOf('{') < 0, m.text);
+      assert.ok(!/\bFour years\b/.test(m.text) || years === 4, 'hard-coded length: ' + m.text);
+      if (/\d+ years/.test(m.text)) assert.equal(m.text.match(/(\d+) years/)[1], String(years), m.text);
+    }
+  }
+});
+
+test('QA1-16: the bench pool gates "loses kicking job to the backup" (be1) on a player who actually held the job', () => {
+  const pool = RTG.Data.headlinesByTag.bench || [];
+  const byId = {};
+  for (const t of pool) byId[t.id] = t;
+  assert.ok(byId.be1 && typeof byId.be1.cond === 'function', 'be1 is conditional');
+  const eligible = (ctx) => pool.filter((t) => !t.cond || t.cond(ctx)).map((t) => t.id);
+  // in-season bench (K1 → K2 this week): be1 is the intended line
+  assert.ok(eligible({ wasK1: true }).indexOf('be1') >= 0, 'be1 for a real benching');
+  // camp loss, and a K2 who never held the job: be1 must be out, and a replacement must exist
+  for (const ctx of [{ camp: true, won: false, wasK1: true }, { camp: true, won: false, wasK1: false }, { wasK1: false, won: false }]) {
+    const ids = eligible(ctx);
+    assert.ok(ids.indexOf('be1') < 0, 'be1 leaked into ' + JSON.stringify(ctx));
+    assert.ok(ids.length > 0, 'the bench pool is never empty for ' + JSON.stringify(ctx) + ' (would fall back to the generic line)');
+  }
+  for (const t of pool) assert.ok(t.text.indexOf('the backup') < 0 || t.id === 'be1' || t.id === 'be2' || t.id === 'be4', t.id + ': ' + t.text);
+});

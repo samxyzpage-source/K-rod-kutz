@@ -296,7 +296,8 @@
   }
 
   /**
-   * Start a season (§3.5.17): builds the active league's schedule (Schedule.college / Schedule.nfl with last
+   * Start a season (§3.5.17): zeroes `stats.season` (the finished line was kept readable through the offseason),
+   * builds the active league's schedule (Schedule.college / Schedule.nfl with last
    * season's standings), resets `state.season` (results and kickerStats rows for every team, preseason poll,
    * zeroed standings), sets phase 'PRE' and week 0, sets the three season goals (Awards.seasonGoals) and, when
    * the §2.2 rule applies and RTG.Career is present, opens the camp battle (Career.campBattle → pending KICKS).
@@ -306,6 +307,9 @@
    */
   Season.start = function (state, rng) {
     var p = state.player;
+    // the previous season's line stays in stats.season through AWARDS / OFF / DRAFT (Stats.finishSeason keeps it);
+    // the new season is the point where it is zeroed, so the awards card, Stats › SEASON and QUICK STATS agree.
+    if (state.stats) state.stats.season = emptyKickerStats();
     var kind = activeKind(state);
     var lg = leagueObj(state, kind);
     if (!lg) throw new Error('Season.start: league ' + kind + ' is missing');
@@ -574,7 +578,7 @@
       p.flags.benchNoted = true;
       report.bench = true;
       message(state, 'coach_bench', {});
-      headline(state, rng, 'bench', {});                                                        // 1 draw
+      headline(state, rng, 'bench', { wasK1: true, rival: teammateKickerName(state) });          // 1 draw
       pushTimeline(state, timelineRow(state, 'BENCHED', 'Benched: Job Security down to ' + Math.round(p.js), TI.bench));
     } else if (p.flags.benchNoted && p.role === 'K1') {
       delete p.flags.benchNoted;
@@ -609,6 +613,16 @@
     state.flags = state.flags || {};
     if (cold) state.flags.rivalCold = true; else delete state.flags.rivalCold;
     return cold;
+  }
+
+  /**
+   * The other kicker on the user's roster (the one ahead of / behind him) for {rival} in bench headlines —
+   * never the school's rival TEAM, which is what the default slot resolves to.
+   * @param {Object} state @returns {string}
+   */
+  function teammateKickerName(state) {
+    var k = aiKickerOf(state, userTeam(state));
+    return (k && k.name) || 'the other guy';
   }
 
   /** Close the open stint in history.teams. */
@@ -665,13 +679,14 @@
   function loseJob(state, rng, report) {
     var p = state.player, TI = TSea().timelineImpact;
     if (p.flags.lostJob === state.year) return;
+    var wasK1 = p.role === 'K1';                     // a K2 never held the job: the bench pool needs to know (§2.11)
     p.role = 'K2';
     p.flags.lostJob = state.year;
     delete p.flags.benched;
     delete p.flags.jsLowWeeks;
     p.flags.benchNoted = true;                                                // the team still plays; the rival kicks
     message(state, 'coach_bench', {});
-    headline(state, rng, 'bench', {});                                                          // 1 draw
+    headline(state, rng, 'bench', { wasK1: wasK1, rival: teammateKickerName(state) });           // 1 draw
     pushTimeline(state, timelineRow(state, 'LOST_JOB', 'Lost the kicking job for the season', TI.lostJob));
     report.cut = { league: 'COLLEGE', teamId: p.teamId, week: state.week, year: state.year, lostJob: true };
     report.bench = true;
@@ -899,14 +914,14 @@
       age: p.age, ovr: ovrOf(p.attrs), role: p.role, stats: s, awards: [], teamRecord: recordText(r), champion: false,
       playoffResult: '', grade: 'C', salary: p.contract ? num(p.contract.aav, 0) : 0, milestones: [] };
     if (state.history && Array.isArray(state.history.seasons)) state.history.seasons.push(line);
-    if (state.stats) state.stats.season = emptyKickerStats();
-    return line;
+    return line;                                     // stats.season is kept readable until Season.start (§2.7.3)
   }
 
   /**
    * Close the season (§3.5.17): completes the bracket if games remain (fastForward), phase 'AWARDS',
    * Awards.compute (→ season.awardsList, XP / fame / history.awards for the user), Stats.finishSeason (SeasonLine
-   * into history.seasons, stats.season reset), league.seasonHistory, AI kicker season tick (kickerStats →
+   * into history.seasons; `stats.season` is left intact so the finished line stays readable through AWARDS / the
+   * offseason / the draft — Season.start zeroes it), league.seasonHistory, AI kicker season tick (kickerStats →
    * kicker.seasonStats), player season counters (collegeSeasons / nflSeasons / seasonsAsStarter), earned traits,
    * state.flags.wonTitle, season-scoped modifier expiry, timeline. Idempotent (season.finished).
    * Draws: fastForward sims → Awards.compute 0–1 → user award headline 1 → 1 headline per record milestone.

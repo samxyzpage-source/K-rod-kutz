@@ -63,6 +63,7 @@
 .scr-hub .hub-banner { margin-bottom: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; text-align: center; }
 .scr-hub .hub-form { margin: -4px 0 8px; text-align: center; }
 .scr-hub .hub-opp { align-items: flex-start; }
+.scr-hub .hub-ingame { display: flex; align-items: center; justify-content: center; gap: 6px; text-align: center; }
 .scr-hub .hub-forecast { margin-top: 8px; gap: 6px 10px; }
 .scr-hub .hub-ratings { margin-top: 6px; }
 .scr-hub .hub-rating { gap: 10px; }
@@ -206,8 +207,10 @@
 .scr-awards .env-desc { color: var(--grey); line-height: 1.5; }
 
 /* ---------- offseason (stepper, blocks, projection) ---------- */
+/* The strip wraps instead of scrolling off the right edge: on a 390-px phone the seven college steps are 624 px
+   wide, and a scroller with no border / fade / scrollbar simply looked cut in half (QA2-18). */
 .scr-offseason .stepper-scroll { border: 0; margin-bottom: 12px; }
-.scr-offseason .stepper { display: flex; gap: 0; min-width: max-content; padding: 4px 0; counter-reset: step; }
+.scr-offseason .stepper { display: flex; flex-wrap: wrap; gap: 6px 0; min-width: 0; padding: 4px 0; counter-reset: step; }
 .scr-offseason .step { display: flex; align-items: center; gap: 6px; padding: 0 10px 0 0; color: var(--grey); font-size: 0.75em; white-space: nowrap; }
 .scr-offseason .step::after { content: ""; display: inline-block; width: 14px; height: 2px; background: var(--ink); margin-left: 6px; }
 .scr-offseason .step:last-child::after { display: none; }
@@ -215,6 +218,10 @@
 .scr-offseason .step.done .step-dot { background: var(--mint); color: var(--ink); border-color: var(--ink); }
 .scr-offseason .step.current { color: var(--gold); }
 .scr-offseason .step.current .step-dot { background: var(--gold); color: var(--ink); border-color: var(--ink); }
+/* a step the chain ran without asking anything: skipped, not done (dashed hollow dot, struck-through name — no
+   opacity trick, so the text keeps its contrast) */
+.scr-offseason .step.skipped .step-dot { background: transparent; border-style: dashed; color: var(--grey); }
+.scr-offseason .step.skipped .step-name { text-decoration: line-through; }
 .scr-offseason .opt { flex: 1 1 45%; min-width: 0; }
 .scr-offseason .opt-detail { line-height: 1.5; }
 .scr-offseason .blocks-grid { gap: 8px; }
@@ -281,10 +288,11 @@
 .scr-legacy .hof-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gold); }
 .scr-legacy .hof-tick { position: absolute; top: -6px; bottom: -6px; width: 3px; background: var(--cream); }
 .scr-legacy .hof-tick.passed { background: var(--mint); }
+/* every label is centred under its own tick — the old last-of-type translateX(-80%) pushed "1ST BALLOT" left onto
+   the INDUCTED tick (QA2-16); the alternating low row is what keeps neighbouring labels from colliding */
 .scr-legacy .hof-tick-label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 6px; font-size: 0.6em; color: var(--grey); white-space: nowrap; }
 .scr-legacy .hof-tick-low .hof-tick-label { margin-top: 20px; }
 .scr-legacy .hof-tick-low { bottom: -20px; }
-.scr-legacy .hof-tick:last-of-type .hof-tick-label { transform: translateX(-80%); }
 .scr-legacy .legacy-verdict { color: var(--gold); line-height: 1.6; }
 .scr-legacy .doc-card { text-align: center; }
 .scr-legacy .doc-title { font-size: 1.1em; color: var(--cream); line-height: 1.6; margin-top: 4px; }

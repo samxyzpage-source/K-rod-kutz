@@ -35,7 +35,7 @@
     function fmtVal(r, v) {
       if (v === null || v === undefined) return '—';
       if (r.key === 'seasonFGpct' || r.key === 'careerFGpct') return (Math.round(v * 10) / 10).toFixed(1) + '%';
-      if (r.key === 'longFG') return v + ' yd';
+      if (r.key === 'longFG') return Kit.longText(v, 'yd');   // no make yet is '—', never a 0-yard field goal
       return String(v);
     }
 
@@ -72,8 +72,8 @@
       var items = [];
       (M.fgm || []).forEach(function (n) { items.push({ id: 'FGM' + n, text: n + ' career field goals', done: !!f['ms:FGM' + n] || car.fgm >= n, prog: Kit.num(car.fgm) + ' / ' + n }); });
       (M.pts || []).forEach(function (n) { items.push({ id: 'PTS' + n, text: n + ' career points', done: !!f['ms:PTS' + n] || car.pts >= n, prog: Kit.num(car.pts) + ' / ' + n }); });
-      items.push({ id: 'first50', text: 'First 50-yarder', done: !!f['ms:first50'] || car.made50plus > 0, prog: car.made50plus ? 'done' : 'long ' + Kit.num(car.long) });
-      items.push({ id: 'first60', text: 'First 60-yarder', done: !!f['ms:first60'] || car.long >= 60, prog: car.long >= 60 ? 'done' : 'long ' + Kit.num(car.long) });
+      items.push({ id: 'first50', text: 'First 50-yarder', done: !!f['ms:first50'] || car.made50plus > 0, prog: car.made50plus ? 'done' : (Kit.num(car.long) > 0 ? 'long ' + car.long : 'no makes yet') });
+      items.push({ id: 'first60', text: 'First 60-yarder', done: !!f['ms:first60'] || car.long >= 60, prog: car.long >= 60 ? 'done' : (Kit.num(car.long) > 0 ? 'long ' + car.long : 'no makes yet') });
       items.push({ id: 'streak', text: (M.consecutive || 20) + ' straight makes', done: !!f['ms:STREAK' + (M.consecutive || 20)] || !!f['ms:streak'] || car.bestConsecutive >= (M.consecutive || 20), prog: 'best ' + Kit.num(car.bestConsecutive) });
       items.push({ id: 'gw', text: (M.gw || 10) + ' game-winners', done: !!f['ms:GW' + (M.gw || 10)] || car.gameWinners >= (M.gw || 10), prog: Kit.num(car.gameWinners) + ' / ' + (M.gw || 10) });
       return c.card({ title: 'MILESTONES', icon: 'star', body: c.list(items, function (m) {

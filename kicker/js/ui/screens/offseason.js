@@ -35,14 +35,28 @@
       return r;
     }
 
+    /**
+     * The wizard strip. A step the chain ran without asking anything (no card, no event — the engine records its
+     * index in chain.skipped) reads as skipped ('–', greyed), never as a completed ✓.
+     */
     function stepper(state) {
       var ch = state.flags && state.flags.offseason;
       if (!ch || !ch.steps) return null;
       var wrap = c.el('ol', { class: 'stepper', 'aria-label': 'Offseason steps' });
       var cur = state.pending ? ch.idx - 1 : ch.idx;
+      var skipped = {};
+      (ch.skipped || []).forEach(function (i) { skipped[i] = true; });
       ch.steps.forEach(function (s, i) {
-        var cls = i < cur ? 'done' : (i === cur ? 'current' : 'todo');
-        wrap.appendChild(c.el('li', { class: 'step ' + cls, 'aria-current': i === cur ? 'step' : null }, c.el('span', { class: 'step-dot', text: i < cur ? '✓' : String(i + 1) }), c.el('span', { class: 'step-name', text: STEP_NAMES[s] || s })));
+        var name = STEP_NAMES[s] || s;
+        var past = i < cur, isSkipped = past && !!skipped[i];
+        var cls = isSkipped ? 'skipped' : (past ? 'done' : (i === cur ? 'current' : 'todo'));
+        var dot = isSkipped ? '–' : (past ? '✓' : String(i + 1));
+        var li = c.el('li', { class: 'step ' + cls, 'aria-current': i === cur ? 'step' : null },
+          c.el('span', { class: 'step-dot', 'aria-hidden': 'true', text: dot }),
+          c.el('span', { class: 'step-name', text: name }));
+        li.setAttribute('aria-label', name + ' — ' + (isSkipped ? 'skipped' : past ? 'done' : i === cur ? 'now' : 'to come'));
+        Kit.tip(li, isSkipped ? 'Skipped — nothing came up this offseason' : past ? 'Done' : (i === cur ? 'This step' : 'Still to come'));
+        wrap.appendChild(li);
       });
       return c.el('div', { class: 'scroll-x stepper-scroll' }, wrap);
     }
@@ -158,6 +172,25 @@
       }
     }
 
+    /**
+     * The contract as it will read NEXT season. The year tick happens in Season.advanceYear (on CONTINUE), and only
+     * for the deal that covered the season just played (season.contractAtStart) — a deal signed during this
+     * offseason still starts at year 1. Without this the preview for Y10 shows the Y9 line ("year 3/4").
+     */
+    function nextContractText(state) {
+      var ct = state.player.contract;
+      if (!ct) return 'No contract';
+      var a = state.season && state.season.contractAtStart;
+      var years = Math.max(1, Kit.num(ct.years, 1));
+      var idx = Kit.num(ct.yearIdx, 0);
+      if (a && a.type === ct.type && Kit.num(a.startYear, state.year) === Kit.num(ct.startYear, state.year) && Kit.num(a.yearIdx, 0) === idx) idx = Math.min(idx + 1, years);
+      if (idx >= years) return ct.type + (ct.type === 'SCHOLARSHIP' || ct.type === 'WALKON' ? '' : ' · ' + c.fmt.money(Kit.num(ct.aav)) + '/yr') + ' · expired';
+      var copy = {};
+      for (var k in ct) if (Object.prototype.hasOwnProperty.call(ct, k)) copy[k] = ct[k];
+      copy.yearIdx = idx;
+      return Kit.contractText(copy);
+    }
+
     function previewCard(state) {
       var p = state.player, t = Kit.userTeam(state);
       var rival = t ? (p.role === 'K1' ? (t.kicker2 || t.kicker) : (t.kicker || t.kicker2)) : null;
@@ -166,7 +199,7 @@
         ['TEAM', t ? t.name : (state.stage === 'NFL' ? 'Free agent' : '—')],
         ['ROLE', p.role === 'NONE' ? 'FA' : p.role],
         ['RIVAL LEG', rival ? rival.name + ' (OVR ' + Kit.num(rival.ovr) + ')' : 'none'],
-        ['CONTRACT', Kit.contractText(p.contract)],
+        ['CONTRACT', nextContractText(state)],
         ['XP TO SPEND', String(p.xp)]
       ];
       return c.card({ title: 'NEXT SEASON PREVIEW', kind: 'gold', icon: 'arrow-r', body: [c.el('div', { class: 'row mb-1' }, t ? c.crest(t, 40) : c.pixelAvatar(p.look, 40), c.el('strong', { class: 'grow', text: 'The wizard is done. The calendar rolls over.' })), c.kv(rows)],

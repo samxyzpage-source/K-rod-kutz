@@ -72,3 +72,96 @@ test('kick_touch file portrait: the page never scrolls during the pull (touch-ac
     assert.deepEqual(app.errors, [], 'console errors');
   } finally { await app.close(); }
 });
+
+/** Press on the ball, pull down `drag` px, hold still for `holdMs`, flick up and release (real CDP touch). */
+async function pullHoldFlick(page, o) {
+  const g = await K.geometry(page);
+  const b = g.ball;
+  const cdp = await page.context().newCDPSession(page);
+  const tp = (x, y) => ({ x, y, id: 1, radiusX: 4, radiusY: 4, force: 1 });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [tp(b.x, b.y)] });
+  for (let i = 1; i <= 8; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [tp(b.x, b.y + o.drag * i / 8)] });
+  if (o.holdMs) await page.waitForTimeout(o.holdMs);
+  for (const up of (o.flickSteps || [24, 60, 120])) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [tp(b.x, b.y + o.drag - up)] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+  await page.waitForTimeout(120);
+  return g;
+}
+
+// §4.6: P is the pull DEPTH reached (clamp(dy / D_full)), whatever the finger did before the flick, and a draw held
+// at ≥ 0.95 for more than 1.2 s reports holdMs. Both used to be read off the flick samples alone: a natural
+// "draw, aim, release" lost ~13 % of the power and the hesitation clock was zeroed by every flick sample.
+test('kick_touch file portrait: a pause at full draw keeps the pull depth, a 1.5 s hold reports holdMs', async () => {
+  const app = await H.openApp({ mode: 'file', viewport: CASES[0].viewport, hasTouch: true, isMobile: true, dpr: 2 });
+  const { page } = app;
+  const read = () => page.evaluate(() => RTG.UI.KickView.current().lastInput());
+  try {
+    // the same gesture with and without a pause at the bottom — D_full varies with the viewport, the power must not
+    await K.openShowcase(page, 4242);
+    await pullHoldFlick(page, { drag: 90, holdMs: 0 });
+    const noPause = await read();
+    await K.waitPhase(page, 'RESULT', 8000);
+
+    await K.openShowcase(page, 4242);
+    const g = await pullHoldFlick(page, { drag: 90, holdMs: 600 });
+    const paused = await read();
+    assert.ok(noPause.power > 0.3, 'the 90-px pull registers (' + noPause.power + ')');
+    assert.ok(Math.abs(paused.power - noPause.power) < 0.02, 'a 600 ms pause at the bottom does not change the power (' + paused.power + ' vs ' + noPause.power + ')');
+    assert.ok(!paused.holdMs, 'a 600 ms pause is under the 1.2 s hesitation line (' + paused.holdMs + ')');
+    await K.waitPhase(page, 'RESULT', 8000);
+
+    // held at full draw for 1.5 s → holdMs reaches Kick.resolve
+    await K.openShowcase(page, 4242);
+    const deep = Math.floor(g.innerHeight - g.ball.y - 14);   // past D_full whatever the cap, so P ≥ 0.95
+    await pullHoldFlick(page, { drag: deep, holdMs: 1500, flickSteps: [3, 40, 110] });
+    const held = await read();
+    assert.ok(held.holdMs > 1200, 'hesitation passed to the engine (' + held.holdMs + ')');
+    assert.ok(held.power > 0.9, 'the held draw keeps its power (' + held.power + ')');
+    assert.deepEqual(app.errors, [], 'console errors');
+  } finally { await app.close(); }
+});
+
+// §4.6 on a landscape phone: the scene must leave 1.15 × D_full of screen under the tee. A stage stretched to the
+// full 390 px put the ball 90 px off the bottom edge, collapsing D_full to ~68 px with overswing on the very edge.
+test('kick_touch file landscape: D_full stays controllable and the HUD column does not clip', async () => {
+  const app = await H.openApp({ mode: 'file', viewport: CASES[1].viewport, hasTouch: true, isMobile: true, dpr: 2 });
+  const { page } = app;
+  try {
+    await K.openShowcase(page, 4242);
+    const g = await K.geometry(page);
+    const room = g.innerHeight - g.ball.y;
+    assert.ok(room >= 150, 'room below the ball for the pull (' + room + ' px)');
+    const hud = await page.evaluate(() => {
+      const h = document.querySelector('.kv-hud');
+      return { sw: h.scrollWidth, cw: h.clientWidth, clipped: Array.prototype.filter.call(h.querySelectorAll('.kv-chip'), c => c.scrollWidth > c.clientWidth + 1).map(c => c.textContent) };
+    });
+    assert.deepEqual(hud.clipped, [], 'no HUD chip is cut off in the landscape side column');
+    assert.ok(hud.sw <= hud.cw + 1, 'the HUD column does not overflow (' + hud.sw + ' > ' + hud.cw + ')');
+    // the session header must stay off the scene: it used to float over the top of the right upright
+    const overlap = await page.evaluate(() => {
+      const h = document.querySelector('.session-header'), c = RTG.UI.KickView.current().canvas;
+      if (!h) return null;
+      const a = h.getBoundingClientRect(), b = c.getBoundingClientRect();
+      return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    });
+    assert.equal(overlap, false, 'the session header does not overlap the kick scene');
+
+    await pullHoldFlick(page, { drag: 130, holdMs: 0, flickSteps: [20, 60, 120] });
+    const inp = await page.evaluate(() => RTG.UI.KickView.current().lastInput());
+    assert.ok(inp.power > 0.85 && inp.power <= 1.15, 'a 130-px pull is about full power, not clamped overswing (' + inp.power + ')');
+    const dFull = 130 / inp.power;
+    assert.ok(dFull >= 105, 'D_full ≥ 105 css px in landscape (' + dFull.toFixed(0) + ')');
+    assert.ok(g.ball.y + 1.15 * dFull <= g.innerHeight - 10, 'the overswing depth is not on the physical screen edge');
+    await K.waitPhase(page, 'RESULT', 8000);
+    // the result panel must not bury the TAP TO SKIP hint
+    const hit = await page.evaluate(() => {
+      const f = document.querySelector('.kv-feedback'), s = document.querySelector('.kv-skip');
+      if (!f || f.hidden || !s || s.hidden) return null;
+      const a = f.getBoundingClientRect(), b = s.getBoundingClientRect();
+      return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    });
+    assert.equal(hit, false, 'the result feedback panel does not cover TAP TO SKIP');
+    assert.deepEqual(app.errors, [], 'console errors');
+  } finally { await app.close(); }
+});

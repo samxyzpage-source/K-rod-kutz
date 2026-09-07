@@ -113,7 +113,7 @@
   }
 
   function deficit(gs, side) { return gs.score[other(side)] - gs.score[side]; }
-  function scoreText(gs) { return gs.homeId + ' ' + gs.score.home + ' - ' + gs.awayId + ' ' + gs.score.away; }
+  function scoreText(gs) { return nameOf(gs, 'home') + ' ' + gs.score.home + ' - ' + nameOf(gs, 'away') + ' ' + gs.score.away; }
   function spotText(ytg) { return ytg > FIELD_YARDS / 2 ? 'own ' + (FIELD_YARDS - ytg) : 'the ' + ytg; }
   /** Display name of a side for the drive log: the team abbreviation (gs.homeAbbr / awayAbbr), never the internal id. */
   function nameOf(gs, side) { return gs[side + 'Abbr'] || gs[side + 'Id']; }

@@ -563,7 +563,12 @@
     if (team) arrangeRoster(state, p.league, team, p.role);
     var rivalName = sess.rival ? sess.rival.name : 'the other leg';
     var line = myMakes + '-' + rivalMakes + ' vs ' + rivalName;
-    headline(state, rng, won ? 'camp' : 'bench', { text: won ? '{last} wins the camp battle ' + line : '{last} loses the kicking job to ' + rivalName + ' (' + line + ')', rival: rivalName });   // 1 draw
+    // camp / won / wasK1 gate the bench pool: a K2 who never held the job must not read "loses kicking job to the
+    // backup" (be1), and {rival} is the team-mate who won it, not the school's rival team.
+    headline(state, rng, won ? 'camp' : 'bench', {
+      text: won ? '{last} wins the camp battle ' + line : '{last} loses the kicking job to ' + rivalName + ' (' + line + ')',
+      rival: rivalName, camp: true, won: won, wasK1: wasK1
+    });   // 1 draw
     message(state, won ? (wasK1 ? 'coach_js_high' : 'coach_unbench') : 'coach_bench', { rival: rivalName });
     timeline(state, 'CAMP', (won ? 'Won' : 'Lost') + ' the camp battle ' + line, won ? 2 : 3);
     var out = { kind: 'CAMP', won: won, myScore: Util.round1(myScore), rivalScore: Util.round1(rivalScore), myMakes: myMakes, rivalMakes: rivalMakes, role: p.role, rival: rivalName };
@@ -808,7 +813,7 @@
     state.stage = 'NFL';
     p.nflSeasons = num(p.nflSeasons, 0);
     delete f.declared; delete f.combinePlan; delete f.offseason; delete f.springLeague; delete f.noOfferSeasons;
-    message(state, 'agent_rookie', { team: team.name });
+    message(state, 'agent_rookie', { team: team.name, years: p.contract ? num(p.contract.years, 0) || undefined : undefined });   // ar1 prints the REAL deal length, never a fallback
     Se.advanceYear(state, rng);
     return { teamId: teamId, role: p.role, contract: p.contract };
   };

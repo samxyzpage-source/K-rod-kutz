@@ -31,7 +31,9 @@
  *   ←/→ (A/D) nudge aim ±0.5° per tap, hold sweeps 6°/s · Space/Enter #1 starts the power meter (0→1.15 in
  *   900 ms, then back, looping) · #2 locks power · accuracy needle sweeps −1..+1 over 700 ms (500 ms at
  *   pressure ≥ 0.6) · #3 locks: quality = 1 − |needle|, aim += 6°·needle.
- *   opts: {pressure, playClockMs(), leftFooted(), active(), canvasEl?, onAim(aim), onPowerStart(),
+ *   Bindings come from `keys()` → store.settings.keys {confirm, confirmAlt, left, right} (Settings ▸ KEYS);
+ *   unset entries fall back to Space/Enter/←/→ and A/D stay as arrow aliases only while ←/→ are unremapped.
+ *   opts: {pressure, playClockMs(), leftFooted(), active(), canvasEl?, keys(), onAim(aim), onPowerStart(),
  *          onPower(P), onPowerLock(P), onNeedle(n), onRelease(input, meta), onClock(remainingMs, totalMs)}
  *   returns {destroy(), reset(), update(now), press(), nudge(dir), state(), aim(), power(), needle(), clockRemaining(), clockTotal()}
  */
@@ -52,6 +54,33 @@
     meter: { nudgeDeg: 0.5, sweepDegPerSec: 6, sweepAfterMs: 220, powerMs: 900, needleMs: 700, needleMsPressure: 500, pressureFast: 0.6, aimPerNeedle: 6 }
   };
   Input.CONST = CONST;
+
+  /** The out-of-the-box keyboard bindings; Settings ▸ KEYS overrides confirm / left / right in `store.settings.keys`. */
+  var DEFAULT_KEYS = { confirm: ' ', confirmAlt: 'Enter', left: 'ArrowLeft', right: 'ArrowRight' };
+  Input.DEFAULT_KEYS = DEFAULT_KEYS;
+
+  /**
+   * Does the KeyboardEvent `e` match the configured binding `key`? Bindings are stored as `KeyboardEvent.key`
+   * values by the settings screen (' ', 'Enter', 'ArrowLeft', 'k', …), so match on `.key` first (case-insensitive
+   * for single characters, so a remap to 'k' still fires with caps lock on), then on `.code` for the space bar
+   * and for callers that store codes.
+   */
+  Input.keyMatches = function (e, key) {
+    if (!e || !key) return false;
+    var k = e.key;
+    if (key === ' ' || key === 'Space' || key === 'Spacebar') return k === ' ' || k === 'Spacebar' || e.code === 'Space';
+    if (k === key) return true;
+    if (typeof k === 'string' && k.length === 1 && key.length === 1 && k.toLowerCase() === key.toLowerCase()) return true;
+    return !!e.code && e.code === key;
+  };
+  /** Merge a settings.keys object over the defaults (unset / non-string entries keep the default). */
+  Input.resolveKeys = function (raw) {
+    var out = { confirm: DEFAULT_KEYS.confirm, confirmAlt: DEFAULT_KEYS.confirmAlt, left: DEFAULT_KEYS.left, right: DEFAULT_KEYS.right };
+    if (raw && typeof raw === 'object') {
+      for (var k in out) if (typeof raw[k] === 'string' && raw[k]) out[k] = raw[k];
+    }
+    return out;
+  };
 
   function now() { return (root.performance && root.performance.now) ? root.performance.now() : Date.now(); }
   function clamp(x, lo, hi) { return x < lo ? lo : (x > hi ? hi : x); }
@@ -368,20 +397,21 @@
       aim = clamp(aim + dir * M.nudgeDeg, -CONST.aimMax, CONST.aimMax);
       call(opts.onAim, aim);
     }
-    function keys() { var k = call(opts.keys); return k && typeof k === 'object' ? k : DEFAULT_KEYS; }
+    function keys() { return Input.resolveKeys(call(opts.keys)); }
     function keyDir(e) {
       var k = keys();
-      if (Input.keyMatches(e, k.left || DEFAULT_KEYS.left)) return -1;
-      if (Input.keyMatches(e, k.right || DEFAULT_KEYS.right)) return 1;
-      // A / D stay as aliases of the arrows while the arrows are the configured keys (§4.6)
+      if (Input.keyMatches(e, k.left)) return -1;
+      if (Input.keyMatches(e, k.right)) return 1;
+      // A / D stay as aliases of the arrows while the arrows are the configured keys (§4.6); once the player has
+      // remapped a direction the letter aliases step aside so they cannot shadow the new binding
       var raw = e.key || e.code;
-      if ((k.left || DEFAULT_KEYS.left) === 'ArrowLeft' && (raw === 'a' || raw === 'A' || raw === 'KeyA')) return -1;
-      if ((k.right || DEFAULT_KEYS.right) === 'ArrowRight' && (raw === 'd' || raw === 'D' || raw === 'KeyD')) return 1;
+      if (k.left === DEFAULT_KEYS.left && (raw === 'a' || raw === 'A' || raw === 'KeyA')) return -1;
+      if (k.right === DEFAULT_KEYS.right && (raw === 'd' || raw === 'D' || raw === 'KeyD')) return 1;
       return 0;
     }
     function isPress(e) {
       var k = keys();
-      return Input.keyMatches(e, k.confirm || DEFAULT_KEYS.confirm) || Input.keyMatches(e, k.confirmAlt || DEFAULT_KEYS.confirmAlt);
+      return Input.keyMatches(e, k.confirm) || Input.keyMatches(e, k.confirmAlt);
     }
     function editable(e) {
       var t = e.target;

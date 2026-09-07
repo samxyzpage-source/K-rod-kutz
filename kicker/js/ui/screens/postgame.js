@@ -5,7 +5,8 @@
  * result), else from store.lastDispatch when its fnName is finishUserGame / autoPlayGame, else it is rebuilt from
  * state (the week's played game + the kick log) so a reload never leaves a blank screen. Big score with crests
  * (your side in gold), your line in gold (FG x/y · LONG · PAT · GW ★), the letter-grade stamp (300 ms stamp-in;
- * instant under reduced motion), headline card, XP breakdown, meter deltas with arrows, the coach's line, injury /
+ * instant under reduced motion), headline card, XP breakdown (rows scaled by the difficulty multiplier and rounded
+ * so they add up to the total), meter deltas with arrows, the coach's line, injury /
  * milestone banners, the kick chips. CONTINUE → dispatch('endWeek') then Router.go('hub') + Router.sync() (the
  * postgame is a hub-family screen, so the automatic sync would otherwise stay here).
  */
@@ -66,7 +67,7 @@
     function yourLine(s) {
       var l = s.userLine || {};
       if (s.played === false) return c.el('p', { class: 'pg-line txt-grey center', text: 'You did not kick this week.' });
-      var parts = [c.el('span', { class: 'num' }, 'FG ' + Kit.num(l.fgm) + '/' + Kit.num(l.fga)), c.el('span', { class: 'num' }, 'LONG ' + Kit.num(l.long)), c.el('span', { class: 'num' }, 'PAT ' + Kit.num(l.patMade) + '/' + Kit.num(l.pat))];
+      var parts = [c.el('span', { class: 'num' }, 'FG ' + Kit.num(l.fgm) + '/' + Kit.num(l.fga)), c.el('span', { class: 'num' }, 'LONG ' + Kit.longText(l.long)), c.el('span', { class: 'num' }, 'PAT ' + Kit.num(l.patMade) + '/' + Kit.num(l.pat))];
       if (l.gw) parts.push(Kit.tip(c.el('span', { class: 'pg-gw' }, c.icon('star', 12), ' GW'), 'Game-winning kick'));
       if (l.tf) parts.push(Kit.tip(c.el('span', { class: 'pg-gw' }, c.icon('clock', 12), ' TF'), 'Tie-forcing kick'));
       if (l.made50plus) parts.push(Kit.tip(c.chip(l.made50plus + '× 50+', 'gold'), 'Makes from 50 yards or more'));
@@ -82,10 +83,45 @@
       return c.el('div', { class: 'pg-stamp-wrap center' }, st);
     }
 
+    /** Whole numbers as close as possible to `values` that add up to `target` (largest remainder first). */
+    function wholeRows(values, target) {
+      var out = [], rem = [], i, sum = 0;
+      for (i = 0; i < values.length; i++) {
+        var floored = Math.floor(values[i]);
+        out.push(floored); rem.push({ i: i, r: values[i] - floored });
+        sum += floored;
+      }
+      var left = Math.round(target) - sum;
+      rem.sort(function (a, b) { return left > 0 ? (b.r - a.r || a.i - b.i) : (a.r - b.r || a.i - b.i); });
+      for (i = 0; i < Math.abs(left) && i < rem.length; i++) out[rem[i].i] += left > 0 ? 1 : -1;
+      if (Math.abs(left) > rem.length && out.length) out[0] += (Math.abs(left) - rem.length) * (left > 0 ? 1 : -1);
+      return out;
+    }
+
+    /**
+     * The XP list: one whole-number row per engine item (the raw §2.1.2 values, rounded so they add up), then the
+     * difficulty multiplier as its own row when it is not ×1 — so the rows visibly sum to TOTAL. Before this the
+     * list showed fractional / unmultiplied values under an integer total (rookie ×1.25: 8+1+7+1+1 = 18 vs "+23").
+     * @param {{items:Array<{label:string, xp:number}>, total:number, mult:number}} xp
+     * @returns {Array<{label:string, xp:number}>}
+     */
+    function xpRows(xp) {
+      var items = xp.items || [], mult = typeof xp.mult === 'number' && xp.mult > 0 ? xp.mult : 1;
+      var raw = [], sum = 0, i;
+      for (i = 0; i < items.length; i++) { raw.push(Kit.num(items[i].xp)); sum += raw[i]; }
+      var base = Math.round(sum);
+      var values = wholeRows(raw, base);
+      var rows = [];
+      for (i = 0; i < items.length; i++) rows.push({ label: items[i].label, xp: values[i], tip: 'XP for ' + items[i].label });
+      var diff = Math.round(Kit.num(xp.total)) - base;
+      if (diff) rows.push({ label: 'Difficulty ×' + mult, xp: diff, tip: 'The difficulty multiplier on everything above' });
+      return rows;
+    }
+
     function xpCard(s) {
       if (!s.xp) return null;
-      var items = c.list(s.xp.items || [], function (it) { return c.el('span', { class: 'row row-between grow' }, c.el('span', { class: 'small', text: it.label }), Kit.numEl('+' + it.xp, 'XP for ' + it.label, 'txt-gold')); }, { empty: 'No XP this game.' });
-      var total = c.el('div', { class: 'row row-between pg-xp-total mt-1' }, c.el('strong', { text: 'TOTAL' }), Kit.numEl('+' + Kit.num(s.xp.total) + ' XP', 'Difficulty multiplier ×' + (s.xp.mult || 1), 'txt-gold big'));
+      var items = c.list(xpRows(s.xp), function (it) { return c.el('span', { class: 'row row-between grow' }, c.el('span', { class: 'small', text: it.label }), Kit.numEl((it.xp < 0 ? '−' : '+') + Math.abs(it.xp), it.tip, 'txt-gold')); }, { empty: 'No XP this game.' });
+      var total = c.el('div', { class: 'row row-between pg-xp-total mt-1' }, c.el('strong', { text: 'TOTAL' }), Kit.numEl('+' + Math.round(Kit.num(s.xp.total)) + ' XP', 'Difficulty multiplier ×' + (s.xp.mult || 1), 'txt-gold big'));
       return c.card({ title: 'XP', icon: 'bolt', body: [items, total] });
     }
 

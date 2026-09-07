@@ -4,10 +4,16 @@
  * A localStorage adapter that never throws: private-mode Safari, quota errors and "storage disabled" all fall
  * back to an in-memory map for the rest of the session. Every call returns synchronously.
  *
+ * A value that fell back to memory SHADOWS the backend for that key: getItem/getJSON/keys read the memory copy
+ * first, so a save that could not be written (quota) is still readable — and loadable — for the rest of the session.
+ * The shadow is dropped as soon as a later write for that key reaches the backend.
+ *
  *   Storage.getItem(key) → string|null          Storage.setItem(key, value) → boolean (false = fell back / failed)
  *   Storage.removeItem(key) → void              Storage.keys() → string[] (own keys, sorted)
  *   Storage.getJSON(key) → any|null             Storage.setJSON(key, obj) → boolean
  *   Storage.available → boolean (false when running on the memory fallback)
+ *   Storage.degraded → boolean (true once any write fell back to memory)
+ *   Storage.memoryKeys() → string[] (keys that only live in memory)
  *   Storage.clear(prefix?) → void  (only keys starting with prefix, default 'rtg.')
  */
 (function (root) {
@@ -15,7 +21,7 @@
   var RTG = root.RTG = root.RTG || {};
   RTG.UI = RTG.UI || {};
 
-  var mem = {};
+  var mem = {};                 // keys whose last write fell back here; these SHADOW the backend
   var backend = null;
   var available = false;
 
@@ -39,19 +45,29 @@
     /** True while the real localStorage is in use. */
     available: available,
 
+    /** True once any write fell back to the in-memory map (quota, disabled storage …). */
+    degraded: false,
+
     getItem: function (key) {
+      // the memory copy wins: it is newer than whatever the backend still holds for this key
+      if (Object.prototype.hasOwnProperty.call(mem, key)) return mem[key];
       if (backend) {
         try { var v = backend.getItem(key); return v === undefined ? null : v; } catch (e) { /* fall through */ }
       }
-      return Object.prototype.hasOwnProperty.call(mem, key) ? mem[key] : null;
+      return null;
     },
 
     setItem: function (key, value) {
       value = String(value);
       if (backend) {
-        try { backend.setItem(key, value); return true; } catch (e) { /* quota / private mode: fall back */ }
+        try {
+          backend.setItem(key, value);
+          if (Object.prototype.hasOwnProperty.call(mem, key)) delete mem[key];   // the backend is current again
+          return true;
+        } catch (e) { /* quota / private mode: fall back */ }
       }
       mem[key] = value;
+      Storage.degraded = true;
       return false;
     },
 
@@ -61,6 +77,9 @@
       }
       delete mem[key];
     },
+
+    /** Keys that only live in the memory fallback (a real write never landed), sorted. */
+    memoryKeys: function () { return Object.keys(mem).sort(); },
 
     /** Own keys (real storage + memory fallback), sorted. */
     keys: function () {

@@ -89,6 +89,64 @@ H.matrix(({ mode, vp }) => {
   });
 }, H.MODES, ['phone', 'desktop']);
 
+test('saveload http desktop: a quota-failed save is still listed, summarised and loadable (QA1-01)', async () => {
+  const app = await H.openApp({ mode: 'http', viewport: 'desktop' });
+  const { page } = app;
+  try {
+    await H.debug(page, 'newCareer', { seed: 11, name: 'Quota Tester' });
+    await H.debug(page, 'jumpTo', { stage: 'COLLEGE', phase: 'REG', week: 1 });
+    const r1 = await page.evaluate(() => RTG.UI.store.save('1'));
+    assert.equal(r1.persisted, true, 'the first save reaches localStorage');
+    // every rtg.save.* write now throws QuotaExceededError
+    await page.evaluate(() => {
+      const orig = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (k, v) {
+        if (String(k).indexOf('rtg.save.') === 0) { const e = new Error('QuotaExceededError'); e.name = 'QuotaExceededError'; throw e; }
+        return orig.call(this, k, v);
+      };
+    });
+    await H.debug(page, 'jumpTo', { stage: 'COLLEGE', phase: 'REG', week: 4 });
+    const out = await page.evaluate(() => {
+      const st = RTG.UI.store;
+      const r2 = st.save('2');
+      return { r2: r2, summary: st.slotSummary('2'), load: st.load('2'), week: st.state.week };
+    });
+    assert.equal(out.r2.ok, true);
+    assert.equal(out.r2.persisted, false, 'store.save reports persisted:false honestly');
+    assert.ok(out.summary, 'the memory-only slot still has a summary');
+    assert.equal(out.summary.week, 4, 'the summary is the week-4 save, not the stale slot content');
+    assert.equal(out.load.ok, true, 'the memory-only slot loads');
+    assert.equal(await page.evaluate(() => RTG.UI.store.state.week), 4, 'loading it restores week 4');
+    // the player is warned once (shell toast)
+    await page.locator('.toast', { hasText: /memory only/i }).waitFor({ timeout: 3000 });
+    assert.deepEqual(app.errors, [], 'console errors');
+  } finally { await app.close(); }
+});
+
+test('saveload http desktop: loading a save applies the CURRENT UI settings, not the saved mirror (QA1-02)', async () => {
+  const app = await H.openApp({ mode: 'http', viewport: 'desktop' });
+  const { page } = app;
+  try {
+    await H.debug(page, 'newCareer', { seed: 77, name: 'Mirror Tester' });
+    const r = await page.evaluate(() => {
+      const st = RTG.UI.store;
+      st.setSetting('playKickoffs', false);
+      st.setSetting('autoPat', 'off');
+      st.save('1');                                        // saved with kickoffs off
+      st.setSetting('playKickoffs', true);
+      st.setSetting('autoPat', 'all');
+      st.setSetting('simSpeed', 2);
+      const load = st.load('1');
+      return { ok: load.ok, ui: JSON.parse(JSON.stringify(st.settings)), mirror: JSON.parse(JSON.stringify(st.state.settings)) };
+    });
+    assert.equal(r.ok, true);
+    assert.equal(r.ui.playKickoffs, true);
+    assert.deepEqual(r.mirror, { autoPat: 'all', playKickoffs: true, simSpeed: 2 },
+      'state.settings is rebuilt from the UI settings on load (UI_API §2.2)');
+    assert.deepEqual(app.errors, [], 'console errors');
+  } finally { await app.close(); }
+});
+
 test('saveload http phone: CONTINUE on the title resumes the autosave', async () => {
   const app = await H.openApp({ mode: 'http', viewport: 'phone' });
   const { page } = app;
@@ -100,10 +158,38 @@ test('saveload http phone: CONTINUE on the title resumes the autosave', async ()
     await page.waitForFunction(() => window.RTG && RTG.UI && RTG.UI.Router && RTG.UI.Router.current() === 'title');
     const summary = await page.locator('.title-summary').textContent();
     assert.match(summary, /Auto Saver/, 'title shows the autosave summary');
+    // QA1-08: human copy, never the raw enum ('Y1 COLLEGE.PRE')
+    assert.doesNotMatch(summary, /COLLEGE|RETIRED|SHOWCASE|LEGACY|\bREG\b|\bPRE\b/, 'no raw stage/phase enum: ' + summary);
+    assert.match(summary, /College · Preseason/, 'stage and phase in human copy: ' + summary);
     await H.clickButton(page, 'CONTINUE');
     await page.waitForFunction(() => RTG.UI.store.state !== null);
     const after1 = H.stripVolatile(await H.debug(page, 'getState'));
     assert.deepEqual(after1, before);
+    assert.deepEqual(app.errors, [], 'console errors');
+  } finally { await app.close(); }
+});
+
+// QA1-10 (the title screen's share of it): "LONG 0" is not a 0-yard field goal, it is no field goal at all —
+// the records ticker must read the em dash like every other surface (RTG.UI.Kit.longText).
+test('saveload http desktop: the title records ticker never prints "LONG 0"', async () => {
+  const app = await H.openApp({ mode: 'http', viewport: 'desktop' });
+  const { page } = app;
+  try {
+    await page.evaluate(() => {
+      RTG.UI.Storage.setJSON(RTG.UI.Store.KEYS.records, {
+        careers: [
+          { seed: 1, name: 'No Makes', tier: 'Journeyman', hof: 120, fgm: 0, long: 0, gw: 0, seasons: 2 },
+          { seed: 2, name: 'Big Leg', tier: 'Legend', hof: 1900, fgm: 480, long: 62, gw: 14, seasons: 15 }
+        ],
+        best: {}
+      });
+      RTG.UI.Router.go('title', {}, { replace: true });
+    });
+    await H.waitForScreen(page, 'title');
+    const ticker = await page.locator('.ticker-inner').textContent();
+    assert.match(ticker, /No Makes .* LONG —/, 'a career with no makes shows an em dash: ' + ticker.slice(0, 160));
+    assert.doesNotMatch(ticker, /LONG 0(?!\d)/, 'no "LONG 0" anywhere in the ticker');
+    assert.match(ticker, /Big Leg .* LONG 62/, 'a real long is still a number');
     assert.deepEqual(app.errors, [], 'console errors');
   } finally { await app.close(); }
 });

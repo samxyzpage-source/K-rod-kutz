@@ -118,8 +118,9 @@
       var cur = conf || userConf(state) || 'Liberty';
       var rows = RTG.Standings.rowsIn(state.season.standings || [], cur);
       var tbl = c.table([
-        { key: 'seed', label: 'SEED', align: 'r', render: function (r) { return r.seed ? String(r.seed) + (r.seed === 1 ? ' (bye)' : '') : '—'; } },
-        { key: 'team', label: 'TEAM', render: function (r) { return c.el('span', { class: 'row' }, teamCell(state, r.teamId), r.divChamp ? c.chip(r.div, 'gold') : null); } },
+        // an all-0-0 table seeds itself on tiebreaks alone: no seed column until somebody has played (see Kit.rankChip)
+        { key: 'seed', label: 'SEED', align: 'r', render: function (r) { return r.seed && Kit.standingsStarted(state) ? String(r.seed) + (r.seed === 1 ? ' (bye)' : '') : '—'; } },
+        { key: 'team', label: 'TEAM', render: function (r) { return c.el('span', { class: 'row' }, teamCell(state, r.teamId), r.divChamp && Kit.standingsStarted(state) ? c.chip(r.div, 'gold') : null); } },
         { key: 'rec', label: 'W-L', align: 'r', render: recText },
         { key: 'confr', label: 'CONF', align: 'r', render: function (r) { return r.confW + '-' + r.confL; } },
         { key: 'diff', label: 'DIFF', align: 'r', render: function (r) { return c.fmt.signed(r.diff || 0); } }

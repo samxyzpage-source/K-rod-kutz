@@ -688,4 +688,15 @@ test('QA1-05: a college game (ids differ from abbreviations) logs abbreviations 
   assert.ok(gs.driveLog[0].text.indexOf(gs.homeId) < 0 && gs.driveLog[0].text.indexOf(gs.awayId) < 0, 'toss line without ids: ' + gs.driveLog[0].text);
   assert.ok(/^[A-Z0-9]{2,5} wins the toss/.test(gs.driveLog[0].text), gs.driveLog[0].text);
   assert.ok(Sim.driveLogLine(gs, gs.driveLog[0]).indexOf(gs.homeId) < 0, 'driveLogLine without ids');
+  // the whole log, not just the toss: the quarter / half / final score lines used to print gs.homeId / gs.awayId
+  gfx.playGame(RTG, { state, gs, rng });
+  let sawScore = 0;
+  for (const row of gs.driveLog) {
+    assert.ok(row.text.indexOf(gs.homeId) < 0 && row.text.indexOf(gs.awayId) < 0, 'internal id in the drive log: ' + row.text);
+    assert.ok(!/own (5[1-9]|[6-9][0-9])/.test(row.text), 'impossible own-yard spot: ' + row.text);
+    if (/ - [A-Z0-9]+ \d+ - /.test(row.text)) sawScore++;
+  }
+  assert.ok(sawScore >= 3, 'the log carries quarter / half / final score lines: ' + sawScore);
+  const fin = gs.driveLog.filter((r) => r.result === 'END_GAME')[0];
+  assert.ok(fin && fin.text.indexOf(gs.homeAbbr) >= 0 && fin.text.indexOf(gs.awayAbbr) >= 0, 'the final line names both abbreviations: ' + (fin && fin.text));
 });

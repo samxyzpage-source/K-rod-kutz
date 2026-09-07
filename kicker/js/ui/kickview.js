@@ -22,6 +22,7 @@
  *   KickView.hudParts(ctx, difficultyRow)             ['47 YDS', 'R HASH', 'WIND ← 12', 'RAIN', 'ICED!']
  *   KickView.kickoffBar(parent, {KO, onLock(timing), reduced}) → {el, destroy()}   one-tap timing bar (§2.3.10)
  *   KickView.sessionScreen(store, opts)               the shared showcase / camp / combine / session-kick screen
+ *   KickView.escapeToSettings(ev) → boolean           §4.8: Escape opens Settings from a chromeless kick screen
  *   KickView.current()                                the live view (RTG.debug / tests)
  *   KickView.TIMING                                   every duration used by the scene (ms)
  */
@@ -78,6 +79,22 @@
   }
   function announce(text) { var c = C(); if (c && c.announce) c.announce(text); }
   function icon(name, size) { var c = C(); return c && c.icon ? c.icon(name, size) : doc.createTextNode(''); }
+
+  // ── how the hints name the confirm action: TAP on a touch device, else the Settings ▸ KEYS binding ──
+  function coarsePointerNow() {
+    try { return !!(root.matchMedia && root.matchMedia('(pointer: coarse)').matches); } catch (e) { return false; }
+  }
+  function keyLabelOf(k) {
+    if (k === ' ' || k === 'Spacebar' || k === 'Space' || !k) return 'SPACE';
+    return String(k).replace('Arrow', '').toUpperCase();
+  }
+  /** The word the tutorial / hints use for "confirm" right now. */
+  function confirmWord() {
+    if (coarsePointerNow()) return 'TAP';
+    var st = RTG.UI.store, In = RTG.UI.Input;
+    var keys = In && In.resolveKeys ? In.resolveKeys(st && st.settings && st.settings.keys) : null;
+    return keyLabelOf(keys ? keys.confirm : ' ');
+  }
 
   /** The §4.6 auto-PAT rule: off = kick every PAT; safe = auto unless pressure ≥ 0.5; all = auto. */
   KickView.shouldAutoPat = function (ctx, settings, store) {
@@ -152,6 +169,14 @@
     var reduced = reducedMotion(settings);
     var inputMode = settings.inputMode === 'meter' ? 'meter' : 'flick';
     var row = diffRow(ctx);
+
+    // Settings ▸ KEYS is mutated in place by store.setSetting, so read the bindings at press time (never cache them).
+    function liveSettings() { return (store && store.settings) || settings || {}; }
+    function keyBindings() { return Inp.resolveKeys(liveSettings().keys); }
+    /** What the on-canvas hints call the confirm action: TAP on a touch device, otherwise the bound key. */
+    function pressLabel() { return coarsePointerNow() ? 'TAP' : keyLabelOf(keyBindings().confirm); }
+    /** Flick-mode hint; pointer-only devices are not told about the keyboard fallback (§4.8). */
+    function flickHint() { return coarsePointerNow() ? 'PULL ↓ · FLICK ↑' : 'PULL ↓ · FLICK ↑ · ' + pressLabel() + ': METER'; }
 
     // ── DOM ──
     var elRoot = el('div', { class: 'kickview kv-mode-' + inputMode, 'data-phase': 'SETUP' });
@@ -343,7 +368,8 @@
       if (sessionInfo && sessionInfo.label) strip.appendChild(el('span', { class: 'chip kv-chip kv-session', text: sessionInfo.label }));
       hud.appendChild(strip);
       var right = el('div', { class: 'kv-hud-right' });
-      heartEl = el('span', { class: 'kv-heart' + (clutch ? ' clutch' : '') + (pressure < 0.2 ? ' calm' : ''), 'aria-label': 'pressure ' + Math.round(pressure * 100) + ' percent', title: 'Pressure ' + Math.round(pressure * 100) + '%' });
+      // role="img" so the aria-label is actually exposed (a bare <span> with aria-label is ignored by AT)
+      heartEl = el('span', { class: 'kv-heart' + (clutch ? ' clutch' : '') + (pressure < 0.2 ? ' calm' : ''), role: 'img', 'aria-label': 'Pressure ' + Math.round(pressure * 100) + ' percent, ' + Math.round(bpm) + ' beats per minute', title: 'Pressure ' + Math.round(pressure * 100) + '%' });
       heartEl.appendChild(icon('heart', 12));
       heartEl.style.animationDuration = (60 / bpm).toFixed(2) + 's';
       heartEl.appendChild(el('span', { class: 'kv-bpm num', text: String(Math.round(bpm)) }));
@@ -421,15 +447,16 @@
           playClockMs: function () { return playClockMs; },
           leftFooted: function () { return mirror; },
           active: inputActive,
+          keys: function () { return liveSettings().keys; },
           onAim: function (a) { aimDeg = a; },
-          onPowerStart: function () { setPhase('POWER'); setHint('SPACE: LOCK POWER'); Audio().click(); },
+          onPowerStart: function () { setPhase('POWER'); setHint(pressLabel() + ': LOCK POWER'); Audio().click(); },
           onPower: function (p) { meterP = p; var tick = Math.floor(p * 10); if (tick !== lastTick) { lastTick = tick; Audio().click(); } lean = Math.min(3, Math.floor(p * 3)); },
-          onPowerLock: function (p) { meterP = p; setPhase('NEEDLE'); setHint('SPACE: STRIKE'); },
+          onPowerLock: function (p) { meterP = p; setPhase('NEEDLE'); setHint(pressLabel() + ': STRIKE'); },
           onNeedle: function (n) { needleVal = n; },
           onRelease: function (inp) { onRelease(inp); }
         });
         clockOwner = meter;
-        setHint('◄ ► AIM · SPACE: POWER');
+        setHint('◄ ► AIM · ' + pressLabel() + ': POWER');
       } else {
         input = Inp.flick(canvas, {
           ballAt: ballCss,
@@ -443,10 +470,10 @@
           onPull: function (P, ln) { pullP = P; lean = ln; },
           onTick: function () { Audio().click(); },
           onRelease: function (inp, meta) { onRelease(inp, meta); },
-          onCancel: function () { setPhase('SETUP'); pullP = 0; lean = 0; setHint('PULL ↓ · FLICK ↑'); }
+          onCancel: function () { setPhase('SETUP'); pullP = 0; lean = 0; setHint(flickHint()); }
         });
         clockOwner = input;
-        setHint('PULL ↓ · FLICK ↑');
+        setHint(flickHint());
       }
     }
     function teardownInput() {
@@ -630,12 +657,35 @@
     function onStagePointer(e) {
       if (phase === 'FLIGHT' || phase === 'FREEZE' || phase === 'RESULT') { if (skip()) e.preventDefault(); }
     }
+    /**
+     * §4.8 keyboard fallback: the flick needs a pointer, so a confirm key on an armed flick scene switches THIS
+     * view to the meter sequence (Settings ▸ Kick input is untouched) and starts it, leaving the flick path intact
+     * for the pointer. The swap sticks for the rest of the session so the player is not thrown back each kick.
+     */
+    function startMeterFallback() {
+      if (destroyed || inputMode === 'meter' || ctx.type === 'KO') return false;
+      if (phase !== 'SETUP') return false;
+      if (input && input.pulling()) return false;
+      inputMode = 'meter';
+      elRoot.classList.remove('kv-mode-flick');
+      elRoot.classList.add('kv-mode-meter');
+      setupInput();
+      if (!meter) return false;
+      announce('Keyboard kick mode. Left and right arrows aim, ' + pressLabel() + ' three times for power, accuracy and the strike.');
+      meter.press();
+      return true;
+    }
+    function isConfirmKey(e) {
+      var k = keyBindings();
+      return Inp.keyMatches(e, k.confirm) || Inp.keyMatches(e, k.confirmAlt) ||
+        Inp.keyMatches(e, Inp.DEFAULT_KEYS.confirm) || Inp.keyMatches(e, Inp.DEFAULT_KEYS.confirmAlt);
+    }
     function onKey(e) {
-      if (e.key === ' ' || e.key === 'Enter' || e.key === 'Spacebar') {
-        var t = e.target, tag = t && t.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
-        if (phase === 'FLIGHT' || phase === 'FREEZE' || phase === 'RESULT') { if (skip()) e.preventDefault(); }
-      }
+      if (destroyed || e.repeat || !isConfirmKey(e)) return;
+      var t = e.target, tag = t && t.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || (t && t.isContentEditable)) return;
+      if (phase === 'FLIGHT' || phase === 'FREEZE' || phase === 'RESULT') { if (skip()) e.preventDefault(); return; }
+      if (phase === 'SETUP' && inputMode === 'flick' && startMeterFallback()) e.preventDefault();
     }
 
     // ───────────────────────────── store: forced / auto results ─────────────────────────────
@@ -1029,7 +1079,13 @@
       wrap.appendChild(el('div', { class: 'ko-verdict ' + (inZone ? 'txt-mint' : 'txt-red'), text: inZone ? 'IN THE ZONE' : (val < 0 ? 'EARLY' : 'LATE') }));
       if (opts.onLock) opts.onLock(Math.round(val * 1000) / 1000);
     }
-    function onKey(e) { if ((e.key === ' ' || e.key === 'Enter') && !locked) { e.preventDefault(); lock(); } }
+    function onKey(e) {
+      if (locked) return;
+      var In = RTG.UI.Input, st = RTG.UI.store;
+      var k = In && In.resolveKeys ? In.resolveKeys(st && st.settings && st.settings.keys) : { confirm: ' ', confirmAlt: 'Enter' };
+      if (!(In.keyMatches(e, k.confirm) || In.keyMatches(e, k.confirmAlt) || e.key === ' ' || e.key === 'Enter')) return;
+      e.preventDefault(); lock();
+    }
     btn.addEventListener('click', lock);
     track.addEventListener('pointerdown', function (e) { e.preventDefault(); lock(); });
     root.addEventListener('keydown', onKey);
@@ -1056,6 +1112,20 @@
     return 'Returned to the ' + ko.startYard + ' · hang ' + num(ko.hang, 0).toFixed(1) + ' s';
   };
 
+  /**
+   * §4.8: the kick screens are chromeless (no tab bar / rail), so Escape is their only route out to Settings —
+   * a keyboard-only player who needs METERS, a bigger font or the colour-blind palette can always reach it and
+   * Router.back() returns to the still-pending session.
+   * @returns {boolean} true when the key was handled
+   */
+  KickView.escapeToSettings = function (ev) {
+    if (!ev || ev.key !== 'Escape' || ev.altKey || ev.ctrlKey || ev.metaKey) return false;
+    var R = RTG.UI.Router;
+    if (!R || R.current() === 'settings') return false;
+    R.go('settings');
+    return true;
+  };
+
   // ═══════════════════════════════ shared session screen ═══════════════════════════════
   /**
    * The screen shared by showcase / camp battle / combine / halftime-70 / tryout sessions: plays
@@ -1080,6 +1150,7 @@
     var koSlot = el('div', { class: 'session-ko', hidden: true });
     rootEl.appendChild(header); rootEl.appendChild(stageWrap); rootEl.appendChild(koSlot);
     var view = null, koBar = null, destroyed = false, timers = [], tut = null, headerEl = null, lastInfo = null, koLocked = false;
+    var tutFitTimer = 0;
 
     function setTimer(fn, ms) { var id = root.setTimeout(function () { if (!destroyed) fn(); }, ms); timers.push(id); }
     function session() { var s = store.state; return s && s.pending && s.pending.kind === 'KICKS' ? s.pending.session : null; }
@@ -1108,16 +1179,33 @@
     }
     /** Keep the tutorial overlay on the canvas rectangle (the stage can be wider / taller than the scene). */
     function fitTutorial() {
-      if (!tut || !view) return;
+      if (!tut || !view) return false;
       var cvs = view.canvas, stage = tut.parentNode;
-      if (!cvs || !stage) return;
+      if (!cvs || !stage) return false;
       var w = cvs.offsetWidth, h = cvs.offsetHeight, sw = stage.clientWidth, sh = stage.clientHeight;
-      if (!w || !sw) return;
+      if (!w || !sw) return false;
       var dx = Math.max(0, Math.round((sw - w) / 2)), dy = Math.max(0, cvs.offsetTop);
       tut.style.left = dx + 'px'; tut.style.right = dx + 'px';
       tut.style.top = dy + 'px'; tut.style.bottom = Math.max(0, sh - dy - h) + 'px';
+      return true;
+    }
+    /**
+     * The tutorial is built inside the Router factory, i.e. BEFORE Router.go appends the screen, so the canvas has
+     * no box yet and a single fitTutorial() call is a no-op. Re-fit on a short interval until the canvas has
+     * settled (attach → Canvas.resize → the fractional phone rescale), then stop.
+     */
+    function scheduleFitTutorial() {
+      if (tutFitTimer) root.clearInterval(tutFitTimer);
+      var n = 0;
+      tutFitTimer = root.setInterval(function () {
+        if (destroyed || !tut) { root.clearInterval(tutFitTimer); tutFitTimer = 0; return; }
+        fitTutorial();
+        if (++n >= 12) { root.clearInterval(tutFitTimer); tutFitTimer = 0; }
+      }, 50);
+      fitTutorial();
     }
     function dismissTutorial() {
+      if (tutFitTimer) { root.clearInterval(tutFitTimer); tutFitTimer = 0; }
       if (!tut) return;
       if (tut.parentNode) tut.parentNode.removeChild(tut);
       tut = null;
@@ -1139,7 +1227,7 @@
       }
       if (store.settings && store.settings.inputMode === 'meter') {
         t.textContent = '';
-        t.appendChild(el('div', { class: 'tut-step' }, el('span', { class: 'tut-text', text: '◄ ► AIM · SPACE ×3\npower · strike' })));
+        t.appendChild(el('div', { class: 'tut-step' }, el('span', { class: 'tut-text', text: '◄ ► AIM · ' + confirmWord() + ' ×3\npower · strike' })));
       }
       return t;
     }
@@ -1169,7 +1257,7 @@
         if (opts.tutorial && !tut) {
           tut = buildTutorial();
           view.el.querySelector('.kv-stage').appendChild(tut);
-          fitTutorial();
+          scheduleFitTutorial();
           view.el.addEventListener('pointerdown', dismissTutorial, true);   // first touch dismisses (non-blocking overlay)
           root.addEventListener('keydown', dismissTutorial, true);
         }
@@ -1223,6 +1311,7 @@
     return {
       el: rootEl,
       view: function () { return view; },
+      onKey: function (ev) { return KickView.escapeToSettings(ev); },
       onResize: function () { if (view) { view.resize(); fitTutorial(); } },
       destroy: function () {
         destroyed = true;

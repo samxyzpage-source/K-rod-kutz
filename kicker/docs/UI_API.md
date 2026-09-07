@@ -39,11 +39,11 @@ then `Router.sync()` (or `store.load('auto')` with `?load=auto`). With `?debug=1
 | `store.lastDispatch` | `{fnName, result, at, forced?}` of the last dispatch / touch |
 | `store.dispatch(fnName, ...args) → result` | calls `RTG.Engine[fnName](state, rng, ...args)` — see §2.1 |
 | `store.subscribe(fn) → unsubscribe` | `fn({fnName, result, args, store, forced?})` after every dispatch, `touch`, `replace`, `settings`, `records` |
-| `store.replace(state, rng?)` | swap the live state (rng rebuilt from `state.rngState` when omitted), then `Router.sync()` and notify `'replace'` |
+| `store.replace(state, rng?)` | swap the live state (rng rebuilt from `state.rngState` when omitted), **always** rebuild the UI-owned `state.settings` mirror from `store.settings` (`Schema.mirrorSettings`) so a loaded / imported career runs on the player's current Auto-PAT · Play kickoffs · sim speed, then `Router.sync()` and notify `'replace'` |
 | `store.clear()` | drop the career (title screen) |
 | `store.newCareer(opts)` | `Engine.newCareer(opts, Date.now())` (opts.settings defaults to the UI settings) → replace → autosave |
 | `store.hasCareer()` | `!!state` |
-| `store.save(slot) → {ok, error?, key, bytes, persisted, savedAt}` | slot `'1'|'2'|'3'|'auto'` (or a full `rtg.save.*` key) |
+| `store.save(slot) → {ok, error?, key, bytes, persisted, savedAt}` | slot `'1'|'2'|'3'|'auto'` (or a full `rtg.save.*` key). `persisted:false` = the write fell back to the in-memory map (quota / private mode); the save is still readable for the rest of the session (§6) and subscribers are notified **once per session** with `{fnName:'storage', result:{persisted:false, key, available}}`, which app.js turns into a warning toast |
 | `store.load(slot | blob) → {ok, error?, code?, warnings, migrated, summary}` | `Save.deserialize` → replace; codes `NEWER / CHECKSUM / INVALID / NO_MIGRATION / EMPTY / PARSE`; the message is in `error` |
 | `store.loadBlob(blob)` | same for an in-memory blob (the Saves import path) |
 | `store.autosave() → boolean` | writes `rtg.save.auto` (never throws) |
@@ -93,7 +93,7 @@ and `<html>`: `.cb .hc .reduced-motion .font-scale-125 .font-scale-150 .left-foo
 
 | Member | Description |
 |---|---|
-| `Router.register(id, factory)` | `factory(store, params) → {el, destroy(), onResize?(), onKey?(ev) → true when handled}` |
+| `Router.register(id, factory)` | `factory(store, params) → {el, destroy(), onResize?(), onKey?(ev) → true when handled, keysInFields?: boolean}` — see §7 for `keysInFields` |
 | `Router.has(id)` / `Router.ids()` | |
 | `Router.mount(rootEl)` | done by app.js (`.screen-host`) |
 | `Router.go(id, params?, {replace?, keepScroll?})` | destroys the live screen, mounts the new one (adds `.screen`, `data-screen`), pushes the previous one on a stack ≤ 8 unless `replace`, scrolls to top, emits `onChange` |
@@ -189,8 +189,14 @@ Canvas code should read colours through `Palette.get()` so the colour-blind / hi
 ## 6. `RTG.UI.Storage`
 
 `getItem(key) → string|null`, `setItem(key, value) → boolean` (false = memory fallback), `removeItem`, `keys()`
-(sorted), `getJSON`, `setJSON`, `clear(prefix='rtg.')`, `available` (false in private mode → in-memory map).
-Never throws. Keys: `rtg.save.1|2|3`, `rtg.save.auto`, `rtg.settings`, `rtg.records`.
+(sorted), `getJSON`, `setJSON`, `clear(prefix='rtg.')`, `available` (false in private mode → in-memory map),
+`degraded` (true once any write has fallen back), `memoryKeys()`. Never throws. Keys: `rtg.save.1|2|3`,
+`rtg.save.auto`, `rtg.settings`, `rtg.records`.
+
+**The memory fallback shadows the backend.** When `setItem` throws (quota, private mode) the value is kept in an
+in-memory map and `getItem` / `getJSON` read that map **first**, so a quota-failed save can still be summarised
+(`slotSummary`) and loaded for the rest of the session — a live-but-full `localStorage` must never hand back the
+stale older value. A later successful write for the same key drops the shadow; `removeItem` / `clear` clear both.
 
 ---
 
@@ -214,6 +220,13 @@ no career) hides the top bar, rails and tab bar. `html` also carries `.is-deskto
 - `Shell.applySettings()`, `Shell.setChrome(screenId)`, `Shell.openMore()`, `Shell.isLandscape()`,
   `Shell.isDesktop()`, `Shell.layout()`, `Shell.reducedMotion()`.
 - Keys: Escape on a FREE screen other than the hub → `hub`. Screens get `onKey(ev)` first; return `true` to consume.
+  Keydowns whose target is an `INPUT` / `TEXTAREA` / `SELECT` / contenteditable are **dropped** so typing never
+  reaches the shell shortcuts — unless the live screen returned `keysInFields: true`, in which case they are
+  forwarded to that screen's `onKey` only (`newcareer` uses it for Enter-to-submit in the name / seed fields).
+  The chromeless kick screens (`kick`, `showcase`, `campbattle`, `combine`) have no tab bar or rail, so their
+  `onKey` sends **Escape → `settings`** (`KickView.escapeToSettings`); `Router.back()` returns to the still-
+  pending session. In flick mode the confirm key on an armed scene also swaps that view to the meter sequence
+  (SPEC §4.8 keyboard fallback), so a keyboard-only player is never stuck.
 
 ---
 
@@ -304,4 +317,7 @@ them to the screen (e.g. `.game-screen .pill`) — global selectors in a later s
 | Integration pass | `Router.resolve` routes a pending `COMBINE_PLAN` to `combine`; `Engine.markRead` is dispatchable (NO_SYNC); `C.tooltip` keeps its description in `#tip-descs`; `debug.jumpTo` settles one pending per step; `.screen-kick / .screen-session` full width and `.scroll-x { position: relative }` live in `style.css` | the U2 / U3 interface requests |
 | Palette extras | `--team-text`, `--navy2` alias, shell colours | readable team text on navy; kick.css referenced `--navy2` |
 | Canvas fractional fit (§4.2) | `RTG.UI.Canvas` integer-scales as specified, except when the integer scale would be 1 and the fractional fit is ≥ `Canvas.MIN_FRACTIONAL` (1.35): then the fractional fit is used (390×844 fits 2× in the showcase; in-game, with the score row and CONTINUE, 375×667 fits 1.6× instead of 1×) | a 1× 192-px scene on a 375-px phone leaves navy on both sides and a tiny pull area; nearest-neighbour sampling keeps the pixels crisp, desktops (fit ≥ 2) still integer-scale |
-| Flick segment start (§4.6 step 3) | `Input.flick` takes the last 120 ms / 6 samples as specified, but the segment never starts before the pull's reversal (the deepest sample of the last 300 ms, already used for power) | a fast pull that snaps straight into the flick would otherwise drag downward samples into the window and the chord across the turn would read as WEAK (×0.85) or, pulled hard enough, as no flick at all |
+| Flick segment start (§4.6 step 3) | `Input.flick` takes the last 120 ms / 6 samples as specified, but the segment never starts before the pull's reversal — the deepest sample of the pull, found by walking back from the release with no time bound (a deeper sample inside the last 300 ms still wins), which is also where power is read | a fast pull that snaps straight into the flick would otherwise drag downward samples into the window and the chord across the turn would read as WEAK (×0.85); and a player who draws, pauses to aim and then flicks leaves no samples at the bottom, so a time-bounded scan read power off the first flick sample instead of the pull depth |
+| `D_full` cap (§4.6 step 2) | `D_full = 0.32 × canvasCssHeight` (portrait) / `0.45 ×` (landscape) as specified, then capped so the whole range including overswing fits under the ball: `min(D_full, max(60, (roomBelowBall − 12) / 1.15))`, measured at `pointerdown` | a finger cannot leave the screen — without the cap a landscape phone put `P = 1.15` past the bottom edge (the home-indicator strip). CSS keeps the room honest instead: `.kv-stage { max-height: 74% }` on landscape phones leaves ~155 px under the tee, so the cap no longer binds there |
+| Hesitation clock (§4.6 / §2.3.3) | `holdSince` is latched at the first sample with P ≥ 0.95 and stopped by the first sample back under it, instead of being zeroed by every sample under the line | the flick samples run through the same `updatePull`, so the old rule zeroed the clock on the way out and `holdMs` was always 0 — the composure penalty was dead code for flick input |
+| Keyboard fallback on a flick scene (§4.8) | the confirm key on an armed flick scene swaps **that view** to the meter sequence (`store.settings.inputMode` untouched) and announces it; Escape on a chromeless kick screen opens `settings` | the flick needs a pointer and the kick screens have no chrome, so a keyboard-only player was stuck on the first showcase kick with no route to Settings |

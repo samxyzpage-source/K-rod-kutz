@@ -1449,7 +1449,7 @@ All debug functions are synchronous and re-render through the store. Playwright 
 | `--team-1` / `--team-2` | from data | team tints (set on the root when the team changes) |
 | `--dusk` | `#5b3a6e` | sky gradient stop for evening games (flat bands, no gradients) |
 
-Colorblind variant (`body.cb`) swaps `--red → #d55e00`, `--mint → #0072b2`, `--gold → #f0e442`, `--sky → #56b4e9` (Okabe–Ito). High-contrast (`body.hc`) uses black/white/yellow only. Result banners always carry text + icon, never colour alone.
+Colorblind variant (`body.cb`) swaps `--red → #e26100`, `--mint → #00b386`, `--gold → #f0e442`, `--sky → #56b4e9` — Okabe–Ito, with vermillion and bluish green taken one tint up so every accent clears WCAG AA (≥ 4.5:1) as text on `--navy`. High-contrast (`body.hc`) uses black, white and four accents separated in luminance as well as hue: `--gold #ff0` (lum .93), `--mint #0f0` (.72), `--sky #66ccff` (.53), `--red #ff5c5c` (.30), so the power bar's target and overswing zones stay distinct in greyscale too; anything painted **on** an accent uses `--ink`. `js/ui/palette.js` holds the same hex values for the canvas. Result banners always carry text + icon, never colour alone.
 
 **Type:** `font-family: "Press Start 2P", "Courier New", Courier, monospace;` loaded via `<link rel="preconnect">` + Google Fonts CSS with `font-display: swap`; base size 10 px phone / 12 px desktop; `--font-scale` 1 / 1.25 / 1.5. Line-height 1.6. Numbers use `font-variant-numeric: tabular-nums` (falls back gracefully).
 
@@ -1518,7 +1518,7 @@ Each entry: layout · components · engine calls.
 **Pointer input (`RTG.UI.Input.flick`)** — uses Pointer Events with `setPointerCapture` on the canvas; `touch-action: none` on the canvas; ignores multi-touch beyond the first pointer.
 1. `pointerdown` within 96 css-px (÷ scale → virtual) of the ball → `PULL`. Play clock starts.
 2. `pointermove`: pull vector `d = (p − p0)`; power `P = clamp(dy / D_full, 0, 1.15)` where `D_full = 0.32 × canvasCssHeight` (portrait) or `0.45 × canvasCssHeight` (landscape); all distances in CSS px (already DPR-independent). Bar fills with ticks every 10 % (click SFX); green zone drawn from `model.pNeed` to `model.pNeed + 0.15` (not on Legend); red zone above 1.0. Kicker sprite lean frame = `floor(P·3)`. Samples `{x, y, t}` are pushed into a ring buffer of 32.
-3. `pointerup`: flick segment = samples in the last **120 ms or the last 6 samples, whichever is larger**. `v = (p_last − p_first) / dt` in css-px/ms. *As built:* the segment never starts before the pull's reversal (the deepest sample of the last 300 ms, which is also where power is read) — a fast pull that snaps straight into the flick would otherwise carry downward samples into the window and read as WEAK. If `v.y > −0.12` (no forward flick) → mishit: `power = 0.5, aim = N_ui(0, 2°) via uiRng, quality = 0.3`. Else:
+3. `pointerup`: flick segment = samples in the last **120 ms or the last 6 samples, whichever is larger**. `v = (p_last − p_first) / dt` in css-px/ms. *As built:* the segment never starts before the pull's reversal — the deepest sample of the pull, found by walking back from the release with no time bound (the 300 ms window only ever deepens it), which is also where power is read, so a pause at full draw cannot under-read power — a fast pull that snaps straight into the flick would otherwise carry downward samples into the window and read as WEAK. If `v.y > −0.12` (no forward flick) → mishit: `power = 0.5, aim = N_ui(0, 2°) via uiRng, quality = 0.3`. Else:
    - `aim = clamp(atan2(v.x, −v.y) · 180/π, −12, 12)` (mirror for left-footed setting);
    - `speed = |v|` css-px/ms; `< 0.35` → "WEAK" (power ×0.85); `> 2.2` → "YANKED" (quality −0.15);
    - `quality = 1 − clamp(rmsPerp / 14, 0, 1)` where `rmsPerp` = RMS perpendicular deviation (css px) of flick samples from the chord; then `quality = clamp(quality − yank, 0, 1)`;
@@ -1527,7 +1527,7 @@ Each entry: layout · components · engine calls.
 4. Play clock at 0 → kick with current values (or mishit if never pulled).
 5. The triple goes to `onInput` → `Engine.applyUserKick` → `FLIGHT` with the returned `KickResult`.
 
-**Keyboard / meter mode** (also selectable for pointer users): ←/→ (A/D) nudge aim ±0.5° per tap, hold to sweep 6°/s; the aim marker sits on the uprights. Space/Enter #1 starts the power meter (0 → 1.15 in 900 ms, then back down; loops); #2 locks power. Immediately an accuracy needle sweeps −1..+1 over 700 ms (500 ms under pressure ≥ 0.6); #3 locks: `quality = 1 − |needle|`, and `aim += 6° × needle` (a centre hit ±0.1 is "PURE"). Escape does nothing after #1. Gamepad: d-pad = arrows, A = Space (optional, via `navigator.getGamepads` polling in the RAF, M4).
+**Keyboard / meter mode** (also selectable for pointer users; the confirm / aim keys below are the defaults — Settings ▸ KEYS rebinds them and `Input.resolveKeys` is the only reader, so A/D stay aliases only while the arrows are unremapped): ←/→ (A/D) nudge aim ±0.5° per tap, hold to sweep 6°/s; the aim marker sits on the uprights. Space/Enter #1 starts the power meter (0 → 1.15 in 900 ms, then back down; loops); #2 locks power. Immediately an accuracy needle sweeps −1..+1 over 700 ms (500 ms under pressure ≥ 0.6); #3 locks: `quality = 1 − |needle|`, and `aim += 6° × needle` (a centre hit ±0.1 is "PURE"). Escape does nothing after #1. Gamepad: d-pad = arrows, A = Space (optional, via `navigator.getGamepads` polling in the RAF, M4).
 
 **Flight (Camera B):** duration `flightTime × 0.75` s (PAT ×0.77 again); ball sprite scale follows the parabola `size = 3 + 9·(4·s·(1−s))` where `s = t/T`; a drop shadow slides along the ground line; lateral screen position interpolates from the ball to the projected `xYd`; uprights drawn last with z-sort (ball behind the crossbar plane after `s > 0.92`). Camera drift 4 px vertical. Wind particles (rain/snow) via uiRng. Skippable by tap/Space after 300 ms (jumps to RESULT).
 
@@ -1544,6 +1544,9 @@ WebAudio only, no files: `click` (bar ticks), `thunk` (contact; pitch 180–320 
 ### 4.8 Accessibility & QoL
 
 - Keyboard-only navigation for every DOM screen (visible `:focus-visible` ring in `--sky`); `Tab` order follows layout; modals trap focus; Escape closes modals (not kicks).
+- Keyboard-only play on the **canvas** screens too: they are chromeless, so the confirm key on an armed flick
+  scene swaps that scene to the meter sequence (the stored input mode is untouched) and Escape opens Settings,
+  returning to the still-pending kick — a keyboard-only player is never stranded on a kick that needs a pointer.
 - `aria-live="polite"` region announces kick results, scores, headlines; canvas has `role="img"` with an `aria-label` describing the kick situation and result.
 - Colour-blind palette, high contrast, reduced motion (`prefers-reduced-motion` honoured + manual switch: no shake, instant flight, no vignette), font scale, play clock ×2, left-footed mirror, tooltips on every number (long-press on touch), haptics (`navigator.vibrate(30)` on contact, 80 on doink) when available and enabled.
 - QoL: sim-to-next-kick default, auto-PAT, auto-kickoff, sim rest of game/season, speed ×1/2/4, kick history, "why did I miss?" feedback, "What's my range?" overlay, seed copy, export/import, undo last XP spend until leaving the Training screen, no undo for kicks.

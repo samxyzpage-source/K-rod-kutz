@@ -57,14 +57,24 @@
   --anim: 1;
 }
 
-body.cb, html.cb { --red: #d55e00; --mint: #0072b2; --gold: #f0e442; --sky: #56b4e9; }
+/* Colour-blind palette (Okabe–Ito). These are painted as TEXT on the navy ground of the result banners, so every one
+   clears WCAG AA there (on --navy #1b1f3a): bluish green 5.98, vermillion 4.56, yellow 12.18, sky 6.98 — and on the
+   --navy-2 cards 5.08 / 3.87 / 10.35 / 5.93. The canonical bluish green #009e73 (4.71 on navy) and vermillion #d55e00
+   (4.17 — the GOOD! / WIDE banners) sit under that bar, so each is used one tint up; hue and separation are unchanged. */
+body.cb, html.cb { --red: #e26100; --mint: #00b386; --gold: #f0e442; --sky: #56b4e9; }
+/* --red is light enough that only ink reads on it: the same override the high-contrast block makes below. */
+body.cb .chip-red, body.cb .banner-bad, body.cb .btn-danger, body.cb .toast-bad { color: var(--ink); }
+
+/* High contrast: black ground, white text, and a small set of maximally separated accents. --gold (yellow, lum .93),
+   --mint (green, .72), --sky (light blue, .53) and --red (.30) all clear 4.5:1 on black AND differ in luminance, so
+   they stay apart in greyscale too — the power bar's target and overswing zones must never blend into one block. */
 body.hc, html.hc {
   --navy: #000; --navy-2: #000; --cream: #fff; --ink: #000; --grass: #000; --grass-2: #111; --chalk: #fff;
-  --gold: #ff0; --red: #fff; --sky: #ff0; --mint: #fff; --grey: #ccc; --dusk: #000; --dusk-2: #000; --sunset: #fff;
+  --gold: #ff0; --red: #ff5c5c; --sky: #66ccff; --mint: #0f0; --grey: #ccc; --dusk: #000; --dusk-2: #000; --sunset: #fff;
   --night: #000; --shadow: #fff; --team-1: #ff0; --team-2: #fff; --team-ink: #000;
 }
 body.hc .card, body.hc .btn, body.hc .chip, body.hc .modal, body.hc .topbar, body.hc .tabbar { border-color: #fff; }
-/* high contrast paints --red / --mint / --chalk all white: anything on those backgrounds must read in ink */
+/* every high-contrast accent is a light colour: anything painted ON one of them must read in ink */
 body.hc .chip-red, body.hc .chip-mint, body.hc .chip-sky, body.hc .chip-gold, body.hc .banner-bad, body.hc .banner-good, body.hc .btn-danger, body.hc .btn-primary, body.hc .toast-bad, body.hc .toast-good, body.hc .toast-gold { color: var(--ink); }
 
 /* ---------- base ---------- */
@@ -545,6 +555,40 @@ body.reduced-motion .ticker-inner { animation: none; }
 .fallback-screen details > summary::before { content: "▸ "; color: var(--grey); }
 .fallback-screen details[open] > summary::before { content: "▾ "; }
 
+/* ----------------------------------------------------------------------------
+   Touch targets (SPEC §4.3: 44-px minimum). On a coarse pointer with room to
+   grow (portrait phones and tablets) the compact controls — small buttons,
+   pills, switches, swatches, tabs, chip buttons — are raised to --touch.
+   Landscape phones (< 500 px tall) keep the compact sizes: the HUD there is
+   height-starved and already scaled down for the short viewport.
+   `button.pill` / `… button.chip` carry an extra element or class on purpose:
+   they must outrank the plain `.pill` / `.scr-hub .hub-chips .chip` rules that
+   kick.css and screens.css declare after this file.
+   ---------------------------------------------------------------------------- */
+@media (pointer: coarse) and (min-height: 500px) {
+  .btn-sm { min-height: var(--touch); min-width: var(--touch); }
+  .btn.pill, button.pill, .pills > .pill { min-height: var(--touch); min-width: var(--touch); }
+  .tab { min-height: var(--touch); }
+  .modal-x { min-height: var(--touch); min-width: var(--touch); }
+  .topbar-stat { min-height: var(--touch); min-width: var(--touch); }
+  .swatch { width: var(--touch); height: var(--touch); }
+  .switch { height: var(--touch); }
+  .switch::after, .switch[aria-checked="true"]::after { top: 50%; margin-top: -10px; }
+  .scr-hub .hub-chips button.chip, button.hub-xp { min-height: var(--touch); }
+  .scr-training button.attr-plus { min-height: var(--touch); }
+  .picker-row > .btn { min-width: var(--touch); }
+  /* the offer/legacy carousel dots stay 14 px to the eye, but the button around them becomes a real 44 × 44 tap
+     target: the button goes transparent and a centred ::after paints the dot */
+  .carousel-dots { gap: 0; }
+  button.carousel-dot, button.carousel-dot.active { width: var(--touch); height: var(--touch); min-height: var(--touch); border: 0; background: none; position: relative; }
+  button.carousel-dot::after {
+    content: ''; position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px;
+    box-sizing: border-box; border: var(--border) solid var(--grey); background: var(--navy);
+  }
+  button.carousel-dot.active::after { background: var(--gold); border-color: var(--ink); }
+  .dbg-grid .btn { min-height: 28px; min-width: 0; }   /* the debug panel is a dev tool, not a touch surface */
+}
+
 /* ---------- responsive visibility (kept last so it wins over the component rules) ---------- */
 @media (max-width: 899px) { .rail { display: none; } }
 @media (min-width: 900px) { .tabbar { display: none; } }
@@ -579,10 +623,20 @@ html { overflow-x: hidden; }   /* on html only: it propagates to the viewport, s
 .screen-kick .kick-continue { flex: 0 0 auto; padding: 4px 8px 8px; display: flex; justify-content: center; }
 .screen-kick .kick-ko { flex: 0 0 auto; padding: 6px; }
 
-/* toasts on the kick-scene screens sit in the sky band, never on the ball, the power bar or the feedback line
-   (not on the combine: its plan card is a DOM card whose options live where the sky would be) */
+/* Toasts on the kick-scene screens sit in the open field band between the crossbar and the tee — never on the
+   uprights, the ball, the power bar or the feedback line. (The old 22 % landed on the posts: the uprights reach
+   into the sky band, so "the sky" is not free space.) Not on the combine: its plan card is a DOM card whose
+   options live where the sky would be. */
 #app.chromeless[data-screen="kick"] ~ .toast-host, #app.chromeless[data-screen="showcase"] ~ .toast-host,
-#app.chromeless[data-screen="campbattle"] ~ .toast-host { top: 22%; bottom: auto; }
+#app.chromeless[data-screen="campbattle"] ~ .toast-host { top: 40%; bottom: auto; }
+@media (min-width: 900px) {   /* desktop centres a taller scene: the crossbar sits lower */
+  #app.chromeless[data-screen="kick"] ~ .toast-host, #app.chromeless[data-screen="showcase"] ~ .toast-host,
+  #app.chromeless[data-screen="campbattle"] ~ .toast-host { top: 43%; }
+}
+@media (orientation: landscape) and (max-height: 520px) {   /* short scene: above the result banner */
+  #app.chromeless[data-screen="kick"] ~ .toast-host, #app.chromeless[data-screen="showcase"] ~ .toast-host,
+  #app.chromeless[data-screen="campbattle"] ~ .toast-host { top: 24%; }
+}
 
 /* ───────────────────────────── the kick view ───────────────────────────── */
 .kickview { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; width: 100%; position: relative; }
@@ -597,7 +651,12 @@ html.is-desktop .kv-stage { align-items: center; }
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
   outline: none; box-shadow: 0 0 0 2px var(--navy2, #262b4d);
 }
-.kv-stage canvas.rtg-canvas:focus-visible { box-shadow: 0 0 0 2px var(--sky, #7fc7ff); }
+/* the same 3-px --sky ring every other control uses (SPEC §4.8), not a thinner shadow */
+.kv-stage canvas.rtg-canvas:focus-visible { outline: 3px solid var(--sky, #7fc7ff); outline-offset: 0; box-shadow: 0 0 0 2px var(--navy2, #262b4d); }
+/* high contrast paints --sky the same yellow as the sky band: hold the ring off the canvas with an ink halo */
+body.hc .kv-stage canvas.rtg-canvas:focus-visible, html.hc .kv-stage canvas.rtg-canvas:focus-visible {
+  outline-offset: 2px; box-shadow: 0 0 0 2px var(--ink, #000);
+}
 .kv-overlay { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
 
 /* HUD strip (DOM text, §4.5 kick row) */
@@ -631,7 +690,13 @@ html.is-desktop .kv-stage { align-items: center; }
 .kv-banner-good { border-color: var(--mint, #4dbb63); color: var(--mint, #4dbb63); }
 .kv-banner-bad { border-color: var(--red, #d8433a); color: var(--red, #d8433a); }
 .kv-banner-doink { border-color: var(--gold, #f6c445); color: var(--gold, #f6c445); background: var(--dusk, #5b3a6e); }
-.kv-banner-blocked { border-color: var(--red, #d8433a); color: #fff; background: var(--red, #d8433a); }
+/* FILLED banners state their text colour in ink rather than trusting token-vs-token contrast (style.css does the
+   same for the DOM banners). Ink on every red token — default #d8433a 4.21:1, cb #e26100 5.23:1, hc #ff5c5c
+   6.94:1 — clears AA; a banner that trusted `color:#fff` on `background: var(--red)` was white-on-white in hc. */
+.kv-banner-blocked { border-color: var(--red, #d8433a); color: var(--ink, #101226); background: var(--red, #d8433a); }
+body.hc .kv-banner, html.hc .kv-banner { background: var(--navy, #000); }
+body.hc .kv-banner-doink, html.hc .kv-banner-doink { background: var(--dusk, #000); }
+body.hc .kv-banner-blocked, html.hc .kv-banner-blocked { background: var(--red, #fff); color: var(--ink, #000); }
 .kv-sub {
   position: absolute; top: 8%; left: 50%; transform: translateX(-50%); padding: 6px 10px; border: 2px solid var(--cream, #f4e9d0);
   background: var(--ink, #101226); color: var(--cream, #f4e9d0); font-size: 11px; letter-spacing: 1px; white-space: nowrap; z-index: 2;
@@ -658,24 +723,36 @@ html.is-desktop .kv-stage { align-items: center; }
 .reduced-motion .kv-banner, .reduced-motion .kv-sub, .reduced-motion .kv-heart, .reduced-motion .kv-iced { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { .kv-banner, .kv-sub, .kv-heart, .kv-iced { animation: none !important; } }
 
-/* landscape phones: HUD becomes a side column so the canvas gets the full height */
+/* landscape phones: the HUD becomes a side column and the scene keeps a pull band under it */
 @media (orientation: landscape) and (max-height: 520px) {
-  .kickview { flex-direction: row; }
-  .kv-hud { flex: 0 0 96px; flex-direction: column; align-items: flex-start; justify-content: flex-start; order: 0; padding: 6px; overflow: hidden; }
+  .kickview { flex-direction: row; background: var(--night, #12142a); }
+  /* wide enough for 'WIND ← 12 → 1.8 yd' and 'Showcase 1/6', and the chips wrap instead of being cut off */
+  .kv-hud { flex: 0 0 112px; flex-direction: column; align-items: flex-start; justify-content: flex-start; order: 0; padding: 6px; overflow-x: hidden; overflow-y: auto; }
   .kv-strip { flex-direction: column; align-items: flex-start; }
+  .kv-hud .kv-chip, .kv-hud .chip { white-space: normal; max-width: 100%; overflow-wrap: break-word; word-break: break-word; }
   .kv-hud-right { flex-direction: column; align-items: flex-start; margin-top: 6px; }
-  .kv-stage { order: 1; }
+  /* §4.6: the flick needs 1.15 × D_full of screen BELOW the tee, and the tee sits at 78 % of the scene. A canvas
+     stretched to the full 390-px height put the ball 90 px off the bottom edge, so the room-below cap collapsed
+     D_full to ~68 px (overswing on the home-indicator strip). Capping the stage leaves that band free: at 844×390
+     the scene is 1.5× with ~155 px under the ball, i.e. the full 0.45 × canvasHeight draw. */
+  .kv-stage { order: 1; max-height: 74%; }
   .kv-banner { top: 50%; font-size: 12px; padding: 6px 10px; border-width: 2px; }
   .kv-sub { top: 4%; font-size: 9px; padding: 4px 8px; }
-  .kv-feedback, .kv-range-panel { position: absolute; right: 0; bottom: 0; width: 34%; max-height: 40%; overflow: auto; border-left: 2px solid var(--ink, #101226); z-index: 4; }
+  .kv-feedback, .kv-range-panel { position: absolute; right: 0; bottom: 0; width: 34%; max-height: 24%; overflow: auto; border-left: 2px solid var(--ink, #101226); z-index: 4; }
   .screen-kick .kick-score { position: absolute; left: 4px; bottom: 4px; width: 142px; z-index: 4; padding: 0; }
   .screen-kick .kick-score .led { width: 100%; padding: 3px 4px; gap: 4px; }
   .screen-kick .kick-score .led-score { font-size: 11px; min-width: 16px; }
   .screen-kick .kick-score .led-clock { font-size: 8px; }
   .screen-kick .kick-score .crest { width: 12px; height: 12px; }
   .screen-kick .kick-continue { position: absolute; right: 6px; top: 40px; z-index: 5; padding: 0; }
-  .screen-session .session-header { position: absolute; top: 0; right: 0; z-index: 4; max-width: 52%; background: rgba(27,31,58,0.92); border: 2px solid var(--navy2, #262b4d); border-top: 0; border-right: 0; }
-  .screen-session .session-ko { position: absolute; left: 100px; right: 0; bottom: 0; z-index: 4; }
+  /* the uprights reach the top 8 % of the scene, so a header floated over the canvas always covered the right
+     post's tip: park it in the band the shortened stage frees up, beside the result panel */
+  .screen-session .session-header {
+    position: absolute; left: 112px; right: 35%; bottom: 0; top: auto; z-index: 3; max-height: 26%; overflow: hidden;
+    padding: 2px 6px; font-size: max(8px, 0.8em); background: rgba(27,31,58,0.92);
+    border: 2px solid var(--navy2, #262b4d); border-bottom: 0; border-right: 0;
+  }
+  .screen-session .session-ko { position: absolute; left: 112px; right: 0; bottom: 0; z-index: 4; }
 }
 
 /* ───────────────────────────── kickoff timing bar ───────────────────────────── */
@@ -779,7 +856,10 @@ html.is-desktop .kv-stage { align-items: center; }
 .picker { display: flex; flex-direction: column; gap: 4px; font-size: 9px; color: var(--grey, #8a8f9e); }
 .picker-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
 .picker-val { color: var(--gold, #f6c445); font-size: 10px; min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
-.practice-stage { position: relative; min-height: 340px; height: 56vh; display: flex; flex-direction: column; border: 2px solid var(--ink, #101226); }
+/* the scene needs a portrait box tall enough to clear Canvas.MIN_FRACTIONAL (1.35 × 320 = 432 px of .kv-stage):
+   at 56vh a 390-px phone fell to 1× (a 192-px scene in a 370-px stage) and a 664-px phone flipped the scene to
+   the landscape 320×192 pair because the stage came out wider than tall */
+.practice-stage { position: relative; min-height: 400px; height: 60vh; display: flex; flex-direction: column; border: 2px solid var(--ink, #101226); }
 .practice-stage .kickview { height: 100%; }
 .practice-stats { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 9px; }
 .heatmap { position: relative; width: 100%; max-width: 320px; height: 120px; background: var(--grass, #3a8c3f); border: 2px solid var(--chalk, #f2f2e6); overflow: hidden; margin: 0 auto; }
@@ -789,6 +869,19 @@ html.is-desktop .kv-stage { align-items: center; }
 .heatmap .hm-dot.miss { background: var(--red, #d8433a); }
 .heatmap .hm-dot.last { outline: 2px solid var(--gold, #f6c445); }
 .heatmap .hm-label { position: absolute; font-size: 7px; color: var(--chalk, #f2f2e6); }
+
+@media (max-width: 480px) and (orientation: portrait) {
+  /* the scene is the screen here: sized so the canvas fills ≥ 80 % of the phone width at 844 AND at 664 css px
+     (below ~650 px tall the min-height binds and the practice screen scrolls, which it already did).
+     The min-height carries the 52-px HUD row above the scene: RANGE? is a 44-px touch target (style.css
+     coarse-pointer block), so a 560-px stage left only 504 px of .kv-stage = a 1.57× scene (77 % of the phone).
+     600 px keeps the fit at 1.70× / 84 % on every phone from 568 px tall up; at 844 the 86vh box is taller
+     still and the scene is width-bound at 1.92× / 95 %. */
+  .practice-stage { height: 86vh; min-height: 600px; }
+}
+@media (max-height: 520px) {   /* short (landscape) viewport: keep the pre-existing box, it is already scrolled */
+  .practice-stage { height: 56vh; min-height: 340px; }
+}
 
 @media (max-width: 380px) {
   .kv-banner { font-size: 13px; padding: 8px 10px; }
@@ -862,6 +955,7 @@ html.is-desktop .kv-stage { align-items: center; }
 .scr-hub .hub-banner { margin-bottom: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; text-align: center; }
 .scr-hub .hub-form { margin: -4px 0 8px; text-align: center; }
 .scr-hub .hub-opp { align-items: flex-start; }
+.scr-hub .hub-ingame { display: flex; align-items: center; justify-content: center; gap: 6px; text-align: center; }
 .scr-hub .hub-forecast { margin-top: 8px; gap: 6px 10px; }
 .scr-hub .hub-ratings { margin-top: 6px; }
 .scr-hub .hub-rating { gap: 10px; }
@@ -1005,8 +1099,10 @@ html.is-desktop .kv-stage { align-items: center; }
 .scr-awards .env-desc { color: var(--grey); line-height: 1.5; }
 
 /* ---------- offseason (stepper, blocks, projection) ---------- */
+/* The strip wraps instead of scrolling off the right edge: on a 390-px phone the seven college steps are 624 px
+   wide, and a scroller with no border / fade / scrollbar simply looked cut in half (QA2-18). */
 .scr-offseason .stepper-scroll { border: 0; margin-bottom: 12px; }
-.scr-offseason .stepper { display: flex; gap: 0; min-width: max-content; padding: 4px 0; counter-reset: step; }
+.scr-offseason .stepper { display: flex; flex-wrap: wrap; gap: 6px 0; min-width: 0; padding: 4px 0; counter-reset: step; }
 .scr-offseason .step { display: flex; align-items: center; gap: 6px; padding: 0 10px 0 0; color: var(--grey); font-size: 0.75em; white-space: nowrap; }
 .scr-offseason .step::after { content: ""; display: inline-block; width: 14px; height: 2px; background: var(--ink); margin-left: 6px; }
 .scr-offseason .step:last-child::after { display: none; }
@@ -1014,6 +1110,10 @@ html.is-desktop .kv-stage { align-items: center; }
 .scr-offseason .step.done .step-dot { background: var(--mint); color: var(--ink); border-color: var(--ink); }
 .scr-offseason .step.current { color: var(--gold); }
 .scr-offseason .step.current .step-dot { background: var(--gold); color: var(--ink); border-color: var(--ink); }
+/* a step the chain ran without asking anything: skipped, not done (dashed hollow dot, struck-through name — no
+   opacity trick, so the text keeps its contrast) */
+.scr-offseason .step.skipped .step-dot { background: transparent; border-style: dashed; color: var(--grey); }
+.scr-offseason .step.skipped .step-name { text-decoration: line-through; }
 .scr-offseason .opt { flex: 1 1 45%; min-width: 0; }
 .scr-offseason .opt-detail { line-height: 1.5; }
 .scr-offseason .blocks-grid { gap: 8px; }
@@ -1080,10 +1180,11 @@ html.is-desktop .kv-stage { align-items: center; }
 .scr-legacy .hof-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--gold); }
 .scr-legacy .hof-tick { position: absolute; top: -6px; bottom: -6px; width: 3px; background: var(--cream); }
 .scr-legacy .hof-tick.passed { background: var(--mint); }
+/* every label is centred under its own tick — the old last-of-type translateX(-80%) pushed "1ST BALLOT" left onto
+   the INDUCTED tick (QA2-16); the alternating low row is what keeps neighbouring labels from colliding */
 .scr-legacy .hof-tick-label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 6px; font-size: 0.6em; color: var(--grey); white-space: nowrap; }
 .scr-legacy .hof-tick-low .hof-tick-label { margin-top: 20px; }
 .scr-legacy .hof-tick-low { bottom: -20px; }
-.scr-legacy .hof-tick:last-of-type .hof-tick-label { transform: translateX(-80%); }
 .scr-legacy .legacy-verdict { color: var(--gold); line-height: 1.6; }
 .scr-legacy .doc-card { text-align: center; }
 .scr-legacy .doc-title { font-size: 1.1em; color: var(--cream); line-height: 1.6; margin-top: 4px; }
@@ -1304,7 +1405,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
           },
           minTimeSec: 30, pMin: 0.02, edgeDiv: 100, homeAdv: 3,
           stallYtg: { NFL: { mean: 25, sd: 12 }, COLLEGE: { mean: 23, sd: 12 }, min: 1, max: 50 },
-          puntStart: { mean: 30, sd: 10, min: 5, max: 60 },                            // opponent own-yard after a punt
+          puntStart: { mean: 30, sd: 10, min: 5, max: 50 },                            // receiving team's OWN yard after a punt: never past midfield (max 50), so the drive log never prints "own 51+"
           turnoverYtg: { mean: 45, sd: 20 },
           downsYtg: { mean: 40, sd: 15 },                                              // E2 (sim.js): spot of a failed 4th down (yards-to-goal of the offence)
           ratingNoiseSd: 3, perGameNoiseDraws: 4
@@ -1708,6 +1809,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
                    st: { mean: 70, sd: 5 }, coachAgg: [0.3, 0.8] },
         aiKicker: {
           age: [22, 36], ovrSd: 7, attrSd: 4, attrMin: 30, attrMax: 99,
+          college: { age: [18, 22], rookieAge: 18, leaveAge: 23 },   // college legs are students: freshmen at 18, eligibility over at 23 (replaced by a freshman)
           collegeAnchorBase: 52, collegeAnchorPerPrestige: 4, nflAnchor: 74,
           contractYears: [1, 4], declineFrom: 34, retireAge: 38, retireProb: 0.5, retireOvrBelow: 55,
           rookie: { mean: 60, sd: 5, age: 22 }
@@ -2765,10 +2867,12 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
    * Generate an AI kicker (§2.5.1). Draws: name (Names.player 3–4), age 1, ovr 2, attrs 5×2, contract 1.
    * @param {RNG} rng @param {number} anchor ovr anchor (college 52 + 4·prestige, NFL 74) @returns {AIKicker}
    */
-  Schema.createAiKicker = function (rng, anchor) {
+  Schema.createAiKicker = function (rng, anchor, kind) {
     var K = Tuning.league.aiKicker;
     var nm = names().player(rng);
-    var age = rng.int(K.age[0], K.age[1]);
+    // college legs are students (Tuning.league.aiKicker.college.age, 18–22); the pro range is 22–36 (§2.5.1)
+    var range = kind === 'COLLEGE' && K.college ? K.college.age : K.age;
+    var age = rng.int(range[0], range[1]);
     var ovr = Util.clamp(Math.round(rng.gauss(anchor, K.ovrSd)), K.attrMin, K.attrMax);
     var attrs = {};
     for (var i = 0; i < ATTRS.length; i++) {
@@ -2836,7 +2940,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     team.surface = surfaceFor(team, rng);
     var K = L.aiKicker;
     var anchor = isCollege ? K.collegeAnchorBase + K.collegeAnchorPerPrestige * team.prestige : K.nflAnchor;
-    team.kicker = Schema.createAiKicker(rng, anchor);
+    team.kicker = Schema.createAiKicker(rng, anchor, league);
     team.ST = Math.round(L.stBlend * team.ST + (1 - L.stBlend) * team.kicker.ovr);
     team.coach = names().coach(rng);
     return team;
@@ -3092,6 +3196,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       week: opts.week || 1,
       kind: ENUM.gameKinds.indexOf(opts.kind) >= 0 ? opts.kind : 'REG',
       homeId: opts.homeId, awayId: opts.awayId,
+      homeAbbr: opts.homeAbbr || null, awayAbbr: opts.awayAbbr || null,   // display names for the drive log (ids are internal)
       userSide: opts.userSide === 'home' || opts.userSide === 'away' ? opts.userSide : null,
       score: { home: 0, away: 0 },
       q: 1, clock: C.quarterSec, half: 1,
@@ -5080,7 +5185,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
  *           weather, dist, made, iced, playoff, rivalry, snow, rookie, walkon}
  * RTG.Data.messages  : {[kind]: [{id, from, avatar?, text}]}   (≥ 60 templates)
  *   kinds: coach_form_sharp coach_form_watch coach_js_high coach_js_low coach_hot_seat coach_bench coach_unbench
- *          coach_win coach_loss coach_pregame coach_camp coach_rest
+ *          coach_win coach_loss coach_pregame coach_welcome coach_camp coach_rest
  *          agent_final_year agent_extension agent_fa agent_tag agent_rookie agent_market agent_cut
  *          gm_welcome gm_cut_warning gm_trade gm_release
  *          press_request press_slump press_hot press_draft
@@ -5283,6 +5388,14 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     h('ct8', 'contract', 'VET MINIMUM: {last} signs for scraps to keep kicking; "scraps kick too", he says', { cond: function (c) { return !!c.min; } }),
     h('ct9', 'contract', '{last} inks {years}-year deal; fine print includes "no more billboard shoots"'),
 
+    // ── commit (6) — college commitments (COMMIT / WALKON): no money, no years; {team} is the school
+    h('cm1', 'commit', 'COMMITTED: {last} picks {team}; {city} "gains a leg, keeps its expectations low"'),
+    h('cm2', 'commit', '{last} signs with {team}; {coach} "excited to have a kicker who kicks"'),
+    h('cm3', 'commit', 'Walk-on {last} joins {team}; no scholarship, "just a bag and a leg"', { cond: function (c) { return !!c.walkon; } }),
+    h('cm4', 'commit', 'SIGNED: {last} commits to {team} after the showcase; scholarship "mostly for the leg"', { cond: function (c) { return !c.walkon; } }),
+    h('cm5', 'commit', '{team} land kicker {last}; recruiting site rates the pickup "fine"'),
+    h('cm6', 'commit', 'Recruit {last} is heading to {city}; the punter "already nervous"'),
+
     // ── draft (9)
     // the round / pick lines need a real draft result (c.round ≥ 1): the declare, combine and undrafted steps also
     // draw from this tag and would otherwise announce "round ?, pick 120" with the college as {team}
@@ -5381,7 +5494,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     h('ms5', 'milestone', '{n} straight makes for {last}; the streak has its own social media account'),
     h('ms6', 'milestone', 'Ten game-winners: {last} is now legally "clutch", per a court in {city}', { cond: function (c) { return c.milestone === 'gw10'; } }),
 
-    // ── transfer / trade / bench / retire (14)
+    // ── transfer / trade / bench / retire (17)
     h('tr1', 'transfer', 'PORTAL: {last} transfers to {team}; old school "wishes him well", sarcastically'),
     h('tr2', 'transfer', '{last} lands at {team} after portal stint; new {coach} "excited", old coach "relieved"'),
     h('tr3', 'transfer', 'Fresh start: {last} arrives in {city} with a duffel bag and a 46-yard range'),
@@ -5389,10 +5502,15 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     h('td2', 'trade', '{team} acquire kicker {last} for a late pick and "considerations"'),
     h('td3', 'trade', 'Trade request denied: {last} staying put, "for now", says everybody'),
     h('td4', 'trade', 'A sixth-rounder for a leg: {last} joins contender {team}'),
-    h('be1', 'bench', 'BENCHED: {last} loses kicking job to the backup; "healthy competition", per {coach}'),
+    // "loses the job" copy only fits a player who HELD it (c.wasK1) outside a camp battle; a K2 who never had the
+    // job (camp loss / VET room) gets the be5 / be6 lines, which name the kicker who is actually ahead of him.
+    h('be1', 'bench', 'BENCHED: {last} loses kicking job to the backup; "healthy competition", per {coach}', { cond: function (c) { return !c.camp && c.wasK1 !== false; } }),
     h('be2', 'bench', '{last} back to K1 after backup "made him look good by comparison"', { cond: function (c) { return !!c.restored; } }),
     h('be3', 'bench', 'CAMP BATTLE: {last} vs the other guy, six kicks, winner starts, loser sulks', { cond: function (c) { return !!c.camp; } }),
     h('be4', 'bench', '{last} WINS THE JOB: camp battle goes to the veteran, backup "already packing"', { cond: function (c) { return !!c.won; } }),
+    h('be5', 'bench', 'JOB LOST: {rival} takes the {team} kicking job from {last}; {coach} calls it "the best six kicks I saw, from one of them"', { cond: function (c) { return !!c.camp && !c.won && c.wasK1 !== false; } }),
+    h('be6', 'bench', 'STILL K2: {rival} keeps the {team} job, {last} keeps the clipboard; "healthy competition", per {coach}', { cond: function (c) { return !c.won && c.wasK1 === false; } }),
+    h('be7', 'bench', 'DEPTH CHART: {team} name {rival} the kicker; {last} "available", says nobody', { cond: function (c) { return !c.won && c.wasK1 === false; } }),
     h('re1', 'retire', 'RETIRED: {last} hangs up the boot after {n} seasons; the boot "relieved"'),
     h('re2', 'retire', 'FAREWELL: {last} kicks his last as {team} say goodbye to a {n}-year leg'),
     h('re3', 'retire', 'Hall call: {last} elected to the Hall of Fame; punters "still waiting"', { cond: function (c) { return !!c.hof; } }),
@@ -5445,10 +5563,18 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       m('coach_loss', 'cl2', 'coach', "We'll look at the tape. Be at the facility early."),
       m('coach_loss', 'cl3', 'coach', "Losses happen. Misses at the end of losses get remembered. Just so you know.")
     ],
+    // NOT WIRED to the engine: the PRE note is `coach_welcome` (QA1-04 — this pool was fired there with no {opp}
+    // in scope and rendered "a factor at the opponent"). Any future caller MUST pass the real week-1 opponent,
+    // i.e. call it from Season.beginRegular where the schedule row exists, never from Career's PRE handoff.
     coach_pregame: [
       m('coach_pregame', 'cp1', 'coach', "{opp} this week. Their rush unit is fast. Get it up quick."),
       m('coach_pregame', 'cp2', 'coach', "Wind's supposed to be a factor at {opp}. We'll adjust the range. Don't be a hero."),
       m('coach_pregame', 'cp3', 'coach', "Big game. Same swing. If I call for a long one, it's because I believe. Don't make me a liar.")
+    ],
+    coach_welcome: [
+      m('coach_welcome', 'cwl1', 'coach', "Welcome to {team}. Kickers kick. Don't talk to the punter about feelings."),
+      m('coach_welcome', 'cwl2', 'coach', "Glad you picked us. Camp opens Monday. Bring the leg, leave the highlight reel."),
+      m('coach_welcome', 'cwl3', 'coach', "You're a {team} kicker now. The job is simple: make the ones I call. I call a lot.")
     ],
     coach_camp: [
       m('coach_camp', 'cc1', 'coach', "Six kicks Thursday. You and the other guy. Best leg starts. Simple."),
@@ -5478,7 +5604,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       m('agent_tag', 'at2', 'agent', "Franchise tag. It's a compliment wrapped in a handcuff. We'll talk options.")
     ],
     agent_rookie: [
-      m('agent_rookie', 'ar1', 'agent', "Rookie deal is signed. Four years. Now go be worth more than it."),
+      m('agent_rookie', 'ar1', 'agent', "Rookie deal is signed. {years} years. Now go be worth more than it."),
       m('agent_rookie', 'ar2', 'agent', "Welcome to the league. Your contract is small. Your leg is not. Prove it.")
     ],
     agent_market: [
@@ -6405,7 +6531,8 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     if (p.js < J.cutBelow) p.flags.jsLowWeeks = (p.flags.jsLowWeeks || 0) + 1;
     else delete p.flags.jsLowWeeks;
     var lowWeeks = p.flags.jsLowWeeks || 0;
-    return { js: p.js, benched: benched || p.role === 'K2' && !!p.flags.benched, cutWarning: lowWeeks >= J.cutWeeks, delta: Util.round1(p.js - before), lowWeeks: lowWeeks };
+    // benched: on the bench right now (sticky); justBenched: lost the K1 job in THIS update (the only "news")
+    return { js: p.js, benched: benched || p.role === 'K2' && !!p.flags.benched, justBenched: benched, cutWarning: lowWeeks >= J.cutWeeks, delta: Util.round1(p.js - before), lowWeeks: lowWeeks };
   };
 
   // ───────────────────────────── per-kick meters ─────────────────────────────
@@ -9745,8 +9872,10 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
   }
 
   function deficit(gs, side) { return gs.score[other(side)] - gs.score[side]; }
-  function scoreText(gs) { return gs.homeId + ' ' + gs.score.home + ' - ' + gs.awayId + ' ' + gs.score.away; }
+  function scoreText(gs) { return nameOf(gs, 'home') + ' ' + gs.score.home + ' - ' + nameOf(gs, 'away') + ' ' + gs.score.away; }
   function spotText(ytg) { return ytg > FIELD_YARDS / 2 ? 'own ' + (FIELD_YARDS - ytg) : 'the ' + ytg; }
+  /** Display name of a side for the drive log: the team abbreviation (gs.homeAbbr / awayAbbr), never the internal id. */
+  function nameOf(gs, side) { return gs[side + 'Abbr'] || gs[side + 'Id']; }
   function sideOfCtx(gs, ctx) { return ctx && ctx.game && ctx.game.teamId === gs.awayId ? 'away' : 'home'; }
 
   // ═══════════════════════════════ clock ═══════════════════════════════
@@ -9853,7 +9982,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     if (gs.league === 'COLLEGE') {
       gs.ot = { period: 1, mode: 'COLLEGE', firstPossession: first, bothPossessed: false, possessions: 0 };
       gs.clock = 0; gs.pendingKickoff = null;
-      pushLog(gs, first, 'Overtime - ' + gs[first + 'Id'] + ' starts from the ' + O.college.ytg, O.college.ytg, 'OT_START');
+      pushLog(gs, first, 'Overtime - ' + nameOf(gs, first) + ' starts from the ' + O.college.ytg, O.college.ytg, 'OT_START');
       newPossession(gs, first, O.college.ytg);
       return ev(gs, 'OT_START', 'Overtime: alternating possessions from the ' + O.college.ytg, { side: first });
     }
@@ -9862,7 +9991,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     gs.timeouts = { home: O.nfl.timeouts, away: O.nfl.timeouts };
     gs.possession = first; gs.ball = null;
     gs.pendingKickoff = { side: other(first) };
-    pushLog(gs, first, 'Overtime - ' + gs[first + 'Id'] + ' wins the toss and receives', 0, 'OT_START');
+    pushLog(gs, first, 'Overtime - ' + nameOf(gs, first) + ' wins the toss and receives', 0, 'OT_START');
     return ev(gs, 'OT_START', 'Overtime: ' + scoreText(gs), { side: first });
   }
 
@@ -10025,7 +10154,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
         gs.timeouts[opp] = gs.timeouts[opp] - 1;
         gs.iced = true;
         ctx = icedCtx(gs, state, rng, side, ctx);
-        pushLog(gs, opp, 'Timeout ' + gs[opp + 'Id'] + ' - icing the kicker', ctx.distance - KT().distance.losToKick, 'ICE');
+        pushLog(gs, opp, 'Timeout ' + nameOf(gs, opp) + ' - icing the kicker', ctx.distance - KT().distance.losToKick, 'ICE');
       }
     }
     if (ctx.isUser) {
@@ -10033,7 +10162,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       var text = opts.text || kickLabel(ctx) + ' attempt';
       if (gs.iced) {
         gs.announce = { type: 'USER_KICK', text: text, side: side };
-        return ev(gs, 'ICE_TIMEOUT', 'ICED! ' + gs[opp + 'Id'] + ' calls timeout before the ' + kickLabel(ctx), { side: side, ctx: ctx });
+        return ev(gs, 'ICE_TIMEOUT', 'ICED! ' + nameOf(gs, opp) + ' calls timeout before the ' + kickLabel(ctx), { side: side, ctx: ctx });
       }
       return ev(gs, 'USER_KICK', text, { side: side, ctx: ctx });
     }
@@ -10238,13 +10367,13 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     if (!gs.ball) newPossession(gs, side, P.defaultStartYtg);
     if (timeLeftInHalf(gs) <= P.minPossessionSec) {
       var d = deficit(gs, side);
-      if (inFirstHalf(gs)) return runOutClock(gs, rng, side, gs[side + 'Id'] + ' runs out the half', 'KNEEL');
+      if (inFirstHalf(gs)) return runOutClock(gs, rng, side, nameOf(gs, side) + ' runs out the half', 'KNEEL');
       if (gs.ot || d > S().script.maxDeficit) return runOutClock(gs, rng, side, 'Hail Mary falls incomplete - time expires', 'HEAVE');
       if (d < 0) return runOutClock(gs, rng, side, 'Victory formation', 'KNEEL');
       // Q4, tied or trailing by ≤ 3: the two-minute drill plays out the final seconds
     }
     if (shouldStartScript(gs, side)) return initScript(gs, rng, side);
-    if (shouldKneel(gs, rng, side)) return runOutClock(gs, rng, side, 'Victory formation - ' + gs[side + 'Id'] + ' kneels it out', 'KNEEL');
+    if (shouldKneel(gs, rng, side)) return runOutClock(gs, rng, side, 'Victory formation - ' + nameOf(gs, side) + ' kneels it out', 'KNEEL');
     var outcome = rollOutcome(gs, rng, side);                                                    // draw 1
     var dt = driveTime(gs, rng, side, outcome);                                                  // draws 2, 3
     var straddled = advanceClock(gs, dt);
@@ -10257,13 +10386,13 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var D = S().drive, opp = other(side), spot, own, text;
     switch (outcome) {
       case 'TD':
-        return scoreTouchdown(gs, state, rng, side, 'Touchdown drive by ' + gs[side + 'Id']);
+        return scoreTouchdown(gs, state, rng, side, 'Touchdown drive by ' + nameOf(gs, side));
       case 'STALL':
         return handleStall(gs, state, rng, side);
       case 'PUNT':
         own = clamp(Math.round(rng.gauss(D.puntStart.mean, D.puntStart.sd)), D.puntStart.min, D.puntStart.max);   // draws 4, 5
         gs.stats[side].punts++;
-        text = 'Punt - ' + gs[opp + 'Id'] + ' takes over at own ' + own;
+        text = 'Punt - ' + nameOf(gs, opp) + ' takes over at ' + spotText(FIELD_YARDS - own);
         pushLog(gs, side, text, FIELD_YARDS - own, 'PUNT');
         return flipPossession(gs, state, rng, opp, FIELD_YARDS - own, ev(gs, 'DRIVE', text, { side: side, result: 'PUNT' }));
       case 'TO':
@@ -10339,7 +10468,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     }
     var own = clamp(Math.round(FIELD_YARDS - ytg - rng.gauss(C.puntNet.mean, C.puntNet.sd)), C.puntCapOwn, D.puntStart.max);   // draws: punt
     gs.stats[side].punts++;
-    var puntText = stallText + ' - punt, ' + gs[opp + 'Id'] + ' at own ' + own;
+    var puntText = stallText + ' - punt, ' + nameOf(gs, opp) + ' at ' + spotText(FIELD_YARDS - own);
     pushLog(gs, side, puntText, ytg, 'PUNT');
     return flipPossession(gs, state, rng, opp, FIELD_YARDS - own, ev(gs, 'DRIVE', puntText, { side: side, result: 'PUNT' }));
   }
@@ -10352,7 +10481,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       : clamp(Math.round(rng.gauss(T.ytg.mean, T.ytg.sd)), 1, FIELD_YARDS - 1);                    // draws (only without a known spot)
     gs.script = { ytg: ytg, down: 1, toGo: T.toGo, plays: 0, timeouts: gs.timeouts[side] };
     var d = deficit(gs, side);
-    var text = 'Two-minute drill - ' + gs[side + 'Id'] + ' from ' + spotText(ytg) + ', ' + Util.fmtClock(gs.clock) + ' left, '
+    var text = 'Two-minute drill - ' + nameOf(gs, side) + ' from ' + spotText(ytg) + ', ' + Util.fmtClock(gs.clock) + ' left, '
       + (d === 0 ? 'tied' : 'down ' + d);
     pushLog(gs, side, text, ytg, 'SCRIPT');
     return ev(gs, 'DRIVE', text, { side: side, result: 'SCRIPT' });
@@ -10442,7 +10571,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var items = [];
     for (var k in O.table) if (hasOwn.call(O.table, k)) items.push({ k: k, w: O.table[k] });
     var outcome = rng.weighted(items, 'w').k;                                                      // draw 1
-    if (outcome === 'TD') return scoreTouchdown(gs, state, rng, side, 'Overtime touchdown by ' + gs[side + 'Id']);
+    if (outcome === 'TD') return scoreTouchdown(gs, state, rng, side, 'Overtime touchdown by ' + nameOf(gs, side));
     if (outcome === 'STALL') {
       var Y = O.stallYtg;
       var ytg = clamp(Math.round(rng.gauss(Y.mean, Y.sd)), Y.min, Y.max);                          // draws 2, 3
@@ -10579,7 +10708,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       if (r.type === 'PAT') { add(r.made ? 'PAT good' : 'PAT missed', r.made ? X.patMade : X.patMissed); continue; }
       if (r.type !== 'FG') continue;
       if (!r.made) { add(D + '-yd FG missed', X.fgMissed); continue; }
-      add(D + '-yd FG made', Util.round1(X.fgMade + X.fgMadePerYd * Math.max(0, D - X.fgMadeFrom)));
+      add(D + '-yd FG made', Math.round(X.fgMade + X.fgMadePerYd * Math.max(0, D - X.fgMadeFrom)));
       if (D >= fifty) add('50+ bonus', X.fifty);
       if (has(r.tags, 'clutch')) add('Clutch make', X.clutch);
       if (has(r.tags, 'gameWinner')) add('GAME-WINNER', X.gameWinner);
@@ -10710,12 +10839,13 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var recv = rng.chance(C.coinP) ? 'home' : 'away';                                                     // coin toss
     var gs = Schema().createGameState({
       id: g.id, league: g.league, week: g.week, kind: g.kind, homeId: home.id, awayId: away.id, userSide: userSide,
+      homeAbbr: home.abbr || home.id, awayAbbr: away.abbr || away.id,
       weather: { weather: wx.weather, tempF: wx.tempF, wind: { speed: wx.wind.speed, dir: wx.wind.dir }, surface: wx.surface, altitude: !!wx.altitude, dome: !!wx.dome },
       offRating: off, defRating: def, timeouts: C.timeoutsPerHalf, receivedFirst: recv
     });
     gs.announce = null;
     gs.meta = { gw: null, tf: null, koTouchbacks: 0, metersAtStart: userSide && state.player ? metersOf(state.player) : null };
-    pushLog(gs, recv, gs[recv + 'Id'] + ' wins the toss and receives', 0, 'TOSS');
+    pushLog(gs, recv, nameOf(gs, recv) + ' wins the toss and receives', 0, 'TOSS');
     if (userSide) state.game = gs;
     return gs;
   };
@@ -10886,7 +11016,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var period = otN > 0 ? 'OT' + (otN > 1 ? otN : '') : 'Q' + q;
     var showClock = !(gs.ot && gs.ot.mode === 'COLLEGE' && otN > 0);
     var parts = [period + (showClock ? ' ' + Util.fmtClock(clock) : '')];
-    if (e.side && (e.side === 'home' || e.side === 'away')) parts.push(gs[e.side + 'Id'] || e.side);
+    if (e.side && (e.side === 'home' || e.side === 'away')) parts.push(nameOf(gs, e.side) || e.side);
     parts.push(e.text || '');
     return parts.join(' · ');
   };
@@ -11443,9 +11573,13 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
 
   /**
    * Close the user's season: build the SeasonLine (snapshot of `stats.season`), append it to
-   * `history.seasons`, run the season-end records check (FG% and career-seasons records), then
-   * reset `stats.season` and the in-season streak counters. Awards for the year must already be
-   * in `history.awards` (Season.finishSeason calls Awards.compute first).
+   * `history.seasons`, run the season-end records check (FG% and career-seasons records) and reset
+   * the in-season streak counters. Awards for the year must already be in `history.awards`
+   * (Season.finishSeason calls Awards.compute first).
+   *
+   * `stats.season` is deliberately NOT cleared here: the finished line has to stay readable on the
+   * awards / stats / hub screens through AWARDS, the offseason wizard and the draft. `Season.start`
+   * zeroes it when the next season opens (that is the only writer of the empty block).
    * @param {CareerState} state @returns {SeasonLine} (+ `milestones` from the records check)
    */
   Stats.finishSeason = function (state) {
@@ -11466,7 +11600,6 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     };
     state.history.seasons.push(line);
     line.milestones = Stats.checkRecords(state, null, null, { final: true });
-    state.stats.season = emptyStats();
     p.missStreak = 0;
     p.makeStreak = 0;
     return line;
@@ -12086,11 +12219,12 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var recs = 0, rn = (state.records && state.records.nfl) || {};
     for (var k in rn) if (Object.prototype.hasOwnProperty.call(rn, k) && rn[k].isUser) recs++;
     var pctOk = num(st.fga, 0) >= H.pctBonusMinFga && fgPct(st) >= H.pctBonusMin ? 1 : 0;
+    // labels say "Pro": the Hall only counts NFL kicks (stats.nfl), never the college line
     var rows = [
-      ['fgm', 'Career FGM', num(st.fgm, 0), W.fgm],
-      ['fifty', '50+ makes', num(st.made50plus, 0), W.fifty],
-      ['pts', 'Points / 100', num(st.pts, 0) / 100, W.ptsPer100],
-      ['gw', 'Game-winners', num(st.gameWinners, 0), W.gw],
+      ['fgm', 'Pro FGM', num(st.fgm, 0), W.fgm],
+      ['fifty', 'Pro 50+ makes', num(st.made50plus, 0), W.fifty],
+      ['pts', 'Pro points / 100', num(st.pts, 0) / 100, W.ptsPer100],
+      ['gw', 'Pro game-winners', num(st.gameWinners, 0), W.gw],
       ['allLeague1', 'All-League 1st', countAwards(state, 'ALL_LEAGUE_1'), W.allLeague1],
       ['allLeague2', 'All-League 2nd', countAwards(state, 'ALL_LEAGUE_2'), W.allLeague2],
       ['stpoy', 'ST Player of the Year', countAwards(state, 'STPOY'), W.stpoy],
@@ -14273,7 +14407,8 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
   }
 
   /**
-   * Start a season (§3.5.17): builds the active league's schedule (Schedule.college / Schedule.nfl with last
+   * Start a season (§3.5.17): zeroes `stats.season` (the finished line was kept readable through the offseason),
+   * builds the active league's schedule (Schedule.college / Schedule.nfl with last
    * season's standings), resets `state.season` (results and kickerStats rows for every team, preseason poll,
    * zeroed standings), sets phase 'PRE' and week 0, sets the three season goals (Awards.seasonGoals) and, when
    * the §2.2 rule applies and RTG.Career is present, opens the camp battle (Career.campBattle → pending KICKS).
@@ -14283,6 +14418,9 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
    */
   Season.start = function (state, rng) {
     var p = state.player;
+    // the previous season's line stays in stats.season through AWARDS / OFF / DRAFT (Stats.finishSeason keeps it);
+    // the new season is the point where it is zeroed, so the awards card, Stats › SEASON and QUICK STATS agree.
+    if (state.stats) state.stats.season = emptyKickerStats();
     var kind = activeKind(state);
     var lg = leagueObj(state, kind);
     if (!lg) throw new Error('Season.start: league ' + kind + ' is missing');
@@ -14359,7 +14497,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
   function weekOpenMessages(state) {
     var p = state.player, C = Contracts();
     if (!userInLeague(state) || state.season.league !== 'NFL') return;
-    if (num(p.nflSeasons, 0) === 0) message(state, 'agent_rookie', {});
+    if (num(p.nflSeasons, 0) === 0) message(state, 'agent_rookie', { years: p.contract ? num(p.contract.years, 0) || undefined : undefined });
     else if (C && isFn(C.inFinalYear) && C.inFinalYear(state)) message(state, 'agent_final_year', {});
   }
 
@@ -14545,11 +14683,13 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
   function jobChecks(state, rng, jsRes, report) {
     var p = state.player, kind = state.season.league, TI = TSea().timelineImpact;
     if (!jsRes) return;
-    if (jsRes.benched && p.role === 'K2' && !p.flags.benchNoted) {
+    // only a NEW bench (K1 → K2 this week) is news; a backup who never held the job (camp loss, STAR room) is not "benched"
+    var newlyBenched = jsRes.justBenched !== undefined ? !!jsRes.justBenched : !!jsRes.benched;
+    if (newlyBenched && p.role === 'K2' && !p.flags.benchNoted) {
       p.flags.benchNoted = true;
       report.bench = true;
       message(state, 'coach_bench', {});
-      headline(state, rng, 'bench', {});                                                        // 1 draw
+      headline(state, rng, 'bench', { wasK1: true, rival: teammateKickerName(state) });          // 1 draw
       pushTimeline(state, timelineRow(state, 'BENCHED', 'Benched: Job Security down to ' + Math.round(p.js), TI.bench));
     } else if (p.flags.benchNoted && p.role === 'K1') {
       delete p.flags.benchNoted;
@@ -14584,6 +14724,16 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     state.flags = state.flags || {};
     if (cold) state.flags.rivalCold = true; else delete state.flags.rivalCold;
     return cold;
+  }
+
+  /**
+   * The other kicker on the user's roster (the one ahead of / behind him) for {rival} in bench headlines —
+   * never the school's rival TEAM, which is what the default slot resolves to.
+   * @param {Object} state @returns {string}
+   */
+  function teammateKickerName(state) {
+    var k = aiKickerOf(state, userTeam(state));
+    return (k && k.name) || 'the other guy';
   }
 
   /** Close the open stint in history.teams. */
@@ -14640,13 +14790,14 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
   function loseJob(state, rng, report) {
     var p = state.player, TI = TSea().timelineImpact;
     if (p.flags.lostJob === state.year) return;
+    var wasK1 = p.role === 'K1';                     // a K2 never held the job: the bench pool needs to know (§2.11)
     p.role = 'K2';
     p.flags.lostJob = state.year;
     delete p.flags.benched;
     delete p.flags.jsLowWeeks;
     p.flags.benchNoted = true;                                                // the team still plays; the rival kicks
     message(state, 'coach_bench', {});
-    headline(state, rng, 'bench', {});                                                          // 1 draw
+    headline(state, rng, 'bench', { wasK1: wasK1, rival: teammateKickerName(state) });           // 1 draw
     pushTimeline(state, timelineRow(state, 'LOST_JOB', 'Lost the kicking job for the season', TI.lostJob));
     report.cut = { league: 'COLLEGE', teamId: p.teamId, week: state.week, year: state.year, lostJob: true };
     report.bench = true;
@@ -14874,14 +15025,14 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       age: p.age, ovr: ovrOf(p.attrs), role: p.role, stats: s, awards: [], teamRecord: recordText(r), champion: false,
       playoffResult: '', grade: 'C', salary: p.contract ? num(p.contract.aav, 0) : 0, milestones: [] };
     if (state.history && Array.isArray(state.history.seasons)) state.history.seasons.push(line);
-    if (state.stats) state.stats.season = emptyKickerStats();
-    return line;
+    return line;                                     // stats.season is kept readable until Season.start (§2.7.3)
   }
 
   /**
    * Close the season (§3.5.17): completes the bracket if games remain (fastForward), phase 'AWARDS',
    * Awards.compute (→ season.awardsList, XP / fame / history.awards for the user), Stats.finishSeason (SeasonLine
-   * into history.seasons, stats.season reset), league.seasonHistory, AI kicker season tick (kickerStats →
+   * into history.seasons; `stats.season` is left intact so the finished line stays readable through AWARDS / the
+   * offseason / the draft — Season.start zeroes it), league.seasonHistory, AI kicker season tick (kickerStats →
    * kicker.seasonStats), player season counters (collegeSeasons / nflSeasons / seasonsAsStarter), earned traits,
    * state.flags.wonTitle, season-scoped modifier expiry, timeline. Idempotent (season.finished).
    * Draws: fastForward sims → Awards.compute 0–1 → user award headline 1 → 1 headline per record milestone.
@@ -15004,23 +15155,30 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     team.DEF = clamp(Math.round(D.keep * num(team.DEF, anchor) + D.anchorW * (anchor + rng.gauss(0, D.sd))), L.ratingMin, L.ratingMax);   // 2
   }
 
-  /** A §2.5.1 replacement rookie: ovr N(60, 5), age 22, attrs = ovr + N(0, 4). Draws: name 3–4 · ovr 2 · attrs 10. */
-  function makeRookie(rng) {
+  /**
+   * A §2.5.1 replacement rookie: ovr N(60, 5), attrs = ovr + N(0, 4); age 22 (NFL) or a college freshman
+   * (Tuning.league.aiKicker.college.rookieAge). Draws: name 3–4 · ovr 2 · attrs 10.
+   */
+  function makeRookie(rng, kind) {
     var K = Tuning.league.aiKicker, N = Names();
     var name = N && isFn(N.player) ? N.player(rng).full : 'Rookie Kicker';
     var ovr = clamp(Math.round(rng.gauss(K.rookie.mean, K.rookie.sd)), K.attrMin, K.attrMax);
     var attrs = {};
     for (var i = 0; i < ATTRS.length; i++) attrs[ATTRS[i]] = clamp(Math.round(ovr + rng.gauss(0, K.attrSd)), K.attrMin, K.attrMax);
-    return { name: name, age: K.rookie.age, ovr: ovr, attrs: attrs, contractYears: TSea().aiRookieContractYears, seasonStats: emptyKickerStats() };
+    var age = kind === 'COLLEGE' && K.college ? K.college.rookieAge : K.rookie.age;
+    return { name: name, age: age, ovr: ovr, attrs: attrs, contractYears: TSea().aiRookieContractYears, seasonStats: emptyKickerStats() };
   }
 
   /**
    * §2.5.1 AI kicker year: age +1, contract −1 (expired → re-sign int(1, 3), 1 draw), −1 POW/yr from 34 (ovr
    * recomputed), retire at 38+ (p 0.5, 1 draw) / ovr < 55 / age ≥ 45 → replaced by a rookie (Schema.setKicker
-   * re-blends ST). Every team keeps at least one AI kicker.
+   * re-blends ST). College legs are students: at Tuning.league.aiKicker.college.leaveAge their eligibility is up
+   * and a freshman takes the slot (0 draws — deterministic). Every team keeps at least one AI kicker.
    */
   function aiKickerYear(state, lg, rng, report) {
     var K = Tuning.league.aiKicker, R = TSea().aiResignYears, S = Schema();
+    var kind = lg.kind || (state.leagues && lg === state.leagues.college ? 'COLLEGE' : 'NFL');
+    var college = kind === 'COLLEGE';
     var slots = ['kicker', 'kicker2'];
     for (var i = 0; i < lg.teams.length; i++) {
       var team = lg.teams[i];
@@ -15033,15 +15191,16 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
         if (k.age >= K.declineFrom && k.attrs) k.attrs.POW = clamp(num(k.attrs.POW, 50) - 1, K.attrMin, K.attrMax);
         if (k.attrs) k.ovr = clamp(ovrOf(k.attrs), K.attrMin, K.attrMax);
         var retire = k.age >= TSea().aiForceRetireAge || k.ovr < K.retireOvrBelow;
+        if (college && K.college && k.age >= K.college.leaveAge) retire = true;              // eligibility over (0 draws)
         if (!retire && k.age >= K.retireAge) retire = rng.chance(K.retireProb);               // 1 draw
         if (!retire) continue;
-        var rookie = makeRookie(rng);                                                         // 15–16 draws
+        var rookie = makeRookie(rng, kind);                                                   // 15–16 draws
         report.retirements.push({ teamId: team.id, name: k.name, age: k.age, ovr: k.ovr, slot: slots[s] });
         report.rookies.push({ teamId: team.id, name: rookie.name, ovr: rookie.ovr, slot: slots[s] });
         if (S && isFn(S.setKicker)) S.setKicker(lg, team.id, rookie, slots[s]); else team[slots[s]] = rookie;
       }
       if (!team.kicker && !team.kicker2) {
-        var extra = makeRookie(rng);
+        var extra = makeRookie(rng, kind);
         var slot = userInLeague(state) && state.player.teamId === team.id ? 'kicker2' : 'kicker';
         if (S && isFn(S.setKicker)) S.setKicker(lg, team.id, extra, slot); else team[slot] = extra;
         report.rookies.push({ teamId: team.id, name: extra.name, ovr: extra.ovr, slot: slot });
@@ -15132,8 +15291,9 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
  *
  * State extensions (all JSON-safe, all optional):
  *   state.flags.showcase        {makes, kicks, stars, ovr, results:[{distance, made}]}
- *   state.flags.offseason       the wizard chain {key, year, league, steps[], idx, done, log[], resigned, talksFailed,
- *                               transferred, noOffers}   (Career.offseasonChain; stale chains are replaced by key)
+ *   state.flags.offseason       the wizard chain {key, year, league, steps[], idx, done, log[], skipped[] (indices of steps
+ *                               that produced nothing for the player), resigned, talksFailed, transferred, noOffers}
+ *                               (Career.offseasonChain; stale chains are replaced by key)
  *   state.flags.noOfferSeasons  consecutive offseasons that ended without an NFL contract (forced retirement at 2)
  *   state.flags.skipGame        {year, week, reason, restoreRole?}   (HOLDOUT / SKIP_GAME actions; honoured by RTG.Engine)
  *   state.flags.transferRequested · declared · combinePlan · combineScore · combine · draftResult · springLeague
@@ -15314,7 +15474,9 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     delete sflags(state).ultimatum;
     delete sflags(state).rivalCold;
   }
-  var REASON_TAG = { TRANSFER: 'transfer', TRADE: 'trade', DRAFTED: 'draft', COMMIT: 'contract', WALKON: 'contract' };
+  // COMMIT / WALKON draw from the college 'commit' pool: the NFL 'contract' pool announces money and years, which a
+  // $0 scholarship / walk-on never has (its unfilled {money}/{years} slots would print the "$1.0M / 2-year" fallbacks)
+  var REASON_TAG = { TRANSFER: 'transfer', TRADE: 'trade', DRAFTED: 'draft', COMMIT: 'commit', WALKON: 'commit' };
   function tagForReason(reason) { return REASON_TAG[reason] || 'fa'; }
 
   /**
@@ -15449,7 +15611,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var weights = C.depthWeights[num(team.prestige, 3)] || C.depthWeights[3];
     var depth = rng.weighted(C.depthOrder, function (d) { return weights[C.depthOrder.indexOf(d)]; });   // 1 draw
     var anchor = Tuning.league.aiKicker.collegeAnchorBase + Tuning.league.aiKicker.collegeAnchorPerPrestige * num(team.prestige, 3);
-    var k = S && isFn(S.createAiKicker) ? S.createAiKicker(rng, anchor)
+    var k = S && isFn(S.createAiKicker) ? S.createAiKicker(rng, anchor, 'COLLEGE')
       : { name: 'Incumbent', age: 20, ovr: anchor, attrs: { POW: anchor, ACC: anchor, CON: anchor, CLU: anchor, KO: anchor }, contractYears: 1, seasonStats: null };
     var target, years;
     if (depth === 'STAR') { target = rng.int(D.STAR.ovr[0], D.STAR.ovr[1]); years = rng.int(D.STAR.years[0], D.STAR.years[1]); }
@@ -15609,7 +15771,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     state.history.contracts.push({ year: state.year, league: 'COLLEGE', teamId: team.id, type: type, years: years, aav: 0, total: 0,
       gtdPct: 0, signingBonus: 0, round: null, endYear: null, reason: type });
     state.stage = 'COLLEGE';
-    message(state, 'coach_pregame', { team: teamName(team) });
+    message(state, 'coach_welcome', { team: teamName(team) });      // a PRE note: no opponent exists yet for a pregame line
     var Se = need(Season(), 'Season', 'decide');
     Se.start(state, rng);
     return { enrolled: true, transferred: false, teamId: team.id };
@@ -15637,7 +15799,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     if (!rival) {
       var anchor = p.league === 'NFL' ? Tuning.league.aiKicker.nflAnchor
         : Tuning.league.aiKicker.collegeAnchorBase + Tuning.league.aiKicker.collegeAnchorPerPrestige * num(team.prestige, 3);
-      rival = S && isFn(S.createAiKicker) ? S.createAiKicker(rng, anchor) : { name: 'Walk-on Kicker', age: 20, ovr: 55, attrs: { POW: 55, ACC: 55, CON: 55, CLU: 55, KO: 55 }, contractYears: 1 };
+      rival = S && isFn(S.createAiKicker) ? S.createAiKicker(rng, anchor, p.league) : { name: 'Walk-on Kicker', age: 20, ovr: 55, attrs: { POW: 55, ACC: 55, CON: 55, CLU: 55, KO: 55 }, contractYears: 1 };
       if (p.role === 'K1') team.kicker2 = rival; else team.kicker = rival;
     }
     var contexts = [], rivalResults = [];
@@ -15676,11 +15838,17 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       p.role = 'K2';
       p.js = soft(C.loserJs);
       pflags(state).benched = true;                                    // §2.2: js ≥ 40 (or a cold rival) wins the job back
+      pflags(state).benchNoted = true;                                 // the camp loss is announced here: no "BENCHED" headline at the first endWeek
     }
     if (team) arrangeRoster(state, p.league, team, p.role);
     var rivalName = sess.rival ? sess.rival.name : 'the other leg';
     var line = myMakes + '-' + rivalMakes + ' vs ' + rivalName;
-    headline(state, rng, won ? 'camp' : 'bench', { text: won ? '{last} wins the camp battle ' + line : '{last} loses the kicking job to ' + rivalName + ' (' + line + ')', rival: rivalName });   // 1 draw
+    // camp / won / wasK1 gate the bench pool: a K2 who never held the job must not read "loses kicking job to the
+    // backup" (be1), and {rival} is the team-mate who won it, not the school's rival team.
+    headline(state, rng, won ? 'camp' : 'bench', {
+      text: won ? '{last} wins the camp battle ' + line : '{last} loses the kicking job to ' + rivalName + ' (' + line + ')',
+      rival: rivalName, camp: true, won: won, wasK1: wasK1
+    });   // 1 draw
     message(state, won ? (wasK1 ? 'coach_js_high' : 'coach_unbench') : 'coach_bench', { rival: rivalName });
     timeline(state, 'CAMP', (won ? 'Won' : 'Lost') + ' the camp battle ' + line, won ? 2 : 3);
     var out = { kind: 'CAMP', won: won, myScore: Util.round1(myScore), rivalScore: Util.round1(rivalScore), myMakes: myMakes, rivalMakes: rivalMakes, role: p.role, rival: rivalName };
@@ -15925,7 +16093,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     state.stage = 'NFL';
     p.nflSeasons = num(p.nflSeasons, 0);
     delete f.declared; delete f.combinePlan; delete f.offseason; delete f.springLeague; delete f.noOfferSeasons;
-    message(state, 'agent_rookie', { team: team.name });
+    message(state, 'agent_rookie', { team: team.name, years: p.contract ? num(p.contract.years, 0) || undefined : undefined });   // ar1 prints the REAL deal length, never a fallback
     Se.advanceYear(state, rng);
     return { teamId: teamId, role: p.role, contract: p.contract };
   };
@@ -16233,12 +16401,17 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
   /** Run chain steps until one sets a pending or the chain ends. */
   function advanceChain(state, rng, ch) {
     var guard = ch.steps.length + 2;
+    if (!Array.isArray(ch.skipped)) ch.skipped = [];
     while (!ch.done && guard-- > 0) {
       if (state.pending) return ch;
       if (ch.idx >= ch.steps.length) { ch.done = true; break; }
-      var id = ch.steps[ch.idx++];
+      var idx = ch.idx, id = ch.steps[ch.idx++];
+      var stageBefore = state.stage, doneBefore = ch.done;
       STEPS[id](state, rng, ch);
       ch.log.push(id);
+      // a step that set nothing pending, changed no stage and did not close / replace the chain never happened for the
+      // player (no card, no event): remember it so the wizard's stepper can show it as skipped instead of done
+      if (!state.pending && state.stage === stageBefore && ch.done === doneBefore && sflags(state).offseason === ch) ch.skipped.push(idx);
       if (sflags(state).offseason !== ch) return ch;                                                  // a step replaced / dropped the chain (REDRAFT, spring league)
     }
     return ch;
@@ -16268,7 +16441,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       if (pflags(state).nearHome) p.morale = soft(p.morale + TC().college.nearHomeMorale);
     }
     var ch = { key: key, year: state.year, league: p.league || (state.season && state.season.league) || 'COLLEGE', steps: stepsFor(state), idx: 0, done: false,
-      log: [], resigned: false, talksFailed: false, transferred: false, noOffers: false, events: 0, portal: false };
+      log: [], skipped: [], resigned: false, talksFailed: false, transferred: false, noOffers: false, events: 0, portal: false };
     f.offseason = ch;
     advanceChain(state, rng, ch);
     return ch;
@@ -17257,6 +17430,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       calendarYear: Tuning.schedule.firstYear + year - 1,
       stage: c.stage || '',
       phase: c.phase || '',
+      week: typeof c.week === 'number' ? c.week : 0,
       ovr: ovrOf(p.attrs),
       age: typeof p.age === 'number' ? p.age : 0,
       league: p.league || null,
@@ -17949,10 +18123,16 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
  * A localStorage adapter that never throws: private-mode Safari, quota errors and "storage disabled" all fall
  * back to an in-memory map for the rest of the session. Every call returns synchronously.
  *
+ * A value that fell back to memory SHADOWS the backend for that key: getItem/getJSON/keys read the memory copy
+ * first, so a save that could not be written (quota) is still readable — and loadable — for the rest of the session.
+ * The shadow is dropped as soon as a later write for that key reaches the backend.
+ *
  *   Storage.getItem(key) → string|null          Storage.setItem(key, value) → boolean (false = fell back / failed)
  *   Storage.removeItem(key) → void              Storage.keys() → string[] (own keys, sorted)
  *   Storage.getJSON(key) → any|null             Storage.setJSON(key, obj) → boolean
  *   Storage.available → boolean (false when running on the memory fallback)
+ *   Storage.degraded → boolean (true once any write fell back to memory)
+ *   Storage.memoryKeys() → string[] (keys that only live in memory)
  *   Storage.clear(prefix?) → void  (only keys starting with prefix, default 'rtg.')
  */
 (function (root) {
@@ -17960,7 +18140,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
   var RTG = root.RTG = root.RTG || {};
   RTG.UI = RTG.UI || {};
 
-  var mem = {};
+  var mem = {};                 // keys whose last write fell back here; these SHADOW the backend
   var backend = null;
   var available = false;
 
@@ -17984,19 +18164,29 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     /** True while the real localStorage is in use. */
     available: available,
 
+    /** True once any write fell back to the in-memory map (quota, disabled storage …). */
+    degraded: false,
+
     getItem: function (key) {
+      // the memory copy wins: it is newer than whatever the backend still holds for this key
+      if (Object.prototype.hasOwnProperty.call(mem, key)) return mem[key];
       if (backend) {
         try { var v = backend.getItem(key); return v === undefined ? null : v; } catch (e) { /* fall through */ }
       }
-      return Object.prototype.hasOwnProperty.call(mem, key) ? mem[key] : null;
+      return null;
     },
 
     setItem: function (key, value) {
       value = String(value);
       if (backend) {
-        try { backend.setItem(key, value); return true; } catch (e) { /* quota / private mode: fall back */ }
+        try {
+          backend.setItem(key, value);
+          if (Object.prototype.hasOwnProperty.call(mem, key)) delete mem[key];   // the backend is current again
+          return true;
+        } catch (e) { /* quota / private mode: fall back */ }
       }
       mem[key] = value;
+      Storage.degraded = true;
       return false;
     },
 
@@ -18006,6 +18196,9 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       }
       delete mem[key];
     },
+
+    /** Keys that only live in the memory fallback (a real write never landed), sorted. */
+    memoryKeys: function () { return Object.keys(mem).sort(); },
 
     /** Own keys (real storage + memory fallback), sorted. */
     keys: function () {
@@ -18072,10 +18265,11 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     // extra shell tokens (documented in UI_API.md; not in the §4.1 table but used by the CSS)
     shadow: '#0b0d1c', dusk2: '#8a4b6b', sunset: '#d9773b', night: '#12142a', ball: '#a0522d'
   };
-  var CB = { red: '#d55e00', mint: '#0072b2', gold: '#f0e442', sky: '#56b4e9' };
+  // Okabe–Ito, each one tint up where the canonical hex misses WCAG AA as text on --navy (see css/style.css).
+  var CB = { red: '#e26100', mint: '#00b386', gold: '#f0e442', sky: '#56b4e9' };
   var HC = {
     navy: '#000000', navy2: '#000000', cream: '#ffffff', ink: '#000000', grass: '#000000', grass2: '#111111',
-    chalk: '#ffffff', gold: '#ffff00', red: '#ffffff', sky: '#ffff00', mint: '#ffffff', grey: '#cccccc', dusk: '#000000',
+    chalk: '#ffffff', gold: '#ffff00', red: '#ff5c5c', sky: '#66ccff', mint: '#00ff00', grey: '#cccccc', dusk: '#000000',
     shadow: '#ffffff', dusk2: '#000000', sunset: '#ffffff', night: '#000000', ball: '#ffffff'
   };
 
@@ -18208,7 +18402,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
  *   store.dispatch(fnName, ...args) → result
  *   store.subscribe(fn) → unsubscribe        fn({fnName, result, args, store})
  *   store.replace(state, rng) · store.newCareer(opts) · store.hasCareer()
- *   store.save(slotKey) → {ok, error?} · store.load(slotKey) → {ok, error?, warnings?} · store.autosave() → boolean
+ *   store.save(slotKey) → {ok, error?, persisted} · store.load(slotKey) → {ok, error?, warnings?} · store.autosave() → boolean
  *   store.saveSettings() · store.setSetting(key, value) · store.resetSettings()
  *   store.touch(fnName, result) — notify + sync without an engine call (debug / forced results)
  *   store.getRecords() / store.addCareerRecord(entry) — the cross-save `rtg.records` block
@@ -18304,6 +18498,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     this.uiRng = RTG.RNG.create((nowMs() ^ 0x9e3779b9) >>> 0);
     this.lastDispatch = null;
     this.lastAutosaveAt = 0;
+    this.storageWarned = false;      // the 'storage' warning is raised once per session
     this.autoKickAll = false;        // RTG.debug.autoKick(true): kick scenes resolve every user kick via autoKick
     this._subs = [];
     this._playMark = 0;
@@ -18425,7 +18620,9 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     this.rng = state ? rng : null;
     this._playMark = state ? nowMs() : 0;
     if (state) {
-      if (!state.settings && RTG.Schema) state.settings = RTG.Schema.mirrorSettings(this.settings);
+      // Settings are UI-owned (SPEC §3.4 / UI_API §2.2): the per-career block is only a mirror of rtg.settings, so
+      // it is rebuilt from the live UI settings — a loaded save must never resurrect the settings it was saved with.
+      if (RTG.Schema && typeof RTG.Schema.mirrorSettings === 'function') state.settings = RTG.Schema.mirrorSettings(this.settings);
       this._validate('replace');
     }
     this._sync(true);
@@ -18468,7 +18665,12 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     return RTG.Engine.save(this.state, this.rng, nowMs());
   };
 
-  /** @returns {{ok:boolean, error?:string, key:string, bytes?:number}} */
+  /**
+   * Write the current career to a slot. `persisted` is false when the write fell back to the in-memory map
+   * (quota / disabled storage): the save is readable for the rest of the session but is lost on reload, so the
+   * first such write also notifies subscribers with fnName 'storage' and the shell raises a warning toast.
+   * @returns {{ok:boolean, error?:string, key:string, bytes?:number, persisted?:boolean}}
+   */
   Store.prototype.save = function (slot) {
     var key = slotKey(slot);
     if (!this.state) return { ok: false, error: 'No career to save', key: key };
@@ -18476,6 +18678,10 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     try { blob = this.blob(); } catch (e) { return { ok: false, error: 'Save failed: ' + e.message, key: key }; }
     var json = JSON.stringify(blob);
     var stored = RTG.UI.Storage.setItem(key, json);
+    if (!stored && !this.storageWarned) {
+      this.storageWarned = true;
+      this._notify({ fnName: 'storage', result: { persisted: false, key: key, available: !!RTG.UI.Storage.available }, args: [] });
+    }
     return { ok: true, key: key, bytes: json.length, persisted: stored, savedAt: blob.savedAt };
   };
 
@@ -20667,7 +20873,9 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
  *   ←/→ (A/D) nudge aim ±0.5° per tap, hold sweeps 6°/s · Space/Enter #1 starts the power meter (0→1.15 in
  *   900 ms, then back, looping) · #2 locks power · accuracy needle sweeps −1..+1 over 700 ms (500 ms at
  *   pressure ≥ 0.6) · #3 locks: quality = 1 − |needle|, aim += 6°·needle.
- *   opts: {pressure, playClockMs(), leftFooted(), active(), canvasEl?, onAim(aim), onPowerStart(),
+ *   Bindings come from `keys()` → store.settings.keys {confirm, confirmAlt, left, right} (Settings ▸ KEYS);
+ *   unset entries fall back to Space/Enter/←/→ and A/D stay as arrow aliases only while ←/→ are unremapped.
+ *   opts: {pressure, playClockMs(), leftFooted(), active(), canvasEl?, keys(), onAim(aim), onPowerStart(),
  *          onPower(P), onPowerLock(P), onNeedle(n), onRelease(input, meta), onClock(remainingMs, totalMs)}
  *   returns {destroy(), reset(), update(now), press(), nudge(dir), state(), aim(), power(), needle(), clockRemaining(), clockTotal()}
  */
@@ -20681,12 +20889,40 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     grabRadiusCss: 96, powerMax: 1.15, aimMax: 12,
     dFullPortrait: 0.32, dFullLandscape: 0.45,
     ring: 32, flickWindowMs: 120, flickMinSamples: 6, powerWindowMs: 300, dFullMinCss: 60, dFullMarginCss: 12,
+    reversalTolCss: 2, pauseGapMs: 60,
     noFlickVy: -0.12, weakSpeed: 0.35, yankSpeed: 2.2, weakMult: 0.85, yankPenalty: 0.15,
     rmsPerpDiv: 14, holdFromP: 0.95, holdMs: 1200, noCancelP: 0.20,
     mishit: { power: 0.5, aimSd: 2, quality: 0.3 }, cancelQuality: 0.5,
     meter: { nudgeDeg: 0.5, sweepDegPerSec: 6, sweepAfterMs: 220, powerMs: 900, needleMs: 700, needleMsPressure: 500, pressureFast: 0.6, aimPerNeedle: 6 }
   };
   Input.CONST = CONST;
+
+  /** The out-of-the-box keyboard bindings; Settings ▸ KEYS overrides confirm / left / right in `store.settings.keys`. */
+  var DEFAULT_KEYS = { confirm: ' ', confirmAlt: 'Enter', left: 'ArrowLeft', right: 'ArrowRight' };
+  Input.DEFAULT_KEYS = DEFAULT_KEYS;
+
+  /**
+   * Does the KeyboardEvent `e` match the configured binding `key`? Bindings are stored as `KeyboardEvent.key`
+   * values by the settings screen (' ', 'Enter', 'ArrowLeft', 'k', …), so match on `.key` first (case-insensitive
+   * for single characters, so a remap to 'k' still fires with caps lock on), then on `.code` for the space bar
+   * and for callers that store codes.
+   */
+  Input.keyMatches = function (e, key) {
+    if (!e || !key) return false;
+    var k = e.key;
+    if (key === ' ' || key === 'Space' || key === 'Spacebar') return k === ' ' || k === 'Spacebar' || e.code === 'Space';
+    if (k === key) return true;
+    if (typeof k === 'string' && k.length === 1 && key.length === 1 && k.toLowerCase() === key.toLowerCase()) return true;
+    return !!e.code && e.code === key;
+  };
+  /** Merge a settings.keys object over the defaults (unset / non-string entries keep the default). */
+  Input.resolveKeys = function (raw) {
+    var out = { confirm: DEFAULT_KEYS.confirm, confirmAlt: DEFAULT_KEYS.confirmAlt, left: DEFAULT_KEYS.left, right: DEFAULT_KEYS.right };
+    if (raw && typeof raw === 'object') {
+      for (var k in out) if (typeof raw[k] === 'string' && raw[k]) out[k] = raw[k];
+    }
+    return out;
+  };
 
   function now() { return (root.performance && root.performance.now) ? root.performance.now() : Date.now(); }
   function clamp(x, lo, hi) { return x < lo ? lo : (x > hi ? hi : x); }
@@ -20705,7 +20941,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var head = 0, count = 0;
     var pointerId = null, pulling = false, P = 0, peakP = 0, lean = -1, lastTick = 0;
     var x0 = 0, y0 = 0, rectLeft = 0, rectTop = 0;
-    var holdSince = 0, everPulled = false;
+    var holdSince = 0, holdEnd = 0, everPulled = false;   // hold at full draw: first sample with P ≥ 0.95 … first sample back under it (the flick)
     var clockStart = 0, clockTotal = 0, clockTimer = 0;
     var destroyed = false;
     var state = 'IDLE';
@@ -20727,9 +20963,10 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     function dFull() {
       var h = call(opts.cssHeight) || canvasEl.clientHeight || 320;
       var d = (call(opts.landscape) ? CONST.dFullLandscape : CONST.dFullPortrait) * h;
-      // DEVIATION (playability): a finger cannot leave the screen, so full power must be reachable within the
-      // room below the ball (iPhone 12 portrait leaves ~100 px). Cap D_full at that room minus a margin.
-      if (roomBelow > 0) d = Math.min(d, Math.max(CONST.dFullMinCss, roomBelow - CONST.dFullMarginCss));
+      // DEVIATION (playability): a finger cannot leave the screen, so the whole power range — the overswing zone
+      // included (P up to powerMax) — must be reachable within the room below the ball. Cap D_full so that
+      // powerMax · D_full still fits in that room minus a margin (a landscape phone leaves ~150 px under the ball).
+      if (roomBelow > 0) d = Math.min(d, Math.max(CONST.dFullMinCss, (roomBelow - CONST.dFullMarginCss) / CONST.powerMax));
       return d;
     }
     function isActive() { return opts.active ? !!opts.active() : true; }
@@ -20797,7 +21034,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       try { if (canvasEl.setPointerCapture) canvasEl.setPointerCapture(pointerId); } catch (err) { /* ignore */ }
       if (e.preventDefault) e.preventDefault();
       x0 = px; y0 = py; head = 0; count = 0;
-      P = 0; peakP = 0; lean = -1; lastTick = 0; holdSince = 0; everPulled = false;
+      P = 0; peakP = 0; lean = -1; lastTick = 0; holdSince = 0; holdEnd = 0; everPulled = false;
       push(px, py, now());
       state = 'PULL'; pulling = true;
       startClock();
@@ -20809,7 +21046,11 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       P = clamp(dy / dFull(), 0, CONST.powerMax);
       if (P > peakP) peakP = P;
       if (P > 0.02) everPulled = true;
-      if (P >= CONST.holdFromP) { if (!holdSince) holdSince = t; } else holdSince = 0;
+      // hesitation clock: starts when P first reaches the full-draw line, stops at the first sample back under it
+      // (that sample IS the flick — the flick samples run through here too, so the clock must never be zeroed by
+      // them); easing back up and pulling again restarts it
+      if (P >= CONST.holdFromP) { if (!holdSince || holdEnd) { holdSince = t; holdEnd = 0; } }
+      else if (holdSince && !holdEnd) holdEnd = t;
       var l = Math.min(3, Math.floor(P * 3));
       var tick = Math.floor(P * 10 + 1e-9);
       if (tick !== lastTick) { lastTick = tick; call(opts.onTick, tick * 10); }
@@ -20851,14 +21092,22 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       for (var i = last; i >= 0; i--) { if (tLast - st[at(i)] <= CONST.flickWindowMs) first = i; else break; }
       var byCount = Math.max(0, n - CONST.flickMinSamples);
       if (byCount < first) first = byCount;
-      // power = the pull depth where the flick began: the deepest point reached in the last powerWindowMs before
-      // the release (the flick itself starts after the reversal, so its own samples sit above the bottom)
-      var deepestQ = first, dF = dFull();
-      for (var q = last; q >= 0; q--) { if (tLast - st[at(q)] > CONST.powerWindowMs) break; if (sy[at(q)] > sy[at(deepestQ)]) deepestQ = q; }
+      // power = the pull depth where the flick began, i.e. the reversal: walk back from the release while the
+      // samples keep getting deeper (a 2-px jitter tolerance) — that is the bottom of the pull whatever its age
+      // (a player who draws, aims for a second and then flicks leaves no samples during the pause, so a time
+      // window would skip the bottom and read power off the first flick sample instead). A deeper sample inside
+      // the last powerWindowMs still wins (a fast pull snapping straight into the flick).
+      var deepestQ = last, dF = dFull();
+      for (var q = last - 1; q >= 0; q--) { if (sy[at(q)] >= sy[at(deepestQ)] - CONST.reversalTolCss) { if (sy[at(q)] > sy[at(deepestQ)]) deepestQ = q; } else break; }
+      for (var q2 = last; q2 >= 0; q2--) { if (tLast - st[at(q2)] > CONST.powerWindowMs) break; if (sy[at(q2)] > sy[at(deepestQ)]) deepestQ = q2; }
       // DEVIATION (fairness, see the header): the segment never starts before that reversal. A fast pull that snaps
       // straight into the flick would otherwise carry its last downward samples into the 120 ms window, and the chord
-      // across the turn would read as WEAK (or, pulled hard enough, as no flick at all).
-      if (deepestQ > first) first = deepestQ;
+      // across the turn would read as WEAK (or, pulled hard enough, as no flick at all). After a pause at the bottom
+      // (no samples while the finger is still) the chord starts at the first moving sample instead, so the time the
+      // finger rested is not counted as flick time.
+      var startQ = deepestQ;
+      if (deepestQ < last && st[at(deepestQ + 1)] - st[at(deepestQ)] > CONST.pauseGapMs) startQ = deepestQ + 1;
+      if (startQ > first) first = startQ;
       var i0 = at(first), i1 = at(last);
       var dt = st[i1] - st[i0];
       var vx = 0, vy = 0;
@@ -20866,7 +21115,6 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       if (vy > CONST.noFlickVy || dt <= 0) { mishit('mishit'); return; }
       var deepest = at(deepestQ);
       var power = clamp((sy[deepest] - y0) / dF, 0, CONST.powerMax);
-      var flickStartT = st[deepest];
       var aim = Math.atan2(vx, -vy) * 180 / Math.PI;
       if (call(opts.leftFooted)) aim = -aim;
       aim = clamp(aim, -CONST.aimMax, CONST.aimMax);
@@ -20884,7 +21132,9 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       }
       var rms = m ? Math.sqrt(sum / m) : 0;
       var quality = clamp(1 - clamp(rms / CONST.rmsPerpDiv, 0, 1) - yank, 0, 1);
-      var hold = holdSince && (flickStartT - holdSince) > CONST.holdMs ? Math.round(flickStartT - holdSince) : 0;
+      // hesitation (§4.6): time spent at P ≥ 0.95 before the flick started (the first sample back under the line)
+      var hEnd = holdEnd || tEnd;
+      var hold = holdSince && (hEnd - holdSince) > CONST.holdMs ? Math.round(hEnd - holdSince) : 0;
       out.power = clamp(power, 0, CONST.powerMax); out.aim = aim; out.quality = quality; out.holdMs = hold;
       meta.kind = 'flick'; meta.speed = speed; meta.rmsPerp = rms; meta.weak = weak; meta.yanked = yanked; meta.samples = last - first + 1; meta.windowMs = dt;
       release();
@@ -20989,15 +21239,21 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       aim = clamp(aim + dir * M.nudgeDeg, -CONST.aimMax, CONST.aimMax);
       call(opts.onAim, aim);
     }
+    function keys() { return Input.resolveKeys(call(opts.keys)); }
     function keyDir(e) {
-      var k = e.key || e.code;
-      if (k === 'ArrowLeft' || k === 'a' || k === 'A' || k === 'KeyA') return -1;
-      if (k === 'ArrowRight' || k === 'd' || k === 'D' || k === 'KeyD') return 1;
+      var k = keys();
+      if (Input.keyMatches(e, k.left)) return -1;
+      if (Input.keyMatches(e, k.right)) return 1;
+      // A / D stay as aliases of the arrows while the arrows are the configured keys (§4.6); once the player has
+      // remapped a direction the letter aliases step aside so they cannot shadow the new binding
+      var raw = e.key || e.code;
+      if (k.left === DEFAULT_KEYS.left && (raw === 'a' || raw === 'A' || raw === 'KeyA')) return -1;
+      if (k.right === DEFAULT_KEYS.right && (raw === 'd' || raw === 'D' || raw === 'KeyD')) return 1;
       return 0;
     }
     function isPress(e) {
-      var k = e.key || e.code;
-      return k === ' ' || k === 'Spacebar' || k === 'Space' || k === 'Enter';
+      var k = keys();
+      return Input.keyMatches(e, k.confirm) || Input.keyMatches(e, k.confirmAlt);
     }
     function editable(e) {
       var t = e.target;
@@ -21096,6 +21352,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
  *   KickView.hudParts(ctx, difficultyRow)             ['47 YDS', 'R HASH', 'WIND ← 12', 'RAIN', 'ICED!']
  *   KickView.kickoffBar(parent, {KO, onLock(timing), reduced}) → {el, destroy()}   one-tap timing bar (§2.3.10)
  *   KickView.sessionScreen(store, opts)               the shared showcase / camp / combine / session-kick screen
+ *   KickView.escapeToSettings(ev) → boolean           §4.8: Escape opens Settings from a chromeless kick screen
  *   KickView.current()                                the live view (RTG.debug / tests)
  *   KickView.TIMING                                   every duration used by the scene (ms)
  */
@@ -21152,6 +21409,22 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
   }
   function announce(text) { var c = C(); if (c && c.announce) c.announce(text); }
   function icon(name, size) { var c = C(); return c && c.icon ? c.icon(name, size) : doc.createTextNode(''); }
+
+  // ── how the hints name the confirm action: TAP on a touch device, else the Settings ▸ KEYS binding ──
+  function coarsePointerNow() {
+    try { return !!(root.matchMedia && root.matchMedia('(pointer: coarse)').matches); } catch (e) { return false; }
+  }
+  function keyLabelOf(k) {
+    if (k === ' ' || k === 'Spacebar' || k === 'Space' || !k) return 'SPACE';
+    return String(k).replace('Arrow', '').toUpperCase();
+  }
+  /** The word the tutorial / hints use for "confirm" right now. */
+  function confirmWord() {
+    if (coarsePointerNow()) return 'TAP';
+    var st = RTG.UI.store, In = RTG.UI.Input;
+    var keys = In && In.resolveKeys ? In.resolveKeys(st && st.settings && st.settings.keys) : null;
+    return keyLabelOf(keys ? keys.confirm : ' ');
+  }
 
   /** The §4.6 auto-PAT rule: off = kick every PAT; safe = auto unless pressure ≥ 0.5; all = auto. */
   KickView.shouldAutoPat = function (ctx, settings, store) {
@@ -21226,6 +21499,14 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var reduced = reducedMotion(settings);
     var inputMode = settings.inputMode === 'meter' ? 'meter' : 'flick';
     var row = diffRow(ctx);
+
+    // Settings ▸ KEYS is mutated in place by store.setSetting, so read the bindings at press time (never cache them).
+    function liveSettings() { return (store && store.settings) || settings || {}; }
+    function keyBindings() { return Inp.resolveKeys(liveSettings().keys); }
+    /** What the on-canvas hints call the confirm action: TAP on a touch device, otherwise the bound key. */
+    function pressLabel() { return coarsePointerNow() ? 'TAP' : keyLabelOf(keyBindings().confirm); }
+    /** Flick-mode hint; pointer-only devices are not told about the keyboard fallback (§4.8). */
+    function flickHint() { return coarsePointerNow() ? 'PULL ↓ · FLICK ↑' : 'PULL ↓ · FLICK ↑ · ' + pressLabel() + ': METER'; }
 
     // ── DOM ──
     var elRoot = el('div', { class: 'kickview kv-mode-' + inputMode, 'data-phase': 'SETUP' });
@@ -21417,7 +21698,8 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       if (sessionInfo && sessionInfo.label) strip.appendChild(el('span', { class: 'chip kv-chip kv-session', text: sessionInfo.label }));
       hud.appendChild(strip);
       var right = el('div', { class: 'kv-hud-right' });
-      heartEl = el('span', { class: 'kv-heart' + (clutch ? ' clutch' : '') + (pressure < 0.2 ? ' calm' : ''), 'aria-label': 'pressure ' + Math.round(pressure * 100) + ' percent', title: 'Pressure ' + Math.round(pressure * 100) + '%' });
+      // role="img" so the aria-label is actually exposed (a bare <span> with aria-label is ignored by AT)
+      heartEl = el('span', { class: 'kv-heart' + (clutch ? ' clutch' : '') + (pressure < 0.2 ? ' calm' : ''), role: 'img', 'aria-label': 'Pressure ' + Math.round(pressure * 100) + ' percent, ' + Math.round(bpm) + ' beats per minute', title: 'Pressure ' + Math.round(pressure * 100) + '%' });
       heartEl.appendChild(icon('heart', 12));
       heartEl.style.animationDuration = (60 / bpm).toFixed(2) + 's';
       heartEl.appendChild(el('span', { class: 'kv-bpm num', text: String(Math.round(bpm)) }));
@@ -21495,15 +21777,16 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
           playClockMs: function () { return playClockMs; },
           leftFooted: function () { return mirror; },
           active: inputActive,
+          keys: function () { return liveSettings().keys; },
           onAim: function (a) { aimDeg = a; },
-          onPowerStart: function () { setPhase('POWER'); setHint('SPACE: LOCK POWER'); Audio().click(); },
+          onPowerStart: function () { setPhase('POWER'); setHint(pressLabel() + ': LOCK POWER'); Audio().click(); },
           onPower: function (p) { meterP = p; var tick = Math.floor(p * 10); if (tick !== lastTick) { lastTick = tick; Audio().click(); } lean = Math.min(3, Math.floor(p * 3)); },
-          onPowerLock: function (p) { meterP = p; setPhase('NEEDLE'); setHint('SPACE: STRIKE'); },
+          onPowerLock: function (p) { meterP = p; setPhase('NEEDLE'); setHint(pressLabel() + ': STRIKE'); },
           onNeedle: function (n) { needleVal = n; },
           onRelease: function (inp) { onRelease(inp); }
         });
         clockOwner = meter;
-        setHint('◄ ► AIM · SPACE: POWER');
+        setHint('◄ ► AIM · ' + pressLabel() + ': POWER');
       } else {
         input = Inp.flick(canvas, {
           ballAt: ballCss,
@@ -21517,10 +21800,10 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
           onPull: function (P, ln) { pullP = P; lean = ln; },
           onTick: function () { Audio().click(); },
           onRelease: function (inp, meta) { onRelease(inp, meta); },
-          onCancel: function () { setPhase('SETUP'); pullP = 0; lean = 0; setHint('PULL ↓ · FLICK ↑'); }
+          onCancel: function () { setPhase('SETUP'); pullP = 0; lean = 0; setHint(flickHint()); }
         });
         clockOwner = input;
-        setHint('PULL ↓ · FLICK ↑');
+        setHint(flickHint());
       }
     }
     function teardownInput() {
@@ -21704,12 +21987,35 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     function onStagePointer(e) {
       if (phase === 'FLIGHT' || phase === 'FREEZE' || phase === 'RESULT') { if (skip()) e.preventDefault(); }
     }
+    /**
+     * §4.8 keyboard fallback: the flick needs a pointer, so a confirm key on an armed flick scene switches THIS
+     * view to the meter sequence (Settings ▸ Kick input is untouched) and starts it, leaving the flick path intact
+     * for the pointer. The swap sticks for the rest of the session so the player is not thrown back each kick.
+     */
+    function startMeterFallback() {
+      if (destroyed || inputMode === 'meter' || ctx.type === 'KO') return false;
+      if (phase !== 'SETUP') return false;
+      if (input && input.pulling()) return false;
+      inputMode = 'meter';
+      elRoot.classList.remove('kv-mode-flick');
+      elRoot.classList.add('kv-mode-meter');
+      setupInput();
+      if (!meter) return false;
+      announce('Keyboard kick mode. Left and right arrows aim, ' + pressLabel() + ' three times for power, accuracy and the strike.');
+      meter.press();
+      return true;
+    }
+    function isConfirmKey(e) {
+      var k = keyBindings();
+      return Inp.keyMatches(e, k.confirm) || Inp.keyMatches(e, k.confirmAlt) ||
+        Inp.keyMatches(e, Inp.DEFAULT_KEYS.confirm) || Inp.keyMatches(e, Inp.DEFAULT_KEYS.confirmAlt);
+    }
     function onKey(e) {
-      if (e.key === ' ' || e.key === 'Enter' || e.key === 'Spacebar') {
-        var t = e.target, tag = t && t.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
-        if (phase === 'FLIGHT' || phase === 'FREEZE' || phase === 'RESULT') { if (skip()) e.preventDefault(); }
-      }
+      if (destroyed || e.repeat || !isConfirmKey(e)) return;
+      var t = e.target, tag = t && t.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || (t && t.isContentEditable)) return;
+      if (phase === 'FLIGHT' || phase === 'FREEZE' || phase === 'RESULT') { if (skip()) e.preventDefault(); return; }
+      if (phase === 'SETUP' && inputMode === 'flick' && startMeterFallback()) e.preventDefault();
     }
 
     // ───────────────────────────── store: forced / auto results ─────────────────────────────
@@ -22103,7 +22409,13 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       wrap.appendChild(el('div', { class: 'ko-verdict ' + (inZone ? 'txt-mint' : 'txt-red'), text: inZone ? 'IN THE ZONE' : (val < 0 ? 'EARLY' : 'LATE') }));
       if (opts.onLock) opts.onLock(Math.round(val * 1000) / 1000);
     }
-    function onKey(e) { if ((e.key === ' ' || e.key === 'Enter') && !locked) { e.preventDefault(); lock(); } }
+    function onKey(e) {
+      if (locked) return;
+      var In = RTG.UI.Input, st = RTG.UI.store;
+      var k = In && In.resolveKeys ? In.resolveKeys(st && st.settings && st.settings.keys) : { confirm: ' ', confirmAlt: 'Enter' };
+      if (!(In.keyMatches(e, k.confirm) || In.keyMatches(e, k.confirmAlt) || e.key === ' ' || e.key === 'Enter')) return;
+      e.preventDefault(); lock();
+    }
     btn.addEventListener('click', lock);
     track.addEventListener('pointerdown', function (e) { e.preventDefault(); lock(); });
     root.addEventListener('keydown', onKey);
@@ -22130,6 +22442,20 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     return 'Returned to the ' + ko.startYard + ' · hang ' + num(ko.hang, 0).toFixed(1) + ' s';
   };
 
+  /**
+   * §4.8: the kick screens are chromeless (no tab bar / rail), so Escape is their only route out to Settings —
+   * a keyboard-only player who needs METERS, a bigger font or the colour-blind palette can always reach it and
+   * Router.back() returns to the still-pending session.
+   * @returns {boolean} true when the key was handled
+   */
+  KickView.escapeToSettings = function (ev) {
+    if (!ev || ev.key !== 'Escape' || ev.altKey || ev.ctrlKey || ev.metaKey) return false;
+    var R = RTG.UI.Router;
+    if (!R || R.current() === 'settings') return false;
+    R.go('settings');
+    return true;
+  };
+
   // ═══════════════════════════════ shared session screen ═══════════════════════════════
   /**
    * The screen shared by showcase / camp battle / combine / halftime-70 / tryout sessions: plays
@@ -22154,6 +22480,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var koSlot = el('div', { class: 'session-ko', hidden: true });
     rootEl.appendChild(header); rootEl.appendChild(stageWrap); rootEl.appendChild(koSlot);
     var view = null, koBar = null, destroyed = false, timers = [], tut = null, headerEl = null, lastInfo = null, koLocked = false;
+    var tutFitTimer = 0;
 
     function setTimer(fn, ms) { var id = root.setTimeout(function () { if (!destroyed) fn(); }, ms); timers.push(id); }
     function session() { var s = store.state; return s && s.pending && s.pending.kind === 'KICKS' ? s.pending.session : null; }
@@ -22182,16 +22509,33 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     }
     /** Keep the tutorial overlay on the canvas rectangle (the stage can be wider / taller than the scene). */
     function fitTutorial() {
-      if (!tut || !view) return;
+      if (!tut || !view) return false;
       var cvs = view.canvas, stage = tut.parentNode;
-      if (!cvs || !stage) return;
+      if (!cvs || !stage) return false;
       var w = cvs.offsetWidth, h = cvs.offsetHeight, sw = stage.clientWidth, sh = stage.clientHeight;
-      if (!w || !sw) return;
+      if (!w || !sw) return false;
       var dx = Math.max(0, Math.round((sw - w) / 2)), dy = Math.max(0, cvs.offsetTop);
       tut.style.left = dx + 'px'; tut.style.right = dx + 'px';
       tut.style.top = dy + 'px'; tut.style.bottom = Math.max(0, sh - dy - h) + 'px';
+      return true;
+    }
+    /**
+     * The tutorial is built inside the Router factory, i.e. BEFORE Router.go appends the screen, so the canvas has
+     * no box yet and a single fitTutorial() call is a no-op. Re-fit on a short interval until the canvas has
+     * settled (attach → Canvas.resize → the fractional phone rescale), then stop.
+     */
+    function scheduleFitTutorial() {
+      if (tutFitTimer) root.clearInterval(tutFitTimer);
+      var n = 0;
+      tutFitTimer = root.setInterval(function () {
+        if (destroyed || !tut) { root.clearInterval(tutFitTimer); tutFitTimer = 0; return; }
+        fitTutorial();
+        if (++n >= 12) { root.clearInterval(tutFitTimer); tutFitTimer = 0; }
+      }, 50);
+      fitTutorial();
     }
     function dismissTutorial() {
+      if (tutFitTimer) { root.clearInterval(tutFitTimer); tutFitTimer = 0; }
       if (!tut) return;
       if (tut.parentNode) tut.parentNode.removeChild(tut);
       tut = null;
@@ -22213,7 +22557,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       }
       if (store.settings && store.settings.inputMode === 'meter') {
         t.textContent = '';
-        t.appendChild(el('div', { class: 'tut-step' }, el('span', { class: 'tut-text', text: '◄ ► AIM · SPACE ×3\npower · strike' })));
+        t.appendChild(el('div', { class: 'tut-step' }, el('span', { class: 'tut-text', text: '◄ ► AIM · ' + confirmWord() + ' ×3\npower · strike' })));
       }
       return t;
     }
@@ -22243,7 +22587,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
         if (opts.tutorial && !tut) {
           tut = buildTutorial();
           view.el.querySelector('.kv-stage').appendChild(tut);
-          fitTutorial();
+          scheduleFitTutorial();
           view.el.addEventListener('pointerdown', dismissTutorial, true);   // first touch dismisses (non-blocking overlay)
           root.addEventListener('keydown', dismissTutorial, true);
         }
@@ -22297,6 +22641,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     return {
       el: rootEl,
       view: function () { return view; },
+      onKey: function (ev) { return KickView.escapeToSettings(ev); },
       onResize: function () { if (view) { view.resize(); fitTutorial(); } },
       destroy: function () {
         destroyed = true;
@@ -22671,6 +23016,34 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
 
   var W = 192, H = 112, TOP = 32;   // TOP: extra night-sky rows above the dusk bands — the logo lives there, clear of the uprights
 
+  var STAGE_NAME = { HS: 'High school', COLLEGE: 'College', DRAFT: 'Draft', NFL: 'Pro', RETIRED: 'Retired' };
+  var PHASE_NAME = {
+    SHOWCASE: 'Showcase', OFFERS: 'Offers',
+    PRE: 'Preseason', REG: 'Season', POST: 'Playoffs', AWARDS: 'Awards', OFF: 'Offseason',
+    DECLARE: 'Declare', COMBINE: 'Combine', DRAFT: 'Draft day', UDFA: 'Undrafted',
+    LEGACY: ''
+  };
+
+  /** Longest make as text — an em dash until a field goal has actually been made (mirrors RTG.UI.Kit.longText,
+      which loads after this file; the records ticker must never print 'LONG 0'). */
+  function longText(long) {
+    var Kit = RTG.UI.Kit;
+    if (Kit && typeof Kit.longText === 'function') return Kit.longText(long);
+    var v = Number(long) || 0;
+    return v > 0 ? String(v) : '—';
+  }
+
+  /** Human copy for a save summary's stage/phase/week — never the raw enum ('Y1 COLLEGE.REG'). */
+  function whereText(summary) {
+    var stage = STAGE_NAME[summary.stage] || summary.stage || '';
+    var phase = PHASE_NAME[summary.phase];
+    if (phase === undefined) phase = summary.phase ? String(summary.phase).toLowerCase() : '';
+    // REG / POST carry a week number, which reads better than the phase name
+    if ((summary.phase === 'REG' || summary.phase === 'POST') && summary.week > 0) phase = 'Week ' + summary.week;
+    if (!stage) return phase;
+    return phase ? stage + ' · ' + phase : stage;
+  }
+
   function factory(store) {
     var C = RTG.UI.C, Router = RTG.UI.Router, P = RTG.UI.Palette;
     var el = C.el('div', { class: 'screen screen-full title-screen' });
@@ -22753,7 +23126,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     menu.appendChild(cont);
     if (summary) {
       menu.appendChild(C.el('div', { class: 'title-summary small txt-grey', 'data-summary': '1' },
-        summary.name + ' · ' + (summary.team || 'no team') + ' · Y' + summary.year + ' ' + summary.stage + '.' + summary.phase + ' · OVR ' + summary.ovr + ' · ' + C.fmt.ago(summary.savedAt)));
+        summary.name + ' · ' + (summary.team || 'no team') + ' · Y' + summary.year + ' ' + whereText(summary) + ' · OVR ' + summary.ovr + ' · ' + C.fmt.ago(summary.savedAt)));
     }
     menu.appendChild(C.button({ label: 'LOAD', kind: 'secondary', block: true, icon: 'save', onClick: function () { Router.go('saves'); } }));
     menu.appendChild(C.button({ label: 'SETTINGS', kind: 'secondary', block: true, icon: 'gear', onClick: function () { Router.go('settings'); } }));
@@ -22761,7 +23134,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     // records ticker
     var rec = store.getRecords();
     var best = rec.careers.slice().sort(function (a, b) { return (b.hof || 0) - (a.hof || 0); }).slice(0, 6);
-    var tickerText = best.length ? best.map(function (c) { return (c.name || '?') + ' · ' + (c.tier || '') + ' · HOF ' + (c.hof || 0) + ' · ' + (c.fgm || 0) + ' FGM · LONG ' + (c.long || 0); }).join('   ★   ')
+    var tickerText = best.length ? best.map(function (c) { return (c.name || '?') + ' · ' + (c.tier || '') + ' · HOF ' + (c.hof || 0) + ' · ' + (c.fgm || 0) + ' FGM · LONG ' + longText(c.long); }).join('   ★   ')
       : 'NO LEGENDS YET · EVERY KICK COUNTS · THE POST IS NOT YOUR FRIEND · GO KICK SOMETHING';
     var ticker = C.el('div', { class: 'ticker', 'aria-label': 'Best careers' }, C.el('div', { class: 'ticker-inner', text: tickerText + '   ★   ' + tickerText }));
 
@@ -22821,12 +23194,28 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var hometowns = (RTG.Data.names && RTG.Data.names.hometowns) || [];
     var rng = store.uiRng;
 
+    /**
+     * The cosmetic defaults, drawn in a fixed order from one RNG. With a seed in the field they come from
+     * RNG.create(seed) — the same seed the engine will use — so "same seed, same career" also covers the
+     * hometown (which feeds the near-home college offers and the hometown discount) and the look.
+     */
+    function rollDefaults(r) {
+      return {
+        name: RTG.Names.player(r).full,
+        look: { skin: r.int(0, 3), hair: r.int(0, 5), boot: r.int(0, 3) },
+        hometownIdx: hometowns.length ? r.int(0, hometowns.length - 1) : -1
+      };
+    }
+    /** Fields the player changed by hand: a new seed never overwrites those. */
+    var touched = { name: false, look: false, hometown: false };
+
+    var d0 = rollDefaults(rng);
     var form = {
-      name: RTG.Names.player(rng).full,
+      name: d0.name,
       archetype: 'SURGEON',
-      look: { skin: rng.int(0, 3), hair: rng.int(0, 5), boot: rng.int(0, 3) },
+      look: d0.look,
       foot: 'R',
-      hometownIdx: hometowns.length ? rng.int(0, hometowns.length - 1) : -1,
+      hometownIdx: d0.hometownIdx,
       difficulty: 'pro',
       seed: ''
     };
@@ -22835,8 +23224,8 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     el.classList.add('newcareer-screen');
 
     // ── name
-    var nameInput = C.el('input', { type: 'text', class: 'input', id: 'nc-name', maxlength: 28, autocomplete: 'off', spellcheck: 'false', value: form.name, 'aria-label': 'Player name', onInput: function () { form.name = nameInput.value; } });
-    var dice = C.button({ kind: 'secondary', icon: 'dice', label: 'DICE', ariaLabel: 'Random name', onClick: function () { form.name = RTG.Names.player(rng).full; nameInput.value = form.name; } });
+    var nameInput = C.el('input', { type: 'text', class: 'input', id: 'nc-name', maxlength: 28, autocomplete: 'off', spellcheck: 'false', value: form.name, 'aria-label': 'Player name', onInput: function () { form.name = nameInput.value; touched.name = true; } });
+    var dice = C.button({ kind: 'secondary', icon: 'dice', label: 'DICE', ariaLabel: 'Random name', onClick: function () { form.name = RTG.Names.player(rng).full; nameInput.value = form.name; touched.name = true; } });
     el.appendChild(C.el('div', { class: 'field' }, C.el('label', { class: 'field-label', 'for': 'nc-name', text: 'NAME' }), C.el('div', { class: 'input-row' }, nameInput, dice)));
 
     // ── archetypes
@@ -22862,16 +23251,30 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     // ── look
     var avatarHost = C.el('div', { class: 'look-preview' });
     function renderAvatar() { C.replace(avatarHost, C.pixelAvatar(form.look, 64)); }
+    var swatchBtns = {};
+    function syncSwatches() {
+      for (var key in swatchBtns) {
+        if (!Object.prototype.hasOwnProperty.call(swatchBtns, key)) continue;
+        var btns = swatchBtns[key];
+        for (var i = 0; i < btns.length; i++) {
+          var on = form.look[key] === i;
+          btns[i].classList.toggle('active', on);
+          btns[i].setAttribute('aria-checked', on ? 'true' : 'false');
+        }
+      }
+      renderAvatar();
+    }
     function swatchRow(key, colours, label) {
       var row = C.el('div', { class: 'swatches', role: 'radiogroup', 'aria-label': label });
       var btns = [];
       colours.forEach(function (col, i) {
         var b = C.el('button', { type: 'button', class: 'swatch', role: 'radio', style: { background: col }, 'aria-label': label + ' ' + (i + 1), onClick: function () {
-          form.look[key] = i; btns.forEach(function (x, j) { x.classList.toggle('active', j === i); x.setAttribute('aria-checked', j === i ? 'true' : 'false'); }); renderAvatar();
+          form.look[key] = i; touched.look = true; syncSwatches();
         } });
         if (form.look[key] === i) { b.classList.add('active'); b.setAttribute('aria-checked', 'true'); }
         btns.push(b); row.appendChild(b);
       });
+      swatchBtns[key] = btns;
       return C.el('div', { class: 'field' }, C.el('span', { class: 'field-label', text: label }), row);
     }
     var footBtns = {};
@@ -22885,7 +23288,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       C.el('div', { class: 'field' }, C.el('span', { class: 'field-label', text: 'KICKING FOOT' }), C.el('div', { class: 'pills' }, footBtns.R, footBtns.L)))) }));
 
     // ── hometown
-    var select = C.el('select', { id: 'nc-home', 'aria-label': 'Hometown', onChange: function () { form.hometownIdx = parseInt(select.value, 10); } });
+    var select = C.el('select', { id: 'nc-home', 'aria-label': 'Hometown', onChange: function () { form.hometownIdx = parseInt(select.value, 10); touched.hometown = true; } });
     hometowns.forEach(function (h, i) { select.appendChild(C.el('option', { value: String(i), text: h.city + ', ' + h.state, selected: i === form.hometownIdx })); });
     el.appendChild(C.el('div', { class: 'field' }, C.el('label', { class: 'field-label', 'for': 'nc-home', text: 'HOMETOWN' }), select));
 
@@ -22910,8 +23313,16 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     el.appendChild(C.el('div', { class: 'field' }, C.el('span', { class: 'field-label', text: 'DIFFICULTY' }), diffRow, diffDesc));
 
     // ── seed
-    var seedInput = C.el('input', { type: 'text', class: 'input', id: 'nc-seed', inputmode: 'numeric', autocomplete: 'off', placeholder: 'random', 'aria-label': 'Seed', onInput: function () { form.seed = seedInput.value.trim(); } });
-    var randomBtn = C.button({ label: 'RANDOM', kind: 'secondary', onClick: function () { form.seed = String(rng.int(1, 999999999)); seedInput.value = form.seed; } });
+    /** A seed in the field re-rolls the untouched cosmetic defaults from that seed (see rollDefaults). */
+    function applySeedDefaults() {
+      if (!form.seed) return;
+      var d = rollDefaults(RTG.RNG.create(RTG.RNG.toSeed(form.seed)));
+      if (!touched.name) { form.name = d.name; nameInput.value = d.name; }
+      if (!touched.look) { form.look = d.look; syncSwatches(); }
+      if (!touched.hometown && d.hometownIdx >= 0) { form.hometownIdx = d.hometownIdx; select.value = String(d.hometownIdx); }
+    }
+    var seedInput = C.el('input', { type: 'text', class: 'input', id: 'nc-seed', inputmode: 'numeric', autocomplete: 'off', placeholder: 'random', 'aria-label': 'Seed', onInput: function () { form.seed = seedInput.value.trim(); applySeedDefaults(); } });
+    var randomBtn = C.button({ label: 'RANDOM', kind: 'secondary', onClick: function () { form.seed = String(rng.int(1, 999999999)); seedInput.value = form.seed; applySeedDefaults(); } });
     el.appendChild(C.el('div', { class: 'field' }, C.el('label', { class: 'field-label', 'for': 'nc-seed', text: 'SEED (numbers or words — same seed, same career)' }), C.el('div', { class: 'input-row' }, seedInput, randomBtn)));
 
     // ── start
@@ -22940,7 +23351,13 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     return {
       el: el,
       destroy: function () {},
-      onKey: function (ev) { if (ev.key === 'Enter' && ev.target === nameInput) { start(); return true; } return false; }
+      keysInFields: true,   // app.js forwards keydowns from #nc-name / #nc-seed so Enter can submit the form
+      onKey: function (ev) {
+        if (ev.key !== 'Enter' || ev.repeat) return false;
+        if (ev.target !== nameInput && ev.target !== seedInput) return false;
+        start();
+        return true;
+      }
     };
   }
 
@@ -23184,8 +23601,9 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
  * Hub: team bar (crest, record, rank / seed), the week card (opponent, venue, home-stadium climate / dome / surface
  * as the "forecast" — the weather itself is rolled at kickoff — storylines from the latest headlines, ratings),
  * meters row (Trust / Fans / Morale / Job Security as 5-block meters, Fame tier / XP / money chips), inbox preview,
- * the phase actions (TRAIN · PLAY GAME · SIM GAME · SIM TO END OF SEASON · END WEEK · START SEASON), the bye-week
- * Rest / Grind card, the PRE goals + camp-battle card, the POST bracket card, injured / benched / free-agent banners.
+ * the phase actions (TRAIN · PLAY GAME · SIM GAME · SIM TO END OF SEASON · END WEEK · START SEASON — or, while a
+ * game is open, the live score line plus RESUME GAME / FINISH GAME and nothing else), the bye-week Rest / Grind
+ * card, the PRE goals + camp-battle card, the POST bracket card, injured / benched / free-agent banners.
  * Re-renders from state on every store change. The shell chrome (top bar / tab bar / rails) is NOT redrawn here.
  */
 (function (root) {
@@ -23240,9 +23658,21 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
   };
 
   Kit.pctText = function (m, a, d) { return a > 0 ? C().fmt.pct(m / a, d === undefined ? 1 : d) : '—'; };
+
+  /**
+   * The longest make as text: an em dash until a field goal has actually been made (a "LONG 0" is not a 0-yard
+   * kick, it is no kick at all — the quick-stats sidebar has always shown '—' here).
+   * @param {number|undefined} long @param {string} [unit] appended when there is a number ('yd')
+   */
+  Kit.longText = function (long, unit) {
+    var v = num(long, 0);
+    if (!(v > 0)) return '—';
+    return unit ? v + ' ' + unit : String(v);
+  };
+
   Kit.fgLine = function (s) {
     if (!s) return '—';
-    return 'FG ' + num(s.fgm) + '/' + num(s.fga) + ' · LONG ' + num(s.long) + ' · PAT ' + num(s.patMade) + '/' + num(s.pat);
+    return 'FG ' + num(s.fgm) + '/' + num(s.fga) + ' · LONG ' + Kit.longText(s.long) + ' · PAT ' + num(s.patMade) + '/' + num(s.pat);
   };
 
   Kit.recordOf = function (state, teamId) {
@@ -23258,6 +23688,17 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     return null;
   };
 
+  /**
+   * Has the current season produced any standings yet? Seeds and division ranks are recomputed from an all-0-0
+   * table in the preseason (and in week 1), where they are a tiebreak artefact of last season's order, not a
+   * standing — so no team may wear a seed / division chip until somebody has played a game.
+   */
+  Kit.standingsStarted = function (state) {
+    var rows = state && state.season && state.season.standings || [];
+    for (var i = 0; i < rows.length; i++) if (num(rows[i].w) + num(rows[i].l) + num(rows[i].t) > 0) return true;
+    return false;
+  };
+
   /** '#4' (college poll) or 'SEED 2' / 'DIV 3rd' (NFL) chip, or null. */
   Kit.rankChip = function (state, teamId) {
     if (!state || !teamId || !state.season) return null;
@@ -23267,6 +23708,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       if (r && r.rank && r.rank <= 25) return Kit.tip(c.chip('#' + r.rank, 'gold'), 'Poll rank ' + r.rank + (r.prev ? ' (was ' + r.prev + ')' : ''));
       return null;
     }
+    if (!Kit.standingsStarted(state)) return null;
     var row = Kit.standingRow(state, teamId);
     if (!row) return null;
     if (row.seed) return Kit.tip(c.chip('SEED ' + row.seed, 'gold'), 'Conference seed ' + row.seed + (row.divChamp ? ' · division champion' : ''));
@@ -23595,9 +24037,30 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       return wrap;
     }
 
+    /** The live game line ('GAME IN PROGRESS · Q1 9:31 · 3-7'), or null when no game is open. */
+    function gameProgress(state) {
+      var gs = state.game;
+      if (!gs || !gs.score) return null;
+      var quarters = RTG.Tuning && RTG.Tuning.sim && RTG.Tuning.sim.clock ? num(RTG.Tuning.sim.clock.quarters, 4) : 4;
+      var otN = num(gs.q, 1) - quarters;
+      var period = otN > 0 ? 'OT' + (otN > 1 ? otN : '') : 'Q' + num(gs.q, 1);
+      var mine = gs.userSide === 'home' ? num(gs.score.home) : num(gs.score.away);
+      var theirs = gs.userSide === 'home' ? num(gs.score.away) : num(gs.score.home);
+      var text = gs.done
+        ? 'GAME OVER · ' + mine + '-' + theirs + ' — finish it to bank the result'
+        : 'GAME IN PROGRESS · ' + period + ' ' + c.fmt.clock(num(gs.clock)) + ' · ' + mine + '-' + theirs + (gs.pending ? ' · your kick is up' : '');
+      var banner = c.el('div', { class: 'banner banner-sky small mt-1 hub-ingame', role: 'status' }, c.icon('boot', 12), ' ' + text);
+      return Kit.tip(banner, 'This week’s game is under way — resume it to take the next kick');
+    }
+
     function actionButtons(state, ref) {
       var season = state.season, p = state.player, buttons = [];
       var inSeason = state.phase === 'REG' || state.phase === 'POST';
+      if (state.game) {   // a game is open: the only move is back into it (no training, no re-playing the week)
+        buttons.push(c.button({ label: state.game.done ? 'FINISH GAME' : 'RESUME GAME', kind: 'primary', icon: 'boot', action: 'resume-game',
+          onClick: function () { c.announce(state.game.done ? 'Finishing the game.' : 'Back to the game.'); R.sync({ force: true }); } }));
+        return buttons;
+      }
       var canTrain = inSeason && !season.trainingDone && !state.pending && !(p.flags && p.flags.skipTraining);
       if (canTrain) buttons.push(c.button({ label: 'TRAIN', kind: 'secondary', icon: 'train', action: 'train', onClick: function () { R.go('training'); } }));
       var gameOpen = ref && !ref.played && !season.weekGameDone && !state.pending;
@@ -23662,9 +24125,11 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
           c.el('strong', { class: 'ellipsis', text: (ref.isHome ? 'vs ' : '@ ') + (opp ? opp.name : ref.oppId) }),
           c.el('span', { class: 'row row-wrap small' }, Kit.numEl(Kit.recordOf(state, ref.oppId) || '0-0', 'Opponent record'), Kit.rankChip(state, ref.oppId), ref.game && ref.game.rivalry ? Kit.tip(c.chip('RIVALRY', 'red', 'bolt'), 'Rivalry week: extra pressure, extra fame') : null)));
       body.push(head);
+      body.push(gameProgress(state));
       body.push(forecastRow(state, ref));
       body.push(ratingsRow(state, ref));
-      if (ref.played && ref.game.score) {
+      if (state.game) { /* the live line above already says where the game stands */ }
+      else if (ref.played && ref.game.score) {
         var us = ref.isHome ? ref.game.score.home : ref.game.score.away, them = ref.isHome ? ref.game.score.away : ref.game.score.home;
         var line = Kit.lineFromKicks(Kit.gameKicks(state, ref.gameId));
         body.push(c.el('div', { class: 'banner ' + (us > them ? 'banner-good' : us < them ? 'banner-bad' : 'banner-gold') + ' small mt-1' }, (us > them ? 'WIN ' : us < them ? 'LOSS ' : 'TIE ') + us + '-' + them + (ref.game.ot ? ' (OT)' : '') + ' · ' + Kit.fgLine(line)));
@@ -23740,7 +24205,8 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       parts.push(teamBar(state));
       parts = parts.concat(banners(state));
       var playing = state.stage === 'COLLEGE' || state.stage === 'NFL';
-      var here = playing && (state.phase === 'PRE' || state.phase === 'REG' || state.phase === 'POST') && !state.game;
+      // a game in progress keeps the week card (with the live score and a RESUME GAME button) — it is still "here"
+      var here = playing && (state.phase === 'PRE' || state.phase === 'REG' || state.phase === 'POST') && (!state.game || state.phase !== 'PRE');
       if (!here) parts.push(elsewhereCard(state));
       else if (state.phase === 'PRE') parts.push(preCard(state));
       else {
@@ -24615,6 +25081,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     return {
       el: el,
       view: function () { return view; },
+      onKey: function (ev) { return KV().escapeToSettings(ev); },
       onResize: function () { if (view) view.resize(); },
       destroy: function () {
         destroyed = true;
@@ -24674,7 +25141,8 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
  * result), else from store.lastDispatch when its fnName is finishUserGame / autoPlayGame, else it is rebuilt from
  * state (the week's played game + the kick log) so a reload never leaves a blank screen. Big score with crests
  * (your side in gold), your line in gold (FG x/y · LONG · PAT · GW ★), the letter-grade stamp (300 ms stamp-in;
- * instant under reduced motion), headline card, XP breakdown, meter deltas with arrows, the coach's line, injury /
+ * instant under reduced motion), headline card, XP breakdown (rows scaled by the difficulty multiplier and rounded
+ * so they add up to the total), meter deltas with arrows, the coach's line, injury /
  * milestone banners, the kick chips. CONTINUE → dispatch('endWeek') then Router.go('hub') + Router.sync() (the
  * postgame is a hub-family screen, so the automatic sync would otherwise stay here).
  */
@@ -24735,7 +25203,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     function yourLine(s) {
       var l = s.userLine || {};
       if (s.played === false) return c.el('p', { class: 'pg-line txt-grey center', text: 'You did not kick this week.' });
-      var parts = [c.el('span', { class: 'num' }, 'FG ' + Kit.num(l.fgm) + '/' + Kit.num(l.fga)), c.el('span', { class: 'num' }, 'LONG ' + Kit.num(l.long)), c.el('span', { class: 'num' }, 'PAT ' + Kit.num(l.patMade) + '/' + Kit.num(l.pat))];
+      var parts = [c.el('span', { class: 'num' }, 'FG ' + Kit.num(l.fgm) + '/' + Kit.num(l.fga)), c.el('span', { class: 'num' }, 'LONG ' + Kit.longText(l.long)), c.el('span', { class: 'num' }, 'PAT ' + Kit.num(l.patMade) + '/' + Kit.num(l.pat))];
       if (l.gw) parts.push(Kit.tip(c.el('span', { class: 'pg-gw' }, c.icon('star', 12), ' GW'), 'Game-winning kick'));
       if (l.tf) parts.push(Kit.tip(c.el('span', { class: 'pg-gw' }, c.icon('clock', 12), ' TF'), 'Tie-forcing kick'));
       if (l.made50plus) parts.push(Kit.tip(c.chip(l.made50plus + '× 50+', 'gold'), 'Makes from 50 yards or more'));
@@ -24751,10 +25219,45 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       return c.el('div', { class: 'pg-stamp-wrap center' }, st);
     }
 
+    /** Whole numbers as close as possible to `values` that add up to `target` (largest remainder first). */
+    function wholeRows(values, target) {
+      var out = [], rem = [], i, sum = 0;
+      for (i = 0; i < values.length; i++) {
+        var floored = Math.floor(values[i]);
+        out.push(floored); rem.push({ i: i, r: values[i] - floored });
+        sum += floored;
+      }
+      var left = Math.round(target) - sum;
+      rem.sort(function (a, b) { return left > 0 ? (b.r - a.r || a.i - b.i) : (a.r - b.r || a.i - b.i); });
+      for (i = 0; i < Math.abs(left) && i < rem.length; i++) out[rem[i].i] += left > 0 ? 1 : -1;
+      if (Math.abs(left) > rem.length && out.length) out[0] += (Math.abs(left) - rem.length) * (left > 0 ? 1 : -1);
+      return out;
+    }
+
+    /**
+     * The XP list: one whole-number row per engine item (the raw §2.1.2 values, rounded so they add up), then the
+     * difficulty multiplier as its own row when it is not ×1 — so the rows visibly sum to TOTAL. Before this the
+     * list showed fractional / unmultiplied values under an integer total (rookie ×1.25: 8+1+7+1+1 = 18 vs "+23").
+     * @param {{items:Array<{label:string, xp:number}>, total:number, mult:number}} xp
+     * @returns {Array<{label:string, xp:number}>}
+     */
+    function xpRows(xp) {
+      var items = xp.items || [], mult = typeof xp.mult === 'number' && xp.mult > 0 ? xp.mult : 1;
+      var raw = [], sum = 0, i;
+      for (i = 0; i < items.length; i++) { raw.push(Kit.num(items[i].xp)); sum += raw[i]; }
+      var base = Math.round(sum);
+      var values = wholeRows(raw, base);
+      var rows = [];
+      for (i = 0; i < items.length; i++) rows.push({ label: items[i].label, xp: values[i], tip: 'XP for ' + items[i].label });
+      var diff = Math.round(Kit.num(xp.total)) - base;
+      if (diff) rows.push({ label: 'Difficulty ×' + mult, xp: diff, tip: 'The difficulty multiplier on everything above' });
+      return rows;
+    }
+
     function xpCard(s) {
       if (!s.xp) return null;
-      var items = c.list(s.xp.items || [], function (it) { return c.el('span', { class: 'row row-between grow' }, c.el('span', { class: 'small', text: it.label }), Kit.numEl('+' + it.xp, 'XP for ' + it.label, 'txt-gold')); }, { empty: 'No XP this game.' });
-      var total = c.el('div', { class: 'row row-between pg-xp-total mt-1' }, c.el('strong', { text: 'TOTAL' }), Kit.numEl('+' + Kit.num(s.xp.total) + ' XP', 'Difficulty multiplier ×' + (s.xp.mult || 1), 'txt-gold big'));
+      var items = c.list(xpRows(s.xp), function (it) { return c.el('span', { class: 'row row-between grow' }, c.el('span', { class: 'small', text: it.label }), Kit.numEl((it.xp < 0 ? '−' : '+') + Math.abs(it.xp), it.tip, 'txt-gold')); }, { empty: 'No XP this game.' });
+      var total = c.el('div', { class: 'row row-between pg-xp-total mt-1' }, c.el('strong', { text: 'TOTAL' }), Kit.numEl('+' + Math.round(Kit.num(s.xp.total)) + ' XP', 'Difficulty multiplier ×' + (s.xp.mult || 1), 'txt-gold big'));
       return c.card({ title: 'XP', icon: 'bolt', body: [items, total] });
     }
 
@@ -25099,8 +25602,9 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       var cur = conf || userConf(state) || 'Liberty';
       var rows = RTG.Standings.rowsIn(state.season.standings || [], cur);
       var tbl = c.table([
-        { key: 'seed', label: 'SEED', align: 'r', render: function (r) { return r.seed ? String(r.seed) + (r.seed === 1 ? ' (bye)' : '') : '—'; } },
-        { key: 'team', label: 'TEAM', render: function (r) { return c.el('span', { class: 'row' }, teamCell(state, r.teamId), r.divChamp ? c.chip(r.div, 'gold') : null); } },
+        // an all-0-0 table seeds itself on tiebreaks alone: no seed column until somebody has played (see Kit.rankChip)
+        { key: 'seed', label: 'SEED', align: 'r', render: function (r) { return r.seed && Kit.standingsStarted(state) ? String(r.seed) + (r.seed === 1 ? ' (bye)' : '') : '—'; } },
+        { key: 'team', label: 'TEAM', render: function (r) { return c.el('span', { class: 'row' }, teamCell(state, r.teamId), r.divChamp && Kit.standingsStarted(state) ? c.chip(r.div, 'gold') : null); } },
         { key: 'rec', label: 'W-L', align: 'r', render: recText },
         { key: 'confr', label: 'CONF', align: 'r', render: function (r) { return r.confW + '-' + r.confL; } },
         { key: 'diff', label: 'DIFF', align: 'r', render: function (r) { return c.fmt.signed(r.diff || 0); } }
@@ -25318,7 +25822,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
         ['FG', Kit.numEl(Kit.num(s.fgm) + ' / ' + Kit.num(s.fga) + ' (' + pct(s.fgm, s.fga) + ')', 'Field goals made / attempted')],
         ['PAT', Kit.numEl(Kit.num(s.patMade) + ' / ' + Kit.num(s.pat) + ' (' + pct(s.patMade, s.pat) + ')', 'Extra points made / attempted')],
         ['POINTS', Kit.numEl(Kit.num(s.pts), '3 per field goal, 1 per PAT')],
-        ['LONG', Kit.numEl(Kit.num(s.long) + ' yd', 'Longest made field goal')],
+        ['LONG', Kit.numEl(Kit.longText(s.long, 'yd'), 'Longest made field goal')],
         ['50+', Kit.numEl(Kit.num(s.made50plus), 'Makes from 50 yards or more')],
         ['CLUTCH', Kit.numEl(Kit.num(s.clutchM) + ' / ' + Kit.num(s.clutchA), 'Kicks at pressure 0.6 or more')],
         ['DECISIVE', Kit.numEl(Kit.num(s.decisiveM) + ' / ' + Kit.num(s.decisiveA), 'Game-deciding kicks')],
@@ -25353,7 +25857,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       var blocks = c.el('div', { class: 'grid-2' });
       [['COLLEGE', st.college], ['PRO', st.nfl]].forEach(function (b) {
         var s = b[1] || {};
-        blocks.appendChild(c.card({ title: b[0], kind: 'flat', body: c.kv([['FG', Kit.num(s.fgm) + '/' + Kit.num(s.fga) + ' (' + pct(s.fgm, s.fga) + ')'], ['PTS', Kit.num(s.pts)], ['LONG', Kit.num(s.long)], ['GW', Kit.num(s.gameWinners)], ['GAMES', Kit.num(s.games)]]) }));
+        blocks.appendChild(c.card({ title: b[0], kind: 'flat', body: c.kv([['FG', Kit.num(s.fgm) + '/' + Kit.num(s.fga) + ' (' + pct(s.fgm, s.fga) + ')'], ['PTS', Kit.num(s.pts)], ['LONG', Kit.longText(s.long)], ['GW', Kit.num(s.gameWinners)], ['GAMES', Kit.num(s.games)]]) }));
       });
       out.push(blocks);
       var rows = h.slice().reverse().map(function (l) { return l; });
@@ -25363,7 +25867,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
         { key: 'role', label: 'ROLE' },
         { key: 'fg', label: 'FG', align: 'r', render: function (l) { return l.stats.fgm + '/' + l.stats.fga; } },
         { key: 'pct', label: 'PCT', align: 'r', render: function (l) { return pct(l.stats.fgm, l.stats.fga); } },
-        { key: 'long', label: 'LONG', align: 'r', render: function (l) { return l.stats.long; } },
+        { key: 'long', label: 'LONG', align: 'r', render: function (l) { return Kit.longText(l.stats.long); } },
         { key: 'pts', label: 'PTS', align: 'r', render: function (l) { return l.stats.pts; } },
         { key: 'rec', label: 'TEAM', align: 'r', render: function (l) { return c.el('span', { class: 'row', style: 'justify-content:flex-end' }, c.el('span', { text: l.teamRecord }), l.champion ? Kit.tip(c.icon('trophy', 12), 'Champions') : null); } },
         { key: 'grade', label: 'GRD', align: 'r' },
@@ -25468,7 +25972,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     function fmtVal(r, v) {
       if (v === null || v === undefined) return '—';
       if (r.key === 'seasonFGpct' || r.key === 'careerFGpct') return (Math.round(v * 10) / 10).toFixed(1) + '%';
-      if (r.key === 'longFG') return v + ' yd';
+      if (r.key === 'longFG') return Kit.longText(v, 'yd');   // no make yet is '—', never a 0-yard field goal
       return String(v);
     }
 
@@ -25505,8 +26009,8 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       var items = [];
       (M.fgm || []).forEach(function (n) { items.push({ id: 'FGM' + n, text: n + ' career field goals', done: !!f['ms:FGM' + n] || car.fgm >= n, prog: Kit.num(car.fgm) + ' / ' + n }); });
       (M.pts || []).forEach(function (n) { items.push({ id: 'PTS' + n, text: n + ' career points', done: !!f['ms:PTS' + n] || car.pts >= n, prog: Kit.num(car.pts) + ' / ' + n }); });
-      items.push({ id: 'first50', text: 'First 50-yarder', done: !!f['ms:first50'] || car.made50plus > 0, prog: car.made50plus ? 'done' : 'long ' + Kit.num(car.long) });
-      items.push({ id: 'first60', text: 'First 60-yarder', done: !!f['ms:first60'] || car.long >= 60, prog: car.long >= 60 ? 'done' : 'long ' + Kit.num(car.long) });
+      items.push({ id: 'first50', text: 'First 50-yarder', done: !!f['ms:first50'] || car.made50plus > 0, prog: car.made50plus ? 'done' : (Kit.num(car.long) > 0 ? 'long ' + car.long : 'no makes yet') });
+      items.push({ id: 'first60', text: 'First 60-yarder', done: !!f['ms:first60'] || car.long >= 60, prog: car.long >= 60 ? 'done' : (Kit.num(car.long) > 0 ? 'long ' + car.long : 'no makes yet') });
       items.push({ id: 'streak', text: (M.consecutive || 20) + ' straight makes', done: !!f['ms:STREAK' + (M.consecutive || 20)] || !!f['ms:streak'] || car.bestConsecutive >= (M.consecutive || 20), prog: 'best ' + Kit.num(car.bestConsecutive) });
       items.push({ id: 'gw', text: (M.gw || 10) + ' game-winners', done: !!f['ms:GW' + (M.gw || 10)] || car.gameWinners >= (M.gw || 10), prog: Kit.num(car.gameWinners) + ' / ' + (M.gw || 10) });
       return c.card({ title: 'MILESTONES', icon: 'star', body: c.list(items, function (m) {
@@ -25687,14 +26191,28 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       return r;
     }
 
+    /**
+     * The wizard strip. A step the chain ran without asking anything (no card, no event — the engine records its
+     * index in chain.skipped) reads as skipped ('–', greyed), never as a completed ✓.
+     */
     function stepper(state) {
       var ch = state.flags && state.flags.offseason;
       if (!ch || !ch.steps) return null;
       var wrap = c.el('ol', { class: 'stepper', 'aria-label': 'Offseason steps' });
       var cur = state.pending ? ch.idx - 1 : ch.idx;
+      var skipped = {};
+      (ch.skipped || []).forEach(function (i) { skipped[i] = true; });
       ch.steps.forEach(function (s, i) {
-        var cls = i < cur ? 'done' : (i === cur ? 'current' : 'todo');
-        wrap.appendChild(c.el('li', { class: 'step ' + cls, 'aria-current': i === cur ? 'step' : null }, c.el('span', { class: 'step-dot', text: i < cur ? '✓' : String(i + 1) }), c.el('span', { class: 'step-name', text: STEP_NAMES[s] || s })));
+        var name = STEP_NAMES[s] || s;
+        var past = i < cur, isSkipped = past && !!skipped[i];
+        var cls = isSkipped ? 'skipped' : (past ? 'done' : (i === cur ? 'current' : 'todo'));
+        var dot = isSkipped ? '–' : (past ? '✓' : String(i + 1));
+        var li = c.el('li', { class: 'step ' + cls, 'aria-current': i === cur ? 'step' : null },
+          c.el('span', { class: 'step-dot', 'aria-hidden': 'true', text: dot }),
+          c.el('span', { class: 'step-name', text: name }));
+        li.setAttribute('aria-label', name + ' — ' + (isSkipped ? 'skipped' : past ? 'done' : i === cur ? 'now' : 'to come'));
+        Kit.tip(li, isSkipped ? 'Skipped — nothing came up this offseason' : past ? 'Done' : (i === cur ? 'This step' : 'Still to come'));
+        wrap.appendChild(li);
       });
       return c.el('div', { class: 'scroll-x stepper-scroll' }, wrap);
     }
@@ -25810,6 +26328,25 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       }
     }
 
+    /**
+     * The contract as it will read NEXT season. The year tick happens in Season.advanceYear (on CONTINUE), and only
+     * for the deal that covered the season just played (season.contractAtStart) — a deal signed during this
+     * offseason still starts at year 1. Without this the preview for Y10 shows the Y9 line ("year 3/4").
+     */
+    function nextContractText(state) {
+      var ct = state.player.contract;
+      if (!ct) return 'No contract';
+      var a = state.season && state.season.contractAtStart;
+      var years = Math.max(1, Kit.num(ct.years, 1));
+      var idx = Kit.num(ct.yearIdx, 0);
+      if (a && a.type === ct.type && Kit.num(a.startYear, state.year) === Kit.num(ct.startYear, state.year) && Kit.num(a.yearIdx, 0) === idx) idx = Math.min(idx + 1, years);
+      if (idx >= years) return ct.type + (ct.type === 'SCHOLARSHIP' || ct.type === 'WALKON' ? '' : ' · ' + c.fmt.money(Kit.num(ct.aav)) + '/yr') + ' · expired';
+      var copy = {};
+      for (var k in ct) if (Object.prototype.hasOwnProperty.call(ct, k)) copy[k] = ct[k];
+      copy.yearIdx = idx;
+      return Kit.contractText(copy);
+    }
+
     function previewCard(state) {
       var p = state.player, t = Kit.userTeam(state);
       var rival = t ? (p.role === 'K1' ? (t.kicker2 || t.kicker) : (t.kicker || t.kicker2)) : null;
@@ -25818,7 +26355,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
         ['TEAM', t ? t.name : (state.stage === 'NFL' ? 'Free agent' : '—')],
         ['ROLE', p.role === 'NONE' ? 'FA' : p.role],
         ['RIVAL LEG', rival ? rival.name + ' (OVR ' + Kit.num(rival.ovr) + ')' : 'none'],
-        ['CONTRACT', Kit.contractText(p.contract)],
+        ['CONTRACT', nextContractText(state)],
         ['XP TO SPEND', String(p.xp)]
       ];
       return c.card({ title: 'NEXT SEASON PREVIEW', kind: 'gold', icon: 'arrow-r', body: [c.el('div', { class: 'row mb-1' }, t ? c.crest(t, 40) : c.pixelAvatar(p.look, 40), c.el('strong', { class: 'grow', text: 'The wizard is done. The calendar rolls over.' })), c.kv(rows)],
@@ -26554,13 +27091,32 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var el = c.el('div', { class: 'screen scr-timeline' });
     var unsub = null, destroyed = false;
 
-    function contractFor(state, year) {
+    /**
+     * The contract that covered `year`, with its yearIdx moved to that season (history.contracts stores the deal as
+     * signed — yearIdx 0 — so without this every node reads "year 1/N", and the NOW card contradicts the team
+     * screen). The live player contract wins for the season in progress: it is the one that has been ticked.
+     */
+    function contractFor(state, year, now) {
+      var live = state.player && state.player.contract;
+      if (now && live) return live;
       var list = state.history.contracts || [], best = null;
       for (var i = 0; i < list.length; i++) {
         var ct = list[i];
         if (ct.year <= year && (ct.endYear === null || ct.endYear === undefined || ct.endYear >= year)) best = ct;
       }
-      return best;
+      if (!best) return null;
+      if (live && live.type === best.type && Kit.num(live.startYear, best.year) === best.year) return atYear(live, year, live.startYear);
+      return atYear(best, year, best.year);
+    }
+
+    /** A shallow copy of `ct` whose yearIdx is the season `year` of that deal (clamped to its length). */
+    function atYear(ct, year, startYear) {
+      var years = Math.max(1, Kit.num(ct.years, 1));
+      var idx = Math.min(Math.max(0, year - Kit.num(startYear, year)), years - 1);
+      var copy = {};
+      for (var k in ct) if (Object.prototype.hasOwnProperty.call(ct, k)) copy[k] = ct[k];
+      copy.yearIdx = idx;
+      return copy;
     }
 
     function moments(state, year) {
@@ -26585,7 +27141,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     function node(state, l, opts) {
       opts = opts || {};
       var year = l.year, s = l.stats || {};
-      var ct = contractFor(state, year);
+      var ct = contractFor(state, year, opts.now);
       var head = c.el('div', { class: 'row tl-head' }, c.crest(l.teamId, 36),
         c.el('div', { class: 'col grow', style: 'gap:2px' },
           c.el('strong', { class: 'ellipsis', text: (opts.now ? 'NOW · ' : '') + Kit.calYear(year) + ' · ' + (l.teamName || Kit.teamName(l.teamId)) }),
@@ -26593,12 +27149,12 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       var line = c.el('div', { class: 'row row-wrap small tl-line' },
         Kit.numEl(l.teamRecord || Kit.recordOf(state, l.teamId) || '—', 'Team record'),
         Kit.numEl('FG ' + Kit.num(s.fgm) + '/' + Kit.num(s.fga) + ' (' + Kit.pctText(s.fgm, s.fga) + ')', 'Field goals', 'txt-gold'),
-        Kit.numEl('LONG ' + Kit.num(s.long), 'Longest make'),
+        Kit.numEl('LONG ' + Kit.longText(s.long), 'Longest make'),
         l.grade ? Kit.tip(c.chip('GRADE ' + l.grade, l.grade === 'A' || l.grade === 'B' ? 'mint' : l.grade === 'C' ? 'grey' : 'red'), 'Season grade') : null,
         playoffChip(l));
       var awards = (l.awards || []).map(function (id) { return Kit.tip(c.el('span', { class: 'tl-award' }, c.icon('trophy', 14)), Kit.awardName(id)); });
       var chips = c.el('div', { class: 'chips mt-1' }, awards.length ? c.el('span', { class: 'row tl-awards' }, awards, c.el('span', { class: 'small txt-grey', text: awards.length + ' award' + (awards.length === 1 ? '' : 's') })) : null,
-        ct ? Kit.tip(c.chip(Kit.contractText(ct).split(' · ').slice(0, 2).join(' · '), ct.type === 'ROOKIE' || ct.type === 'UDFA' ? 'sky' : ct.type === 'TAG' ? 'red' : ct.type === 'VET' ? 'gold' : 'grey', 'money'), (ct.reason || ct.type) + ' · signed Y' + ct.year + (ct.total ? ' · ' + c.fmt.money(ct.total) + ' total' : '')) : null,
+        ct ? Kit.tip(c.chip(Kit.contractText(ct).split(' · ').slice(0, 2).join(' · '), ct.type === 'ROOKIE' || ct.type === 'UDFA' ? 'sky' : ct.type === 'TAG' ? 'red' : ct.type === 'VET' ? 'gold' : 'grey', 'money'), (ct.reason || ct.type) + ' · signed Y' + Kit.num(ct.year, Kit.num(ct.startYear, year)) + ' · year ' + (Kit.num(ct.yearIdx) + 1) + '/' + Kit.num(ct.years, 1) + (ct.total ? ' · ' + c.fmt.money(ct.total) + ' total' : '')) : null,
         typeof l.salary === 'number' && l.salary ? Kit.tip(c.chip(c.fmt.money(l.salary), 'grey'), 'Paid this season') : null);
       var ms = moments(state, year);
       var det = c.el('details', { class: 'tl-moments', open: opts.open ? '' : null });
@@ -26724,12 +27280,16 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
 
     function breakdown(rep) {
       var rows = (rep.breakdown || []).filter(function (b) { return b.points; });
-      return c.table([
+      // the counts here are the PRO line only (Awards.hofScore reads stats.nfl), so they are smaller than CAREER
+      // LINE above — say so, or the two cards read as a contradiction
+      var note = c.el('p', { class: 'small txt-grey mb-1', text: 'The ballot counts pro kicks only — the college line above is not on it.' });
+      var tbl = c.table([
         { key: 'label', label: 'INPUT' },
         { key: 'count', label: 'COUNT', align: 'r', render: function (b) { return String(Math.round(b.count * 100) / 100); } },
         { key: 'weight', label: '×', align: 'r' },
         { key: 'points', label: 'PTS', align: 'r', render: function (b) { return c.el('span', { class: 'txt-gold', text: String(b.points) }); } }
       ], rows, { compact: true, caption: 'Hall of Fame score breakdown', empty: 'No Hall of Fame credit — the pro game never saw the leg.' });
+      return [note, tbl];
     }
 
     function careerCard(state) {
@@ -26740,7 +27300,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
         ['FG', Kit.numEl(line.fgm + ' / ' + line.fga + ' (' + c.fmt.pct(line.pct) + ')', 'Career field goals')],
         ['PAT', Kit.numEl(line.patMade + ' / ' + line.pat, 'Career extra points')],
         ['POINTS', Kit.numEl(String(line.pts), 'Career points')],
-        ['LONG', Kit.numEl(line.long + ' yd', 'Longest make')],
+        ['LONG', Kit.numEl(Kit.longText(line.long, 'yd'), 'Longest make')],
         ['50+', Kit.numEl(String(line.made50plus), 'Makes from 50+')],
         ['GAME-WINNERS', Kit.numEl(String(line.gameWinners), 'Game-winning kicks')],
         ['SEASONS', Kit.numEl(line.seasons + ' (' + line.collegeSeasons + ' college · ' + line.nflSeasons + ' pro)', 'Seasons played')],
@@ -26875,6 +27435,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var el = C.screen({ title: 'SETTINGS', back: function () { if (store.state) Router.back(); else Router.go('title'); } });
     el.classList.add('settings-screen');
     var unsub = null;
+    var cancelRemap = null;      // set while a key row is waiting for a press; destroy() must call it
 
     function s() { return store.settings; }
 
@@ -26905,15 +27466,21 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     function keyRow(key, label) {
       var b = C.button({ label: keyName(s().keys[key]), kind: 'secondary', small: true, ariaLabel: label + ' key: ' + keyName(s().keys[key]) + ', press to remap' });
       b.addEventListener('click', function () {
+        if (cancelRemap) cancelRemap();          // only one row can be waiting at a time
         b.textContent = 'PRESS A KEY…';
         b.classList.add('blink');
-        function onKey(ev) {
-          ev.preventDefault(); ev.stopPropagation();
+        function stop() {
           root.removeEventListener('keydown', onKey, true);
+          if (cancelRemap === stop) cancelRemap = null;
           b.classList.remove('blink');
-          if (ev.key !== 'Escape') { var k = {}; k[key] = ev.key; store.setSetting('keys', k); }
           b.textContent = keyName(s().keys[key]);
         }
+        function onKey(ev) {
+          ev.preventDefault(); ev.stopPropagation();
+          if (ev.key !== 'Escape') { var k = {}; k[key] = ev.key; store.setSetting('keys', k); }
+          stop();
+        }
+        cancelRemap = stop;
         root.addEventListener('keydown', onKey, true);
       });
       return C.el('div', { class: 'toggle' }, C.el('span', { class: 'toggle-label', text: label }), b);
@@ -26931,7 +27498,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
 
     el.appendChild(C.card({ title: 'ACCESSIBILITY', body: [
       toggle('colorblind', 'Colour-blind palette', 'Okabe–Ito reds / greens / golds'),
-      toggle('highContrast', 'High contrast', 'Black, white and yellow only'),
+      toggle('highContrast', 'High contrast', 'Black and white with four high-contrast accents'),
       toggle('reducedMotion', 'Reduced motion', 'No shake, instant flight, no vignette'),
       pills('fontScale', 'Font scale', [{ value: 1, label: '100%' }, { value: 1.25, label: '125%' }, { value: 1.5, label: '150%' }]),
       toggle('tooltips', 'Tooltips', 'Hover / long-press explanations on numbers'),
@@ -26946,7 +27513,10 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     ] }));
 
     el.appendChild(C.card({ title: 'DATA', body: [
-      C.el('p', { class: 'small txt-grey', text: 'Settings live in ' + RTG.UI.Store.KEYS.settings + (RTG.UI.Storage.available ? '' : ' (storage unavailable: memory only)') + '. Saves are on the Saves screen.' })
+      C.el('p', { class: 'small txt-grey', text: 'Settings live in ' + RTG.UI.Store.KEYS.settings
+        + (!RTG.UI.Storage.available ? ' (storage unavailable: memory only)'
+          : RTG.UI.Storage.degraded ? ' (storage is full: recent saves are in memory only and are lost when you close the tab)' : '')
+        + '. Saves are on the Saves screen.' })
     ], footer: [
       C.button({ label: 'SAVES', kind: 'secondary', icon: 'save', onClick: function () { Router.go('saves'); } }),
       C.button({ label: 'RESET SETTINGS', kind: 'danger', onClick: function () {
@@ -26966,7 +27536,9 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       for (var j = 0; j < ps.length; j++) { var on = String(s()[ps[j].getAttribute('data-setting')]) === ps[j].getAttribute('data-value'); ps[j].classList.toggle('active', on); ps[j].setAttribute('aria-checked', on ? 'true' : 'false'); }
     }
 
-    return { el: el, destroy: function () { if (unsub) unsub(); unsub = null; } };
+    // Leaving the screen cancels a pending remap: the capturing window listener must not outlive the screen,
+    // or the next key pressed anywhere is swallowed and silently rebinds the setting.
+    return { el: el, destroy: function () { if (cancelRemap) cancelRemap(); if (unsub) unsub(); unsub = null; } };
   }
 
   RTG.UI.Router.register('settings', factory);
@@ -27526,7 +28098,14 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
   function onKey(ev) {
     if (C().modalOpen()) return;
     var t = ev.target, tag = t && t.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) {
+      // Typing must not reach the shell shortcuts. A screen that wants the keys pressed inside its own fields
+      // (Enter to submit a form) opts in with keysInFields:true on the object it returns; every other screen
+      // keeps plain typing untouched.
+      var sc = Router().screen();
+      if (sc && sc.keysInFields === true && Router().key(ev)) ev.preventDefault();
+      return;
+    }
     if (Router().key(ev)) { ev.preventDefault(); return; }
     // Shell shortcuts: Escape → back on browsing screens; '?' toggles the debug panel when debug is on.
     if (ev.key === 'Escape' && store.state && Router().FREE[Router().current()] && Router().current() !== 'hub') { Router().go('hub'); }
@@ -27540,6 +28119,11 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var teamId = state && state.player ? state.player.teamId : null;
     if (teamId !== lastTeam) { lastTeam = teamId; RTG.UI.Palette.setTeamVars(teamId); }
     if (info.fnName === 'settings') Shell.applySettings();
+    if (info.fnName === 'storage' && info.result && info.result.persisted === false) {
+      C().toast(info.result.available
+        ? 'Storage is full — saves are kept in memory only and are lost when you close the tab.'
+        : 'Storage is unavailable — saves are kept in memory only and are lost when you close the tab.', 'bad', 6000);
+    }
     closeStaleEventModal();
     Shell.setChrome(Router().current());
   }

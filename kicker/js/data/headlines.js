@@ -318,7 +318,7 @@
     h('ms5', 'milestone', '{n} straight makes for {last}; the streak has its own social media account'),
     h('ms6', 'milestone', 'Ten game-winners: {last} is now legally "clutch", per a court in {city}', { cond: function (c) { return c.milestone === 'gw10'; } }),
 
-    // ── transfer / trade / bench / retire (14)
+    // ── transfer / trade / bench / retire (17)
     h('tr1', 'transfer', 'PORTAL: {last} transfers to {team}; old school "wishes him well", sarcastically'),
     h('tr2', 'transfer', '{last} lands at {team} after portal stint; new {coach} "excited", old coach "relieved"'),
     h('tr3', 'transfer', 'Fresh start: {last} arrives in {city} with a duffel bag and a 46-yard range'),
@@ -326,10 +326,15 @@
     h('td2', 'trade', '{team} acquire kicker {last} for a late pick and "considerations"'),
     h('td3', 'trade', 'Trade request denied: {last} staying put, "for now", says everybody'),
     h('td4', 'trade', 'A sixth-rounder for a leg: {last} joins contender {team}'),
-    h('be1', 'bench', 'BENCHED: {last} loses kicking job to the backup; "healthy competition", per {coach}'),
+    // "loses the job" copy only fits a player who HELD it (c.wasK1) outside a camp battle; a K2 who never had the
+    // job (camp loss / VET room) gets the be5 / be6 lines, which name the kicker who is actually ahead of him.
+    h('be1', 'bench', 'BENCHED: {last} loses kicking job to the backup; "healthy competition", per {coach}', { cond: function (c) { return !c.camp && c.wasK1 !== false; } }),
     h('be2', 'bench', '{last} back to K1 after backup "made him look good by comparison"', { cond: function (c) { return !!c.restored; } }),
     h('be3', 'bench', 'CAMP BATTLE: {last} vs the other guy, six kicks, winner starts, loser sulks', { cond: function (c) { return !!c.camp; } }),
     h('be4', 'bench', '{last} WINS THE JOB: camp battle goes to the veteran, backup "already packing"', { cond: function (c) { return !!c.won; } }),
+    h('be5', 'bench', 'JOB LOST: {rival} takes the {team} kicking job from {last}; {coach} calls it "the best six kicks I saw, from one of them"', { cond: function (c) { return !!c.camp && !c.won && c.wasK1 !== false; } }),
+    h('be6', 'bench', 'STILL K2: {rival} keeps the {team} job, {last} keeps the clipboard; "healthy competition", per {coach}', { cond: function (c) { return !c.won && c.wasK1 === false; } }),
+    h('be7', 'bench', 'DEPTH CHART: {team} name {rival} the kicker; {last} "available", says nobody', { cond: function (c) { return !c.won && c.wasK1 === false; } }),
     h('re1', 'retire', 'RETIRED: {last} hangs up the boot after {n} seasons; the boot "relieved"'),
     h('re2', 'retire', 'FAREWELL: {last} kicks his last as {team} say goodbye to a {n}-year leg'),
     h('re3', 'retire', 'Hall call: {last} elected to the Hall of Fame; punters "still waiting"', { cond: function (c) { return !!c.hof; } }),
@@ -382,6 +387,9 @@
       m('coach_loss', 'cl2', 'coach', "We'll look at the tape. Be at the facility early."),
       m('coach_loss', 'cl3', 'coach', "Losses happen. Misses at the end of losses get remembered. Just so you know.")
     ],
+    // NOT WIRED to the engine: the PRE note is `coach_welcome` (QA1-04 — this pool was fired there with no {opp}
+    // in scope and rendered "a factor at the opponent"). Any future caller MUST pass the real week-1 opponent,
+    // i.e. call it from Season.beginRegular where the schedule row exists, never from Career's PRE handoff.
     coach_pregame: [
       m('coach_pregame', 'cp1', 'coach', "{opp} this week. Their rush unit is fast. Get it up quick."),
       m('coach_pregame', 'cp2', 'coach', "Wind's supposed to be a factor at {opp}. We'll adjust the range. Don't be a hero."),

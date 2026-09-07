@@ -84,3 +84,46 @@ for (const mode of H.MODES) {
     });
   }
 }
+
+/** Every visible, enabled control on a screen that is smaller than 44×44 css px. */
+const SMALL_TARGETS = `(() => {
+  const out = [];
+  document.querySelectorAll('button, select, [role="switch"], [role="radio"], .switch, .swatch, .pill, .tab').forEach(e => {
+    if (e.disabled || e.closest('.dbg')) return;
+    if (e.offsetParent === null && getComputedStyle(e).position !== 'fixed') return;
+    const r = e.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return;
+    if (r.height < 44 || r.width < 44) out.push((e.className || e.tagName) + ' "' + (e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 14) + '" ' + Math.round(r.width) + 'x' + Math.round(r.height));
+  });
+  return out;
+})()`;
+
+for (const vp of ['phone', 'tablet']) {
+  test(`responsive http ${vp}: every control meets the 44-px touch minimum (QA2-06)`, async () => {
+    const app = await H.openApp({ mode: 'http', viewport: vp });
+    const { page } = app;
+    try {
+      await page.evaluate(() => RTG.UI.Router.go('newcareer'));
+      await H.waitForScreen(page, 'newcareer');
+      assert.deepEqual(await page.evaluate(SMALL_TARGETS), [], 'newcareer touch targets');
+      await H.debug(page, 'jumpTo', { stage: 'COLLEGE', phase: 'REG', week: 1, seed: 4242 });
+      for (const id of ['hub', 'settings', 'saves', 'practice', 'training', 'stats', 'inbox']) {
+        await H.debug(page, 'go', id);
+        await H.waitForScreen(page, id);
+        await page.waitForTimeout(120);
+        assert.deepEqual(await page.evaluate(SMALL_TARGETS), [], id + ' touch targets at ' + vp);
+        await H.noHorizontalScroll(page, id + ' ' + vp);
+      }
+      await page.evaluate(() => RTG.UI.store.dispatch('startUserGame'));
+      await H.waitForScreen(page, 'game');
+      await page.waitForTimeout(150);
+      assert.deepEqual(await page.evaluate(SMALL_TARGETS), [], 'game touch targets at ' + vp);
+      if (await toKick(page)) {
+        await page.waitForTimeout(300);
+        assert.deepEqual(await page.evaluate(SMALL_TARGETS), [], 'kick HUD touch targets at ' + vp);
+        await H.debug(page, 'forceKick', { outcome: 'GOOD' });
+      }
+      assert.deepEqual(app.errors, [], 'console errors');
+    } finally { await app.close(); }
+  });
+}

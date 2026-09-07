@@ -44,14 +44,24 @@
   --anim: 1;
 }
 
-body.cb, html.cb { --red: #d55e00; --mint: #0072b2; --gold: #f0e442; --sky: #56b4e9; }
+/* Colour-blind palette (Okabe–Ito). These are painted as TEXT on the navy ground of the result banners, so every one
+   clears WCAG AA there (on --navy #1b1f3a): bluish green 5.98, vermillion 4.56, yellow 12.18, sky 6.98 — and on the
+   --navy-2 cards 5.08 / 3.87 / 10.35 / 5.93. The canonical bluish green #009e73 (4.71 on navy) and vermillion #d55e00
+   (4.17 — the GOOD! / WIDE banners) sit under that bar, so each is used one tint up; hue and separation are unchanged. */
+body.cb, html.cb { --red: #e26100; --mint: #00b386; --gold: #f0e442; --sky: #56b4e9; }
+/* --red is light enough that only ink reads on it: the same override the high-contrast block makes below. */
+body.cb .chip-red, body.cb .banner-bad, body.cb .btn-danger, body.cb .toast-bad { color: var(--ink); }
+
+/* High contrast: black ground, white text, and a small set of maximally separated accents. --gold (yellow, lum .93),
+   --mint (green, .72), --sky (light blue, .53) and --red (.30) all clear 4.5:1 on black AND differ in luminance, so
+   they stay apart in greyscale too — the power bar's target and overswing zones must never blend into one block. */
 body.hc, html.hc {
   --navy: #000; --navy-2: #000; --cream: #fff; --ink: #000; --grass: #000; --grass-2: #111; --chalk: #fff;
-  --gold: #ff0; --red: #fff; --sky: #ff0; --mint: #fff; --grey: #ccc; --dusk: #000; --dusk-2: #000; --sunset: #fff;
+  --gold: #ff0; --red: #ff5c5c; --sky: #66ccff; --mint: #0f0; --grey: #ccc; --dusk: #000; --dusk-2: #000; --sunset: #fff;
   --night: #000; --shadow: #fff; --team-1: #ff0; --team-2: #fff; --team-ink: #000;
 }
 body.hc .card, body.hc .btn, body.hc .chip, body.hc .modal, body.hc .topbar, body.hc .tabbar { border-color: #fff; }
-/* high contrast paints --red / --mint / --chalk all white: anything on those backgrounds must read in ink */
+/* every high-contrast accent is a light colour: anything painted ON one of them must read in ink */
 body.hc .chip-red, body.hc .chip-mint, body.hc .chip-sky, body.hc .chip-gold, body.hc .banner-bad, body.hc .banner-good, body.hc .btn-danger, body.hc .btn-primary, body.hc .toast-bad, body.hc .toast-good, body.hc .toast-gold { color: var(--ink); }
 
 /* ---------- base ---------- */
@@ -531,6 +541,40 @@ body.reduced-motion .ticker-inner { animation: none; }
 .fallback-screen details > summary::-webkit-details-marker { display: none; }
 .fallback-screen details > summary::before { content: "▸ "; color: var(--grey); }
 .fallback-screen details[open] > summary::before { content: "▾ "; }
+
+/* ----------------------------------------------------------------------------
+   Touch targets (SPEC §4.3: 44-px minimum). On a coarse pointer with room to
+   grow (portrait phones and tablets) the compact controls — small buttons,
+   pills, switches, swatches, tabs, chip buttons — are raised to --touch.
+   Landscape phones (< 500 px tall) keep the compact sizes: the HUD there is
+   height-starved and already scaled down for the short viewport.
+   `button.pill` / `… button.chip` carry an extra element or class on purpose:
+   they must outrank the plain `.pill` / `.scr-hub .hub-chips .chip` rules that
+   kick.css and screens.css declare after this file.
+   ---------------------------------------------------------------------------- */
+@media (pointer: coarse) and (min-height: 500px) {
+  .btn-sm { min-height: var(--touch); min-width: var(--touch); }
+  .btn.pill, button.pill, .pills > .pill { min-height: var(--touch); min-width: var(--touch); }
+  .tab { min-height: var(--touch); }
+  .modal-x { min-height: var(--touch); min-width: var(--touch); }
+  .topbar-stat { min-height: var(--touch); min-width: var(--touch); }
+  .swatch { width: var(--touch); height: var(--touch); }
+  .switch { height: var(--touch); }
+  .switch::after, .switch[aria-checked="true"]::after { top: 50%; margin-top: -10px; }
+  .scr-hub .hub-chips button.chip, button.hub-xp { min-height: var(--touch); }
+  .scr-training button.attr-plus { min-height: var(--touch); }
+  .picker-row > .btn { min-width: var(--touch); }
+  /* the offer/legacy carousel dots stay 14 px to the eye, but the button around them becomes a real 44 × 44 tap
+     target: the button goes transparent and a centred ::after paints the dot */
+  .carousel-dots { gap: 0; }
+  button.carousel-dot, button.carousel-dot.active { width: var(--touch); height: var(--touch); min-height: var(--touch); border: 0; background: none; position: relative; }
+  button.carousel-dot::after {
+    content: ''; position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px;
+    box-sizing: border-box; border: var(--border) solid var(--grey); background: var(--navy);
+  }
+  button.carousel-dot.active::after { background: var(--gold); border-color: var(--ink); }
+  .dbg-grid .btn { min-height: 28px; min-width: 0; }   /* the debug panel is a dev tool, not a touch surface */
+}
 
 /* ---------- responsive visibility (kept last so it wins over the component rules) ---------- */
 @media (max-width: 899px) { .rail { display: none; } }

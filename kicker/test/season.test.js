@@ -256,7 +256,9 @@ test('a full college season with auto kicks: PRE→REG→POST→AWARDS→OFF, 13
   assert.equal(line.stats.pts, Tuning.kick.points.FG * line.stats.fgm + Tuning.kick.points.PAT * line.stats.patMade);
   assert.equal(line.stats.games, res.userGames, 'one game per user week');
   assert.ok(line.stats.fga >= 5 && line.stats.pat >= 20, 'a real workload (a 95/95 team scores TDs, so FGA are few): ' + line.stats.fga + ' FGA, ' + line.stats.pat + ' PAT');
-  assert.equal(state.stats.season.fga, 0, 'stats.season reset for the next year');
+  // QA1-02: the just-finished line stays in stats.season through AWARDS / OFF / DRAFT (Season.start zeroes it)
+  assert.equal(state.stats.season.fga, line.stats.fga, 'stats.season still holds the finished line at AWARDS');
+  assert.equal(state.stats.season.fgm, line.stats.fgm);
   assert.equal(state.stats.career.fga, line.stats.fga);
   assert.equal(line.teamRecord, season.results[p.teamId].w + '-' + season.results[p.teamId].l + (season.results[p.teamId].t ? '-' + season.results[p.teamId].t : ''));
   assert.equal(line.champion, champ === p.teamId);
@@ -545,6 +547,38 @@ test('§2.2 college: three weeks under the cut line lose the job for the season 
   Season.endWeek(state, rng);
   assert.equal(p.role, 'K2', 'no restore this season');
   ok(state, 'lost job');
+  // QA1-16: this one HELD the job, so "loses kicking job to the backup" (be1) is the right copy for the benching
+  const bh = state.headlines.filter((h) => h.tag === 'bench');
+  assert.ok(bh.length >= 1, 'a bench headline');
+  assert.ok(bh.some((h) => h.tpl === 'be1'), 'be1 is eligible for a K1 who lost the job: ' + JSON.stringify(bh.map((h) => h.text)));
+  for (const h of bh) assert.ok(h.text.indexOf('{') < 0, h.text);
+});
+
+test('QA1-16: a player who is already K2 never reads "loses kicking job to the backup" — the headline names the kicker ahead of him', () => {
+  const tpls = {};
+  for (let seed = 40; seed < 52; seed++) {
+    const state = enrol(RTG, 'COLLEGE', { seed });
+    const rng = RTG.RNG.create(seed);
+    Season.start(state, rng); Season.beginRegular(state, rng);
+    const p = state.player;
+    p.role = 'K2'; p.flags.benchNoted = true; p.flags.benched = true;   // camp loss / VET room: he never held the job
+    p.js = 5; p.trust = 0;
+    let lost = null;
+    for (let i = 0; i < 4 && !lost; i++) {
+      while (state.pending) settle(RTG, state, rng);
+      if (Season.userGameRef(state)) Season.simUserGameAuto(state, rng);
+      const rep = Season.endWeek(state, rng);
+      if (rep.cut) lost = rep;
+    }
+    assert.ok(lost, 'lost the job at seed ' + seed);
+    const bh = state.headlines.filter((h) => h.tag === 'bench');
+    assert.equal(bh.length, 1, 'exactly one bench headline: ' + JSON.stringify(bh.map((h) => h.text)));
+    assert.ok(bh[0].text.indexOf('to the backup') < 0, 'he IS the backup: ' + bh[0].text);
+    assert.notEqual(bh[0].tpl, 'be1', bh[0].text);
+    assert.ok(bh[0].text.indexOf('{') < 0 && bh[0].text.indexOf('the rival') < 0, 'no unfilled / wrong {rival} slot: ' + bh[0].text);
+    tpls[bh[0].tpl] = bh[0].text;
+  }
+  assert.ok(Object.keys(tpls).length >= 1, 'a bench template stayed eligible for a K2');
 });
 
 // ═══════════════════════════════ advanceYear ═══════════════════════════════
@@ -626,6 +660,45 @@ test('runtime: a full college season < 250 ms (engine in the main context; the v
     + (stash.collegeMs === undefined ? '?' : stash.collegeMs.toFixed(0)) + ' ms, NFL ' + (stash.nflMs === undefined ? '?' : stash.nflMs.toFixed(0)) + ' ms');
   assert.ok(warm.ms < 250, 'full college season (warm) ' + warm.ms.toFixed(0) + ' ms < 250 ms');
   if (stash.collegeMs !== undefined) assert.ok(stash.collegeMs < 2000, 'vm-harness season under a sanity bound: ' + stash.collegeMs.toFixed(0) + ' ms');
+});
+
+// ═══════════════════════════════ QA1-02: the finished season line stays readable ═══════════════════════════════
+
+test('QA1-02: stats.season survives finishSeason / advanceYear and is zeroed only by Season.start', () => {
+  const st = enrol(RTG, 'COLLEGE', { seed: 31 });
+  const rng = RTG.RNG.create(31);
+  Season.start(st, rng);
+  Season.beginRegular(st, rng);
+  // a real workload on the season sheet
+  st.stats.season.fga = 22; st.stats.season.fgm = 19; st.stats.season.pat = 23; st.stats.season.patMade = 23;
+  st.stats.season.long = 52; st.stats.season.games = 12; st.stats.season.pts = 80;
+  st.stats.career.fga = 22; st.stats.career.fgm = 19;
+  st.phase = 'POST';
+  const line = Season.finishSeason(st, rng);
+  assert.equal(st.phase, 'AWARDS');
+  assert.equal(line.stats.fgm, 19, 'the archived line carries the numbers');
+  // AWARDS: the awards card, Stats › SEASON and QUICK STATS all read state.stats.season — it must still be the line
+  assert.equal(st.stats.season.fga, 22, 'stats.season is intact at AWARDS');
+  assert.equal(st.stats.season.fgm, 19);
+  assert.equal(st.stats.season.long, 52);
+  assert.equal(st.stats.season.games, 12);
+  ok(st, 'AWARDS with the season line intact');
+  // a save round trip keeps it (the packed KickerStats block)
+  const blob = RTG.Save.serialize(st, rng, 1757000000000);
+  const back = RTG.Save.deserialize(blob);
+  deq(back.state.stats.season, st.stats.season, 'stats.season round-trips through the save');
+  assert.ok(Schema.validate(back.state).ok, Schema.validate(back.state).errors.slice(0, 4).join('; '));
+  // the offseason wizard runs at phase OFF, before advanceYear — the finished line is still on the sheet there
+  st.phase = 'OFF';
+  assert.equal(st.stats.season.fgm, 19, 'stats.season is intact through the OFF wizard / DRAFT');
+  assert.equal(st.history.seasons[st.history.seasons.length - 1].stats.fgm, 19);
+  // …and the NEXT season (advanceYear → Season.start) is what clears it
+  Season.advanceYear(st, rng);
+  assert.equal(st.phase, 'PRE');
+  assert.equal(st.stats.season.fga, 0, 'Season.start zeroes the sheet');
+  assert.equal(st.stats.season.games, 0);
+  assert.equal(st.stats.career.fgm, 19, 'career totals untouched');
+  ok(st, 'year 2 PRE');
 });
 
 // ═══════════════════════════════ QA1-03: college AI kickers are students ═══════════════════════════════

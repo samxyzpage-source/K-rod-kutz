@@ -126,6 +126,7 @@
     return {
       el: el,
       view: function () { return view; },
+      onKey: function (ev) { return KV().escapeToSettings(ev); },
       onResize: function () { if (view) view.resize(); },
       destroy: function () {
         destroyed = true;

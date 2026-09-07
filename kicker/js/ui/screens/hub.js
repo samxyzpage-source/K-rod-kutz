@@ -7,8 +7,9 @@
  * Hub: team bar (crest, record, rank / seed), the week card (opponent, venue, home-stadium climate / dome / surface
  * as the "forecast" — the weather itself is rolled at kickoff — storylines from the latest headlines, ratings),
  * meters row (Trust / Fans / Morale / Job Security as 5-block meters, Fame tier / XP / money chips), inbox preview,
- * the phase actions (TRAIN · PLAY GAME · SIM GAME · SIM TO END OF SEASON · END WEEK · START SEASON), the bye-week
- * Rest / Grind card, the PRE goals + camp-battle card, the POST bracket card, injured / benched / free-agent banners.
+ * the phase actions (TRAIN · PLAY GAME · SIM GAME · SIM TO END OF SEASON · END WEEK · START SEASON — or, while a
+ * game is open, the live score line plus RESUME GAME / FINISH GAME and nothing else), the bye-week Rest / Grind
+ * card, the PRE goals + camp-battle card, the POST bracket card, injured / benched / free-agent banners.
  * Re-renders from state on every store change. The shell chrome (top bar / tab bar / rails) is NOT redrawn here.
  */
 (function (root) {
@@ -63,9 +64,21 @@
   };
 
   Kit.pctText = function (m, a, d) { return a > 0 ? C().fmt.pct(m / a, d === undefined ? 1 : d) : '—'; };
+
+  /**
+   * The longest make as text: an em dash until a field goal has actually been made (a "LONG 0" is not a 0-yard
+   * kick, it is no kick at all — the quick-stats sidebar has always shown '—' here).
+   * @param {number|undefined} long @param {string} [unit] appended when there is a number ('yd')
+   */
+  Kit.longText = function (long, unit) {
+    var v = num(long, 0);
+    if (!(v > 0)) return '—';
+    return unit ? v + ' ' + unit : String(v);
+  };
+
   Kit.fgLine = function (s) {
     if (!s) return '—';
-    return 'FG ' + num(s.fgm) + '/' + num(s.fga) + ' · LONG ' + num(s.long) + ' · PAT ' + num(s.patMade) + '/' + num(s.pat);
+    return 'FG ' + num(s.fgm) + '/' + num(s.fga) + ' · LONG ' + Kit.longText(s.long) + ' · PAT ' + num(s.patMade) + '/' + num(s.pat);
   };
 
   Kit.recordOf = function (state, teamId) {
@@ -81,6 +94,17 @@
     return null;
   };
 
+  /**
+   * Has the current season produced any standings yet? Seeds and division ranks are recomputed from an all-0-0
+   * table in the preseason (and in week 1), where they are a tiebreak artefact of last season's order, not a
+   * standing — so no team may wear a seed / division chip until somebody has played a game.
+   */
+  Kit.standingsStarted = function (state) {
+    var rows = state && state.season && state.season.standings || [];
+    for (var i = 0; i < rows.length; i++) if (num(rows[i].w) + num(rows[i].l) + num(rows[i].t) > 0) return true;
+    return false;
+  };
+
   /** '#4' (college poll) or 'SEED 2' / 'DIV 3rd' (NFL) chip, or null. */
   Kit.rankChip = function (state, teamId) {
     if (!state || !teamId || !state.season) return null;
@@ -90,6 +114,7 @@
       if (r && r.rank && r.rank <= 25) return Kit.tip(c.chip('#' + r.rank, 'gold'), 'Poll rank ' + r.rank + (r.prev ? ' (was ' + r.prev + ')' : ''));
       return null;
     }
+    if (!Kit.standingsStarted(state)) return null;
     var row = Kit.standingRow(state, teamId);
     if (!row) return null;
     if (row.seed) return Kit.tip(c.chip('SEED ' + row.seed, 'gold'), 'Conference seed ' + row.seed + (row.divChamp ? ' · division champion' : ''));
@@ -418,9 +443,30 @@
       return wrap;
     }
 
+    /** The live game line ('GAME IN PROGRESS · Q1 9:31 · 3-7'), or null when no game is open. */
+    function gameProgress(state) {
+      var gs = state.game;
+      if (!gs || !gs.score) return null;
+      var quarters = RTG.Tuning && RTG.Tuning.sim && RTG.Tuning.sim.clock ? num(RTG.Tuning.sim.clock.quarters, 4) : 4;
+      var otN = num(gs.q, 1) - quarters;
+      var period = otN > 0 ? 'OT' + (otN > 1 ? otN : '') : 'Q' + num(gs.q, 1);
+      var mine = gs.userSide === 'home' ? num(gs.score.home) : num(gs.score.away);
+      var theirs = gs.userSide === 'home' ? num(gs.score.away) : num(gs.score.home);
+      var text = gs.done
+        ? 'GAME OVER · ' + mine + '-' + theirs + ' — finish it to bank the result'
+        : 'GAME IN PROGRESS · ' + period + ' ' + c.fmt.clock(num(gs.clock)) + ' · ' + mine + '-' + theirs + (gs.pending ? ' · your kick is up' : '');
+      var banner = c.el('div', { class: 'banner banner-sky small mt-1 hub-ingame', role: 'status' }, c.icon('boot', 12), ' ' + text);
+      return Kit.tip(banner, 'This week’s game is under way — resume it to take the next kick');
+    }
+
     function actionButtons(state, ref) {
       var season = state.season, p = state.player, buttons = [];
       var inSeason = state.phase === 'REG' || state.phase === 'POST';
+      if (state.game) {   // a game is open: the only move is back into it (no training, no re-playing the week)
+        buttons.push(c.button({ label: state.game.done ? 'FINISH GAME' : 'RESUME GAME', kind: 'primary', icon: 'boot', action: 'resume-game',
+          onClick: function () { c.announce(state.game.done ? 'Finishing the game.' : 'Back to the game.'); R.sync({ force: true }); } }));
+        return buttons;
+      }
       var canTrain = inSeason && !season.trainingDone && !state.pending && !(p.flags && p.flags.skipTraining);
       if (canTrain) buttons.push(c.button({ label: 'TRAIN', kind: 'secondary', icon: 'train', action: 'train', onClick: function () { R.go('training'); } }));
       var gameOpen = ref && !ref.played && !season.weekGameDone && !state.pending;
@@ -485,9 +531,11 @@
           c.el('strong', { class: 'ellipsis', text: (ref.isHome ? 'vs ' : '@ ') + (opp ? opp.name : ref.oppId) }),
           c.el('span', { class: 'row row-wrap small' }, Kit.numEl(Kit.recordOf(state, ref.oppId) || '0-0', 'Opponent record'), Kit.rankChip(state, ref.oppId), ref.game && ref.game.rivalry ? Kit.tip(c.chip('RIVALRY', 'red', 'bolt'), 'Rivalry week: extra pressure, extra fame') : null)));
       body.push(head);
+      body.push(gameProgress(state));
       body.push(forecastRow(state, ref));
       body.push(ratingsRow(state, ref));
-      if (ref.played && ref.game.score) {
+      if (state.game) { /* the live line above already says where the game stands */ }
+      else if (ref.played && ref.game.score) {
         var us = ref.isHome ? ref.game.score.home : ref.game.score.away, them = ref.isHome ? ref.game.score.away : ref.game.score.home;
         var line = Kit.lineFromKicks(Kit.gameKicks(state, ref.gameId));
         body.push(c.el('div', { class: 'banner ' + (us > them ? 'banner-good' : us < them ? 'banner-bad' : 'banner-gold') + ' small mt-1' }, (us > them ? 'WIN ' : us < them ? 'LOSS ' : 'TIE ') + us + '-' + them + (ref.game.ot ? ' (OT)' : '') + ' · ' + Kit.fgLine(line)));
@@ -563,7 +611,8 @@
       parts.push(teamBar(state));
       parts = parts.concat(banners(state));
       var playing = state.stage === 'COLLEGE' || state.stage === 'NFL';
-      var here = playing && (state.phase === 'PRE' || state.phase === 'REG' || state.phase === 'POST') && !state.game;
+      // a game in progress keeps the week card (with the live score and a RESUME GAME button) — it is still "here"
+      var here = playing && (state.phase === 'PRE' || state.phase === 'REG' || state.phase === 'POST') && (!state.game || state.phase !== 'PRE');
       if (!here) parts.push(elsewhereCard(state));
       else if (state.phase === 'PRE') parts.push(preCard(state));
       else {

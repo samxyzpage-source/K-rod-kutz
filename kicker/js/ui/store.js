@@ -11,7 +11,7 @@
  *   store.dispatch(fnName, ...args) → result
  *   store.subscribe(fn) → unsubscribe        fn({fnName, result, args, store})
  *   store.replace(state, rng) · store.newCareer(opts) · store.hasCareer()
- *   store.save(slotKey) → {ok, error?} · store.load(slotKey) → {ok, error?, warnings?} · store.autosave() → boolean
+ *   store.save(slotKey) → {ok, error?, persisted} · store.load(slotKey) → {ok, error?, warnings?} · store.autosave() → boolean
  *   store.saveSettings() · store.setSetting(key, value) · store.resetSettings()
  *   store.touch(fnName, result) — notify + sync without an engine call (debug / forced results)
  *   store.getRecords() / store.addCareerRecord(entry) — the cross-save `rtg.records` block
@@ -107,6 +107,7 @@
     this.uiRng = RTG.RNG.create((nowMs() ^ 0x9e3779b9) >>> 0);
     this.lastDispatch = null;
     this.lastAutosaveAt = 0;
+    this.storageWarned = false;      // the 'storage' warning is raised once per session
     this.autoKickAll = false;        // RTG.debug.autoKick(true): kick scenes resolve every user kick via autoKick
     this._subs = [];
     this._playMark = 0;
@@ -228,7 +229,9 @@
     this.rng = state ? rng : null;
     this._playMark = state ? nowMs() : 0;
     if (state) {
-      if (!state.settings && RTG.Schema) state.settings = RTG.Schema.mirrorSettings(this.settings);
+      // Settings are UI-owned (SPEC §3.4 / UI_API §2.2): the per-career block is only a mirror of rtg.settings, so
+      // it is rebuilt from the live UI settings — a loaded save must never resurrect the settings it was saved with.
+      if (RTG.Schema && typeof RTG.Schema.mirrorSettings === 'function') state.settings = RTG.Schema.mirrorSettings(this.settings);
       this._validate('replace');
     }
     this._sync(true);
@@ -271,7 +274,12 @@
     return RTG.Engine.save(this.state, this.rng, nowMs());
   };
 
-  /** @returns {{ok:boolean, error?:string, key:string, bytes?:number}} */
+  /**
+   * Write the current career to a slot. `persisted` is false when the write fell back to the in-memory map
+   * (quota / disabled storage): the save is readable for the rest of the session but is lost on reload, so the
+   * first such write also notifies subscribers with fnName 'storage' and the shell raises a warning toast.
+   * @returns {{ok:boolean, error?:string, key:string, bytes?:number, persisted?:boolean}}
+   */
   Store.prototype.save = function (slot) {
     var key = slotKey(slot);
     if (!this.state) return { ok: false, error: 'No career to save', key: key };
@@ -279,6 +287,10 @@
     try { blob = this.blob(); } catch (e) { return { ok: false, error: 'Save failed: ' + e.message, key: key }; }
     var json = JSON.stringify(blob);
     var stored = RTG.UI.Storage.setItem(key, json);
+    if (!stored && !this.storageWarned) {
+      this.storageWarned = true;
+      this._notify({ fnName: 'storage', result: { persisted: false, key: key, available: !!RTG.UI.Storage.available }, args: [] });
+    }
     return { ok: true, key: key, bytes: json.length, persisted: stored, savedAt: blob.savedAt };
   };
 

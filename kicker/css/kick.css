@@ -21,10 +21,20 @@
 .screen-kick .kick-continue { flex: 0 0 auto; padding: 4px 8px 8px; display: flex; justify-content: center; }
 .screen-kick .kick-ko { flex: 0 0 auto; padding: 6px; }
 
-/* toasts on the kick-scene screens sit in the sky band, never on the ball, the power bar or the feedback line
-   (not on the combine: its plan card is a DOM card whose options live where the sky would be) */
+/* Toasts on the kick-scene screens sit in the open field band between the crossbar and the tee — never on the
+   uprights, the ball, the power bar or the feedback line. (The old 22 % landed on the posts: the uprights reach
+   into the sky band, so "the sky" is not free space.) Not on the combine: its plan card is a DOM card whose
+   options live where the sky would be. */
 #app.chromeless[data-screen="kick"] ~ .toast-host, #app.chromeless[data-screen="showcase"] ~ .toast-host,
-#app.chromeless[data-screen="campbattle"] ~ .toast-host { top: 22%; bottom: auto; }
+#app.chromeless[data-screen="campbattle"] ~ .toast-host { top: 40%; bottom: auto; }
+@media (min-width: 900px) {   /* desktop centres a taller scene: the crossbar sits lower */
+  #app.chromeless[data-screen="kick"] ~ .toast-host, #app.chromeless[data-screen="showcase"] ~ .toast-host,
+  #app.chromeless[data-screen="campbattle"] ~ .toast-host { top: 43%; }
+}
+@media (orientation: landscape) and (max-height: 520px) {   /* short scene: above the result banner */
+  #app.chromeless[data-screen="kick"] ~ .toast-host, #app.chromeless[data-screen="showcase"] ~ .toast-host,
+  #app.chromeless[data-screen="campbattle"] ~ .toast-host { top: 24%; }
+}
 
 /* ───────────────────────────── the kick view ───────────────────────────── */
 .kickview { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; width: 100%; position: relative; }
@@ -39,7 +49,12 @@ html.is-desktop .kv-stage { align-items: center; }
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
   outline: none; box-shadow: 0 0 0 2px var(--navy2, #262b4d);
 }
-.kv-stage canvas.rtg-canvas:focus-visible { box-shadow: 0 0 0 2px var(--sky, #7fc7ff); }
+/* the same 3-px --sky ring every other control uses (SPEC §4.8), not a thinner shadow */
+.kv-stage canvas.rtg-canvas:focus-visible { outline: 3px solid var(--sky, #7fc7ff); outline-offset: 0; box-shadow: 0 0 0 2px var(--navy2, #262b4d); }
+/* high contrast paints --sky the same yellow as the sky band: hold the ring off the canvas with an ink halo */
+body.hc .kv-stage canvas.rtg-canvas:focus-visible, html.hc .kv-stage canvas.rtg-canvas:focus-visible {
+  outline-offset: 2px; box-shadow: 0 0 0 2px var(--ink, #000);
+}
 .kv-overlay { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
 
 /* HUD strip (DOM text, §4.5 kick row) */
@@ -73,7 +88,13 @@ html.is-desktop .kv-stage { align-items: center; }
 .kv-banner-good { border-color: var(--mint, #4dbb63); color: var(--mint, #4dbb63); }
 .kv-banner-bad { border-color: var(--red, #d8433a); color: var(--red, #d8433a); }
 .kv-banner-doink { border-color: var(--gold, #f6c445); color: var(--gold, #f6c445); background: var(--dusk, #5b3a6e); }
-.kv-banner-blocked { border-color: var(--red, #d8433a); color: #fff; background: var(--red, #d8433a); }
+/* FILLED banners state their text colour in ink rather than trusting token-vs-token contrast (style.css does the
+   same for the DOM banners). Ink on every red token — default #d8433a 4.21:1, cb #e26100 5.23:1, hc #ff5c5c
+   6.94:1 — clears AA; a banner that trusted `color:#fff` on `background: var(--red)` was white-on-white in hc. */
+.kv-banner-blocked { border-color: var(--red, #d8433a); color: var(--ink, #101226); background: var(--red, #d8433a); }
+body.hc .kv-banner, html.hc .kv-banner { background: var(--navy, #000); }
+body.hc .kv-banner-doink, html.hc .kv-banner-doink { background: var(--dusk, #000); }
+body.hc .kv-banner-blocked, html.hc .kv-banner-blocked { background: var(--red, #fff); color: var(--ink, #000); }
 .kv-sub {
   position: absolute; top: 8%; left: 50%; transform: translateX(-50%); padding: 6px 10px; border: 2px solid var(--cream, #f4e9d0);
   background: var(--ink, #101226); color: var(--cream, #f4e9d0); font-size: 11px; letter-spacing: 1px; white-space: nowrap; z-index: 2;
@@ -100,24 +121,36 @@ html.is-desktop .kv-stage { align-items: center; }
 .reduced-motion .kv-banner, .reduced-motion .kv-sub, .reduced-motion .kv-heart, .reduced-motion .kv-iced { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { .kv-banner, .kv-sub, .kv-heart, .kv-iced { animation: none !important; } }
 
-/* landscape phones: HUD becomes a side column so the canvas gets the full height */
+/* landscape phones: the HUD becomes a side column and the scene keeps a pull band under it */
 @media (orientation: landscape) and (max-height: 520px) {
-  .kickview { flex-direction: row; }
-  .kv-hud { flex: 0 0 96px; flex-direction: column; align-items: flex-start; justify-content: flex-start; order: 0; padding: 6px; overflow: hidden; }
+  .kickview { flex-direction: row; background: var(--night, #12142a); }
+  /* wide enough for 'WIND ← 12 → 1.8 yd' and 'Showcase 1/6', and the chips wrap instead of being cut off */
+  .kv-hud { flex: 0 0 112px; flex-direction: column; align-items: flex-start; justify-content: flex-start; order: 0; padding: 6px; overflow-x: hidden; overflow-y: auto; }
   .kv-strip { flex-direction: column; align-items: flex-start; }
+  .kv-hud .kv-chip, .kv-hud .chip { white-space: normal; max-width: 100%; overflow-wrap: break-word; word-break: break-word; }
   .kv-hud-right { flex-direction: column; align-items: flex-start; margin-top: 6px; }
-  .kv-stage { order: 1; }
+  /* §4.6: the flick needs 1.15 × D_full of screen BELOW the tee, and the tee sits at 78 % of the scene. A canvas
+     stretched to the full 390-px height put the ball 90 px off the bottom edge, so the room-below cap collapsed
+     D_full to ~68 px (overswing on the home-indicator strip). Capping the stage leaves that band free: at 844×390
+     the scene is 1.5× with ~155 px under the ball, i.e. the full 0.45 × canvasHeight draw. */
+  .kv-stage { order: 1; max-height: 74%; }
   .kv-banner { top: 50%; font-size: 12px; padding: 6px 10px; border-width: 2px; }
   .kv-sub { top: 4%; font-size: 9px; padding: 4px 8px; }
-  .kv-feedback, .kv-range-panel { position: absolute; right: 0; bottom: 0; width: 34%; max-height: 40%; overflow: auto; border-left: 2px solid var(--ink, #101226); z-index: 4; }
+  .kv-feedback, .kv-range-panel { position: absolute; right: 0; bottom: 0; width: 34%; max-height: 24%; overflow: auto; border-left: 2px solid var(--ink, #101226); z-index: 4; }
   .screen-kick .kick-score { position: absolute; left: 4px; bottom: 4px; width: 142px; z-index: 4; padding: 0; }
   .screen-kick .kick-score .led { width: 100%; padding: 3px 4px; gap: 4px; }
   .screen-kick .kick-score .led-score { font-size: 11px; min-width: 16px; }
   .screen-kick .kick-score .led-clock { font-size: 8px; }
   .screen-kick .kick-score .crest { width: 12px; height: 12px; }
   .screen-kick .kick-continue { position: absolute; right: 6px; top: 40px; z-index: 5; padding: 0; }
-  .screen-session .session-header { position: absolute; top: 0; right: 0; z-index: 4; max-width: 52%; background: rgba(27,31,58,0.92); border: 2px solid var(--navy2, #262b4d); border-top: 0; border-right: 0; }
-  .screen-session .session-ko { position: absolute; left: 100px; right: 0; bottom: 0; z-index: 4; }
+  /* the uprights reach the top 8 % of the scene, so a header floated over the canvas always covered the right
+     post's tip: park it in the band the shortened stage frees up, beside the result panel */
+  .screen-session .session-header {
+    position: absolute; left: 112px; right: 35%; bottom: 0; top: auto; z-index: 3; max-height: 26%; overflow: hidden;
+    padding: 2px 6px; font-size: max(8px, 0.8em); background: rgba(27,31,58,0.92);
+    border: 2px solid var(--navy2, #262b4d); border-bottom: 0; border-right: 0;
+  }
+  .screen-session .session-ko { position: absolute; left: 112px; right: 0; bottom: 0; z-index: 4; }
 }
 
 /* ───────────────────────────── kickoff timing bar ───────────────────────────── */
@@ -221,7 +254,10 @@ html.is-desktop .kv-stage { align-items: center; }
 .picker { display: flex; flex-direction: column; gap: 4px; font-size: 9px; color: var(--grey, #8a8f9e); }
 .picker-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
 .picker-val { color: var(--gold, #f6c445); font-size: 10px; min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
-.practice-stage { position: relative; min-height: 340px; height: 56vh; display: flex; flex-direction: column; border: 2px solid var(--ink, #101226); }
+/* the scene needs a portrait box tall enough to clear Canvas.MIN_FRACTIONAL (1.35 × 320 = 432 px of .kv-stage):
+   at 56vh a 390-px phone fell to 1× (a 192-px scene in a 370-px stage) and a 664-px phone flipped the scene to
+   the landscape 320×192 pair because the stage came out wider than tall */
+.practice-stage { position: relative; min-height: 400px; height: 60vh; display: flex; flex-direction: column; border: 2px solid var(--ink, #101226); }
 .practice-stage .kickview { height: 100%; }
 .practice-stats { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 9px; }
 .heatmap { position: relative; width: 100%; max-width: 320px; height: 120px; background: var(--grass, #3a8c3f); border: 2px solid var(--chalk, #f2f2e6); overflow: hidden; margin: 0 auto; }
@@ -231,6 +267,19 @@ html.is-desktop .kv-stage { align-items: center; }
 .heatmap .hm-dot.miss { background: var(--red, #d8433a); }
 .heatmap .hm-dot.last { outline: 2px solid var(--gold, #f6c445); }
 .heatmap .hm-label { position: absolute; font-size: 7px; color: var(--chalk, #f2f2e6); }
+
+@media (max-width: 480px) and (orientation: portrait) {
+  /* the scene is the screen here: sized so the canvas fills ≥ 80 % of the phone width at 844 AND at 664 css px
+     (below ~650 px tall the min-height binds and the practice screen scrolls, which it already did).
+     The min-height carries the 52-px HUD row above the scene: RANGE? is a 44-px touch target (style.css
+     coarse-pointer block), so a 560-px stage left only 504 px of .kv-stage = a 1.57× scene (77 % of the phone).
+     600 px keeps the fit at 1.70× / 84 % on every phone from 568 px tall up; at 844 the 86vh box is taller
+     still and the scene is width-bound at 1.92× / 95 %. */
+  .practice-stage { height: 86vh; min-height: 600px; }
+}
+@media (max-height: 520px) {   /* short (landscape) viewport: keep the pre-existing box, it is already scrolled */
+  .practice-stage { height: 56vh; min-height: 340px; }
+}
 
 @media (max-width: 380px) {
   .kv-banner { font-size: 13px; padding: 8px 10px; }

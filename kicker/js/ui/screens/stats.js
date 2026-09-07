@@ -32,7 +32,7 @@
         ['FG', Kit.numEl(Kit.num(s.fgm) + ' / ' + Kit.num(s.fga) + ' (' + pct(s.fgm, s.fga) + ')', 'Field goals made / attempted')],
         ['PAT', Kit.numEl(Kit.num(s.patMade) + ' / ' + Kit.num(s.pat) + ' (' + pct(s.patMade, s.pat) + ')', 'Extra points made / attempted')],
         ['POINTS', Kit.numEl(Kit.num(s.pts), '3 per field goal, 1 per PAT')],
-        ['LONG', Kit.numEl(Kit.num(s.long) + ' yd', 'Longest made field goal')],
+        ['LONG', Kit.numEl(Kit.longText(s.long, 'yd'), 'Longest made field goal')],
         ['50+', Kit.numEl(Kit.num(s.made50plus), 'Makes from 50 yards or more')],
         ['CLUTCH', Kit.numEl(Kit.num(s.clutchM) + ' / ' + Kit.num(s.clutchA), 'Kicks at pressure 0.6 or more')],
         ['DECISIVE', Kit.numEl(Kit.num(s.decisiveM) + ' / ' + Kit.num(s.decisiveA), 'Game-deciding kicks')],
@@ -67,7 +67,7 @@
       var blocks = c.el('div', { class: 'grid-2' });
       [['COLLEGE', st.college], ['PRO', st.nfl]].forEach(function (b) {
         var s = b[1] || {};
-        blocks.appendChild(c.card({ title: b[0], kind: 'flat', body: c.kv([['FG', Kit.num(s.fgm) + '/' + Kit.num(s.fga) + ' (' + pct(s.fgm, s.fga) + ')'], ['PTS', Kit.num(s.pts)], ['LONG', Kit.num(s.long)], ['GW', Kit.num(s.gameWinners)], ['GAMES', Kit.num(s.games)]]) }));
+        blocks.appendChild(c.card({ title: b[0], kind: 'flat', body: c.kv([['FG', Kit.num(s.fgm) + '/' + Kit.num(s.fga) + ' (' + pct(s.fgm, s.fga) + ')'], ['PTS', Kit.num(s.pts)], ['LONG', Kit.longText(s.long)], ['GW', Kit.num(s.gameWinners)], ['GAMES', Kit.num(s.games)]]) }));
       });
       out.push(blocks);
       var rows = h.slice().reverse().map(function (l) { return l; });
@@ -77,7 +77,7 @@
         { key: 'role', label: 'ROLE' },
         { key: 'fg', label: 'FG', align: 'r', render: function (l) { return l.stats.fgm + '/' + l.stats.fga; } },
         { key: 'pct', label: 'PCT', align: 'r', render: function (l) { return pct(l.stats.fgm, l.stats.fga); } },
-        { key: 'long', label: 'LONG', align: 'r', render: function (l) { return l.stats.long; } },
+        { key: 'long', label: 'LONG', align: 'r', render: function (l) { return Kit.longText(l.stats.long); } },
         { key: 'pts', label: 'PTS', align: 'r', render: function (l) { return l.stats.pts; } },
         { key: 'rec', label: 'TEAM', align: 'r', render: function (l) { return c.el('span', { class: 'row', style: 'justify-content:flex-end' }, c.el('span', { text: l.teamRecord }), l.champion ? Kit.tip(c.icon('trophy', 12), 'Champions') : null); } },
         { key: 'grade', label: 'GRD', align: 'r' },

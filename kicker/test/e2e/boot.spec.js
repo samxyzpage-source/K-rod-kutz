@@ -65,6 +65,48 @@ test('boot http phone: fonts blocked → still renders and a kick can be played'
   } finally { await app.close(); }
 });
 
+test('boot http desktop: a write that falls back to memory shadows the backend (QA1-01)', async () => {
+  const app = await H.openApp({ mode: 'http', viewport: 'desktop' });
+  const { page } = app;
+  try {
+    const r = await page.evaluate(() => {
+      const S = RTG.UI.Storage;
+      S.setItem('rtg.probe', 'old');                       // lands in the real localStorage
+      const orig = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (k, v) {
+        if (String(k).indexOf('rtg.probe') === 0) { const e = new Error('QuotaExceededError'); e.name = 'QuotaExceededError'; throw e; }
+        return orig.call(this, k, v);
+      };
+      const wrote = S.setItem('rtg.probe', 'new');         // quota → memory fallback
+      const out = {
+        wrote: wrote,
+        read: S.getItem('rtg.probe'),                      // must be the memory copy, not the stale backend value
+        json: (S.setJSON('rtg.probe.j', { a: 1 }), S.getJSON('rtg.probe.j')),
+        keys: S.keys().indexOf('rtg.probe.j') >= 0,
+        memoryKeys: S.memoryKeys(),
+        degraded: S.degraded
+      };
+      Storage.prototype.setItem = orig;                    // storage recovers
+      S.setItem('rtg.probe', 'fresh');
+      out.afterRecovery = S.getItem('rtg.probe');
+      out.shadowDropped = S.memoryKeys().indexOf('rtg.probe') < 0;
+      S.removeItem('rtg.probe'); S.removeItem('rtg.probe.j');
+      out.removed = S.getItem('rtg.probe.j');
+      return out;
+    });
+    assert.equal(r.wrote, false, 'setItem reports the fallback');
+    assert.equal(r.read, 'new', 'the memory copy shadows the stale backend value');
+    assert.deepEqual(r.json, { a: 1 }, 'getJSON reads the memory copy');
+    assert.equal(r.keys, true, 'keys() lists memory-only keys');
+    assert.ok(r.memoryKeys.indexOf('rtg.probe') >= 0, 'memoryKeys() reports the fallback keys');
+    assert.equal(r.degraded, true, 'Storage.degraded flips on the first fallback');
+    assert.equal(r.afterRecovery, 'fresh', 'a later successful write wins');
+    assert.equal(r.shadowDropped, true, 'the shadow is dropped once the backend is current again');
+    assert.equal(r.removed, null, 'removeItem clears the memory copy too');
+    assert.deepEqual(app.errors, [], 'console errors');
+  } finally { await app.close(); }
+});
+
 test('boot file desktop: debug mode validates state after every dispatch', async () => {
   const app = await H.openApp({ mode: 'file', viewport: 'desktop', debug: true });
   const { page } = app;

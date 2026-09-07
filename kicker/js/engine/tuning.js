@@ -163,7 +163,7 @@
           },
           minTimeSec: 30, pMin: 0.02, edgeDiv: 100, homeAdv: 3,
           stallYtg: { NFL: { mean: 25, sd: 12 }, COLLEGE: { mean: 23, sd: 12 }, min: 1, max: 50 },
-          puntStart: { mean: 30, sd: 10, min: 5, max: 60 },                            // opponent own-yard after a punt
+          puntStart: { mean: 30, sd: 10, min: 5, max: 50 },                            // receiving team's OWN yard after a punt: never past midfield (max 50), so the drive log never prints "own 51+"
           turnoverYtg: { mean: 45, sd: 20 },
           downsYtg: { mean: 40, sd: 15 },                                              // E2 (sim.js): spot of a failed 4th down (yards-to-goal of the offence)
           ratingNoiseSd: 3, perGameNoiseDraws: 4

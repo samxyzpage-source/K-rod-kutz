@@ -76,12 +76,16 @@
 
     function breakdown(rep) {
       var rows = (rep.breakdown || []).filter(function (b) { return b.points; });
-      return c.table([
+      // the counts here are the PRO line only (Awards.hofScore reads stats.nfl), so they are smaller than CAREER
+      // LINE above — say so, or the two cards read as a contradiction
+      var note = c.el('p', { class: 'small txt-grey mb-1', text: 'The ballot counts pro kicks only — the college line above is not on it.' });
+      var tbl = c.table([
         { key: 'label', label: 'INPUT' },
         { key: 'count', label: 'COUNT', align: 'r', render: function (b) { return String(Math.round(b.count * 100) / 100); } },
         { key: 'weight', label: '×', align: 'r' },
         { key: 'points', label: 'PTS', align: 'r', render: function (b) { return c.el('span', { class: 'txt-gold', text: String(b.points) }); } }
       ], rows, { compact: true, caption: 'Hall of Fame score breakdown', empty: 'No Hall of Fame credit — the pro game never saw the leg.' });
+      return [note, tbl];
     }
 
     function careerCard(state) {
@@ -92,7 +96,7 @@
         ['FG', Kit.numEl(line.fgm + ' / ' + line.fga + ' (' + c.fmt.pct(line.pct) + ')', 'Career field goals')],
         ['PAT', Kit.numEl(line.patMade + ' / ' + line.pat, 'Career extra points')],
         ['POINTS', Kit.numEl(String(line.pts), 'Career points')],
-        ['LONG', Kit.numEl(line.long + ' yd', 'Longest make')],
+        ['LONG', Kit.numEl(Kit.longText(line.long, 'yd'), 'Longest make')],
         ['50+', Kit.numEl(String(line.made50plus), 'Makes from 50+')],
         ['GAME-WINNERS', Kit.numEl(String(line.gameWinners), 'Game-winning kicks')],
         ['SEASONS', Kit.numEl(line.seasons + ' (' + line.collegeSeasons + ' college · ' + line.nflSeasons + ' pro)', 'Seasons played')],

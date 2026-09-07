@@ -27,10 +27,11 @@
     // extra shell tokens (documented in UI_API.md; not in the §4.1 table but used by the CSS)
     shadow: '#0b0d1c', dusk2: '#8a4b6b', sunset: '#d9773b', night: '#12142a', ball: '#a0522d'
   };
-  var CB = { red: '#d55e00', mint: '#0072b2', gold: '#f0e442', sky: '#56b4e9' };
+  // Okabe–Ito, each one tint up where the canonical hex misses WCAG AA as text on --navy (see css/style.css).
+  var CB = { red: '#e26100', mint: '#00b386', gold: '#f0e442', sky: '#56b4e9' };
   var HC = {
     navy: '#000000', navy2: '#000000', cream: '#ffffff', ink: '#000000', grass: '#000000', grass2: '#111111',
-    chalk: '#ffffff', gold: '#ffff00', red: '#ffffff', sky: '#ffff00', mint: '#ffffff', grey: '#cccccc', dusk: '#000000',
+    chalk: '#ffffff', gold: '#ffff00', red: '#ff5c5c', sky: '#66ccff', mint: '#00ff00', grey: '#cccccc', dusk: '#000000',
     shadow: '#ffffff', dusk2: '#000000', sunset: '#ffffff', night: '#000000', ball: '#ffffff'
   };
 

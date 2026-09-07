@@ -486,7 +486,16 @@ H.matrix(({ mode, vp }) => {
         b = await brief(page);
         if (b.stage === 'NFL' && !b.pending) break;
         if (b.pending && b.pending.kind === 'DECISION') { const before = await sig(page); await clickDecision(page, b.pending.decision, {}); await waitChange(page, before, 20000); continue; }
-        if (b.pending && b.pending.kind === 'KICKS') { await forceSession(page, b.pending.session); continue; }
+        if (b.pending && b.pending.kind === 'KICKS') {
+          // the draft screen holds the rookie-deal card until CONTINUE, so the session's scene is not mounted yet
+          if ((await H.screenId(page)) === 'draft') {
+            const go = page.locator('.scr-draft [data-action="continue"]');
+            if (await go.count()) await go.click(); else await page.evaluate(() => RTG.UI.Router.sync({ force: true }));
+            await page.waitForTimeout(150);
+          }
+          await forceSession(page, b.pending.session);
+          continue;
+        }
         if (b.pending && b.pending.kind === 'EVENT') { await settleEvents(page); continue; }
         const cont = page.locator('.scr-draft [data-action="continue"]');
         if (await cont.count()) { const before = await sig(page); await cont.click(); await page.waitForTimeout(150); if ((await sig(page)) === before) await page.evaluate(() => RTG.UI.Router.sync({ force: true })); continue; }

@@ -274,7 +274,14 @@
   function onKey(ev) {
     if (C().modalOpen()) return;
     var t = ev.target, tag = t && t.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) {
+      // Typing must not reach the shell shortcuts. A screen that wants the keys pressed inside its own fields
+      // (Enter to submit a form) opts in with keysInFields:true on the object it returns; every other screen
+      // keeps plain typing untouched.
+      var sc = Router().screen();
+      if (sc && sc.keysInFields === true && Router().key(ev)) ev.preventDefault();
+      return;
+    }
     if (Router().key(ev)) { ev.preventDefault(); return; }
     // Shell shortcuts: Escape → back on browsing screens; '?' toggles the debug panel when debug is on.
     if (ev.key === 'Escape' && store.state && Router().FREE[Router().current()] && Router().current() !== 'hub') { Router().go('hub'); }
@@ -288,6 +295,11 @@
     var teamId = state && state.player ? state.player.teamId : null;
     if (teamId !== lastTeam) { lastTeam = teamId; RTG.UI.Palette.setTeamVars(teamId); }
     if (info.fnName === 'settings') Shell.applySettings();
+    if (info.fnName === 'storage' && info.result && info.result.persisted === false) {
+      C().toast(info.result.available
+        ? 'Storage is full — saves are kept in memory only and are lost when you close the tab.'
+        : 'Storage is unavailable — saves are kept in memory only and are lost when you close the tab.', 'bad', 6000);
+    }
     closeStaleEventModal();
     Shell.setChrome(Router().current());
   }

@@ -14,6 +14,7 @@
     var el = C.screen({ title: 'SETTINGS', back: function () { if (store.state) Router.back(); else Router.go('title'); } });
     el.classList.add('settings-screen');
     var unsub = null;
+    var cancelRemap = null;      // set while a key row is waiting for a press; destroy() must call it
 
     function s() { return store.settings; }
 
@@ -44,15 +45,21 @@
     function keyRow(key, label) {
       var b = C.button({ label: keyName(s().keys[key]), kind: 'secondary', small: true, ariaLabel: label + ' key: ' + keyName(s().keys[key]) + ', press to remap' });
       b.addEventListener('click', function () {
+        if (cancelRemap) cancelRemap();          // only one row can be waiting at a time
         b.textContent = 'PRESS A KEY…';
         b.classList.add('blink');
-        function onKey(ev) {
-          ev.preventDefault(); ev.stopPropagation();
+        function stop() {
           root.removeEventListener('keydown', onKey, true);
+          if (cancelRemap === stop) cancelRemap = null;
           b.classList.remove('blink');
-          if (ev.key !== 'Escape') { var k = {}; k[key] = ev.key; store.setSetting('keys', k); }
           b.textContent = keyName(s().keys[key]);
         }
+        function onKey(ev) {
+          ev.preventDefault(); ev.stopPropagation();
+          if (ev.key !== 'Escape') { var k = {}; k[key] = ev.key; store.setSetting('keys', k); }
+          stop();
+        }
+        cancelRemap = stop;
         root.addEventListener('keydown', onKey, true);
       });
       return C.el('div', { class: 'toggle' }, C.el('span', { class: 'toggle-label', text: label }), b);
@@ -70,7 +77,7 @@
 
     el.appendChild(C.card({ title: 'ACCESSIBILITY', body: [
       toggle('colorblind', 'Colour-blind palette', 'Okabe–Ito reds / greens / golds'),
-      toggle('highContrast', 'High contrast', 'Black, white and yellow only'),
+      toggle('highContrast', 'High contrast', 'Black and white with four high-contrast accents'),
       toggle('reducedMotion', 'Reduced motion', 'No shake, instant flight, no vignette'),
       pills('fontScale', 'Font scale', [{ value: 1, label: '100%' }, { value: 1.25, label: '125%' }, { value: 1.5, label: '150%' }]),
       toggle('tooltips', 'Tooltips', 'Hover / long-press explanations on numbers'),
@@ -85,7 +92,10 @@
     ] }));
 
     el.appendChild(C.card({ title: 'DATA', body: [
-      C.el('p', { class: 'small txt-grey', text: 'Settings live in ' + RTG.UI.Store.KEYS.settings + (RTG.UI.Storage.available ? '' : ' (storage unavailable: memory only)') + '. Saves are on the Saves screen.' })
+      C.el('p', { class: 'small txt-grey', text: 'Settings live in ' + RTG.UI.Store.KEYS.settings
+        + (!RTG.UI.Storage.available ? ' (storage unavailable: memory only)'
+          : RTG.UI.Storage.degraded ? ' (storage is full: recent saves are in memory only and are lost when you close the tab)' : '')
+        + '. Saves are on the Saves screen.' })
     ], footer: [
       C.button({ label: 'SAVES', kind: 'secondary', icon: 'save', onClick: function () { Router.go('saves'); } }),
       C.button({ label: 'RESET SETTINGS', kind: 'danger', onClick: function () {
@@ -105,7 +115,9 @@
       for (var j = 0; j < ps.length; j++) { var on = String(s()[ps[j].getAttribute('data-setting')]) === ps[j].getAttribute('data-value'); ps[j].classList.toggle('active', on); ps[j].setAttribute('aria-checked', on ? 'true' : 'false'); }
     }
 
-    return { el: el, destroy: function () { if (unsub) unsub(); unsub = null; } };
+    // Leaving the screen cancels a pending remap: the capturing window listener must not outlive the screen,
+    // or the next key pressed anywhere is swallowed and silently rebinds the setting.
+    return { el: el, destroy: function () { if (cancelRemap) cancelRemap(); if (unsub) unsub(); unsub = null; } };
   }
 
   RTG.UI.Router.register('settings', factory);
