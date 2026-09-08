@@ -80,7 +80,8 @@ then `Router.sync()` (or `store.load('auto')` with `?load=auto`). With `?debug=1
 ```
 { audio: true, autoPat: 'off'|'safe'|'all', playKickoffs: false, simSpeed: 1|2|4,
   colorblind: false, highContrast: false, reducedMotion: false, fontScale: 1|1.25|1.5,
-  leftFooted: false, inputMode: 'flick'|'meter', playClockMult: 1|2, tooltips: true, haptics: true,
+  leftFooted: false, inputMode: 'meter'|'flick' (default 'meter' = aim-then-hold), playClockMult: 1|2, tooltips: true, haptics: true,
+  kickInputV2: true,            // migration marker: pre-aim-and-hold settings are moved onto 'meter' once
   keys: { confirm: ' ', confirmAlt: 'Enter', left: 'ArrowLeft', right: 'ArrowRight' } }
 ```
 `RTG.UI.Store.defaultSettings()` / `sanitizeSettings(raw)`. `app.js` mirrors them to classes on **both** `<body>`
@@ -225,7 +226,7 @@ no career) hides the top bar, rails and tab bar. `html` also carries `.is-deskto
   forwarded to that screen's `onKey` only (`newcareer` uses it for Enter-to-submit in the name / seed fields).
   The chromeless kick screens (`kick`, `showcase`, `campbattle`, `combine`) have no tab bar or rail, so their
   `onKey` sends **Escape → `settings`** (`KickView.escapeToSettings`); `Router.back()` returns to the still-
-  pending session. In flick mode the confirm key on an armed scene also swaps that view to the meter sequence
+  pending session. In flick mode the confirm key on an armed scene also swaps that view to aim-then-hold
   (SPEC §4.8 keyboard fallback), so a keyboard-only player is never stuck.
 
 ---
@@ -320,4 +321,4 @@ them to the screen (e.g. `.game-screen .pill`) — global selectors in a later s
 | Flick segment start (§4.6 step 3) | `Input.flick` takes the last 120 ms / 6 samples as specified, but the segment never starts before the pull's reversal — the deepest sample of the pull, found by walking back from the release with no time bound (a deeper sample inside the last 300 ms still wins), which is also where power is read | a fast pull that snaps straight into the flick would otherwise drag downward samples into the window and the chord across the turn would read as WEAK (×0.85); and a player who draws, pauses to aim and then flicks leaves no samples at the bottom, so a time-bounded scan read power off the first flick sample instead of the pull depth |
 | `D_full` cap (§4.6 step 2) | `D_full = 0.32 × canvasCssHeight` (portrait) / `0.45 ×` (landscape) as specified, then capped so the whole range including overswing fits under the ball: `min(D_full, max(60, (roomBelowBall − 12) / 1.15))`, measured at `pointerdown` | a finger cannot leave the screen — without the cap a landscape phone put `P = 1.15` past the bottom edge (the home-indicator strip). CSS keeps the room honest instead: `.kv-stage { max-height: 74% }` on landscape phones leaves ~155 px under the tee, so the cap no longer binds there |
 | Hesitation clock (§4.6 / §2.3.3) | `holdSince` is latched at the first sample with P ≥ 0.95 and stopped by the first sample back under it, instead of being zeroed by every sample under the line | the flick samples run through the same `updatePull`, so the old rule zeroed the clock on the way out and `holdMs` was always 0 — the composure penalty was dead code for flick input |
-| Keyboard fallback on a flick scene (§4.8) | the confirm key on an armed flick scene swaps **that view** to the meter sequence (`store.settings.inputMode` untouched) and announces it; Escape on a chromeless kick screen opens `settings` | the flick needs a pointer and the kick screens have no chrome, so a keyboard-only player was stuck on the first showcase kick with no route to Settings |
+| Keyboard fallback on a flick scene (§4.8) | the confirm key on an armed flick scene swaps **that view** to aim-then-hold (`store.settings.inputMode` untouched) and announces it; Escape on a chromeless kick screen opens `settings` | the flick needs a pointer and the kick screens have no chrome, so a keyboard-only player was stuck on the first showcase kick with no route to Settings |

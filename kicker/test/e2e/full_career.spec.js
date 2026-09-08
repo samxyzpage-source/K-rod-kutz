@@ -97,18 +97,20 @@ async function realFlick(page) {
   await K.waitPhase(page, 'RESULT', 15000);
 }
 
-/** The keyboard meter: ► ×2, Space (power), Space (lock), Space (strike). */
+/** Aim-then-hold on the keyboard: ► ×2, then hold Space until the bar is in the green and let go. */
 async function keyboardKick(page) {
   await K.waitPhase(page, 'SETUP', 10000);
   await page.waitForTimeout(120);
   for (let i = 0; i < 2; i++) await page.keyboard.press('ArrowRight');
-  await page.keyboard.press('Space');
+  const ms = await page.evaluate(() => {
+    var v = RTG.UI.KickView.current(), m = v && v.model(), M = RTG.UI.Input.CONST.meter, C = RTG.UI.Input.CONST;
+    var need = m ? m.pNeed : 0.7;
+    return Math.round(Math.min(C.powerMax, need + 0.075) / C.powerMax * M.holdMs);
+  });
+  await page.keyboard.down('Space');
   await page.waitForFunction(() => RTG.UI.KickView.current() && RTG.UI.KickView.current().phase() === 'POWER', null, { timeout: 4000 });
-  await page.waitForTimeout(320);
-  await page.keyboard.press('Space');
-  await page.waitForFunction(() => RTG.UI.KickView.current() && RTG.UI.KickView.current().phase() === 'NEEDLE', null, { timeout: 4000 });
-  await page.waitForTimeout(150);
-  await page.keyboard.press('Space');
+  await page.waitForTimeout(ms);
+  await page.keyboard.up('Space');
   await K.waitPhase(page, 'RESULT', 15000);
 }
 

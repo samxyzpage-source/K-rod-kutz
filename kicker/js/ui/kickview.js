@@ -176,7 +176,11 @@
     /** What the on-canvas hints call the confirm action: TAP on a touch device, otherwise the bound key. */
     function pressLabel() { return coarsePointerNow() ? 'TAP' : keyLabelOf(keyBindings().confirm); }
     /** Flick-mode hint; pointer-only devices are not told about the keyboard fallback (§4.8). */
-    function flickHint() { return coarsePointerNow() ? 'PULL ↓ · FLICK ↑' : 'PULL ↓ · FLICK ↑ · ' + pressLabel() + ': METER'; }
+    function flickHint() { return coarsePointerNow() ? 'PULL ↓ · FLICK ↑' : 'PULL ↓ · FLICK ↑ · ' + pressLabel() + ': HOLD MODE'; }
+    /** Aim-then-hold prompt: the arrows aim, then you hold and let go in the green. */
+    function meterHint() {
+      return coarsePointerNow() ? '◄ ► AIM · HOLD, RELEASE IN THE GREEN' : '◄ ► AIM · HOLD ' + pressLabel() + ', RELEASE IN THE GREEN';
+    }
 
     // ── DOM ──
     var elRoot = el('div', { class: 'kickview kv-mode-' + inputMode, 'data-phase': 'SETUP' });
@@ -448,15 +452,15 @@
           leftFooted: function () { return mirror; },
           active: inputActive,
           keys: function () { return liveSettings().keys; },
+          greenZone: function () { return model ? { lo: model.pNeed, hi: Math.min(T().kick.range.powerMax, model.pNeed + 0.15) } : null; },
           onAim: function (a) { aimDeg = a; },
-          onPowerStart: function () { setPhase('POWER'); setHint(pressLabel() + ': LOCK POWER'); Audio().click(); },
+          onPowerStart: function () { setPhase('POWER'); setHint('RELEASE IN THE GREEN'); Audio().click(); },
           onPower: function (p) { meterP = p; var tick = Math.floor(p * 10); if (tick !== lastTick) { lastTick = tick; Audio().click(); } lean = Math.min(3, Math.floor(p * 3)); },
-          onPowerLock: function (p) { meterP = p; setPhase('NEEDLE'); setHint(pressLabel() + ': STRIKE'); },
-          onNeedle: function (n) { needleVal = n; },
+          onPowerCancel: function () { meterP = 0; lean = 0; setPhase('SETUP'); setHint(meterHint()); },
           onRelease: function (inp) { onRelease(inp); }
         });
         clockOwner = meter;
-        setHint('◄ ► AIM · ' + pressLabel() + ': POWER');
+        setHint(meterHint());
       } else {
         input = Inp.flick(canvas, {
           ballAt: ballCss,
@@ -853,14 +857,6 @@
       }
       g.globalAlpha = 1;
       g.drawImage(markerSpr, Math.round(xA - 3), L.yXbar - 6);
-      // needle bar (meter mode) under the posts
-      if (inputMode === 'meter' && (phase === 'NEEDLE' || phase === 'POWER')) {
-        var nb = L.needle;
-        g.fillStyle = pal('navy'); g.fillRect(nb.x - 1, nb.y - 1, nb.w + 2, nb.h + 2);
-        g.fillStyle = pal('chalk'); g.fillRect(nb.x, nb.y, nb.w, nb.h);
-        g.fillStyle = pal('mint'); g.fillRect(Math.round(nb.x + nb.w / 2 - nb.w * 0.05), nb.y, Math.max(2, Math.round(nb.w * 0.1)), nb.h);
-        if (phase === 'NEEDLE') { g.fillStyle = pal('red'); g.fillRect(Math.round(nb.x + (needleVal + 1) / 2 * (nb.w - 2)), nb.y - 2, 2, nb.h + 4); }
-      }
     }
     function drawPowerBar() {
       if (ctx.type === 'KO') return;
@@ -1012,6 +1008,10 @@
       phase: function () { return phase; },
       layout: function () { return L; },
       ctx: function () { return ctx; },
+      model: function () { return model; },
+      /** Current aim in degrees (arrow keys / hold mode) and the live power-bar fill — used by the specs. */
+      aim: function () { return aimDeg; },
+      meterPower: function () { return meterP; },
       result: function () { return result; },
       /** The last emitted triple and its input meta ({kind, speed css-px/ms, rmsPerp, weak, yanked, samples, windowMs}). */
       lastInput: function () { return lastInput; },
@@ -1227,7 +1227,7 @@
       }
       if (store.settings && store.settings.inputMode === 'meter') {
         t.textContent = '';
-        t.appendChild(el('div', { class: 'tut-step' }, el('span', { class: 'tut-text', text: '◄ ► AIM · ' + confirmWord() + ' ×3\npower · strike' })));
+        t.appendChild(el('div', { class: 'tut-step' }, el('span', { class: 'tut-text', text: '◄ ► AIM\nHOLD ' + confirmWord() + ', LET GO IN THE GREEN' })));
       }
       return t;
     }

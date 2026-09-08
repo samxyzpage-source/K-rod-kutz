@@ -70,7 +70,7 @@
       pills('autoPat', 'Auto-PAT', [{ value: 'off', label: 'OFF' }, { value: 'safe', label: 'SAFE' }, { value: 'all', label: 'ALL' }], 'SAFE auto-kicks extra points unless the pressure is on'),
       toggle('playKickoffs', 'Play kickoffs', 'One-tap timing bar instead of a simulated kickoff'),
       pills('simSpeed', 'Sim speed', [{ value: 1, label: '×1' }, { value: 2, label: '×2' }, { value: 4, label: '×4' }]),
-      pills('inputMode', 'Kick input', [{ value: 'flick', label: 'FLICK' }, { value: 'meter', label: 'METERS' }], 'Flick: pull back and flick. Meters: keyboard power + accuracy'),
+      pills('inputMode', 'Kick input', [{ value: 'meter', label: 'AIM + HOLD' }, { value: 'flick', label: 'FLICK' }], 'Aim + hold: arrows aim, then hold and release in the green. Flick: pull back and flick the ball'),
       pills('playClockMult', 'Play clock', [{ value: 1, label: '×1' }, { value: 2, label: '×2' }], 'Double the time to set up a kick'),
       toggle('leftFooted', 'Left-footed mirror', 'Mirror the kick scene for a left-footed feel')
     ] }));

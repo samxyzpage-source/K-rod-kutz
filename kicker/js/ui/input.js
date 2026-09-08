@@ -51,7 +51,15 @@
     noFlickVy: -0.12, weakSpeed: 0.35, yankSpeed: 2.2, weakMult: 0.85, yankPenalty: 0.15,
     rmsPerpDiv: 14, holdFromP: 0.95, holdMs: 1200, noCancelP: 0.20,
     mishit: { power: 0.5, aimSd: 2, quality: 0.3 }, cancelQuality: 0.5,
-    meter: { nudgeDeg: 0.5, sweepDegPerSec: 6, sweepAfterMs: 220, powerMs: 900, needleMs: 700, needleMsPressure: 500, pressureFast: 0.6, aimPerNeedle: 6 }
+    // Aim-then-hold meter: arrows aim, then hold the confirm key/finger while the power bar fills and let go
+    // inside the green band. `holdMs` is the time to fill 0 → powerMax; `holdMsPressure` is the quicker fill
+    // under pressure. Quality comes from where the release landed relative to the green zone (§4.6).
+    meter: {
+      nudgeDeg: 0.5, sweepDegPerSec: 6, sweepAfterMs: 220,
+      holdMs: 1300, holdMsPressure: 1050, pressureFast: 0.6,
+      minCommit: 0.08,                                   // a release below this is a stray tap: back to AIM, no kick
+      quality: { center: 1.0, edge: 0.88, missSlope: 2.2, min: 0.3, halfFallback: 0.075 }
+    }
   };
   Input.CONST = CONST;
 
@@ -331,21 +339,46 @@
     };
   };
 
-  // ═══════════════════════════════ meter (keyboard / 3-click) ═══════════════════════════════
+  // ═══════════════════════════════ meter (aim with the arrows, then hold) ═══════════════════════════════
+  /**
+   * Aim-then-hold kick input (§4.6). The player aims with ◄ ► (or A/D, or the remapped keys), then holds the
+   * confirm key — or a finger anywhere on the canvas — while the power bar climbs from 0 to `powerMax`, and
+   * lets go inside the green band. Release timing is the ONLY power input, so contact quality is read from the
+   * same release: dead centre of the green is a pure strike, and the further outside it lands the worse the
+   * contact. Holding past 1.0 leaves the bar in the red, where the engine's overswing penalty takes over.
+   */
   Input.meter = function (opts) {
     opts = opts || {};
     var M = CONST.meter;
-    var state = 'AIM';                 // AIM → POWER → NEEDLE → DONE
-    var aim = 0, P = 0, needle = 0, tPower = 0, tNeedle = 0, lockedP = 0;
+    var state = 'AIM';                 // AIM → POWER → DONE
+    var aim = 0, P = 0, tPower = 0;
     var heldDir = 0, heldSince = 0, lastUpdate = 0;
+    var holdKey = null, holdPointer = false;
     var clockStart = 0, clockTotal = 0, clockTimer = 0;
     var destroyed = false;
     var out = { power: 0, aim: 0, quality: 0, holdMs: 0 };
     var meta = { kind: 'meter', speed: 0, rmsPerp: 0, weak: false, yanked: false };
 
     function isActive() { return opts.active ? !!opts.active() : true; }
-    function needleMs() { return (opts.pressure || 0) >= M.pressureFast ? M.needleMsPressure : M.needleMs; }
-    function tri(t, period) { var ph = (t / period) % 2; return ph < 1 ? ph : 2 - ph; }
+    function fillMs() { return (opts.pressure || 0) >= M.pressureFast ? M.holdMsPressure : M.holdMs; }
+    /** Power after holding for `ms`, clamped at the top of the bar (an over-hold parks in the red). */
+    function powerAt(ms) { return clamp(CONST.powerMax * (ms / fillMs()), 0, CONST.powerMax); }
+
+    /**
+     * Contact quality for a release at power `p`: 1.0 at the middle of the green band, easing to `edge` at its
+     * rim, then falling away outside it. With no green zone to aim at (assists off) every release is `edge`.
+     */
+    function qualityFor(p) {
+      var Q = M.quality;
+      var z = call(opts.greenZone);
+      if (!z || typeof z.lo !== 'number' || typeof z.hi !== 'number' || z.hi <= z.lo) return Q.edge;
+      if (p >= z.lo && p <= z.hi) {
+        var mid = (z.lo + z.hi) / 2, half = (z.hi - z.lo) / 2 || Q.halfFallback;
+        return Q.edge + (Q.center - Q.edge) * (1 - clamp(Math.abs(p - mid) / half, 0, 1));
+      }
+      var d = p < z.lo ? z.lo - p : p - z.hi;
+      return clamp(Q.edge - Q.missSlope * d, Q.min, Q.edge);
+    }
 
     function startClock() {
       var total = call(opts.playClockMs) || 0;
@@ -357,40 +390,43 @@
     function onClockOut() {
       clockTimer = 0;
       if (destroyed || state === 'AIM' || state === 'DONE') return;
-      var t = now();
-      if (state === 'POWER') { lockedP = CONST.powerMax * tri(t - tPower, M.powerMs); needle = 0; }
-      else needle = -1 + 2 * tri(t - tNeedle, needleMs());
+      P = powerAt(now() - tPower);
       finish(CONST.cancelQuality, 'clock');
     }
     function finish(qualityOverride, kind) {
-      var q = qualityOverride !== undefined ? qualityOverride : clamp(1 - Math.abs(needle), 0, 1);
-      var a = aim + M.aimPerNeedle * needle;
-      out.power = clamp(lockedP, 0, CONST.powerMax);
-      out.aim = clamp(a, -CONST.aimMax, CONST.aimMax);
-      out.quality = q; out.holdMs = 0;
-      meta.kind = kind || 'meter'; meta.needle = needle;
+      out.power = clamp(P, 0, CONST.powerMax);
+      out.aim = clamp(aim, -CONST.aimMax, CONST.aimMax);
+      out.quality = qualityOverride !== undefined ? qualityOverride : qualityFor(out.power);
+      out.holdMs = 0;
+      meta.kind = kind || 'meter';
       state = 'DONE';
+      holdKey = null; holdPointer = false;
       stopClock();
       call(opts.onRelease, out, meta);
     }
 
-    function press() {
-      if (destroyed || !isActive()) return;
-      var t = now();
-      if (state === 'AIM') {
-        state = 'POWER'; tPower = t; P = 0;
-        startClock();
-        call(opts.onPowerStart);
-      } else if (state === 'POWER') {
-        lockedP = CONST.powerMax * tri(t - tPower, M.powerMs);
-        P = lockedP;
-        state = 'NEEDLE'; tNeedle = t; needle = -1;
-        call(opts.onPowerLock, lockedP);
-      } else if (state === 'NEEDLE') {
-        needle = -1 + 2 * tri(t - tNeedle, needleMs());
-        finish(undefined, 'meter');
-      }
+    /** Begin the power climb (confirm key down, or a finger on the canvas). */
+    function holdStart() {
+      if (destroyed || !isActive() || state !== 'AIM') return;
+      state = 'POWER'; tPower = now(); P = 0;
+      startClock();
+      call(opts.onPowerStart);
     }
+    /** Let go: kick at the power the bar reached — unless it was a stray tap, which just returns to aiming. */
+    function holdEnd() {
+      if (destroyed || state !== 'POWER') return;
+      P = powerAt(now() - tPower);
+      if (P < M.minCommit) {
+        state = 'AIM'; P = 0;
+        holdKey = null; holdPointer = false;
+        call(opts.onPower, 0);
+        call(opts.onPowerCancel);
+        return;
+      }
+      finish(undefined, 'meter');
+    }
+    /** Legacy one-shot entry (RTG.debug / tests): hold and release immediately at the current fill. */
+    function press() { if (state === 'AIM') holdStart(); else holdEnd(); }
     function nudge(dir) {
       if (destroyed || !isActive() || state === 'DONE') return;
       if (call(opts.leftFooted)) dir = -dir;
@@ -429,24 +465,34 @@
       }
       if (isPress(e)) {
         e.preventDefault();
-        if (e.repeat) return;
-        press();
+        if (e.repeat) return;                 // auto-repeat while held must not restart the climb
+        if (state === 'AIM' && holdKey === null) { holdKey = e.key || e.code; holdStart(); }
       }
     }
     function onKeyUp(e) {
       var dir = keyDir(e);
       if (dir && dir === heldDir) { heldDir = 0; heldSince = 0; }
+      if (holdKey !== null && isPress(e)) { holdKey = null; holdEnd(); }
     }
-    function onPointer(e) {
-      if (destroyed || !isActive()) return;
+    function onPointerDown(e) {
+      if (destroyed || !isActive() || state !== 'AIM') return;
       if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
       e.preventDefault();
-      press();
+      holdPointer = true;
+      holdStart();
+    }
+    function onPointerUp() {
+      if (!holdPointer) return;
+      holdPointer = false;
+      holdEnd();
     }
 
     root.addEventListener('keydown', onKeyDown);
     root.addEventListener('keyup', onKeyUp);
-    if (opts.canvasEl) opts.canvasEl.addEventListener('pointerdown', onPointer);
+    // the release is caught on the window so dragging off the canvas mid-hold still kicks
+    root.addEventListener('pointerup', onPointerUp);
+    root.addEventListener('pointercancel', onPointerUp);
+    if (opts.canvasEl) opts.canvasEl.addEventListener('pointerdown', onPointerDown);
 
     return {
       /** Advance the sweeps; call once per frame. */
@@ -460,22 +506,26 @@
           aim = clamp(aim + d * M.sweepDegPerSec * dt / 1000, -CONST.aimMax, CONST.aimMax);
           call(opts.onAim, aim);
         }
-        if (state === 'POWER') { P = CONST.powerMax * tri(t - tPower, M.powerMs); call(opts.onPower, P); }
-        else if (state === 'NEEDLE') { needle = -1 + 2 * tri(t - tNeedle, needleMs()); call(opts.onNeedle, needle); }
+        if (state === 'POWER') { P = powerAt(t - tPower); call(opts.onPower, P); }
       },
       press: press,
+      holdStart: holdStart,
+      holdEnd: holdEnd,
+      power: function () { return P; },
+      state: function () { return state; },
+      /** Quality a release would earn right now — the scene tints the bar with it. */
+      qualityNow: function () { return qualityFor(P); },
       nudge: nudge,
       destroy: function () {
         destroyed = true; stopClock();
         root.removeEventListener('keydown', onKeyDown);
         root.removeEventListener('keyup', onKeyUp);
-        if (opts.canvasEl) opts.canvasEl.removeEventListener('pointerdown', onPointer);
+        root.removeEventListener('pointerup', onPointerUp);
+        root.removeEventListener('pointercancel', onPointerUp);
+        if (opts.canvasEl) opts.canvasEl.removeEventListener('pointerdown', onPointerDown);
       },
-      reset: function () { stopClock(); state = 'AIM'; P = 0; needle = 0; lockedP = 0; heldDir = 0; lastUpdate = 0; },
-      state: function () { return state; },
+      reset: function () { stopClock(); state = 'AIM'; P = 0; heldDir = 0; lastUpdate = 0; holdKey = null; holdPointer = false; },
       aim: function () { return aim; },
-      power: function () { return state === 'NEEDLE' || state === 'DONE' ? lockedP : P; },
-      needle: function () { return needle; },
       clockRemaining: function () { return clockTotal ? Math.max(0, clockTotal - (now() - clockStart)) : 0; },
       clockTotal: function () { return clockTotal; }
     };

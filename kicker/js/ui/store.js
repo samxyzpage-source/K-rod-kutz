@@ -64,10 +64,11 @@
       reducedMotion: false,
       fontScale: 1,
       leftFooted: false,
-      inputMode: 'flick',
+      inputMode: 'meter',
       playClockMult: 1,
       tooltips: true,
       haptics: true,
+      kickInputV2: true,             // migration marker: settings saved before aim-then-hold shipped are moved onto it once
       keys: { confirm: ' ', confirmAlt: 'Enter', left: 'ArrowLeft', right: 'ArrowRight' }
     };
   }
@@ -95,6 +96,9 @@
         d[k] = raw[k];
       }
     }
+    // One-time move to aim-then-hold: settings written before it shipped carry the old flick default, so the
+    // change would never reach a returning player. Switch them over once; after that their choice is theirs.
+    if (raw.kickInputV2 !== true) { d.inputMode = 'meter'; d.kickInputV2 = true; }
     return d;
   }
 

@@ -16,25 +16,30 @@ phones and desktops.
 
 ### Controls
 
-**The kick (flick mode, default)**
+**The kick (aim and hold — the default)**
 
-1. Press on the ball and **pull down** for power — the bar on the left fills, the green zone marks the power you need for
-   the distance (Legend difficulty hides it). Over 100 % is an overswing: more carry, less accuracy.
-2. **Flick up** to strike. The direction of the flick is your aim (the aim marker sits on the uprights), its straightness
-   is your strike quality — a wobbly flick hooks or pushes the ball, a yanked one loses quality, a lazy one loses power.
-3. The play clock (ring around the ball) starts on the first touch; when it runs out the ball goes with whatever you have.
-   Holding full power for more than 1.2 s before the flick is a hesitation (a composure penalty).
+1. **Aim** with `←` / `→` (or `A` / `D`) — 0.5° per tap, hold to sweep. The marker on the uprights is where you are
+   pointing. This is the whole aim: nothing later moves it.
+2. **Hold** `Space` (or `Enter`, or a finger anywhere on the scene). The power bar on the left climbs from zero. The
+   green band is the power the distance needs — Legend difficulty hides it.
+3. **Let go in the green.** The release sets your power *and* your contact: dead centre of the green is a pure strike,
+   the edges are decent, and the further outside it you release the worse the ball comes off your foot. Hold past
+   100 % and you are in the red — an overswing, with more carry and less accuracy.
+4. A tap too quick to register just returns you to aiming; it does not spend the kick. The play clock (the ring around
+   the ball) starts when you begin the hold, and if it runs out the ball goes with whatever the bar had.
 
-**Keyboard / meter mode** (Settings → INPUT → METERS; also usable with a mouse or a tap on the scene)
+All four bindings are remappable under Settings → KEYS (`A` / `D` stay aim aliases only while the arrows are unremapped).
+`Space` / `Enter` also skips the flight (after 300 ms) and the result beat. `Escape` on a kick screen opens Settings and
+comes straight back to the pending kick.
 
-- `←` / `→` (or `A` / `D`) nudge the aim 0.5° per tap; hold to sweep.
-- `Space` / `Enter` #1 starts the power meter, #2 locks it, then an accuracy needle sweeps; #3 strikes — a centre hit is
-  PURE, the needle's offset becomes aim error.
-- `Space` / `Enter` also skips the flight (after 300 ms) and the result beat.
-- All four bindings are remappable under Settings → KEYS (`A` / `D` stay aim aliases only while the arrows are unremapped).
-- On a **flick** kick the confirm key is a keyboard fallback: it switches that scene to the meter sequence, so a
-  keyboard-only player never gets stuck on a kick that needs a pointer. `Escape` on a kick screen opens Settings and
-  comes straight back to the pending kick.
+**Flick mode** (Settings → Kick input → FLICK) — the original touch mechanic
+
+1. Press on the ball and **pull down** for power, then **flick up** to strike.
+2. The direction of the flick is your aim; its straightness is your strike quality — a wobbly flick hooks or pushes the
+   ball, a yanked one loses quality, a lazy one loses power. Holding full power for more than 1.2 s before the flick is a
+   hesitation (a composure penalty).
+3. On a flick kick the confirm key is a keyboard fallback: it switches that scene to aim-and-hold, so a keyboard-only
+   player never gets stuck on a kick that needs a pointer.
 
 **Everywhere else**: `Tab` reaches every button, `Enter` activates the primary button of a screen (CONTINUE, START THE
 DRAFT…), `Escape` closes modals and returns from a browsing screen to the hub, `←` / `→` browse offer cards. On phones
