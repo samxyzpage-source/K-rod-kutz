@@ -3,6 +3,7 @@
  * mouse or with CDP touch events, wait for a scene phase, and loop a game with forced kicks.
  *
  *   const K = require('./_kickhelpers');
+ *   await K.useFlick(page)                           → pin the flick mechanic (aim-then-hold is the default, D20)
  *   await K.openShowcase(page, seed)                 → new career via RTG.debug, waits for the KickView in SETUP
  *   await K.geometry(page)                           → {scale, w, h, landscape, cssHeight, rect, ball:{x,y}}
  *   await K.mouseFlick(page, {drag, dragMs, flick, flickMs, dx})
@@ -11,6 +12,14 @@
  *   await K.waitSetup(page, resultsLen, timeout)     resolves when the scene is armed for kick #resultsLen+1
  */
 'use strict';
+
+/**
+ * Pin flick as the kick input for a spec that tests it. Aim-then-hold (`inputMode: 'meter'`) is the default
+ * since SPEC D20, and the scene reads the mode when it mounts — so this must run before `openShowcase`.
+ */
+async function useFlick(page) {
+  await page.evaluate(() => RTG.UI.store.setSetting('inputMode', 'flick'));
+}
 
 async function openShowcase(page, seed) {
   await page.evaluate(s => RTG.debug.newCareer({ seed: s, name: 'E2E Kicker' }), seed || 4242);
@@ -79,4 +88,4 @@ function waitSetup(page, n, timeout) {
   }, n, { timeout: timeout || 10000 });
 }
 
-module.exports = { openShowcase, geometry, mouseFlick, touchFlick, waitPhase, waitSetup };
+module.exports = { useFlick, openShowcase, geometry, mouseFlick, touchFlick, waitPhase, waitSetup };

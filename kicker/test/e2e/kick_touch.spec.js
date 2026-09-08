@@ -27,7 +27,7 @@ for (const mode of H.MODES) {
       const app = await H.openApp({ mode, viewport: cs.viewport, hasTouch: true, isMobile: true, dpr: cs.dpr });
       const { page } = app;
       try {
-        await K.openShowcase(page, 77);
+        await K.useFlick(page); await K.openShowcase(page, 77);
         const g = await K.geometry(page);
         assert.ok(g.scale >= 2 ? Number.isInteger(g.scale) : (g.scale === 1 || g.scale >= 1.35), 'integer scale, or the fractional phone fit ≥ 1.35 (' + g.scale + ')');
         if (cs.label !== 'landscape') assert.ok(g.rect.w >= g.innerWidth * 0.8, 'the portrait scene fills the phone width (' + g.rect.w + ' of ' + g.innerWidth + ')');
@@ -63,7 +63,7 @@ test('kick_touch file portrait: the page never scrolls during the pull (touch-ac
   const app = await H.openApp({ mode: 'file', viewport: CASES[0].viewport, hasTouch: true, isMobile: true, dpr: 2 });
   const { page } = app;
   try {
-    await K.openShowcase(page, 78);
+    await K.useFlick(page); await K.openShowcase(page, 78);
     const before = await page.evaluate(() => window.scrollY);
     await K.touchFlick(page, { drag: 140, dragMs: 300, flick: 60, flickMs: 80 });
     const after = await page.evaluate(() => window.scrollY);
@@ -98,12 +98,12 @@ test('kick_touch file portrait: a pause at full draw keeps the pull depth, a 1.5
   const read = () => page.evaluate(() => RTG.UI.KickView.current().lastInput());
   try {
     // the same gesture with and without a pause at the bottom — D_full varies with the viewport, the power must not
-    await K.openShowcase(page, 4242);
+    await K.useFlick(page); await K.openShowcase(page, 4242);
     await pullHoldFlick(page, { drag: 90, holdMs: 0 });
     const noPause = await read();
     await K.waitPhase(page, 'RESULT', 8000);
 
-    await K.openShowcase(page, 4242);
+    await K.useFlick(page); await K.openShowcase(page, 4242);
     const g = await pullHoldFlick(page, { drag: 90, holdMs: 600 });
     const paused = await read();
     assert.ok(noPause.power > 0.3, 'the 90-px pull registers (' + noPause.power + ')');
@@ -112,7 +112,7 @@ test('kick_touch file portrait: a pause at full draw keeps the pull depth, a 1.5
     await K.waitPhase(page, 'RESULT', 8000);
 
     // held at full draw for 1.5 s → holdMs reaches Kick.resolve
-    await K.openShowcase(page, 4242);
+    await K.useFlick(page); await K.openShowcase(page, 4242);
     const deep = Math.floor(g.innerHeight - g.ball.y - 14);   // past D_full whatever the cap, so P ≥ 0.95
     await pullHoldFlick(page, { drag: deep, holdMs: 1500, flickSteps: [3, 40, 110] });
     const held = await read();
@@ -128,7 +128,7 @@ test('kick_touch file landscape: D_full stays controllable and the HUD column do
   const app = await H.openApp({ mode: 'file', viewport: CASES[1].viewport, hasTouch: true, isMobile: true, dpr: 2 });
   const { page } = app;
   try {
-    await K.openShowcase(page, 4242);
+    await K.useFlick(page); await K.openShowcase(page, 4242);
     const g = await K.geometry(page);
     const room = g.innerHeight - g.ball.y;
     assert.ok(room >= 150, 'room below the ball for the pull (' + room + ' px)');
