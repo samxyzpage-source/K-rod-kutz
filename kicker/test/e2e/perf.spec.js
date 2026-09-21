@@ -56,6 +56,23 @@ async function openGame(page) {
   await H.waitForScreen(page, 'game');
 }
 
+/**
+ * The perf run measures the kick scene, not the depth chart — but a user kick only happens while the player is K1
+ * (sim.js userKicks), and whether a given fixture wins its camp battle depends on the team data of the day. Promote
+ * the player when the auto-played career left them behind the incumbent, so the measurement is not fixture-bound.
+ */
+async function ensureStarter(page) {
+  const role = await page.evaluate(() => RTG.UI.store.state.player.role);
+  if (role === 'K1') return role;
+  await page.evaluate(() => {
+    const s = RTG.debug.getState();
+    s.player.role = 'K1';
+    if (s.player.flags) delete s.player.flags.benched;
+    RTG.debug.setState(s);
+  });
+  return await page.evaluate(() => RTG.UI.store.state.player.role);
+}
+
 /** NEXT KICK ▶ until the kick screen (a user kick) shows, or the game ends. */
 async function toKick(page) {
   for (let g = 0; g < 60; g++) {
@@ -100,8 +117,10 @@ for (const mode of H.MODES) {
       // kicker may be benched or between teams; a game may also end without a user kick, so try a few weeks)
       await H.debug(page, 'newCareer', { seed: 4242, name: 'Perf Kicker', archetype: 'CANNON' });
       await H.debug(page, 'jumpTo', { stage: 'COLLEGE', phase: 'REG', week: 1 });
+      await K.useFlick(page);                       // the kick below is a mouse flick (aim-then-hold is the default, D20)
       let reached = false;
-      for (let w = 0; w < 6 && !reached; w++) {
+      for (let w = 0; w < 12 && !reached; w++) {
+        assert.equal(await ensureStarter(page), 'K1', 'the fixture kicks (K1)');   // a week can bench them again
         await openGame(page);
         reached = await toKick(page);
         if (!reached) { await page.evaluate(() => { const s = RTG.UI.store.state; if (s.game) RTG.UI.store.dispatch('autoPlayGame'); }); await page.waitForTimeout(100); await H.debug(page, 'simWeek'); await H.debug(page, 'settle'); }
