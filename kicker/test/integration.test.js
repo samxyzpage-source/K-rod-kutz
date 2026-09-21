@@ -95,11 +95,13 @@ function playSession(track) {
 /** Drive the in-progress user game with AI triples until END_GAME; returns the number of user kicks applied. */
 function playGame(track, onPending) {
   const { state, rng } = track;
-  let kicks = 0, guard = 400, ev = null;
+  let kicks = 0, guard = 400, ev = null, afterIce = false;
   while (guard-- > 0) {
-    ev = step(track, 'simToKick', true, () => Engine.simToKick(state, rng));
+    // the call right after an ICE_TIMEOUT just hands back the queued USER_KICK, so it draws nothing
+    ev = step(track, 'simToKick', !afterIce, () => Engine.simToKick(state, rng));
+    afterIce = false;
     if (ev.type === 'END_GAME' || ev.type === 'END') break;
-    if (ev.type === 'ICE_TIMEOUT') continue;                    // the queued USER_KICK arrives on the next simToKick
+    if (ev.type === 'ICE_TIMEOUT') { afterIce = true; continue; }   // the queued USER_KICK arrives next
     const gs = state.game;
     assert.ok(gs && gs.pending, ev.type + ' comes with a pending kick');
     if (onPending) onPending(ev);

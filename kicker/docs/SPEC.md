@@ -60,13 +60,14 @@
 | D12 | Sprites | Procedural sprite atlas from pixel strings built at boot (tech). No PNGs, no artist on the critical path. | file:// safe, no assets. |
 | D13 | Difficulty | 4 tiers. σ multiplier applies only to the **user's** kicks (human or auto-simmed). Balance tests run at Pro. | Balance is difficulty-independent for AI. |
 | D14 | League sims | Every game of the user's current league is simulated weekly (all AI kicks resolved through `Kick.model`), so awards/records are computed from real simulated stats. The other league only drifts yearly. | Cheap (≈600 drive rolls/week) and makes awards honest. |
-| D15 | Team names | All lists scrubbed against a blocklist of real NFL/NCAA/major-pro nicknames + name/place collisions (Minutemen, Aces, Gators, Broncos, Lakers, Bison, Cavaliers, Roadrunners, Mustangs, Bulldogs, Hurricanes, Timberwolves, Lightning, Mariners, Hoosier, Buckeye, Sooner, etc.). `test/data_lint.test.js` enforces it. | Legal. |
+| D15 | Team names (colleges superseded by D22) | All lists scrubbed against a blocklist of real NFL/NCAA/major-pro nicknames + name/place collisions (Minutemen, Aces, Gators, Broncos, Lakers, Bison, Cavaliers, Roadrunners, Mustangs, Bulldogs, Hurricanes, Timberwolves, Lightning, Mariners, Hoosier, Buckeye, Sooner, etc.). `test/data_lint.test.js` enforces it. | Legal. |
 | D16 | Kickoffs | Simulated by default; optional one-tap timing mini-event (`settings.playKickoffs`). Dynamic-kickoff analog (touchback to the 30 NFL / 25 college). | Brief: "simulated or a simplified mini-event". |
 | D17 | Rounds | Kickers go rounds 3–7 or UDFA; 1 % "first-round shock" event at draftValue ≥ 92. | Realism (systems) + fantasy. |
 | D18 | State mutation | In place via API; `Schema.validate` runs after every dispatch when `debug` is on. No per-week deep clones. | Perf + simplicity. |
 | D19 | Progression economy (post-integration spec bump) | POT ~ N(88, 6); `cost = 30 + 2.2·(v−50) + 6.5·(v−70) + 3.0·(v−80)`; game/offseason XP at ≈ 60 % of the §2.1.2 table (training 20 unchanged); tailwind range bonus 0.15 yd/mph; coach threshold +0.20 from 57 yd; camp battle only when the incumbent is within 2 OVR; HOF weights favour dominance and verdict/tier thresholds rescaled (1850 / 1550 / 1250 · 1900 / 1500 / 950 / 450); draft value +12 offset. Measured bands live in `Tuning.career.balance`; full rationale and tables in `docs/BALANCE.md` §5.2. | The §2.13 bands were unattainable under the original constants: every auto career hit its potential by NFL year 1 and retired first-ballot with 12 k XP unspent, leaving the Training screen dead for 15 seasons. |
 | D20 | Kick input (post-launch, at the player's request) | **Aim-then-hold replaces the 3-click meter and becomes the default** for every new career and, once, for players whose settings predate it (`kickInputV2` marker in `rtg.settings`): arrows aim, then hold the confirm key / a finger and release inside the green band; the release sets power AND contact quality, so the accuracy needle is gone. Flick stays available under Settings ▸ Kick input. | The 3-click meter asked for three separate timings and the needle re-aimed the kick after the player had already aimed, which made the arrows feel pointless; one held press reads as a kick's windup and keeps aim and power as two clean, separate decisions. |
 | D21 | Green = guaranteed (post-launch, at the player's request: "make it easier, green should be guaranteed") | A release inside the green band makes the kick outright — no random error, contact slop or block — and the band widened 0.15 → 0.20 (`Tuning.kick.range.greenBand`, also what the scene draws). Gated by `settings.greenAssist` (default on) and verified engine-side by `Kick.inGreen`. Aim-and-hold only; flick is unchanged. | The ask was for an easier game with a promise the bar can actually keep. Keeping it UI-flagged but engine-verified means the assist cannot leak into AI kicks, so the §2.3.6 make-rate table, the sim bands and the career balance targets all stand. Aim still decides every kick that misses the green. |
+| D22 | Real colleges (post-launch, at the player's request) | The 48 fictional schools and the 18 fictional bowls are replaced with real FBS programmes on 2026 alignment and the real bowl slate; conference codes become `SEC BIG XII ACC PAC AAC` (letters only — the id grammar is `[A-Z]{3}` + index) and each conference is ordered to put real rivalries on the `(0,7) (1,6) (2,5) (3,4)` slots. `verifiedFictional` is `false` for colleges and the blocklist lint now guards the NFL side only. **The NFL league stays fictional.** | The player asked for real colleges on their own project. Only 48 of ~134 FBS programmes fit the engine's 6×8 structure, so this is a selection, not the full sport; Notre Dame and the other independents have no conference slot. School nicknames and marks are trademarks — fine for a personal project, worth licensing thought if it is ever published commercially, which is why the pro league remains invented. |
 
 ---
 
@@ -772,83 +773,32 @@ Every event resolves with a consequence headline next week.
 
 All data files are plain JS literals attached to `RTG.Data.*`. Every team carries `verifiedFictional: true` after the blocklist lint passes. Abbreviations are 3 letters, unique per league.
 
-#### 2.12.1 Colleges — 48 teams, 6 conferences × 8 (`data/colleges.js` → `RTG.Data.colleges`, array in this exact order; index within conference = position below)
+#### 2.12.1 Colleges — 48 real FBS programmes, 6 conferences × 8 (`data/colleges.js` → `RTG.Data.colleges`)
 
-Columns: idx · Team (city, state) · prestige · OFF/DEF/ST · climate (W warm, T temperate, C cold; D dome; A altitude; ! windy; ~ rainy) · primary/secondary. Rival pairs are `(0,7) (1,6) (2,5) (3,4)` in each conference.
+**Superseded by D22:** the 48 fictional schools this section used to tabulate were replaced with real programmes on
+2026 alignment. `data/colleges.js` is the authoritative list; the spec no longer duplicates it. The structure is
+unchanged and still load-bearing: 6 conferences × 8, array ordered conference by conference, `confIdx` 0–7, rival
+pairs `(0,7) (1,6) (2,5) (3,4)`, ids `<CONF><idx>` with three-letter conference codes.
 
-**Coastal Alliance** (`COA`)
-| idx | Team | P | OFF/DEF/ST | Clim | Colors |
-|---|---|---|---|---|---|
-| 0 | Atlantic Tech Tidewaters (Norfolk, VA) | 5 | 88/85/78 | T | #0b3d91 / #f2c14e |
-| 1 | Chesapeake State Admirals (Annapolis, MD) | 4 | 82/80/74 | T | #14213d / #c0c0c0 |
-| 2 | Carolina Pines Foxhounds (Raleigh, NC) | 3 | 76/74/70 | T | #1d4d2b / #f4e9d0 |
-| 3 | Savannah Marsh Herons (Savannah, GA) | 3 | 74/76/68 | W | #2a6f5c / #f7f3e3 |
-| 4 | James River Ironclads (Richmond, VA) | 4 | 80/82/72 | T | #7a1f2b / #d4af37 |
-| 5 | Jersey Shore Boardwalkers (Atlantic City, NJ) | 2 | 68/66/64 | C | #005f73 / #ee9b00 |
-| 6 | Beacon Hill Lamplighters (Boston, MA) | 3 | 75/72/70 | C | #1b263b / #e0e1dd |
-| 7 | Newport Bay Schooners (Newport, RI) | 2 | 66/68/64 | C ~ | #003049 / #fcbf49 |
+| idx | Conference | id | The eight, in index order (0 → 7) |
+|---|---|---|---|
+| 0 | Southeastern Conference | `SEC` | Alabama · Georgia · LSU · Texas · Oklahoma · Tennessee · Florida · Auburn |
+| 1 | Big Ten Conference | `BIG` | Ohio State · Penn State · Oregon · Wisconsin · Nebraska · Washington · USC · Michigan |
+| 2 | Big 12 Conference | `XII` | Kansas State · Utah · Baylor · Iowa State · Oklahoma State · TCU · BYU · Kansas |
+| 3 | Atlantic Coast Conference | `ACC` | Clemson · Florida State · Virginia Tech · NC State · North Carolina · Virginia · Miami · Georgia Tech |
+| 4 | Pac-12 Conference | `PAC` | Boise State · Oregon State · Colorado State · San Diego State · Texas State · Utah State · Washington State · Fresno State |
+| 5 | American Conference | `AAC` | South Florida · Army · Memphis · East Carolina · Charlotte · Tulane · Navy · UTSA |
 
-**Heartland Conference** (`HRT`)
-| idx | Team | P | OFF/DEF/ST | Clim | Colors |
-|---|---|---|---|---|---|
-| 0 | Prairie Tech Sodbusters (Lincoln, NE) | 5 | 90/86/80 | C | #d00000 / #f4e9d0 |
-| 1 | Great Plains Tech Windmills (Wichita, KS) | 4 | 84/80/76 | C ! | #ffb703 / #023047 |
-| 2 | Iowa Ridge Harvesters (Des Moines, IA) | 4 | 82/84/74 | C | #1a1a1a / #f6c445 |
-| 3 | Twin Cities Northmen (Minneapolis, MN) | 3 | 76/78/72 | C | #2a3d66 / #e4c580 |
-| 4 | Ozark Ridgerunners (Springfield, MO) | 2 | 68/70/66 | T | #4e6e3f / #f2e8cf |
-| 5 | Missouri Valley Steamboats (St. Louis, MO) | 3 | 74/72/70 | T | #0b3954 / #bfd7ea |
-| 6 | Cornbelt State Reapers (Cedar Rapids, IA) | 2 | 64/66/62 | C | #386641 / #f2e8cf |
-| 7 | Dakota Frontier Drovers (Fargo, ND) | 1 | 60/62/60 | C ! | #5c4033 / #e9d8a6 |
+Each conference is ordered so the rival slots are real rivalries: Iron Bowl (`SEC0`/`SEC7`), Georgia–Florida,
+Red River (`SEC3`/`SEC4`), The Game (`BIG0`/`BIG7`), Oregon–Washington, Sunflower Showdown, Holy War, Baylor–TCU,
+Florida State–Miami, Commonwealth Cup, NC State–North Carolina, Clemson–Georgia Tech, Army–Navy (`AAC1`/`AAC6`),
+Memphis–Tulane, the Milk Can. Prestige 1–5, ratings, climate flags, real colours and unique three-letter abbreviations
+live in the data file. Nicknames repeat there as they do in life (four of these programmes are the Tigers), so only the
+full name must be unique.
 
-**Big Frontier** (`BFR`)
-| idx | Team | P | OFF/DEF/ST | Clim | Colors |
-|---|---|---|---|---|---|
-| 0 | Lone Star Tech Longriders (Lubbock, TX) | 5 | 91/85/80 | W ! | #8b0000 / #e8d5a3 |
-| 1 | Red River State Rustlers (Denison, TX) | 4 | 84/80/74 | W | #7b2d26 / #e6b422 |
-| 2 | Hill Country Armadillos (Austin, TX) | 3 | 74/76/70 | W | #5b8c5a / #f4e9d0 |
-| 3 | Cimarron Twisters (Stillwater, OK) | 4 | 83/82/76 | T ! | #e07a1f / #2b2b2b |
-| 4 | Rio Bravo Mesquites (Laredo, TX) | 2 | 66/64/62 | W | #2b6a4d / #f5d49b |
-| 5 | Gulf Shore Squalls (Corpus Christi, TX) | 3 | 78/72/70 | W ! | #006d77 / #ffddd2 |
-| 6 | Panhandle Dusters (Amarillo, TX) | 1 | 58/60/58 | T ! | #9c6644 / #f1dca7 |
-| 7 | Sonoran Tech Sidewinders (Tucson, AZ) | 2 | 66/68/64 | W | #b35c1e / #f2e2c4 |
+Bowls (`RTG.Data.bowls`) are likewise real: the six New Year's Six as majors (Rose, Sugar, Orange, Cotton, Fiesta,
+Peach) and twelve real minor bowls.
 
-**Pacific Crest** (`PAC`)
-| idx | Team | P | OFF/DEF/ST | Clim | Colors |
-|---|---|---|---|---|---|
-| 0 | Golden Coast Condors (Los Angeles, CA) | 5 | 89/84/80 | W | #ffb100 / #1c3f60 |
-| 1 | Bay Area Tech Fog (San Francisco, CA) | 4 | 82/80/74 | T | #4a6d7c / #dfe7ea |
-| 2 | Cascadia Stormcrows (Portland, OR) | 4 | 83/83/76 | T ~ | #1d3b2a / #a9c5b3 |
-| 3 | Sierra State Prospectors (Reno, NV) | 3 | 76/74/70 | C A | #5e503f / #eae2b7 |
-| 4 | Desert Vista Scorpions (Phoenix, AZ) | 3 | 75/75/70 | W | #6b2737 / #e9c46a |
-| 5 | Emerald City Orcas (Seattle, WA) | 3 | 74/76/72 | T ~ | #0b3d2e / #7fc7ff |
-| 6 | High Desert Kestrels (Boise, ID) | 2 | 66/66/64 | C | #1f4e79 / #f4a259 |
-| 7 | Sonoma Vintners (Santa Rosa, CA) | 1 | 60/58/58 | T | #6a1b4d / #f1e3d3 |
-
-**Southern Union** (`SOU`)
-| idx | Team | P | OFF/DEF/ST | Clim | Colors |
-|---|---|---|---|---|---|
-| 0 | Crimson Bluff Boars (Tuscaloosa, AL) | 5 | 92/88/82 | W | #8b1a1a / #f4e9d0 |
-| 1 | Magnolia Thoroughbreds (Jackson, MS) | 4 | 84/85/76 | W | #2d3a8c / #e8e3d3 |
-| 2 | Bayou Tech Egrets (Baton Rouge, LA) | 4 | 82/80/74 | W | #2f1f5e / #e5b83b |
-| 3 | Tennessee Ridge Copperheads (Knoxville, TN) | 3 | 76/78/70 | T | #d1541e / #f4e9d0 |
-| 4 | Peachtree Kingfishers (Atlanta, GA) | 3 | 78/74/72 | W | #0d5c63 / #f6ae2d |
-| 5 | Blue Ridge Colliers (Asheville, NC) | 2 | 68/70/64 | C | #22333b / #c6ac8f |
-| 6 | Gulfport Sailfish (Gulfport, MS) | 2 | 66/64/62 | W | #0077b6 / #caf0f8 |
-| 7 | Everglades Tech Manatees (Miami, FL) | 5 | 90/84/78 | W | #0a6b5e / #f7a823 |
-
-**Great Lakes League** (`GLL`)
-| idx | Team | P | OFF/DEF/ST | Clim | Colors |
-|---|---|---|---|---|---|
-| 0 | Lakeshore State Freighters (Cleveland, OH) | 5 | 87/89/80 | C | #4b2e1e / #f5b400 |
-| 1 | Motor City Tech Gears (Detroit, MI) | 4 | 82/84/76 | C D | #0f4c81 / #c0c0c0 |
-| 2 | Scioto Valley Ironmen (Columbus, OH) | 4 | 84/84/78 | C | #9c1c1c / #e6e6e6 |
-| 3 | Northwoods Voyageurs (Green Bay, WI) | 3 | 74/76/72 | C | #1e3a2f / #c8a951 |
-| 4 | Rust Belt Foundrymen (Pittsburgh, PA) | 3 | 72/76/70 | C | #3a3a3a / #d9a520 |
-| 5 | Erie Shore Lightkeepers (Erie, PA) | 2 | 66/68/64 | C ~ | #234e70 / #fbd1a2 |
-| 6 | Wabash Valley Pacesetters (Indianapolis, IN) | 2 | 68/64/64 | C D | #0e2a47 / #b9c6d2 |
-| 7 | Superior Bay Icebreakers (Duluth, MN) | 1 | 60/62/60 | C ! | #274c77 / #e7ecef |
-
-Prestige tier semantics: 5 = title contender yearly; 4 = playoff bubble; 3 = bowl team; 2 = .500; 1 = rebuilding. `anchor = 50 + 8·prestige` for yearly regression. NIL band by prestige: 5: $60–120k, 4: $30–80k, 3: $10–40k, 2: $0–15k, 1: $0.
 
 #### 2.12.2 NFL — 32 teams (`data/nfl.js` → `RTG.Data.nfl`, array in this order). Conferences **Liberty** / **Frontier**, divisions North/South/East/West.
 

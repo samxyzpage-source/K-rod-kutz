@@ -2,12 +2,13 @@
  * Road to Glory: Kicker — college data (SPEC §2.12.1, §2.12.3).
  *
  * RTG.Data.conferences : 6 conferences in spec order [{id, name, idx}]
- * RTG.Data.colleges    : 48 teams in the EXACT spec order (conference by
- *                        conference, idx 0..7 within each). Index within the
- *                        conference is load-bearing: rivals are (0,7) (1,6)
- *                        (2,5) (3,4) and the circle-method schedule uses it.
+ * RTG.Data.colleges    : 48 real FBS programs, 6 conferences x 8 (2026 alignment; only 48 of ~134
+ *                        programs fit the engine's 6x8 structure). Order within a conference is
+ *                        load-bearing: rivals are (0,7) (1,6) (2,5) (3,4) and the circle-method
+ *                        schedule uses it, so each conference is ordered to put real rivalries on those
+ *                        pairs (Iron Bowl, The Game, Red River, Army-Navy, Egg-Bowl-style pairings...).
  * RTG.Data.rivalPairs  : [[0,7],[1,6],[2,5],[3,4]]
- * RTG.Data.bowls       : 6 major + 12 minor bowls with venue climate.
+ * RTG.Data.bowls       : 6 major (New Year's Six) + 12 minor real bowls with venue climate.
  * RTG.Data.collegeById : {[id]: team} lookup cache.
  *
  * Team fields (static half of §2.5.1 Team; Schema.createTeam adds coachAgg,
@@ -26,12 +27,12 @@
   RTG.Data = RTG.Data || {};
 
   var conferences = [
-    { id: 'COA', name: 'Coastal Alliance', idx: 0 },
-    { id: 'HRT', name: 'Heartland Conference', idx: 1 },
-    { id: 'BFR', name: 'Big Frontier', idx: 2 },
-    { id: 'PAC', name: 'Pacific Crest', idx: 3 },
-    { id: 'SOU', name: 'Southern Union', idx: 4 },
-    { id: 'GLL', name: 'Great Lakes League', idx: 5 }
+    { id: 'SEC', name: 'Southeastern Conference', idx: 0 },
+    { id: 'BIG', name: 'Big Ten Conference', idx: 1 },
+    { id: 'XII', name: 'Big 12 Conference', idx: 2 },
+    { id: 'ACC', name: 'Atlantic Coast Conference', idx: 3 },
+    { id: 'PAC', name: 'Pac-12 Conference', idx: 4 },
+    { id: 'AAC', name: 'American Conference', idx: 5 }
   ];
 
   var rivalPairs = [[0, 7], [1, 6], [2, 5], [3, 4]];
@@ -43,67 +44,67 @@
    * Grouped by conference in spec order.
    */
   var ROWS = {
-    COA: [
-      ['Atlantic Tech', 'Tidewaters', 'Norfolk', 'VA', 'SE', 5, 88, 85, 78, 'T', '#0b3d91', '#f2c14e', 'ATT'],
-      ['Chesapeake State', 'Admirals', 'Annapolis', 'MD', 'NE', 4, 82, 80, 74, 'T', '#14213d', '#c0c0c0', 'CHS'],
-      ['Carolina Pines', 'Foxhounds', 'Raleigh', 'NC', 'SE', 3, 76, 74, 70, 'T', '#1d4d2b', '#f4e9d0', 'CPN'],
-      ['Savannah Marsh', 'Herons', 'Savannah', 'GA', 'SE', 3, 74, 76, 68, 'W', '#2a6f5c', '#f7f3e3', 'SAV'],
-      ['James River', 'Ironclads', 'Richmond', 'VA', 'SE', 4, 80, 82, 72, 'T', '#7a1f2b', '#d4af37', 'JRV'],
-      ['Jersey Shore', 'Boardwalkers', 'Atlantic City', 'NJ', 'NE', 2, 68, 66, 64, 'C', '#005f73', '#ee9b00', 'JSH'],
-      ['Beacon Hill', 'Lamplighters', 'Boston', 'MA', 'NE', 3, 75, 72, 70, 'C', '#1b263b', '#e0e1dd', 'BHL'],
-      ['Newport Bay', 'Schooners', 'Newport', 'RI', 'NE', 2, 66, 68, 64, 'C~', '#003049', '#fcbf49', 'NPB']
+    SEC: [
+      ['Alabama', 'Crimson Tide', 'Tuscaloosa', 'AL', 'SE', 5, 91, 88, 82, 'W', '#9e1b32', '#ffffff', 'ALA'],
+      ['Georgia', 'Bulldogs', 'Athens', 'GA', 'SE', 5, 90, 89, 81, 'W', '#ba0c2f', '#000000', 'UGA'],
+      ['LSU', 'Tigers', 'Baton Rouge', 'LA', 'SE', 4, 85, 82, 77, 'W', '#461d7c', '#fdd023', 'LSU'],
+      ['Texas', 'Longhorns', 'Austin', 'TX', 'SW', 5, 89, 86, 80, 'W', '#bf5700', '#ffffff', 'TEX'],
+      ['Oklahoma', 'Sooners', 'Norman', 'OK', 'SW', 4, 84, 81, 76, 'T!', '#841617', '#fdf9d8', 'OKL'],
+      ['Tennessee', 'Volunteers', 'Knoxville', 'TN', 'SE', 4, 83, 79, 75, 'T', '#ff8200', '#4b4b4b', 'TEN'],
+      ['Florida', 'Gators', 'Gainesville', 'FL', 'SE', 3, 77, 76, 72, 'W', '#0021a5', '#fa4616', 'FLA'],
+      ['Auburn', 'Tigers', 'Auburn', 'AL', 'SE', 3, 78, 77, 73, 'W', '#0c2340', '#e87722', 'AUB']
     ],
-    HRT: [
-      ['Prairie Tech', 'Sodbusters', 'Lincoln', 'NE', 'MW', 5, 90, 86, 80, 'C', '#d00000', '#f4e9d0', 'PRT'],
-      ['Great Plains Tech', 'Windmills', 'Wichita', 'KS', 'MW', 4, 84, 80, 76, 'C!', '#ffb703', '#023047', 'GPT'],
-      ['Iowa Ridge', 'Harvesters', 'Des Moines', 'IA', 'MW', 4, 82, 84, 74, 'C', '#1a1a1a', '#f6c445', 'IWR'],
-      ['Twin Cities', 'Northmen', 'Minneapolis', 'MN', 'MW', 3, 76, 78, 72, 'C', '#2a3d66', '#e4c580', 'TWC'],
-      ['Ozark', 'Ridgerunners', 'Springfield', 'MO', 'MW', 2, 68, 70, 66, 'T', '#4e6e3f', '#f2e8cf', 'OZK'],
-      ['Missouri Valley', 'Steamboats', 'St. Louis', 'MO', 'MW', 3, 74, 72, 70, 'T', '#0b3954', '#bfd7ea', 'MOV'],
-      ['Cornbelt State', 'Reapers', 'Cedar Rapids', 'IA', 'MW', 2, 64, 66, 62, 'C', '#386641', '#f2e8cf', 'CBS'],
-      ['Dakota Frontier', 'Drovers', 'Fargo', 'ND', 'MW', 1, 60, 62, 60, 'C!', '#5c4033', '#e9d8a6', 'DKF']
+    BIG: [
+      ['Ohio State', 'Buckeyes', 'Columbus', 'OH', 'MW', 5, 92, 89, 82, 'C', '#bb0000', '#ffffff', 'OSU'],
+      ['Penn State', 'Nittany Lions', 'University Park', 'PA', 'NE', 4, 85, 84, 77, 'C', '#041e42', '#ffffff', 'PSU'],
+      ['Oregon', 'Ducks', 'Eugene', 'OR', 'W', 5, 89, 84, 80, 'T~', '#154733', '#fee123', 'ORE'],
+      ['Wisconsin', 'Badgers', 'Madison', 'WI', 'MW', 3, 76, 78, 72, 'C', '#c5050c', '#ffffff', 'WIS'],
+      ['Nebraska', 'Cornhuskers', 'Lincoln', 'NE', 'MW', 3, 75, 74, 71, 'C!', '#e41c38', '#ffffff', 'NEB'],
+      ['Washington', 'Huskies', 'Seattle', 'WA', 'W', 4, 83, 80, 76, 'T~', '#4b2e83', '#b7a57a', 'UWA'],
+      ['USC', 'Trojans', 'Los Angeles', 'CA', 'W', 4, 86, 78, 76, 'W', '#990000', '#ffcc00', 'USC'],
+      ['Michigan', 'Wolverines', 'Ann Arbor', 'MI', 'MW', 5, 88, 88, 81, 'C', '#00274c', '#ffcb05', 'MIC']
     ],
-    BFR: [
-      ['Lone Star Tech', 'Longriders', 'Lubbock', 'TX', 'SW', 5, 91, 85, 80, 'W!', '#8b0000', '#e8d5a3', 'LST'],
-      ['Red River State', 'Rustlers', 'Denison', 'TX', 'SW', 4, 84, 80, 74, 'W', '#7b2d26', '#e6b422', 'RRS'],
-      ['Hill Country', 'Armadillos', 'Austin', 'TX', 'SW', 3, 74, 76, 70, 'W', '#5b8c5a', '#f4e9d0', 'HCA'],
-      ['Cimarron', 'Twisters', 'Stillwater', 'OK', 'SW', 4, 83, 82, 76, 'T!', '#e07a1f', '#2b2b2b', 'CIM'],
-      ['Rio Bravo', 'Mesquites', 'Laredo', 'TX', 'SW', 2, 66, 64, 62, 'W', '#2b6a4d', '#f5d49b', 'RIO'],
-      ['Gulf Shore', 'Squalls', 'Corpus Christi', 'TX', 'SW', 3, 78, 72, 70, 'W!', '#006d77', '#ffddd2', 'GSS'],
-      ['Panhandle', 'Dusters', 'Amarillo', 'TX', 'SW', 1, 58, 60, 58, 'T!', '#9c6644', '#f1dca7', 'PAN'],
-      ['Sonoran Tech', 'Sidewinders', 'Tucson', 'AZ', 'SW', 2, 66, 68, 64, 'W', '#b35c1e', '#f2e2c4', 'SNT']
+    XII: [
+      ['Kansas State', 'Wildcats', 'Manhattan', 'KS', 'MW', 3, 78, 76, 73, 'C!', '#512888', '#ffffff', 'KSU'],
+      ['Utah', 'Utes', 'Salt Lake City', 'UT', 'W', 3, 77, 79, 73, 'CA', '#cc0000', '#ffffff', 'UTA'],
+      ['Baylor', 'Bears', 'Waco', 'TX', 'SW', 3, 74, 72, 70, 'W', '#154734', '#ffb81c', 'BAY'],
+      ['Iowa State', 'Cyclones', 'Ames', 'IA', 'MW', 3, 76, 75, 72, 'C!', '#c8102e', '#f1be48', 'ISU'],
+      ['Oklahoma State', 'Cowboys', 'Stillwater', 'OK', 'SW', 3, 75, 73, 71, 'T!', '#ff7300', '#000000', 'OKS'],
+      ['TCU', 'Horned Frogs', 'Fort Worth', 'TX', 'SW', 3, 77, 74, 72, 'W', '#4d1979', '#a3a9ac', 'TCU'],
+      ['BYU', 'Cougars', 'Provo', 'UT', 'W', 3, 76, 75, 72, 'CA', '#002e5d', '#ffffff', 'BYU'],
+      ['Kansas', 'Jayhawks', 'Lawrence', 'KS', 'MW', 2, 69, 66, 66, 'C!', '#0051ba', '#ffc82d', 'KAN']
+    ],
+    ACC: [
+      ['Clemson', 'Tigers', 'Clemson', 'SC', 'SE', 5, 88, 86, 80, 'W', '#f66733', '#522d80', 'CLM'],
+      ['Florida State', 'Seminoles', 'Tallahassee', 'FL', 'SE', 4, 82, 80, 76, 'W', '#782f40', '#ceb888', 'FSU'],
+      ['Virginia Tech', 'Hokies', 'Blacksburg', 'VA', 'SE', 3, 74, 76, 72, 'T', '#630031', '#cf4420', 'VTC'],
+      ['NC State', 'Wolfpack', 'Raleigh', 'NC', 'SE', 3, 74, 73, 70, 'T', '#cc0000', '#ffffff', 'NCS'],
+      ['North Carolina', 'Tar Heels', 'Chapel Hill', 'NC', 'SE', 3, 75, 71, 70, 'T', '#7bafd4', '#13294b', 'UNC'],
+      ['Virginia', 'Cavaliers', 'Charlottesville', 'VA', 'SE', 2, 68, 67, 65, 'T', '#232d4b', '#f84c1e', 'UVA'],
+      ['Miami', 'Hurricanes', 'Coral Gables', 'FL', 'SE', 4, 84, 79, 76, 'W~', '#f47321', '#005030', 'CAN'],
+      ['Georgia Tech', 'Yellow Jackets', 'Atlanta', 'GA', 'SE', 3, 73, 72, 70, 'W', '#b3a369', '#003057', 'GTC']
     ],
     PAC: [
-      ['Golden Coast', 'Condors', 'Los Angeles', 'CA', 'W', 5, 89, 84, 80, 'W', '#ffb100', '#1c3f60', 'GCC'],
-      ['Bay Area Tech', 'Fog', 'San Francisco', 'CA', 'W', 4, 82, 80, 74, 'T', '#4a6d7c', '#dfe7ea', 'BAT'],
-      ['Cascadia', 'Stormcrows', 'Portland', 'OR', 'W', 4, 83, 83, 76, 'T~', '#1d3b2a', '#a9c5b3', 'CAS'],
-      ['Sierra State', 'Prospectors', 'Reno', 'NV', 'W', 3, 76, 74, 70, 'CA', '#5e503f', '#eae2b7', 'SRS'],
-      ['Desert Vista', 'Scorpions', 'Phoenix', 'AZ', 'SW', 3, 75, 75, 70, 'W', '#6b2737', '#e9c46a', 'DVS'],
-      ['Emerald City', 'Orcas', 'Seattle', 'WA', 'W', 3, 74, 76, 72, 'T~', '#0b3d2e', '#7fc7ff', 'EMC'],
-      ['High Desert', 'Kestrels', 'Boise', 'ID', 'W', 2, 66, 66, 64, 'C', '#1f4e79', '#f4a259', 'HDK'],
-      ['Sonoma', 'Vintners', 'Santa Rosa', 'CA', 'W', 1, 60, 58, 58, 'T', '#6a1b4d', '#f1e3d3', 'SNM']
+      ['Boise State', 'Broncos', 'Boise', 'ID', 'W', 3, 79, 76, 74, 'C', '#0033a0', '#f1a800', 'BOI'],
+      ['Oregon State', 'Beavers', 'Corvallis', 'OR', 'W', 2, 68, 69, 66, 'T~', '#dc4405', '#000000', 'ORS'],
+      ['Colorado State', 'Rams', 'Fort Collins', 'CO', 'W', 2, 67, 66, 65, 'CA', '#1e4d2b', '#c8c372', 'CSU'],
+      ['San Diego State', 'Aztecs', 'San Diego', 'CA', 'W', 2, 66, 70, 67, 'W', '#a6192e', '#000000', 'SDS'],
+      ['Texas State', 'Bobcats', 'San Marcos', 'TX', 'SW', 2, 68, 65, 64, 'W', '#501214', '#8d774a', 'TXS'],
+      ['Utah State', 'Aggies', 'Logan', 'UT', 'W', 2, 67, 64, 64, 'CA', '#00263a', '#8a8d8f', 'USU'],
+      ['Washington State', 'Cougars', 'Pullman', 'WA', 'W', 2, 70, 67, 66, 'C', '#981e32', '#d3d3d3', 'WSU'],
+      ['Fresno State', 'Bulldogs', 'Fresno', 'CA', 'W', 2, 69, 68, 66, 'W', '#db0032', '#ffffff', 'FRS']
     ],
-    SOU: [
-      ['Crimson Bluff', 'Boars', 'Tuscaloosa', 'AL', 'SE', 5, 92, 88, 82, 'W', '#8b1a1a', '#f4e9d0', 'CRB'],
-      ['Magnolia', 'Thoroughbreds', 'Jackson', 'MS', 'SE', 4, 84, 85, 76, 'W', '#2d3a8c', '#e8e3d3', 'MAG'],
-      ['Bayou Tech', 'Egrets', 'Baton Rouge', 'LA', 'SE', 4, 82, 80, 74, 'W', '#2f1f5e', '#e5b83b', 'BYT'],
-      ['Tennessee Ridge', 'Copperheads', 'Knoxville', 'TN', 'SE', 3, 76, 78, 70, 'T', '#d1541e', '#f4e9d0', 'TNR'],
-      ['Peachtree', 'Kingfishers', 'Atlanta', 'GA', 'SE', 3, 78, 74, 72, 'W', '#0d5c63', '#f6ae2d', 'PCH'],
-      ['Blue Ridge', 'Colliers', 'Asheville', 'NC', 'SE', 2, 68, 70, 64, 'C', '#22333b', '#c6ac8f', 'BLR'],
-      ['Gulfport', 'Sailfish', 'Gulfport', 'MS', 'SE', 2, 66, 64, 62, 'W', '#0077b6', '#caf0f8', 'GPS'],
-      ['Everglades Tech', 'Manatees', 'Miami', 'FL', 'SE', 5, 90, 84, 78, 'W', '#0a6b5e', '#f7a823', 'EVT']
-    ],
-    GLL: [
-      ['Lakeshore State', 'Freighters', 'Cleveland', 'OH', 'MW', 5, 87, 89, 80, 'C', '#4b2e1e', '#f5b400', 'LKS'],
-      ['Motor City Tech', 'Gears', 'Detroit', 'MI', 'MW', 4, 82, 84, 76, 'CD', '#0f4c81', '#c0c0c0', 'MCT'],
-      ['Scioto Valley', 'Ironmen', 'Columbus', 'OH', 'MW', 4, 84, 84, 78, 'C', '#9c1c1c', '#e6e6e6', 'SCV'],
-      ['Northwoods', 'Voyageurs', 'Green Bay', 'WI', 'MW', 3, 74, 76, 72, 'C', '#1e3a2f', '#c8a951', 'NWV'],
-      ['Rust Belt', 'Foundrymen', 'Pittsburgh', 'PA', 'NE', 3, 72, 76, 70, 'C', '#3a3a3a', '#d9a520', 'RBF'],
-      ['Erie Shore', 'Lightkeepers', 'Erie', 'PA', 'NE', 2, 66, 68, 64, 'C~', '#234e70', '#fbd1a2', 'ERI'],
-      ['Wabash Valley', 'Pacesetters', 'Indianapolis', 'IN', 'MW', 2, 68, 64, 64, 'CD', '#0e2a47', '#b9c6d2', 'WAB'],
-      ['Superior Bay', 'Icebreakers', 'Duluth', 'MN', 'MW', 1, 60, 62, 60, 'C!', '#274c77', '#e7ecef', 'SUP']
+    AAC: [
+      ['South Florida', 'Bulls', 'Tampa', 'FL', 'SE', 2, 70, 66, 65, 'W~', '#006747', '#cfc493', 'USF'],
+      ['Army', 'Black Knights', 'West Point', 'NY', 'NE', 2, 69, 70, 67, 'C', '#000000', '#d4bf91', 'ARM'],
+      ['Memphis', 'Tigers', 'Memphis', 'TN', 'SE', 3, 74, 69, 69, 'T', '#003087', '#898d8d', 'MPH'],
+      ['East Carolina', 'Pirates', 'Greenville', 'NC', 'SE', 2, 68, 65, 64, 'T', '#592a8a', '#fdc82f', 'ECU'],
+      ['Charlotte', '49ers', 'Charlotte', 'NC', 'SE', 1, 61, 60, 60, 'T', '#006450', '#b9975b', 'CLT'],
+      ['Tulane', 'Green Wave', 'New Orleans', 'LA', 'SE', 3, 73, 71, 69, 'W~', '#006747', '#8ec4ea', 'TUL'],
+      ['Navy', 'Midshipmen', 'Annapolis', 'MD', 'NE', 2, 70, 68, 67, 'T', '#00205b', '#c5b783', 'NVY'],
+      ['UTSA', 'Roadrunners', 'San Antonio', 'TX', 'SW', 2, 69, 64, 64, 'WD', '#0c2340', '#f15a22', 'UTS']
     ]
-  };
+  };;
 
   var CLIMATE = { W: 'warm', T: 'temperate', C: 'cold' };
 
@@ -139,7 +140,7 @@
       rainy: code.indexOf('~') >= 0,
       colors: [r[10], r[11]],
       abbr: r[12],
-      verifiedFictional: true
+      verifiedFictional: false        // real FBS programs (SPEC D22); the NFL side stays fictional
     };
   }
 
@@ -161,25 +162,25 @@
    * Compact: [id, name, city, state, tier, climate code]
    */
   var BOWL_ROWS = [
-    ['citrus', 'Citrus Grove Bowl', 'Orlando', 'FL', 'major', 'W~'],
-    ['cactus', 'Cactus Sun Bowl', 'Phoenix', 'AZ', 'major', 'WD'],
-    ['harbor', 'Harbor Bowl', 'San Diego', 'CA', 'major', 'W'],
-    ['peach', 'Peach Blossom Bowl', 'Atlanta', 'GA', 'major', 'WD'],
-    ['alamo', 'Alamo Plaza Bowl', 'San Antonio', 'TX', 'major', 'WD'],
-    ['frontier', 'Frontier Bowl', 'Dallas', 'TX', 'major', 'TD'],
-    ['lakeshore', 'Lakeshore Bowl', 'Chicago', 'IL', 'minor', 'C!'],
-    ['silverdollar', 'Silver Dollar Bowl', 'Reno', 'NV', 'minor', 'CA'],
-    ['gulfcoast', 'Gulf Coast Bowl', 'Mobile', 'AL', 'minor', 'W~'],
-    ['pioneer', 'Pioneer Bowl', 'Boise', 'ID', 'minor', 'C'],
-    ['redwood', 'Redwood Bowl', 'San Jose', 'CA', 'minor', 'T'],
-    ['independence', 'Independence Day Bowl', 'Shreveport', 'LA', 'minor', 'W'],
-    ['boardwalk', 'Boardwalk Bowl', 'Atlantic City', 'NJ', 'minor', 'C!'],
-    ['bluegrass', 'Bluegrass Bowl', 'Louisville', 'KY', 'minor', 'T'],
-    ['musicrow', 'Music Row Bowl', 'Nashville', 'TN', 'minor', 'T'],
-    ['sunshine', 'Sunshine Bowl', 'Tampa', 'FL', 'minor', 'W~'],
-    ['prairie', 'Prairie Bowl', 'Kansas City', 'MO', 'minor', 'C'],
-    ['steel', 'Steel Bowl', 'Pittsburgh', 'PA', 'minor', 'C']
-  ];
+    ['rose', 'Rose Bowl', 'Pasadena', 'CA', 'major', 'W'],
+    ['sugar', 'Sugar Bowl', 'New Orleans', 'LA', 'major', 'WD'],
+    ['orange', 'Orange Bowl', 'Miami Gardens', 'FL', 'major', 'W~'],
+    ['cotton', 'Cotton Bowl', 'Arlington', 'TX', 'major', 'TD'],
+    ['fiesta', 'Fiesta Bowl', 'Glendale', 'AZ', 'major', 'WD'],
+    ['peach', 'Peach Bowl', 'Atlanta', 'GA', 'major', 'WD'],
+    ['citrus', 'Citrus Bowl', 'Orlando', 'FL', 'minor', 'W~'],
+    ['alamo', 'Alamo Bowl', 'San Antonio', 'TX', 'minor', 'WD'],
+    ['holiday', 'Holiday Bowl', 'San Diego', 'CA', 'minor', 'W'],
+    ['gator', 'Gator Bowl', 'Jacksonville', 'FL', 'minor', 'W'],
+    ['sun', 'Sun Bowl', 'El Paso', 'TX', 'minor', 'WA'],
+    ['music', 'Music City Bowl', 'Nashville', 'TN', 'minor', 'T'],
+    ['libertyb', 'Liberty Bowl', 'Memphis', 'TN', 'minor', 'T'],
+    ['pinstripe', 'Pinstripe Bowl', 'Bronx', 'NY', 'minor', 'C!'],
+    ['lasvegas', 'Las Vegas Bowl', 'Las Vegas', 'NV', 'minor', 'WD'],
+    ['texas', 'Texas Bowl', 'Houston', 'TX', 'minor', 'WD'],
+    ['duke', "Duke's Mayo Bowl", 'Charlotte', 'NC', 'minor', 'T'],
+    ['pop', 'Pop-Tarts Bowl', 'Orlando', 'FL', 'minor', 'W~']
+  ];;
 
   var bowls = [];
   for (var b = 0; b < BOWL_ROWS.length; b++) {

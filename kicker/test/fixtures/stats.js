@@ -52,7 +52,7 @@ function kick(RTG, state, o) {
   const league = state.season.league;
   const type = o.type || 'FG';
   const distance = o.distance !== undefined ? o.distance : (type === 'PAT' ? (league === 'NFL' ? RTG.Tuning.kick.distance.patNfl : RTG.Tuning.kick.distance.patCollege) : 40);
-  const oppId = o.oppId || (league === 'NFL' ? 'PIT' : 'COA5');
+  const oppId = o.oppId || (league === 'NFL' ? 'PIT' : 'SEC5');
   const week = o.week !== undefined ? o.week : state.week;
   const ctx = schemaFx.kickContext(RTG, {
     type, league, distance, hash: o.hash || 0, pressure: o.pressure !== undefined ? o.pressure : 0.15,

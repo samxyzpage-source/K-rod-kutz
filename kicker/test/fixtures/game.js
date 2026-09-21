@@ -88,7 +88,7 @@ function nflUserState(RTG, opts) {
 }
 
 /**
- * COLLEGE.REG week 5 (COA2, K1, freshman) with no game in progress.
+ * COLLEGE.REG week 5 (SEC2, K1, freshman) with no game in progress.
  * @param {object} RTG @param {{seed?: number}} [opts] @returns {object} CareerState
  */
 function collegeUserState(RTG, opts) {

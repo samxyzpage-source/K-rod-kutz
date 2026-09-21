@@ -265,7 +265,7 @@ test('college rankings: §2.6.1 formula, preseason uses prestige/5, weekly score
 
 test('college conference standings: conference record first, then head-to-head, then ranking score', () => {
   const s = fx.seasonState(RTG, { league: 'COLLEGE', weeks: 0, seed: 4 });
-  const conf = s.league.teams.filter((t) => t.conf === 'HRT').map((t) => t.id);
+  const conf = s.league.teams.filter((t) => t.conf === 'BIG').map((t) => t.id);
   const [a, b, c] = conf;
   for (const id of conf) record(s.season, id, 5, 7, { confW: 2, confL: 5 });
   record(s.season, a, 9, 3, { confW: 6, confL: 1 });          // worse overall than b but better in conference

@@ -517,17 +517,20 @@ test('applyKickMeters: trust / fans / morale / fame deltas per §2.2', (t) => {
   const fresh = (o) => pfx.stateWith(RTG, Object.assign({ trust: 50, fans: 50, morale: 50, fame: 100, makeStreak: 0 }, o || {}));
   const ctx = (o) => pfx.kickContext(RTG, Object.assign({ league: 'COLLEGE' }, o));
   const res = (o) => pfx.kickResult(o);
-  // plain 42-yd make (prestige-3 school → marketMult 1)
+  // Fame per make is D/10 × the school's market multiplier, so derive it from the fixture's actual team
+  // rather than pinning a number that moves whenever the league data changes.
+  const mm = Player.marketMult(fresh());
+  const fameFor = (d) => RTG.Util.round1(d / 10 * mm);
   let state = fresh();
   let d = Player.applyKickMeters(state, ctx({ distance: 42 }), res({ distance: 42 }));
-  deq(d, { trust: 2, fans: 1, morale: 0, fame: 4.2, js: 0 });
+  deq(d, { trust: 2, fans: 1, morale: 0, fame: fameFor(42), js: 0 });
   assert.equal(state.player.trust, 52);
   assert.equal(state.player.fans, 51);
-  assert.equal(state.player.fame, 104.2);
+  assert.equal(state.player.fame, RTG.Util.round1(100 + fameFor(42)));
   // 52-yd decisive clutch make
   state = fresh();
   d = Player.applyKickMeters(state, ctx({ distance: 52, decisive: true, pressure: 0.9 }), res({ distance: 52, tags: ['decisive', 'clutch', 'fiftyPlus'] }));
-  deq(d, { trust: S.trust.make50 + S.trust.decisiveMake, fans: S.fans.make + S.fans.decisiveMake, morale: S.morale.clutchMake, fame: 5.2 + S.fame.fifty + S.fame.decisiveMake, js: 0 });
+  deq(d, { trust: S.trust.make50 + S.trust.decisiveMake, fans: S.fans.make + S.fans.decisiveMake, morale: S.morale.clutchMake, fame: RTG.Util.round1(fameFor(52) + S.fame.fifty + S.fame.decisiveMake), js: 0 });
   // misses by bucket
   state = fresh();
   deq(Player.applyKickMeters(state, ctx({ distance: 38 }), res({ outcome: 'WIDE_L', distance: 38 })), { trust: -4, fans: -3, morale: 0, fame: 0, js: 0 });

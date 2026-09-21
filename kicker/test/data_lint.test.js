@@ -45,7 +45,7 @@ function dupes(arr) {
 
 test('colleges: 48 teams, 6 conferences × 8, spec order and indices', () => {
   assert.equal(D.conferences.length, 6);
-  same(D.conferences.map((c) => c.id), ['COA', 'HRT', 'BFR', 'PAC', 'SOU', 'GLL']);
+  same(D.conferences.map((c) => c.id), ['SEC', 'BIG', 'XII', 'ACC', 'PAC', 'AAC']);
   assert.equal(D.colleges.length, 48);
   D.colleges.forEach((t, i) => {
     const conf = D.conferences[Math.floor(i / 8)].id;
@@ -57,13 +57,19 @@ test('colleges: 48 teams, 6 conferences × 8, spec order and indices', () => {
   });
   same(D.rivalPairs, [[0, 7], [1, 6], [2, 5], [3, 4]]);
   // spot-check spec order
-  assert.equal(D.colleges[0].name, 'Atlantic Tech Tidewaters');
-  assert.equal(D.colleges[8].name, 'Prairie Tech Sodbusters');
-  assert.equal(D.colleges[16].name, 'Lone Star Tech Longriders');
-  assert.equal(D.colleges[24].name, 'Golden Coast Condors');
-  assert.equal(D.colleges[32].name, 'Crimson Bluff Boars');
-  assert.equal(D.colleges[40].name, 'Lakeshore State Freighters');
-  assert.equal(D.colleges[47].name, 'Superior Bay Icebreakers');
+  assert.equal(D.colleges[0].name, 'Alabama Crimson Tide');
+  assert.equal(D.colleges[8].name, 'Ohio State Buckeyes');
+  assert.equal(D.colleges[16].name, 'Kansas State Wildcats');
+  assert.equal(D.colleges[24].name, 'Clemson Tigers');
+  assert.equal(D.colleges[32].name, 'Boise State Broncos');
+  assert.equal(D.colleges[40].name, 'South Florida Bulls');
+  assert.equal(D.colleges[47].name, 'UTSA Roadrunners');
+  // each conference is ordered so the (0,7) (1,6) (2,5) (3,4) rival slots are real rivalries
+  const rivalOf = (id) => D.collegeById[D.collegeById[id].rival].school;
+  assert.equal(rivalOf('SEC0'), 'Auburn');          // Iron Bowl
+  assert.equal(rivalOf('SEC3'), 'Oklahoma');        // Red River
+  assert.equal(rivalOf('BIG0'), 'Michigan');        // The Game
+  assert.equal(rivalOf('AAC1'), 'Navy');            // Army-Navy
 });
 
 test('colleges: field ranges, climate flags, regions', () => {
@@ -77,13 +83,10 @@ test('colleges: field ranges, climate flags, regions', () => {
     assert.match(t.abbr, /^[A-Z]{3}$/, t.id + ' abbr 3 letters');
   }
   // spec spot checks
-  const mct = D.collegeById.GLL1;
-  assert.equal(mct.dome, true); assert.equal(mct.climate, 'cold');
-  const srs = D.collegeById.PAC3;
-  assert.equal(srs.altitude, true);
-  const npb = D.collegeById.COA7;
-  assert.equal(npb.rainy, true);
-  assert.equal(D.collegeById.HRT1.windy, true);
+  assert.equal(D.collegeById.AAC7.dome, true);          // UTSA, the Alamodome
+  assert.equal(D.collegeById.XII1.altitude, true);      // Utah
+  assert.equal(D.collegeById.BIG2.rainy, true);         // Oregon
+  assert.equal(D.collegeById.SEC4.windy, true);         // Oklahoma
 });
 
 test('bowls: 6 major + 12 minor with venue climate', () => {
@@ -91,7 +94,7 @@ test('bowls: 6 major + 12 minor with venue climate', () => {
   const minors = D.bowls.filter((b) => b.tier === 'minor');
   assert.equal(majors.length, 6);
   assert.equal(minors.length, 12);
-  same(majors.map((b) => b.name), ['Citrus Grove Bowl', 'Cactus Sun Bowl', 'Harbor Bowl', 'Peach Blossom Bowl', 'Alamo Plaza Bowl', 'Frontier Bowl']);
+  same(majors.map((b) => b.name), ['Rose Bowl', 'Sugar Bowl', 'Orange Bowl', 'Cotton Bowl', 'Fiesta Bowl', 'Peach Bowl']);
   assert.equal(dupes(D.bowls.map((b) => b.id)).length, 0);
   for (const b of D.bowls) {
     assert.ok(CLIMATES.includes(b.climate), b.id);
@@ -166,13 +169,17 @@ test('blocklist: contains every §2.12.5 nickname and the extra words; helper no
   assert.ok(D.isBlockedNick('Buckeye State Foxes'));
   assert.ok(D.isBlockedNick('Admirals', 'Milwaukee'), 'city+nick pair');
   assert.ok(!D.isBlockedNick('Admirals', 'Annapolis'));
-  assert.ok(!D.isBlockedNick('Foxhounds'));
+  assert.ok(!D.isBlockedNick('Harbormen'));
   assert.ok(Array.isArray(D.blockedCityNick) && D.blockedCityNick.length >= 40);
   for (const p of D.blockedCityNick) assert.ok(Array.isArray(p) && p.length === 2 && p[0] && p[1]);
 });
 
-test('teams: no nickname, name or city+nick collides with the blocklist', () => {
-  for (const t of D.colleges.concat(D.nfl)) {
+// SPEC D22: the colleges are the real FBS programs, so the trademark blocklist guards the NFL side only —
+// that is where a fictional league is doing the legal work. Colleges are still checked for shape and
+// uniqueness above, and must declare themselves non-fictional so nothing claims otherwise.
+test('teams: no NFL nickname, name or city+nick collides with the blocklist', () => {
+  for (const t of D.colleges) assert.equal(t.verifiedFictional, false, t.id + ' is a real programme');
+  for (const t of D.nfl) {
     assert.ok(!D.isBlockedNick(t.nick, t.city), `${t.id} nick "${t.nick}" is blocked`);
     for (const w of D.blockedWords) {
       assert.ok(t.name.toLowerCase().indexOf(w.toLowerCase()) < 0, `${t.id} name contains "${w}"`);
@@ -194,12 +201,9 @@ test('teams: ids unique across both leagues; abbrs and names unique per league',
   same(dupes(D.nfl.map((t) => t.abbr)), []);
   same(dupes(D.colleges.map((t) => t.name)), []);
   same(dupes(D.nfl.map((t) => t.name)), []);
-  same(dupes(D.colleges.map((t) => t.nick)), []);
+  // College nicknames legitimately repeat in real life (four of these programmes are the Tigers), so only the
+  // full name has to be unique there. The fictional NFL side still owes unique nicknames.
   same(dupes(D.nfl.map((t) => t.nick)), []);
-  // no exact nickname shared between the two leagues (the spec's own Tidewater /
-  // Tidewaters near-duplicate is tolerated and reported in the package notes)
-  const cn = new Set(D.colleges.map((t) => t.nick.toLowerCase()));
-  for (const t of D.nfl) assert.ok(!cn.has(t.nick.toLowerCase()), t.nick + ' shared with a college');
 });
 
 test('teams: hex colours valid and primary/secondary contrast ≥ 2.5', () => {

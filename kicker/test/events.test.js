@@ -402,7 +402,10 @@ test('flags route to state.flags (career) or player.flags; agentTier/trait/injur
   s = efx.forEvent(RTG, 'NIL_TRUCK'); const e0 = s.history.earnings; Events.force(s, rngOf(1), 'NIL_TRUCK'); Events.apply(s, rngOf(1), 0);
   assert.ok(Math.abs(s.history.earnings - (e0 + 0.04)) < 1e-9);
   assert.equal(s.player.trust, 60 - 4);
-  s = efx.forEvent(RTG, 'PSYCH'); s.history.earnings = 0.005; Events.force(s, rngOf(1), 'PSYCH'); out = Events.apply(s, rngOf(1), 0);
+  // the session is free at a big programme, so both cases pin the prestige rather than trusting the fixture's school
+  s = efx.forEvent(RTG, 'PSYCH'); s.history.earnings = 0.005;
+  s.leagues.college.teams.find((t) => t.id === s.player.teamId).prestige = 3;
+  Events.force(s, rngOf(1), 'PSYCH'); out = Events.apply(s, rngOf(1), 0);
   assert.equal(out.effects.money, -15); assert.equal(s.history.earnings, 0);
   s = efx.forEvent(RTG, 'PSYCH'); s.leagues.college.teams.find((t) => t.id === s.player.teamId).prestige = 5;
   Events.force(s, rngOf(1), 'PSYCH'); out = Events.apply(s, rngOf(1), 0);

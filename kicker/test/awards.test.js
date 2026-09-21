@@ -113,8 +113,8 @@ test('college: Golden Boot / All-American / All-Conference per conference / Fres
   const u = s.stats.season;
   u.fga = 26; u.fgm = 25; u.long = 61; u.made50plus = 6; u.clutchM = 5; u.gameWinners = 3; u.pts = 75 + 40; u.clutchBest = 61;
   u.decisiveMakeWeeks = [13, 17];
-  s.season.schedule.push({ id: 'ccg', week: 13, homeId: me, awayId: 'COA5', kind: 'CCG', played: true, score: { home: 24, away: 21 } });
-  s.season.schedule.push({ id: 'champ', week: 17, homeId: 'PAC0', awayId: me, kind: 'CHAMP', played: true, score: { home: 20, away: 23 } });
+  s.season.schedule.push({ id: 'ccg', week: 13, homeId: me, awayId: 'SEC5', kind: 'CCG', played: true, score: { home: 24, away: 21 } });
+  s.season.schedule.push({ id: 'champ', week: 17, homeId: 'ACC0', awayId: me, kind: 'CHAMP', played: true, score: { home: 20, away: 23 } });
   const out = Awards.compute(s, RTG.RNG.create(2));
   assert.equal(byId(out, 'GOLDEN_BOOT')[0].teamId, me);
   assert.equal(byId(out, 'ALL_AMERICAN_1')[0].teamId, me);

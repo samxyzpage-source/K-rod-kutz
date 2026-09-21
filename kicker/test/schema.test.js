@@ -323,9 +323,9 @@ test('lookup helpers: teamIn / teamById / leagueOf / userTeam / activeLeague / c
   if (!hasData) { t.skip(dataNote); return; }
   const state = fx.collegeRegWeek5(RTG);
   assert.equal(Schema.teamById(state, 'BOS').abbr, 'BOS');
-  assert.equal(Schema.teamById(state, 'COA0').conf, 'COA');
+  assert.equal(Schema.teamById(state, 'SEC0').conf, 'SEC');
   assert.equal(Schema.teamById(state, 'nope'), null);
-  assert.equal(Schema.teamIn(state.leagues.nfl, 'COA0'), null);
+  assert.equal(Schema.teamIn(state.leagues.nfl, 'SEC0'), null);
   assert.equal(Schema.leagueOf(state, 'NFL'), state.leagues.nfl);
   assert.equal(Schema.userTeam(state).id, state.player.teamId);
   assert.equal(Schema.activeLeague(state).kind, 'COLLEGE');

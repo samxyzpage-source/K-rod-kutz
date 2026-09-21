@@ -14,6 +14,15 @@ phones and desktops.
 - Or publish the single-file bundle: `node kicker/tools/bundle.js` writes `kicker/dist/kicker.html`, one self-contained
   HTML file that behaves exactly like the multi-file site.
 
+### The leagues
+
+The college side is 48 real FBS programmes on 2026 alignment — six conferences of eight, ordered so the rivalry
+games are the real ones (Iron Bowl, The Game, Red River, Army–Navy…). Only 48 of roughly 134 programmes fit the
+structure, so it is a selection; the independents, Notre Dame among them, have no conference slot. School
+nicknames and colours belong to those schools — fine for a personal project, worth a licensing thought before
+anything commercial. The **pro league is invented** (32 fictional teams in real cities), which is where the
+trademark blocklist still does its work.
+
 ### Controls
 
 **The kick (aim and hold — the default)**
@@ -96,7 +105,8 @@ kicker/
   js/00_namespace.js      window.RTG = {VERSION, SAVE_VERSION, Data, UI}
   js/engine/*.js          the pure, DOM-free game engine (tuning, rng, schema, kick model, sim, season, career,
                           contracts, draft, events, awards, stats, save); fn(state, rng, args) → result
-  js/data/*.js            colleges, NFL teams, names, awards, events, headlines, records, blocklist
+  js/data/*.js            colleges (48 real FBS programmes), NFL teams (fictional), names, awards,
+                          events, headlines, records, blocklist
   js/ui/*.js              storage, palette, store (the one owner of state), router, components, sprites, canvas,
                           audio, input (flick / meter), kickview (the kick scene)
   js/ui/screens/*.js      one file per screen; each registers itself with RTG.UI.Router

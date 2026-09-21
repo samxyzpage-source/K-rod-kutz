@@ -143,10 +143,10 @@ test('recordAiKick creates the team entry on demand and mirrors applyKick', () =
   const s = fx.cleanCollege(RTG);
   const k = fx.kick(RTG, s, { distance: 51, outcome: 'GOOD', tags: ['fiftyPlus'] });
   k.ctx.isUser = false;
-  Stats.recordAiKick(s.season, 'COA5', k.ctx, k.result);
+  Stats.recordAiKick(s.season, 'SEC5', k.ctx, k.result);
   const k2 = fx.kick(RTG, s, { distance: 33, outcome: 'BLOCKED' });
-  Stats.recordAiKick(s.season, 'COA5', k2.ctx, k2.result);
-  const ai = s.season.kickerStats.COA5;
+  Stats.recordAiKick(s.season, 'SEC5', k2.ctx, k2.result);
+  const ai = s.season.kickerStats.SEC5;
   assert.equal(ai.fga, 2); assert.equal(ai.fgm, 1); assert.equal(ai.long, 51); assert.equal(ai.made50plus, 1); assert.equal(ai.blocked, 1);
   assert.equal(s.stats.season.fga, 0, 'the user is untouched');
   assert.ok(Schema.validate(s).ok);
@@ -290,8 +290,8 @@ test('finishSeason builds a SeasonLine, appends history, KEEPS the season sheet 
 test('finishSeason reads the postseason result and champion from the schedule', () => {
   const s = fx.cleanCollege(RTG);
   const me = s.player.teamId;
-  s.season.schedule.push({ id: 'ccg', week: 13, homeId: me, awayId: 'COA5', kind: 'CCG', played: true, score: { home: 24, away: 20 } });
-  s.season.schedule.push({ id: 'champ', week: 17, homeId: 'PAC0', awayId: me, kind: 'CHAMP', played: true, score: { home: 20, away: 23 } });
+  s.season.schedule.push({ id: 'ccg', week: 13, homeId: me, awayId: 'SEC5', kind: 'CCG', played: true, score: { home: 24, away: 20 } });
+  s.season.schedule.push({ id: 'champ', week: 17, homeId: 'ACC0', awayId: me, kind: 'CHAMP', played: true, score: { home: 20, away: 23 } });
   const line = Stats.finishSeason(s);
   assert.equal(line.playoffResult, 'CHAMP'); assert.equal(line.champion, true);
 });

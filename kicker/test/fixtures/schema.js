@@ -183,7 +183,7 @@ function collegeRegWeek5(RTG, opts) {
   var rng = rngFor(RTG, (opts.seed === undefined ? DEFAULT_SEED : opts.seed) + 101);
   var Schema = RTG.Schema, T = RTG.Tuning;
   var league = state.leagues.college;
-  var team = league.teams[2];                       // COA2 (prestige 3)
+  var team = league.teams[2];                       // SEC2 = LSU (prestige 4)
   var p = state.player;
   Schema.reindex(state);
   state.stage = 'COLLEGE'; state.phase = 'REG'; state.year = 1; state.week = 5;
@@ -248,14 +248,14 @@ function nflRegWeek9InGame(RTG, opts) {
   team.kicker2 = team.kicker; team.kicker = null;
   Schema.reindexLeague(league);
   league.year = 5; state.leagues.college.year = 5;
-  state.history.teams.push({ teamId: 'COA2', league: 'COLLEGE', fromYear: 1, toYear: 4, reason: 'SIGNED' });
+  state.history.teams.push({ teamId: 'SEC2', league: 'COLLEGE', fromYear: 1, toYear: 4, reason: 'SIGNED' });
   state.history.teams.push({ teamId: team.id, league: 'NFL', fromYear: 5, toYear: null, reason: 'DRAFTED' });
   for (var y = 1; y <= 4; y++) {
     var st = Schema.emptyKickerStats();
     st.fga = 20 + y; st.fgm = 15 + y; st.pat = 30; st.patMade = 29; st.pts = st.fgm * 3 + 29; st.long = 48 + y; st.games = 12; st.gamesStarted = 12;
-    state.history.seasons.push({ year: y, league: 'COLLEGE', teamId: 'COA2', teamName: 'Carolina Pines Foxhounds', age: 17 + y, ovr: 52 + 4 * y, role: 'K1', stats: st, awards: [], teamRecord: '8-4', champion: false, playoffResult: '', grade: 'B', salary: 0 });
+    state.history.seasons.push({ year: y, league: 'COLLEGE', teamId: 'SEC2', teamName: 'LSU Tigers', age: 17 + y, ovr: 52 + 4 * y, role: 'K1', stats: st, awards: [], teamRecord: '8-4', champion: false, playoffResult: '', grade: 'B', salary: 0 });
   }
-  state.history.awards.push({ year: 4, league: 'COLLEGE', id: 'ALL_CONF_1', name: 'All-Conference First Team K', teamId: 'COA2' });
+  state.history.awards.push({ year: 4, league: 'COLLEGE', id: 'ALL_CONF_1', name: 'All-Conference First Team K', teamId: 'SEC2' });
   state.history.contracts.push({ year: 5, league: 'NFL', teamId: team.id, type: 'ROOKIE', years: 4, aav: 0.98 });
   state.history.earnings = 0.98;
   state.season = Schema.emptySeason('NFL', 5);
@@ -306,7 +306,7 @@ function nflRegWeek9InGame(RTG, opts) {
   addKicks(RTG, state, 20, 'NFL', team.id, oppId, 8);
   state.stats.season.games = 8; state.stats.season.gamesStarted = 8; state.stats.season.pat = 18; state.stats.season.patMade = 17; state.stats.season.pts += 17;
   state.stats.career.games = 60; state.stats.career.gamesStarted = 56; state.stats.nfl.games = 8; state.stats.nfl.gamesStarted = 8;
-  state.records.college.longFG = { value: 57, holder: p.name.full, holderTeam: 'COA2', year: Schema.calendarYear(3), isUser: true };
+  state.records.college.longFG = { value: 57, holder: p.name.full, holderTeam: 'SEC2', year: Schema.calendarYear(3), isUser: true };
   state.records.personal.longFG = 57;
   state.headlines.push({ id: 'h9', year: 5, week: 8, text: 'Rookie leg holds up in the wind', tag: 'postgame_win' });
   state.recentHeadlineIds.push('h9');

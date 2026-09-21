@@ -416,6 +416,7 @@ test('injuries tick down in endWeek (the rival kicks meanwhile) and count toward
   deq(rep.injuries, { active: true, weeksLeft: 1, cleared: false, isNew: true });
   assert.ok(state.inbox.some((m) => m.from === 'family'), 'the family worries');
   assert.ok(state.history.timeline.some((t) => t.kind === 'INJURY'));
+  while (state.pending) settle(RTG, state, rng);        // a weekly event may have rolled; endWeek refuses with one pending
   Season.simUserGameAuto(state, rng);
   rep = Season.endWeek(state, rng);
   assert.equal(p.injury, null);
