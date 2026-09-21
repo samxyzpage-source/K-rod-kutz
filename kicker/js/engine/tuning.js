@@ -62,6 +62,10 @@
           flightBase: 1.0, flightPerYd: 0.026, // t = 1.0 + 0.026·D
           uiFlightScale: 0.75,
           powerMax: 1.15, aimMax: 12,
+          // The green band on the power bar: [pNeed, pNeed + greenBand], drawn by the scene and — with the
+          // Settings ▸ "Green = guaranteed" assist on — the window that turns a release into a certain make
+          // (§4.6, D21). Distinct from `kick.ai.powerAdd`, which is the AI's own aiming rule.
+          greenBand: 0.20,
           launchClampDeg: 60,                  // numerical guard for the tan() projection of the launch angle
           contactPowerBase: 0.92, contactPowerQuality: 0.08   // Peff = power·(0.92 + 0.08·quality)
         },

@@ -68,6 +68,7 @@
       playClockMult: 1,
       tooltips: true,
       haptics: true,
+      greenAssist: true,             // §4.6 D21: a release inside the green band is a guaranteed make
       kickInputV2: true,             // migration marker: settings saved before aim-then-hold shipped are moved onto it once
       keys: { confirm: ' ', confirmAlt: 'Enter', left: 'ArrowLeft', right: 'ArrowRight' }
     };

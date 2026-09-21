@@ -81,6 +81,7 @@ then `Router.sync()` (or `store.load('auto')` with `?load=auto`). With `?debug=1
 { audio: true, autoPat: 'off'|'safe'|'all', playKickoffs: false, simSpeed: 1|2|4,
   colorblind: false, highContrast: false, reducedMotion: false, fontScale: 1|1.25|1.5,
   leftFooted: false, inputMode: 'meter'|'flick' (default 'meter' = aim-then-hold), playClockMult: 1|2, tooltips: true, haptics: true,
+  greenAssist: true,            // D21: a release inside the green band is a guaranteed make (aim-and-hold only)
   kickInputV2: true,            // migration marker: pre-aim-and-hold settings are moved onto 'meter' once
   keys: { confirm: ' ', confirmAlt: 'Enter', left: 'ArrowLeft', right: 'ArrowRight' } }
 ```

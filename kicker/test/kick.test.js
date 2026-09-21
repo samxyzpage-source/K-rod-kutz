@@ -684,3 +684,48 @@ test('built contexts validate inside a KICKS session and survive JSON round trip
     assert.ok(Schema.validate(state).ok, 'fixture ' + name);
   }
 });
+
+// D21 "Green = guaranteed": a release the UI flags as inside the green band [pNeed, pNeed + greenBand] is a
+// pure strike — no random error, no contact slop, no block — so it always goes through. The engine re-checks
+// the claim against its own pNeed so a UI bug can never hand out free makes, and AI kicks never set the flag.
+test('green assist: a verified green release always makes, a false claim does not, and the flag is opt-in', () => {
+  const R = RTG.Tuning.kick.range;
+  const profiles = { poor: { POW: 45, ACC: 40, CON: 38, CLU: 35, KO: 40 }, avg: { POW: 62, ACC: 60, CON: 55, CLU: 55, KO: 55 } };
+  const rng = RTG.RNG.create(2026);
+  let n = 0;
+  for (const distance of [22, 33, 41, 48, 55]) {
+    for (const name of ['poor', 'avg']) {
+      for (const weather of ['clear', 'snow', 'rain']) {
+        const attrs = profiles[name];
+        const ctx = kfx.ctx(RTG, { distance, weather, wind: { speed: 22, dir: 90 }, pressure: 1, hash: 1, isUser: true, attrs });
+        const m = RTG.Kick.model(ctx, attrs);
+        if (m.pNeed > R.powerMax) continue;                       // green off the top of the bar: nothing to hit
+        const hi = Math.min(R.powerMax, m.pNeed + R.greenBand);
+        for (const t of [0, 0.5, 1]) {                            // low edge, middle, high edge of the band
+          const power = m.pNeed + t * (hi - m.pNeed);
+          assert.equal(RTG.Kick.inGreen(power, m), true, 'inGreen at t=' + t);
+          const r = RTG.Kick.resolve(rng, ctx, attrs, { power, aim: 0, quality: 0.9, green: true });
+          assert.equal(r.made, true, `${distance} yd ${name} ${weather} t=${t}: ${r.outcome}`);
+          assert.equal(r.outcome, 'GOOD');
+          assert.equal(r.assisted, true, 'the result records that the assist applied');
+          n++;
+        }
+      }
+    }
+  }
+  assert.ok(n >= 60, 'covered ' + n + ' green releases');
+
+  // the same power without the flag goes through the normal physics (the whole point of the assist)
+  const attrs = profiles.poor;
+  const ctx = kfx.ctx(RTG, { distance: 55, wind: { speed: 22, dir: 90 }, pressure: 1, isUser: true, attrs });
+  const m = RTG.Kick.model(ctx, attrs);
+  let plain = 0;
+  for (let i = 0; i < 400; i++) if (RTG.Kick.resolve(rng, ctx, attrs, { power: m.pNeed + 0.1, aim: 0, quality: 0.9 }).made) plain++;
+  assert.ok(plain < 380, 'without the flag a 55-yarder in a gale is not automatic (' + plain + '/400)');
+
+  // a claim the engine cannot verify earns nothing
+  assert.equal(RTG.Kick.inGreen(Math.max(0.05, m.pNeed - 0.3), m), false);
+  let lied = 0;
+  for (let i = 0; i < 400; i++) if (RTG.Kick.resolve(rng, ctx, attrs, { power: Math.max(0.05, m.pNeed - 0.3), aim: 0, quality: 0.9, green: true }).made) lied++;
+  assert.equal(lied, 0, 'a false green claim is rejected (' + lied + ' made)');
+});

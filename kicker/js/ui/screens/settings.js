@@ -71,6 +71,7 @@
       toggle('playKickoffs', 'Play kickoffs', 'One-tap timing bar instead of a simulated kickoff'),
       pills('simSpeed', 'Sim speed', [{ value: 1, label: '×1' }, { value: 2, label: '×2' }, { value: 4, label: '×4' }]),
       pills('inputMode', 'Kick input', [{ value: 'meter', label: 'AIM + HOLD' }, { value: 'flick', label: 'FLICK' }], 'Aim + hold: arrows aim, then hold and release in the green. Flick: pull back and flick the ball'),
+      toggle('greenAssist', 'Green = guaranteed', 'Aim + hold: releasing inside the green band always makes the kick. Off = the green is only the right power, and the strike can still miss'),
       pills('playClockMult', 'Play clock', [{ value: 1, label: '×1' }, { value: 2, label: '×2' }], 'Double the time to set up a kick'),
       toggle('leftFooted', 'Left-footed mirror', 'Mirror the kick scene for a left-footed feel')
     ] }));

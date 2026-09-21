@@ -27,15 +27,20 @@
  * (pointercancel / capture loss → kick with the current values, quality 0.5); play clock at 0 → kick with
  * the current values or mishit if never pulled.
  *
- * RTG.UI.Input.meter(opts) — keyboard / 3-click mode (also tap on the canvas = Space).
- *   ←/→ (A/D) nudge aim ±0.5° per tap, hold sweeps 6°/s · Space/Enter #1 starts the power meter (0→1.15 in
- *   900 ms, then back, looping) · #2 locks power · accuracy needle sweeps −1..+1 over 700 ms (500 ms at
- *   pressure ≥ 0.6) · #3 locks: quality = 1 − |needle|, aim += 6°·needle.
+ * RTG.UI.Input.meter(opts) — aim-then-hold mode, the default (also works with a mouse or a finger on the canvas).
+ *   ←/→ (A/D) nudge aim ±0.5° per tap, hold sweeps 6°/s — aim is the arrows ALONE. Then the confirm key (or a
+ *   pointer on the canvas) is HELD while power climbs linearly 0 → 1.15 over meter.holdMs (1300 ms; 1050 ms at
+ *   pressure ≥ 0.6) and parks at the top; the release sets power, and quality comes from that release relative
+ *   to the green band [pNeed, pNeed + Tuning.kick.range.greenBand]: 1.0 at its middle, `edge` at the rim, then
+ *   falling away outside it (floor `min`). A release under meter.minCommit is a stray tap — back to AIM, no kick.
+ *   With opts.assist() on, a release inside the band also sets `input.green`, which the engine honours as a
+ *   guaranteed make (SPEC D21). The play clock starts on the first hold; running it out kicks at the current fill.
  *   Bindings come from `keys()` → store.settings.keys {confirm, confirmAlt, left, right} (Settings ▸ KEYS);
  *   unset entries fall back to Space/Enter/←/→ and A/D stay as arrow aliases only while ←/→ are unremapped.
- *   opts: {pressure, playClockMs(), leftFooted(), active(), canvasEl?, keys(), onAim(aim), onPowerStart(),
- *          onPower(P), onPowerLock(P), onNeedle(n), onRelease(input, meta), onClock(remainingMs, totalMs)}
- *   returns {destroy(), reset(), update(now), press(), nudge(dir), state(), aim(), power(), needle(), clockRemaining(), clockTotal()}
+ *   opts: {pressure, playClockMs(), leftFooted(), active(), canvasEl?, keys(), greenZone(), assist(),
+ *          onAim(aim), onPowerStart(), onPower(P), onPowerCancel(), onRelease(input, meta), onClock(rem, total)}
+ *   returns {destroy(), reset(), update(now), press(), holdStart(), holdEnd(), nudge(dir), state(), aim(), power(),
+ *            qualityNow(), inGreenNow(), clockRemaining(), clockTotal()}
  */
 (function (root) {
   'use strict';
@@ -393,11 +398,18 @@
       P = powerAt(now() - tPower);
       finish(CONST.cancelQuality, 'clock');
     }
+    /** Did this release land inside the green band? (Only then can the assist guarantee the kick.) */
+    function releasedInGreen(p) {
+      var z = call(opts.greenZone);
+      return !!(z && typeof z.lo === 'number' && typeof z.hi === 'number' && p >= z.lo && p <= z.hi);
+    }
     function finish(qualityOverride, kind) {
       out.power = clamp(P, 0, CONST.powerMax);
       out.aim = clamp(aim, -CONST.aimMax, CONST.aimMax);
       out.quality = qualityOverride !== undefined ? qualityOverride : qualityFor(out.power);
       out.holdMs = 0;
+      // §4.6 assist: a release in the green is a guaranteed make unless the player turned it off
+      out.green = kind !== 'clock' && releasedInGreen(out.power) && (opts.assist ? !!call(opts.assist) : false);
       meta.kind = kind || 'meter';
       state = 'DONE';
       holdKey = null; holdPointer = false;
@@ -515,6 +527,8 @@
       state: function () { return state; },
       /** Quality a release would earn right now — the scene tints the bar with it. */
       qualityNow: function () { return qualityFor(P); },
+      /** Would a release right now land in the green band? (the scene brightens the bar with it) */
+      inGreenNow: function () { return releasedInGreen(P); },
       nudge: nudge,
       destroy: function () {
         destroyed = true; stopClock();

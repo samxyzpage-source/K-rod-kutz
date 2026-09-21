@@ -583,7 +583,8 @@
       power: clamp(num(input.power, 0), 0, R.powerMax),
       aim: clamp(num(input.aim, 0), -R.aimMax, R.aimMax),
       quality: clamp(num(input.quality, 0), 0, 1),
-      holdMs: Math.max(0, num(input.holdMs, 0))
+      holdMs: Math.max(0, num(input.holdMs, 0)),
+      green: !!input.green        // the UI's claim that this release landed in the green band (§4.6 assist)
     };
   }
 
@@ -624,6 +625,7 @@
     var m = Kick.geometry(ctx, attrs);                                                    // input-independent numbers (no erf)
     if (opts.forced) return Kick.forcedResult(ctx, attrs, inp, opts.forced, m, opts);
     var D = ctx.distance;
+    if (inp.green && Kick.inGreen(inp.power, m)) return greenResult(ctx, attrs, inp, m, rng, opts);
     var peff = Kick.peff(inp.power, inp.quality);
     var blocked = rng.chance(Kick.pBlock(ctx, peff, m.maxFG, attrs));                     // draw 1
     var sigma = Kick.sigmaFor(ctx, inp, attrs);                                           // deterministic
@@ -641,6 +643,36 @@
       x: x, h: h, launch: launch, err: err, shank: shank, contact: contact, overBias: overBias, sigma: sigma, blocked: blocked
     }, cls, opts);
   };
+
+  /**
+   * Is `power` inside the green band [pNeed, pNeed + greenBand] of this kick? The engine checks the UI's
+   * `input.green` claim against its own numbers so a UI bug can never hand out free makes.
+   * @param {number} power @param {Object} model Kick.geometry / Kick.model output @returns {boolean}
+   */
+  Kick.inGreen = function (power, model) {
+    var R = K().range, eps = 1e-6;
+    if (!model || typeof model.pNeed !== 'number') return false;
+    return power >= model.pNeed - eps && power <= Math.min(R.powerMax, model.pNeed + R.greenBand) + eps;
+  };
+
+  /**
+   * The "Green = guaranteed" assist (§4.6, D21): a release inside the green band is a pure strike straight
+   * through the middle — no random error, no contact slop, no block. Power is already at or above `pNeed`, so
+   * the ball clears the bar by construction; the height is floored a touch above it for the flight animation.
+   * Consumes no rng (x = 0 is nowhere near a post, so `classify` never reaches a doink roll).
+   */
+  function greenResult(ctx, attrs, inp, m, rng, opts) {
+    var T = K(), D = ctx.distance;
+    var carry = m.carryMax * Kick.peff(inp.power, inp.quality);
+    var h = Math.max(Kick.heightAt(D, carry), T.geometry.XBAR + T.forced.clearMargin);
+    var cls = Kick.classify(false, h, 0, rng, ctx);
+    var res = makeResult(ctx, m, inp, {
+      x: 0, h: h, launch: m.targetDeg + inp.aim, err: 0, shank: false, contact: 0, overBias: 0,
+      sigma: Kick.sigmaFor(ctx, inp, attrs), blocked: false
+    }, cls, opts);
+    res.assisted = true;
+    return res;
+  }
 
   /**
    * Debug: a consistent KickResult for a requested outcome without consuming rng. `forced` is an

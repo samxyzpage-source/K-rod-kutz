@@ -1304,6 +1304,10 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
           flightBase: 1.0, flightPerYd: 0.026, // t = 1.0 + 0.026·D
           uiFlightScale: 0.75,
           powerMax: 1.15, aimMax: 12,
+          // The green band on the power bar: [pNeed, pNeed + greenBand], drawn by the scene and — with the
+          // Settings ▸ "Green = guaranteed" assist on — the window that turns a release into a certain make
+          // (§4.6, D21). Distinct from `kick.ai.powerAdd`, which is the AI's own aiming rule.
+          greenBand: 0.20,
           launchClampDeg: 60,                  // numerical guard for the tan() projection of the launch angle
           contactPowerBase: 0.92, contactPowerQuality: 0.08   // Peff = power·(0.92 + 0.08·quality)
         },
@@ -7403,7 +7407,8 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       power: clamp(num(input.power, 0), 0, R.powerMax),
       aim: clamp(num(input.aim, 0), -R.aimMax, R.aimMax),
       quality: clamp(num(input.quality, 0), 0, 1),
-      holdMs: Math.max(0, num(input.holdMs, 0))
+      holdMs: Math.max(0, num(input.holdMs, 0)),
+      green: !!input.green        // the UI's claim that this release landed in the green band (§4.6 assist)
     };
   }
 
@@ -7444,6 +7449,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
     var m = Kick.geometry(ctx, attrs);                                                    // input-independent numbers (no erf)
     if (opts.forced) return Kick.forcedResult(ctx, attrs, inp, opts.forced, m, opts);
     var D = ctx.distance;
+    if (inp.green && Kick.inGreen(inp.power, m)) return greenResult(ctx, attrs, inp, m, rng, opts);
     var peff = Kick.peff(inp.power, inp.quality);
     var blocked = rng.chance(Kick.pBlock(ctx, peff, m.maxFG, attrs));                     // draw 1
     var sigma = Kick.sigmaFor(ctx, inp, attrs);                                           // deterministic
@@ -7461,6 +7467,36 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       x: x, h: h, launch: launch, err: err, shank: shank, contact: contact, overBias: overBias, sigma: sigma, blocked: blocked
     }, cls, opts);
   };
+
+  /**
+   * Is `power` inside the green band [pNeed, pNeed + greenBand] of this kick? The engine checks the UI's
+   * `input.green` claim against its own numbers so a UI bug can never hand out free makes.
+   * @param {number} power @param {Object} model Kick.geometry / Kick.model output @returns {boolean}
+   */
+  Kick.inGreen = function (power, model) {
+    var R = K().range, eps = 1e-6;
+    if (!model || typeof model.pNeed !== 'number') return false;
+    return power >= model.pNeed - eps && power <= Math.min(R.powerMax, model.pNeed + R.greenBand) + eps;
+  };
+
+  /**
+   * The "Green = guaranteed" assist (§4.6, D21): a release inside the green band is a pure strike straight
+   * through the middle — no random error, no contact slop, no block. Power is already at or above `pNeed`, so
+   * the ball clears the bar by construction; the height is floored a touch above it for the flight animation.
+   * Consumes no rng (x = 0 is nowhere near a post, so `classify` never reaches a doink roll).
+   */
+  function greenResult(ctx, attrs, inp, m, rng, opts) {
+    var T = K(), D = ctx.distance;
+    var carry = m.carryMax * Kick.peff(inp.power, inp.quality);
+    var h = Math.max(Kick.heightAt(D, carry), T.geometry.XBAR + T.forced.clearMargin);
+    var cls = Kick.classify(false, h, 0, rng, ctx);
+    var res = makeResult(ctx, m, inp, {
+      x: 0, h: h, launch: m.targetDeg + inp.aim, err: 0, shank: false, contact: 0, overBias: 0,
+      sigma: Kick.sigmaFor(ctx, inp, attrs), blocked: false
+    }, cls, opts);
+    res.assisted = true;
+    return res;
+  }
 
   /**
    * Debug: a consistent KickResult for a requested outcome without consuming rng. `forced` is an
@@ -18459,6 +18495,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       playClockMult: 1,
       tooltips: true,
       haptics: true,
+      greenAssist: true,             // §4.6 D21: a release inside the green band is a guaranteed make
       kickInputV2: true,             // migration marker: settings saved before aim-then-hold shipped are moved onto it once
       keys: { confirm: ' ', confirmAlt: 'Enter', left: 'ArrowLeft', right: 'ArrowRight' }
     };
@@ -20873,15 +20910,20 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
  * (pointercancel / capture loss → kick with the current values, quality 0.5); play clock at 0 → kick with
  * the current values or mishit if never pulled.
  *
- * RTG.UI.Input.meter(opts) — keyboard / 3-click mode (also tap on the canvas = Space).
- *   ←/→ (A/D) nudge aim ±0.5° per tap, hold sweeps 6°/s · Space/Enter #1 starts the power meter (0→1.15 in
- *   900 ms, then back, looping) · #2 locks power · accuracy needle sweeps −1..+1 over 700 ms (500 ms at
- *   pressure ≥ 0.6) · #3 locks: quality = 1 − |needle|, aim += 6°·needle.
+ * RTG.UI.Input.meter(opts) — aim-then-hold mode, the default (also works with a mouse or a finger on the canvas).
+ *   ←/→ (A/D) nudge aim ±0.5° per tap, hold sweeps 6°/s — aim is the arrows ALONE. Then the confirm key (or a
+ *   pointer on the canvas) is HELD while power climbs linearly 0 → 1.15 over meter.holdMs (1300 ms; 1050 ms at
+ *   pressure ≥ 0.6) and parks at the top; the release sets power, and quality comes from that release relative
+ *   to the green band [pNeed, pNeed + Tuning.kick.range.greenBand]: 1.0 at its middle, `edge` at the rim, then
+ *   falling away outside it (floor `min`). A release under meter.minCommit is a stray tap — back to AIM, no kick.
+ *   With opts.assist() on, a release inside the band also sets `input.green`, which the engine honours as a
+ *   guaranteed make (SPEC D21). The play clock starts on the first hold; running it out kicks at the current fill.
  *   Bindings come from `keys()` → store.settings.keys {confirm, confirmAlt, left, right} (Settings ▸ KEYS);
  *   unset entries fall back to Space/Enter/←/→ and A/D stay as arrow aliases only while ←/→ are unremapped.
- *   opts: {pressure, playClockMs(), leftFooted(), active(), canvasEl?, keys(), onAim(aim), onPowerStart(),
- *          onPower(P), onPowerLock(P), onNeedle(n), onRelease(input, meta), onClock(remainingMs, totalMs)}
- *   returns {destroy(), reset(), update(now), press(), nudge(dir), state(), aim(), power(), needle(), clockRemaining(), clockTotal()}
+ *   opts: {pressure, playClockMs(), leftFooted(), active(), canvasEl?, keys(), greenZone(), assist(),
+ *          onAim(aim), onPowerStart(), onPower(P), onPowerCancel(), onRelease(input, meta), onClock(rem, total)}
+ *   returns {destroy(), reset(), update(now), press(), holdStart(), holdEnd(), nudge(dir), state(), aim(), power(),
+ *            qualityNow(), inGreenNow(), clockRemaining(), clockTotal()}
  */
 (function (root) {
   'use strict';
@@ -21239,11 +21281,18 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       P = powerAt(now() - tPower);
       finish(CONST.cancelQuality, 'clock');
     }
+    /** Did this release land inside the green band? (Only then can the assist guarantee the kick.) */
+    function releasedInGreen(p) {
+      var z = call(opts.greenZone);
+      return !!(z && typeof z.lo === 'number' && typeof z.hi === 'number' && p >= z.lo && p <= z.hi);
+    }
     function finish(qualityOverride, kind) {
       out.power = clamp(P, 0, CONST.powerMax);
       out.aim = clamp(aim, -CONST.aimMax, CONST.aimMax);
       out.quality = qualityOverride !== undefined ? qualityOverride : qualityFor(out.power);
       out.holdMs = 0;
+      // §4.6 assist: a release in the green is a guaranteed make unless the player turned it off
+      out.green = kind !== 'clock' && releasedInGreen(out.power) && (opts.assist ? !!call(opts.assist) : false);
       meta.kind = kind || 'meter';
       state = 'DONE';
       holdKey = null; holdPointer = false;
@@ -21361,6 +21410,8 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       state: function () { return state; },
       /** Quality a release would earn right now — the scene tints the bar with it. */
       qualityNow: function () { return qualityFor(P); },
+      /** Would a release right now land in the green band? (the scene brightens the bar with it) */
+      inGreenNow: function () { return releasedInGreen(P); },
       nudge: nudge,
       destroy: function () {
         destroyed = true; stopClock();
@@ -21836,7 +21887,8 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
           leftFooted: function () { return mirror; },
           active: inputActive,
           keys: function () { return liveSettings().keys; },
-          greenZone: function () { return model ? { lo: model.pNeed, hi: Math.min(T().kick.range.powerMax, model.pNeed + 0.15) } : null; },
+          greenZone: function () { return model ? { lo: model.pNeed, hi: Math.min(T().kick.range.powerMax, model.pNeed + T().kick.range.greenBand) } : null; },
+          assist: function () { return liveSettings().greenAssist !== false; },
           onAim: function (a) { aimDeg = a; },
           onPowerStart: function () { setPhase('POWER'); setHint('RELEASE IN THE GREEN'); Audio().click(); },
           onPower: function (p) { meterP = p; var tick = Math.floor(p * 10); if (tick !== lastTick) { lastTick = tick; Audio().click(); } lean = Math.min(3, Math.floor(p * 3)); },
@@ -21875,6 +21927,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       if (destroyed || !inputActive()) return;
       var triple = { power: inp.power, aim: inp.aim, quality: inp.quality };
       if (inp.holdMs) triple.holdMs = inp.holdMs;
+      if (inp.green) triple.green = true;      // §4.6 D21: the engine re-checks this before guaranteeing the kick
       lastInput = triple; lastMeta = meta ? { kind: meta.kind, speed: meta.speed, rmsPerp: meta.rmsPerp, weak: !!meta.weak, yanked: !!meta.yanked, samples: meta.samples, windowMs: meta.windowMs } : null;
       var res = null;
       try { res = opts.onInput ? opts.onInput(triple, meta) : null; }
@@ -22251,7 +22304,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       g.fillStyle = pal('navy2'); g.fillRect(b.x, b.y, b.w, b.h);
       var pxOf = function (p) { return Math.round(b.y + b.h - (p / R.powerMax) * b.h); };
       if (row.greenZone && model) {
-        var y1 = pxOf(Math.min(R.powerMax, model.pNeed + 0.15)), y2 = pxOf(Math.max(0, model.pNeed));
+        var y1 = pxOf(Math.min(R.powerMax, model.pNeed + R.greenBand)), y2 = pxOf(Math.max(0, model.pNeed));
         g.fillStyle = pal('mint'); g.globalAlpha = 0.55; g.fillRect(b.x, y1, b.w, Math.max(1, y2 - y1)); g.globalAlpha = 1;
       }
       var yr = pxOf(1.0);
@@ -27546,6 +27599,7 @@ html.is-landscape .scr-training .focus-tile { min-height: 72px; }
       toggle('playKickoffs', 'Play kickoffs', 'One-tap timing bar instead of a simulated kickoff'),
       pills('simSpeed', 'Sim speed', [{ value: 1, label: '×1' }, { value: 2, label: '×2' }, { value: 4, label: '×4' }]),
       pills('inputMode', 'Kick input', [{ value: 'meter', label: 'AIM + HOLD' }, { value: 'flick', label: 'FLICK' }], 'Aim + hold: arrows aim, then hold and release in the green. Flick: pull back and flick the ball'),
+      toggle('greenAssist', 'Green = guaranteed', 'Aim + hold: releasing inside the green band always makes the kick. Off = the green is only the right power, and the strike can still miss'),
       pills('playClockMult', 'Play clock', [{ value: 1, label: '×1' }, { value: 2, label: '×2' }], 'Double the time to set up a kick'),
       toggle('leftFooted', 'Left-footed mirror', 'Mirror the kick scene for a left-footed feel')
     ] }));

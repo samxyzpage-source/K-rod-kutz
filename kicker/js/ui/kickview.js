@@ -452,7 +452,8 @@
           leftFooted: function () { return mirror; },
           active: inputActive,
           keys: function () { return liveSettings().keys; },
-          greenZone: function () { return model ? { lo: model.pNeed, hi: Math.min(T().kick.range.powerMax, model.pNeed + 0.15) } : null; },
+          greenZone: function () { return model ? { lo: model.pNeed, hi: Math.min(T().kick.range.powerMax, model.pNeed + T().kick.range.greenBand) } : null; },
+          assist: function () { return liveSettings().greenAssist !== false; },
           onAim: function (a) { aimDeg = a; },
           onPowerStart: function () { setPhase('POWER'); setHint('RELEASE IN THE GREEN'); Audio().click(); },
           onPower: function (p) { meterP = p; var tick = Math.floor(p * 10); if (tick !== lastTick) { lastTick = tick; Audio().click(); } lean = Math.min(3, Math.floor(p * 3)); },
@@ -491,6 +492,7 @@
       if (destroyed || !inputActive()) return;
       var triple = { power: inp.power, aim: inp.aim, quality: inp.quality };
       if (inp.holdMs) triple.holdMs = inp.holdMs;
+      if (inp.green) triple.green = true;      // §4.6 D21: the engine re-checks this before guaranteeing the kick
       lastInput = triple; lastMeta = meta ? { kind: meta.kind, speed: meta.speed, rmsPerp: meta.rmsPerp, weak: !!meta.weak, yanked: !!meta.yanked, samples: meta.samples, windowMs: meta.windowMs } : null;
       var res = null;
       try { res = opts.onInput ? opts.onInput(triple, meta) : null; }
@@ -867,7 +869,7 @@
       g.fillStyle = pal('navy2'); g.fillRect(b.x, b.y, b.w, b.h);
       var pxOf = function (p) { return Math.round(b.y + b.h - (p / R.powerMax) * b.h); };
       if (row.greenZone && model) {
-        var y1 = pxOf(Math.min(R.powerMax, model.pNeed + 0.15)), y2 = pxOf(Math.max(0, model.pNeed));
+        var y1 = pxOf(Math.min(R.powerMax, model.pNeed + R.greenBand)), y2 = pxOf(Math.max(0, model.pNeed));
         g.fillStyle = pal('mint'); g.globalAlpha = 0.55; g.fillRect(b.x, y1, b.w, Math.max(1, y2 - y1)); g.globalAlpha = 1;
       }
       var yr = pxOf(1.0);

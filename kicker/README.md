@@ -22,9 +22,11 @@ phones and desktops.
    pointing. This is the whole aim: nothing later moves it.
 2. **Hold** `Space` (or `Enter`, or a finger anywhere on the scene). The power bar on the left climbs from zero. The
    green band is the power the distance needs — Legend difficulty hides it.
-3. **Let go in the green.** The release sets your power *and* your contact: dead centre of the green is a pure strike,
-   the edges are decent, and the further outside it you release the worse the ball comes off your foot. Hold past
-   100 % and you are in the red — an overswing, with more carry and less accuracy.
+3. **Let go in the green — that is a guaranteed make.** Anywhere inside the band, the kick goes through: no wobble, no
+   doink, no block. Outside it the normal physics apply, and the further out you release the worse the ball comes off
+   your foot; hold past 100 % and you are in the red — an overswing, with more carry and less accuracy. Distance still
+   decides everything, because the green sits higher up the bar the longer the kick, and past your range there is no
+   green left to hit. Turn the guarantee off under Settings → "Green = guaranteed" if you want the risk back.
 4. A tap too quick to register just returns you to aiming; it does not spend the kick. The play clock (the ring around
    the ball) starts when you begin the hold, and if it runs out the ball goes with whatever the bar had.
 
