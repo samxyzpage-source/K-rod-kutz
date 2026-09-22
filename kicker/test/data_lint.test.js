@@ -275,23 +275,14 @@ test('names: no blocked real-kicker surnames (allowCommon exempt)', () => {
 
 test('records: §2.9 base values, labels and minimum-attempt notes', () => {
   const R = D.records;
-  same(R.base.college, { longFG: 62, seasonFGM: 29, seasonPts: 140, seasonFGpct: 96.0, season50plus: 8, careerFGM: 90, careerPts: 460, careerFGpct: 89.5, consecutiveFGM: 26, careerGW: 7,
-    longPunt: 78, seasonNet: 44.8, seasonIn20: 34, careerPunts: 230, careerNet: 42.6, careerIn20: 96 });
-  same(R.base.nfl, { longFG: 66, seasonFGM: 40, seasonPts: 166, seasonFGpct: 97.2, season50plus: 12, careerFGM: 560, careerPts: 2600, careerFGpct: 91.0, consecutiveFGM: 44, careerGW: 30, careerSeasons: 22,
-    longPunt: 82, seasonNet: 46.4, seasonIn20: 42, careerPunts: 1100, careerNet: 44.2, careerIn20: 460, punterSeasons: 22 });
+  same(R.base.college, { longFG: 62, seasonFGM: 29, seasonPts: 140, seasonFGpct: 96.0, season50plus: 8, careerFGM: 90, careerPts: 460, careerFGpct: 89.5, consecutiveFGM: 26, careerGW: 7 });
+  same(R.base.nfl, { longFG: 66, seasonFGM: 40, seasonPts: 166, seasonFGpct: 97.2, season50plus: 12, careerFGM: 560, careerPts: 2600, careerFGpct: 91.0, consecutiveFGM: 44, careerGW: 30, careerSeasons: 22 });
+  assert.equal(R.keys.length, 11);
   for (const k of R.keys) assert.ok(R.meta[k] && R.meta[k].label, k + ' label');
   assert.equal(R.meta.seasonFGpct.minFga, 20);
   assert.equal(R.meta.careerFGpct.minFga, 100);
-  assert.equal(R.meta.seasonNet.minPunts, 30);
-  assert.equal(R.meta.careerNet.minPunts, 150);
+  assert.equal(R.keysFor('college').length, 10);
   same(R.keysFor('nfl'), R.keys);
-  // §2.14: every key belongs to exactly one position, and the split covers the list
-  const kicking = R.keysFor('nfl', 'K'), punting = R.keysFor('nfl', 'P');
-  assert.equal(kicking.length + punting.length, R.keys.length);
-  assert.equal(kicking.length, 11);
-  assert.ok(punting.indexOf('longPunt') >= 0 && kicking.indexOf('longFG') >= 0);
-  assert.equal(R.keysFor('college', 'K').length, 10, 'college has no careerSeasons');
-  assert.equal(R.keysFor('college', 'P').length, 6, 'college has no punterSeasons');
 });
 
 // ───────────────────────────── events / headlines (E3, conditional) ─────────────────────────────

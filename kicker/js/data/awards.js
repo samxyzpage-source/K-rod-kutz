@@ -1,12 +1,12 @@
 /**
  * Road to Glory: Kicker — awards catalog (SPEC §2.8).
  *
- * RTG.Data.awards      : [{id, league:'COLLEGE'|'NFL'|'BOTH', name, rule, xp, fame, description, rank?, position?}]
+ * RTG.Data.awards      : [{id, league:'COLLEGE'|'NFL'|'BOTH', name, rule, xp, fame, description, rank?}]
  *                        `rule` is the key RTG.Awards.compute switches on; xp/fame are read from
  *                        Tuning.awards.rewards when present (the numbers below are the §2.8 table
  *                        and only serve as a fallback so the file also works standalone).
  * RTG.Data.awardsById  : {[id]: award}
- * RTG.Data.awardsFor(league, position?) → award[]  (league rows + BOTH rows, for 'K' or 'P')
+ * RTG.Data.awardsFor(league) → award[]  (league rows + BOTH rows)
  *
  * Pure data. No randomness, no DOM.
  */
@@ -74,29 +74,7 @@
     // ── Both
     row('SEASON_GOAL_1', 'BOTH', 'Season Goal I', 'GOAL', 40, 0, 'First preseason goal met.', { goalIdx: 0 }),
     row('SEASON_GOAL_2', 'BOTH', 'Season Goal II', 'GOAL', 60, 0, 'Second preseason goal met.', { goalIdx: 1 }),
-    row('SEASON_GOAL_3', 'BOTH', 'Season Goal III', 'GOAL', 100, 0, 'Third preseason goal met.', { goalIdx: 2 }),
-
-    // ── Punters (§2.14). The road is the same; what it counts is net yards and the ones you pinned.
-    row('GOLDEN_FOOT', 'COLLEGE', 'Golden Foot Award', 'TOP_SCORE', 200, 150,
-      'Best punter in the nation. Nobody notices until nobody can return one.', { position: 'P' }),
-    row('ALL_AMERICAN_P1', 'COLLEGE', 'All-American First Team (P)', 'RANK', 150, 100,
-      'Ranked first nationally by punting score.', { position: 'P', rank: [1, 1] }),
-    row('ALL_AMERICAN_P2', 'COLLEGE', 'All-American Second Team (P)', 'RANK', 80, 50,
-      'Ranked second or third nationally by punting score.', { position: 'P', rank: [2, 3] }),
-    row('ALL_CONF_P1', 'COLLEGE', 'All-Conference First Team (P)', 'CONF_RANK', 80, 40,
-      'Best punter in the conference.', { position: 'P' }),
-    row('FRESHMAN_FOOT', 'COLLEGE', 'Freshman Punter of the Year', 'FRESHMAN', 100, 60,
-      'The best first-year leg in the country.', { position: 'P' }),
-    row('PIN_KING_COLLEGE', 'COLLEGE', 'Coffin Corner Award', 'BEST_IN20', 60, 40,
-      'Most punts downed inside the 20.', { position: 'P' }),
-    row('GOLDEN_LEG_P', 'NFL', 'Golden Leg (Punter)', 'TOP_SCORE', 200, 150,
-      'The best punting season in the league.', { position: 'P' }),
-    row('ALL_LEAGUE_P1', 'NFL', 'All-League First Team (P)', 'RANK', 180, 120,
-      'First-team all-league punter.', { position: 'P', rank: [1, 1] }),
-    row('ALL_LEAGUE_P2', 'NFL', 'All-League Second Team (P)', 'RANK', 100, 60,
-      'Second-team all-league punter.', { position: 'P', rank: [2, 2] }),
-    row('PIN_KING_NFL', 'NFL', 'Field Position Award', 'BEST_IN20', 60, 40,
-      'Most punts downed inside the 20.', { position: 'P' })
+    row('SEASON_GOAL_3', 'BOTH', 'Season Goal III', 'GOAL', 100, 0, 'Third preseason goal met.', { goalIdx: 2 })
   ];
 
   // season-goal xp comes from Tuning.awards.goalXp when present
@@ -109,19 +87,12 @@
   RTG.Data.awards = awards;
   RTG.Data.awardsById = byId;
   /**
-   * Awards available in a league (plus the BOTH rows). A row with no `position` belongs to the kicker;
-   * `position: 'P'` rows are the punter's (§2.14).
-   * @param {'COLLEGE'|'NFL'} league @param {'K'|'P'} [position] @returns {object[]}
+   * Awards available in a league (plus the BOTH rows).
+   * @param {'COLLEGE'|'NFL'} league @returns {object[]}
    */
-  RTG.Data.awardsFor = function (league, position) {
-    var pos = position === 'P' ? 'P' : 'K';
+  RTG.Data.awardsFor = function (league) {
     var out = [];
-    for (var k = 0; k < awards.length; k++) {
-      var a = awards[k];
-      if (a.league !== league && a.league !== 'BOTH') continue;
-      if ((a.position || 'K') !== pos) continue;
-      out.push(a);
-    }
+    for (var k = 0; k < awards.length; k++) if (awards[k].league === league || awards[k].league === 'BOTH') out.push(awards[k]);
     return out;
   };
 })(typeof window !== 'undefined' ? window : globalThis);

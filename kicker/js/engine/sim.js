@@ -480,16 +480,7 @@
   /** The user's punts land in the career stats; everyone else's are just a drive-log line. */
   function recordPuntRow(gs, state, rng, ctx, result, ai) {
     var St = Stats();
-    if (!St) return null;
-    var side = sideOfCtx(gs, ctx);
-    if (!ctx.isUser || ai) {
-      // the league's punting line: what the punter awards and records are ranked on
-      if (isFn(St.recordAiPunt) && state && state.season && state.season.league === gs.league) {
-        St.recordAiPunt(state.season, gs[side + 'Id'], ctx, result);
-      }
-      return null;
-    }
-    if (!isFn(St.recordPunt) || !state || !state.stats) return null;
+    if (!ctx.isUser || ai || !St || !isFn(St.recordPunt) || !state || !state.stats) return null;
     return St.recordPunt(state, ctx, result, {
       gameId: gs.id, teamId: gs[sideOfCtx(gs, ctx) + 'Id'], oppId: gs[other(sideOfCtx(gs, ctx)) + 'Id'],
       week: gs.week, year: state ? num(state.year, 0) : 0,

@@ -345,32 +345,9 @@ test('applyUserKick / sessionKick accept opts.forced (debug): requested outcome,
   assert.equal(state.stage, 'HS'); assert.equal(state.phase, 'OFFERS');
   Engine.autoPlayCareer(state, rng, { untilStage: 'COLLEGE' });
   Engine.nextPhase(state, rng);
-  // this fixture can lose its camp battle, and a K2 never kicks (sim.js userKicks): put them back in the job
-  if (state.player.role !== 'K1') { state.player.role = 'K1'; if (state.player.flags) delete state.player.flags.benched; }
   Engine.startUserGame(state, rng);
-  // sim on until the kicker is actually asked for one: not every game hands you a kick in its first drive
-  let ev = null, weeks = 0;
-  while (weeks < 12) {
-    ev = Engine.simToKick(state, rng);
-    if (ev.type === 'USER_KICK') break;
-    if (ev.type === 'END_GAME' || ev.type === 'END') {
-      Engine.finishUserGame(state, rng);
-      Engine.endWeek(state, rng);
-      Engine.settlePending(state, rng);
-      weeks++;
-      var ref = RTG.Season.userGameRef(state);
-      while (!(ref && !ref.played) && weeks < 12) {          // byes and weeks the schedule skips
-        Engine.autoPlayWeek(state, rng);
-        weeks++;
-        ref = RTG.Season.userGameRef(state);
-      }
-      if (!ref || ref.played) break;
-      Engine.startUserGame(state, rng);
-      continue;
-    }
-    if (state.game.pending) Engine.autoKick(state, rng);
-  }
-  assert.equal(ev.type, 'USER_KICK', 'a user kick within a dozen weeks');
+  const ev = Engine.simToKick(state, rng);
+  assert.equal(ev.type, 'USER_KICK');
   const b2 = rng.state();
   const k = Engine.applyUserKick(state, rng, null, { forced: { outcome: 'WIDE_L' } });
   assert.equal(k.outcome, 'WIDE_L'); assert.equal(k.made, false); assert.equal(k.forced, true);
