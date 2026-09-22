@@ -31,7 +31,7 @@
    * @property {number} createdAt         ms, supplied by the UI
    * @property {number} playtimeSec
    * @property {'HS'|'COLLEGE'|'DRAFT'|'NFL'|'RETIRED'} stage
-   * @property {string} phase             HS: SEASON|OFFERS · COLLEGE/NFL: PRE|REG|POST|AWARDS|OFF · DRAFT: DECLARE|COMBINE|DRAFT|UDFA · RETIRED: LEGACY
+   * @property {string} phase             HS: SEASON|CAMPS|OFFERS · COLLEGE/NFL: PRE|REG|POST|AWARDS|OFF · DRAFT: DECLARE|COMBINE|DRAFT|UDFA · RETIRED: LEGACY
    * @property {number} year              1 = first college season; calendar = 2026 + year − 1
    * @property {number} week              1-based; PRE = 0; POST continues numbering
    * @property {Player} player
@@ -229,7 +229,7 @@
   /** @typedef {{id:string, week:number, year:number, from:string, avatar:string, text:string, kind:'note'|'event'|'result', read:boolean}} Message */
   /** @typedef {{id:string, year:number, week:number, text:string, tag:string}} Headline */
   /** @typedef {{kind:string, payload:*, options:{id:string, label:string, detail:string}[]}} Decision */
-  /** @typedef {{kind:'HS_GAME'|'CAMP'|'COMBINE_LADDER'|'COMBINE_ACC'|'COMBINE_KO'|'HALFTIME70'|'PRACTICE'|'TRYOUT', contexts:KickContext[], results:KickResult[], rival?:{name:string, results:KickResult[]}, idx:number}} KickSession */
+  /** @typedef {{kind:'HS_GAME'|'RECRUIT_CAMP'|'CAMP'|'COMBINE_LADDER'|'COMBINE_ACC'|'COMBINE_KO'|'HALFTIME70'|'PRACTICE'|'TRYOUT', contexts:KickContext[], results:KickResult[], rival?:{name:string, results:KickResult[]}, idx:number}} KickSession */
   /** @typedef {{id:string, text:string, sender:string, choices:{label:string, preview:string}[], rolledWeek:number, rolledYear:number}} EventInstance */
   /** @typedef {{id:string, key:string, op:'mul'|'add', value:number, expires:{type:'week'|'game'|'season'|'never', at:number}, label:string, source:string}} Modifier */
   /** @typedef {{autoPat:'off'|'safe'|'all', playKickoffs:boolean, simSpeed:1|2|4}} Settings  (per-career mirror of the UI settings) */
@@ -239,7 +239,7 @@
   var ENUM = {
     stages: ['HS', 'COLLEGE', 'DRAFT', 'NFL', 'RETIRED'],
     phases: {
-      HS: ['SEASON', 'OFFERS'],
+      HS: ['SEASON', 'CAMPS', 'OFFERS'],
       COLLEGE: ['PRE', 'REG', 'POST', 'AWARDS', 'OFF'],
       NFL: ['PRE', 'REG', 'POST', 'AWARDS', 'OFF'],
       DRAFT: ['DECLARE', 'COMBINE', 'DRAFT', 'UDFA'],
@@ -259,7 +259,7 @@
     subs: ['', 'DEAD_CENTER', 'SNEAKS', 'LINE_DRIVE'],
     pendingKinds: ['EVENT', 'DECISION', 'KICKS'],
     gamePendingTypes: ['USER_KICK', 'USER_KICKOFF'],
-    sessionKinds: ['HS_GAME', 'CAMP', 'COMBINE_LADDER', 'COMBINE_ACC', 'COMBINE_KO', 'HALFTIME70', 'PRACTICE', 'TRYOUT'],
+    sessionKinds: ['HS_GAME', 'RECRUIT_CAMP', 'CAMP', 'COMBINE_LADDER', 'COMBINE_ACC', 'COMBINE_KO', 'HALFTIME70', 'PRACTICE', 'TRYOUT'],
     decisionKinds: ['OFFERS_COLLEGE', 'REDSHIRT', 'DECLARE', 'TRANSFER', 'COMBINE_PLAN', 'UDFA', 'EXTENSION', 'FREE_AGENCY', 'TAG',
                     'RETIRE', 'OFFSEASON_PLAN', 'CUT_NOTICE', 'HOF', 'TRAINING_BLOCKS', 'BODY_CHECK', 'CAMP'],
     focus: ['POW', 'ACC', 'CON', 'CLU', 'KO', 'REST'],

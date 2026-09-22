@@ -436,12 +436,34 @@
           offerAt: 70, highAt: 45, warmAt: 25, min: 0, max: 100
         },
         // the 0-6 rating the star formula reads, from the whole five-game stretch
-        rating: { fgW: 0.55, patW: 0.20, gwW: 0.25, scale: 6, longAdd: 0.35, longMax: 1 }
+        rating: { fgW: 0.55, patW: 0.20, gwW: 0.25, scale: 6, longAdd: 0.35, longMax: 1 },
+        // recruiting camps (HS.buildCamps / HS.startCamp / HS.finishCamp): after the fifth game every school that
+        // wants a closer look invites the kicker to its camp, and an offer is earned there — kick by kick, in
+        // front of that staff — instead of appearing at the end of the season
+        camps: {
+          kicks: 5,                                         // a camp is five kicks for the staff
+          maxInvites: 8,                                    // the itinerary's cap: 8 camps × 5 kicks is about twice the senior season's kicks
+          inviteTier: 'WARM',                               // every board school at this interest tier or above (HS.tierOf) sends an invite
+          // schools that were not on the board but invite on the strength of the star rating: how many, at which
+          // prestige. A perfect season brings the blue bloods in; a 4★ some prestige-4s; a 3★ one mid-major.
+          extra: { 5: { prestige: 5, n: [3, 4] }, 4: { prestige: 4, n: [2, 3] }, 3: { prestige: 3, n: [1, 1] } },
+          fallback: { n: [1, 2], prestigeMax: 2 },          // a season nobody followed still gets one or two small camps — never zero
+          // what a staff wants to see, by prestige: makes of the five, and the distance the long one must come from
+          // (0 = the small schools do not ask for a long one). A prestige-5 staff wants 4 of 5 with one from 55+;
+          // a prestige-1 school is happy with 3 of 5 from inside 48.
+          bar: { 1: { makes: 3, long: 0 }, 2: { makes: 3, long: 0 }, 3: { makes: 4, long: 48 }, 4: { makes: 4, long: 52 }, 5: { makes: 4, long: 55 } },
+          // the five distances, short to long, by prestige; the first four wander ±jitter yards, the long one adds 0..longExtra
+          distances: { 1: [27, 32, 36, 40, 44], 2: [29, 34, 38, 42, 46], 3: [31, 36, 41, 45, 48], 4: [32, 38, 43, 47, 52], 5: [34, 40, 45, 50, 55] },
+          jitter: 2, longExtra: 2,
+          pressure: 0.15, lastPressure: 0.5,                // a camp is calm-ish; the staff watches the last one
+          windCap: 8,                                       // the school's own weather, with the wind held to a breeze
+          oppST: 40                                         // no rush at a camp: the block chance sits near its floor
+        }
       },
 
       // ───────────────────────────── §2.7.1 / §2.7.5 / §2.7.6 DRAFT ─────────────────────────────
       draft: {
-        stars: { base: 1.5, perOvr: 0.03, ovrAnchor: 40, seasonW: 0.4, min: 2, max: 5, walkon: 2 },
+        stars: { base: 1.5, perOvr: 0.03, ovrAnchor: 40, seasonW: 0.55, min: 2, max: 5, walkon: 2 },   // seasonW 0.4 → 0.55: a perfect senior year (rating 6) at a recruit's OVR must round to 5★, not 4
         offers: { min: 3, max: 6, walkon: 1, safetyPrestigeMax: 2, weightOffset: 0.5,
                   depth: { VET: { ovr: [66, 78], years: [1, 1] }, STAR: { ovr: [74, 84], years: [2, 3] } },
                   prestigeBumpPer: 2, prestigeAnchor: 3 },
