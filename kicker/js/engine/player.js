@@ -147,7 +147,7 @@
       a = ATTRS[i];
       attrs[a] = clamp(Math.round(table[a][0] + rng.gauss(0, table[a][1])), P.creation.attrMin, P.creation.attrMax);
     }
-    // 2. potential
+    // 2. potential (the signature attribute's is the ceiling itself, D24 — set after the draws so the order holds)
     var pot = {};
     for (i = 0; i < ATTRS.length; i++) {
       a = ATTRS[i];
@@ -203,9 +203,26 @@
       tags: 0,
       gamesPlayed: 0
     };
+    uncapSignature(player);
     if (opts.stars !== undefined && opts.stars !== P.creation.starBase) Player.applyStars(player, opts.stars);
     return player;
   };
+
+  /**
+   * The attribute an archetype is named for (D24): CANNON → POW, SURGEON → ACC, ICEMAN → CLU, SOCCER → KO.
+   * Its potential is the 99 ceiling and never moves.
+   * @param {string} archetype @returns {string|null}
+   */
+  Player.signatureOf = function (archetype) {
+    var S = Tuning.progression.signature || {};
+    return S[archetype] || null;
+  };
+  /** Pin the signature attribute's potential at the ceiling. @param {object} player @returns {object} player */
+  function uncapSignature(player) {
+    var sig = Player.signatureOf(player.archetype);
+    if (sig && player.pot) player.pot[sig] = Tuning.progression.attrMax;
+    return player;
+  }
 
   /**
    * Apply (or re-apply) the star rating bonus relative to the player's current
@@ -225,6 +242,7 @@
       player.attrs[a] = clamp(player.attrs[a] + dAttr, P.attrMin, P.attrMax);
       player.pot[a] = clamp(player.pot[a] + dPot, P.attrMin, P.attrMax);
     }
+    uncapSignature(player);                          // the star bonus never moves the signature attribute (D24)
     player.stars = stars;
     player.fame = Tuning.soft.start.fameByStars[stars] !== undefined ? Tuning.soft.start.fameByStars[stars] : player.fame;
     return player;

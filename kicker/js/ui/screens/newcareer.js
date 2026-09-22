@@ -64,7 +64,12 @@
     var archCards = {};
     Object.keys(ARCH).forEach(function (id) {
       var bars = C.el('div', { class: 'stack', style: 'gap:2px' });
-      RTG.Schema.ATTRS.forEach(function (a) { bars.appendChild(C.bar({ label: a, value: ARCH[id][a][0], noValue: true })); });
+      var sig = RTG.Player.signatureOf ? RTG.Player.signatureOf(id) : null;
+      RTG.Schema.ATTRS.forEach(function (a) {
+        var bar = C.bar({ label: a, value: ARCH[id][a][0], noValue: true });
+        if (a === sig) bar.appendChild(C.chip('NO CAP', 'gold'));           // D24: trainable all the way to 99
+        bars.appendChild(bar);
+      });
       var card = C.el('button', { type: 'button', class: 'card card-selectable arch-card', role: 'radio', 'data-arch': id, onClick: function () { selectArch(id); } },
         C.el('div', { class: 'card-title', text: id === 'SOCCER' ? 'SOCCER CONVERT' : id }),
         bars,

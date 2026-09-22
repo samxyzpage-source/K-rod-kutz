@@ -97,7 +97,7 @@ test('create: archetype means, creation clamp 30–75, POT ~N(pot.mean, pot.sd) 
   for (const arch of ['CANNON', 'SURGEON', 'ICEMAN', 'SOCCER']) {
     const rng = RTG.RNG.create(100);
     const sums = { POW: 0, ACC: 0, CON: 0, CLU: 0, KO: 0 };
-    let potSum = 0, traits = 0, bigLeg = 0, ice = 0;
+    let potSum = 0, potN = 0, traits = 0, bigLeg = 0, ice = 0;
     const N = 3000;
     for (let i = 0; i < N; i++) {
       const p = Player.create(rng, { archetype: arch, name: 'A B' });
@@ -105,7 +105,8 @@ test('create: archetype means, creation clamp 30–75, POT ~N(pot.mean, pot.sd) 
         sums[a] += p.attrs[a];
         assert.ok(p.attrs[a] >= P.creation.attrMin && p.attrs[a] <= P.creation.attrMax);
         assert.ok(p.pot[a] >= P.pot.min && p.pot[a] <= P.pot.max);
-        potSum += p.pot[a];
+        if (a === Player.signatureOf(p.archetype)) continue;      // D24: pinned at 99, not part of the draw's distribution
+        potSum += p.pot[a]; potN++;
       }
       if (p.traits.length) { traits++; if (p.traits[0] === 'BIG_LEG') bigLeg++; if (p.traits[0] === 'ICE_VEINS') ice++; }
       assert.equal(p.stars, 3);
@@ -115,7 +116,7 @@ test('create: archetype means, creation clamp 30–75, POT ~N(pot.mean, pot.sd) 
       assert.equal(p.teamId, null);
     }
     for (const a of Player.ATTRS) assert.ok(Math.abs(sums[a] / N - P.archetypes[arch][a][0]) < 0.6, arch + ' ' + a + ' mean ' + sums[a] / N);
-    assert.ok(Math.abs(potSum / (N * 5) - P.pot.mean) < 0.7);
+    assert.ok(Math.abs(potSum / potN - P.pot.mean) < 0.7);
     assert.ok(Math.abs(traits / N - 0.25) < 0.03, arch + ' trait rate ' + traits / N);
     if (arch === 'CANNON') assert.ok(bigLeg / traits > 0.45, 'Cannon BIG_LEG share ' + bigLeg / traits);
     if (arch === 'ICEMAN') assert.ok(ice / traits > 0.45, 'Iceman ICE_VEINS share ' + ice / traits);
@@ -135,6 +136,31 @@ test('create: archetype means, creation clamp 30–75, POT ~N(pot.mean, pot.sd) 
   deq(p.look, { skin: 2, hair: 3, boot: 1 });
   assert.equal(p.hometown.city, 'Reno');
   assert.equal(p.id, 'pid');
+});
+
+test('D24: the signature attribute has no potential cap — it starts at 99, survives the star bonus and trains past a normal POT', () => {
+  const S = Tuning.progression.signature;
+  deq(S, { CANNON: 'POW', SURGEON: 'ACC', ICEMAN: 'CLU', SOCCER: 'KO' });
+  for (const arch of Object.keys(S)) {
+    const sig = S[arch];
+    assert.equal(Player.signatureOf(arch), sig);
+    for (const seed of [1, 2, 3]) {
+      const p = Player.create(RTG.RNG.create(seed), { archetype: arch, name: 'Sig Test' });
+      assert.equal(p.pot[sig], Tuning.progression.attrMax, arch + ' ' + sig + ' uncapped (seed ' + seed + ')');
+      const others = RTG.Schema.ATTRS.filter((a) => a !== sig);
+      assert.ok(others.some((a) => p.pot[a] < Tuning.progression.attrMax), 'the other attributes keep their caps');
+      Player.applyStars(p, 2);                                  // the walk-on penalty must not dent it
+      assert.equal(p.pot[sig], Tuning.progression.attrMax, 'walk-on bonus leaves the signature at 99');
+      Player.applyStars(p, 5);
+      assert.equal(p.pot[sig], Tuning.progression.attrMax);
+    }
+  }
+  // and spendXp climbs past where a normal cap would have stopped
+  const c = Player.create(RTG.RNG.create(9), { archetype: 'CANNON', name: 'Big Leg' });
+  c.attrs.POW = 97; c.xp = 1e6;
+  assert.equal(Player.spendXp(c, 'POW').ok, true); assert.equal(c.attrs.POW, 98);
+  assert.equal(Player.spendXp(c, 'POW').ok, true); assert.equal(c.attrs.POW, 99);
+  assert.equal(Player.spendXp(c, 'POW').ok, false, 'the 99 ceiling still holds');
 });
 
 test('applyStars: +4 attrs per star above 3, POT bonus, fame start', () => {

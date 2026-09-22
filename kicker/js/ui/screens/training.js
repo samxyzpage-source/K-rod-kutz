@@ -108,6 +108,7 @@
     function potHint(p, a) {
       var tier = p.agentTier | 0, pot = p.pot ? p.pot[a] : null;
       if (typeof pot !== 'number') return { pot: undefined, text: '' };
+      if (RTG.Player.signatureOf && RTG.Player.signatureOf(p.archetype) === a) return { pot: undefined, text: 'no cap', signature: true };   // D24
       if (tier >= 2) return { pot: pot, text: 'cap ' + pot };
       if (tier === 1) { var band = RTG.Tuning && RTG.Tuning.contracts && RTG.Tuning.contracts.agent ? RTG.Tuning.contracts.agent.potBandTier1 : 5; return { pot: pot, band: band, text: 'cap ' + Math.max(p.attrs[a], pot - band) + '–' + Math.min(99, pot + band) }; }
       return { pot: undefined, text: '' };

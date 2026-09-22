@@ -261,6 +261,8 @@
           SOCCER: { POW: [56, 4], ACC: [46, 4], CON: [46, 4], CLU: [46, 5], KO: [62, 4] }
         },
         creation: { attrMin: 30, attrMax: 75, starPer: 4, starBase: 3, defaultStars: 3 },
+        // D24: the attribute an archetype is named for has no potential cap — it can be trained to 99
+        signature: { CANNON: 'POW', SURGEON: 'ACC', ICEMAN: 'CLU', SOCCER: 'KO' },
         pot: { mean: 88, sd: 6, min: 62, max: 99, starBonus: { 2: -3, 3: 0, 4: 3, 5: 6 } },
         form: { decay: 0.7, sdBase: 3.5, sdConDiv: 130, max: 6, sharpAt: 3, watchAt: -3 },
         traits: {
