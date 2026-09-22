@@ -411,6 +411,93 @@
     };
   }
 
+  // ═══════════════════════════════ §2.14 punts ═══════════════════════════════
+
+  /**
+   * Fold a punt into one stat block: attempts, gross and net yards, hang, the ones that died inside the 20,
+   * touchbacks, blocks and the longest. A punter's line is net average and inside-20 rate, so both are kept
+   * as running sums rather than derived after the fact.
+   * @param {Object} s a KickerStats block @param {Object} ctx @param {Object} result PuntResult @returns {Object} s
+   */
+  Stats.applyPunt = function (s, ctx, result) {
+    ensureStats(s);
+    s.punts++;
+    if (result.blocked) { s.puntBlocked++; return s; }
+    var gross = num(result.gross, 0), net = num(result.net, 0);
+    s.puntYds += gross;
+    s.puntNet += net;
+    s.hangSum = Util.roundN(num(s.hangSum, 0) + num(result.hang, 0), 2);
+    if (gross > num(s.puntLong, 0)) s.puntLong = Math.round(gross);
+    if (result.touchback) s.tbs++;
+    else if (result.inside20) { s.in20++; if (num(ctx && ctx.pressure, 0) >= Tuning.kick.pressure.clutchThreshold) s.pinned++; }
+    if (result.fairCatch || result.outOfBounds) s.fairCatch++;
+    s.retYds += num(result.returnYds, 0);
+    return s;
+  };
+
+  /**
+   * Record one of the user's punts on the season, career and league blocks, and log it like a kick so the
+   * kick log, the splits and the game screen all see it.
+   * @param {CareerState} state @param {Object} ctx @param {Object} result @param {Object} [meta]
+   * @returns {Object|null} the KickLogRow
+   */
+  Stats.recordPunt = function (state, ctx, result, meta) {
+    meta = meta || {};
+    var st = state.stats;
+    var kind = leagueOfKick(state, ctx);
+    var targets = [st.season, st.career, st[lgKey(kind)]];
+    for (var i = 0; i < targets.length; i++) if (targets[i]) Stats.applyPunt(targets[i], ctx, result);
+
+    var seq = num(st.kickSeq, st.kicks.length) + 1;
+    st.kickSeq = seq;
+    var week = typeof meta.week === 'number' ? meta.week : state.week;
+    var year = typeof meta.year === 'number' ? meta.year : state.year;
+    var g = ctx.game || {};
+    var row = {
+      id: meta.id || ('p' + year + 'w' + week + 'n' + seq),
+      year: year, week: week, league: ctx.league || 'COLLEGE',
+      gameId: meta.gameId !== undefined ? meta.gameId : (state.game ? state.game.id : null),
+      teamId: meta.teamId !== undefined ? meta.teamId : (state.player.teamId || g.teamId || null),
+      oppId: meta.oppId !== undefined ? meta.oppId : (g.oppId || null),
+      type: 'PUNT', distance: Math.round(num(result.gross, 0)), hash: num(ctx.hash, 0),
+      wind: ctx.wind ? { speed: ctx.wind.speed, dir: ctx.wind.dir } : { speed: 0, dir: 0 },
+      weather: ctx.weather || 'clear', pressure: Util.roundN(num(ctx.pressure, 0), 3),
+      outcome: result.grade, made: !result.blocked && !result.touchback,
+      tags: (result.tags || []).slice(),
+      input: { power: num(result.power, 0), aim: num(result.aim, 0), quality: 0 },
+      auto: meta.auto !== undefined ? !!meta.auto : !!result.auto,
+      rngState: (typeof meta.rngState === 'number' ? meta.rngState : num(state.rngState, 0)) >>> 0,
+      q: num(g.q, 0), clock: num(g.clock, 0), scoreFor: num(g.scoreFor, 0), scoreAgainst: num(g.scoreAgainst, 0),
+      punt: {
+        losYard: num(ctx.losYard, 0), gross: num(result.gross, 0), net: num(result.net, 0), hang: num(result.hang, 0),
+        oppStart: num(result.oppStart, 0), inside20: !!result.inside20, touchback: !!result.touchback,
+        outOfBounds: !!result.outOfBounds, fairCatch: !!result.fairCatch, returnYds: num(result.returnYds, 0),
+        blocked: !!result.blocked
+      }
+    };
+    st.kicks.push(row);
+    enforceKickCap(st);
+    addRowToSplits(ensureSplits(st), row);
+    return row;
+  };
+
+  /** Net average, gross average, inside-20 rate and hang for a stat block (0 when nothing was punted). */
+  Stats.puntLine = function (s) {
+    var n = num(s && s.punts, 0), live = n - num(s && s.puntBlocked, 0);
+    return {
+      punts: n,
+      gross: live > 0 ? Util.round1(num(s.puntYds, 0) / live) : 0,
+      net: live > 0 ? Util.round1(num(s.puntNet, 0) / live) : 0,
+      hang: live > 0 ? Util.roundN(num(s.hangSum, 0) / live, 2) : 0,
+      in20: num(s && s.in20, 0),
+      in20Pct: live > 0 ? num(s.in20, 0) / live : 0,
+      tbs: num(s && s.tbs, 0),
+      long: num(s && s.puntLong, 0),
+      blocked: num(s && s.puntBlocked, 0),
+      retYds: num(s && s.retYds, 0)
+    };
+  };
+
   /**
    * Record an AI kicker's kick into `season.kickerStats[teamId]` (created on demand).
    * @param {SeasonState} season @param {string} teamId @param {KickContext} ctx @param {KickResult} result

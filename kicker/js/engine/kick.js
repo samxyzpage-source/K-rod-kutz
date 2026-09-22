@@ -1051,7 +1051,7 @@
     situation = situation || {};
     var T = K(), DF = T.defaults;
     rng = rng || situation.rng || null;
-    var type = situation.type === 'PAT' || situation.type === 'KO' ? situation.type : 'FG';
+    var type = situation.type === 'PAT' || situation.type === 'KO' || situation.type === 'PUNT' ? situation.type : 'FG';
     var isUser = situation.isUser !== undefined ? !!situation.isUser : !(situation.kicker || situation.attrs);
     var league = situation.league || (gs && gs.league) || (state && state.player && state.player.league)
       || (state && state.season && state.season.league) || 'COLLEGE';
@@ -1060,6 +1060,7 @@
     var distance;
     if (type === 'PAT') distance = Kick.patDistance(league);
     else if (type === 'KO') distance = T.kickoff.kickFromYard;
+    else if (type === 'PUNT') distance = num(situation.toGoal, FIELD_YARDS - num(situation.losYard, 30));   // §2.14: the room in front of the punter
     else distance = num(situation.distance, typeof situation.ytg === 'number' ? Kick.distanceFor(situation.ytg) : Kick.patDistance(league));
     distance = clamp(Math.round(distance), 1, Tuning.progression.attrMax);
 

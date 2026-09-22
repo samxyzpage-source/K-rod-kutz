@@ -434,15 +434,18 @@ test('scripted rng: two-point rule after a TD, kneel, punt field position, stall
   const eB = Sim.step(b.gs, b.state, gfx.scriptedRng({ chance: true }));
   assert.equal(eB.type, 'END_GAME'); assert.equal(b.gs.done, true); assert.equal(b.gs.clock, 0);
   assert.ok(b.gs.driveLog.some((r) => r.result === 'KNEEL'));
-  // (c) punt: opponent starts at own 30 (gauss → mean)
+  // (c) punt: a real punt from the line of scrimmage (§2.14), the other side takes over where it died
   const c = gfx.q4TrailingBy2(RTG, { seed: 4 });
   c.gs.q = 2; c.gs.clock = 600; c.gs.half = 1;
   const eC = Sim.step(c.gs, c.state, gfx.scriptedRng({ weighted: 'PUNT', chance: false }));
   assert.equal(eC.type, 'DRIVE'); assert.equal(eC.result, 'PUNT');
   assert.equal(c.gs.possession, otherSide(c.gs.userSide));
-  assert.equal(c.gs.ball.ytg, 100 - T.drive.puntStart.mean);
+  assert.ok(eC.punt && eC.punt.type === 'PUNT', 'the punt engine resolved it');
+  assert.equal(eC.ctx.losYard, T.drive.puntLos.mean, 'from the scripted line of scrimmage');
+  assert.equal(c.gs.ball.ytg, 100 - Math.round(eC.punt.oppStart), 'they start where the punt left them');
+  assert.ok(eC.punt.gross > 20 && eC.punt.gross < 70, 'a real punt (' + eC.punt.gross + ' yd)');
   assert.equal(c.gs.stats[c.gs.userSide].punts, 1);
-  assert.equal(c.gs.clock, 600 - Math.round(T.drive.time.PUNT.mean), 'drive time = mean (gauss → mean)');
+  assert.ok(c.gs.clock < 600, 'the punt took time off the clock');
   // (d) stall by the opponent → coach decision → AI FG (gauss 0 error, no block/shank → GOOD)
   const d = gfx.q4TrailingBy2(RTG, { seed: 5 });
   d.gs.q = 3; d.gs.clock = 700; d.gs.half = 2; d.gs.possession = otherSide(d.gs.userSide); d.gs.ball = { ytg: 60, down: 1, toGo: 10 };
