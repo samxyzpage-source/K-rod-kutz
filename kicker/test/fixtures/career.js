@@ -9,6 +9,8 @@
  *   const b = kfx.campBattle(RTG);                     // COLLEGE.PRE with a pending CAMP session vs a strong rival
  *   const o = kfx.collegeOff(RTG, { seasons: 3 });     // COLLEGE.OFF, season finished, chain not started
  *   const n = kfx.nflOff(RTG);                         // NFL.OFF (final rookie year), season finished, chain not started
+ *   const p = kfx.newPunter(RTG, { seed: 7 });         // a brand-new punter career (position 'P', §2.14) at HS.SEASON
+ *   const q = kfx.autoPunter(RTG, { untilStage: 'NFL' });  // that career on auto to a stage: {state, rng, seasons}
  *   kfx.fillSession(session, [true, false, ...]);      // deterministic results for a pending KickSession
  *
  * Every builder returns fresh objects and is deterministic for a seed.
@@ -26,7 +28,39 @@ var NOW = 1757000000000;
 function newCareer(RTG, opts) {
   opts = opts || {};
   var seed = opts.seed === undefined ? DEFAULT_SEED : opts.seed;
-  var r = RTG.Engine.newCareer({ name: opts.name || 'Sam Booter', archetype: opts.archetype || 'SURGEON', difficulty: opts.difficulty || 'pro', seed: seed }, NOW);
+  var o = { name: opts.name || 'Sam Booter', archetype: opts.archetype || 'SURGEON', difficulty: opts.difficulty || 'pro', seed: seed };
+  if (opts.position) o.position = opts.position;                 // 'K' (default) or 'P' (§2.14)
+  var r = RTG.Engine.newCareer(o, NOW);
+  return r;
+}
+
+/** {state, rng} of a brand-new punter career: newCareer with position 'P' (§2.14). */
+function newPunter(RTG, opts) {
+  var o = {};
+  for (var k in (opts || {})) if (Object.prototype.hasOwnProperty.call(opts, k)) o[k] = opts[k];
+  o.position = 'P';
+  if (!o.name) o.name = 'Pat Punter';
+  return newCareer(RTG, o);
+}
+
+/**
+ * A punter career played on auto (Engine.autoPlayCareer) to opts.untilStage (default RETIRED), validating the
+ * state after every season. `seasons` collects the SeasonLines in order.
+ * @returns {{state, rng, seasons}}
+ */
+function autoPunter(RTG, opts) {
+  opts = opts || {};
+  var r = newPunter(RTG, opts);
+  var seasons = [];
+  RTG.Engine.autoPlayCareer(r.state, r.rng, {
+    untilStage: opts.untilStage || 'RETIRED',
+    onSeason: function (state, line) {
+      seasons.push(line);
+      var v = RTG.Schema.validate(state);
+      if (!v.ok) throw new Error('autoPunter: invalid state after season ' + line.year + ': ' + v.errors.slice(0, 4).join('; '));
+    }
+  });
+  r.seasons = seasons;
   return r;
 }
 
@@ -211,6 +245,8 @@ module.exports = {
   DEFAULT_SEED: DEFAULT_SEED,
   NOW: NOW,
   newCareer: newCareer,
+  newPunter: newPunter,
+  autoPunter: autoPunter,
   playSession: playSession,
   fillSession: fillSession,
   hsGame: hsGame,
