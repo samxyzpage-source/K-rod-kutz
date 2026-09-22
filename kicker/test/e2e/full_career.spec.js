@@ -499,8 +499,8 @@ H.matrix(({ mode, vp }) => {
       }
       await shotIf(page, shots, 'full_draft_' + vp);
       await checkpoint(page, app, 'drafted');
-      // rookie contract / camp invites / tryout
-      for (let g = 0; g < 12; g++) {
+      // rookie contract / camp invites / tryout — an undrafted path runs through more cards than a drafted one
+      for (let g = 0; g < 30; g++) {
         b = await brief(page);
         if (b.stage === 'NFL' && !b.pending) break;
         if (b.pending && b.pending.kind === 'DECISION') { const before = await sig(page); await clickDecision(page, b.pending.decision, {}); await waitChange(page, before, 20000); continue; }
@@ -522,12 +522,16 @@ H.matrix(({ mode, vp }) => {
       }
       b = await brief(page);
       assert.equal(b.stage, 'NFL', 'in the NFL (' + b.stage + '.' + b.phase + ')');
+      assert.equal(b.pending, null, 'nothing left pending on the way into the NFL ('
+        + (b.pending ? b.pending.kind + ':' + (b.pending.decision || b.pending.session || '') : '') + ')');
       assert.ok(b.teamId, 'has a pro team');
       await checkpoint(page, app, 'rookie');
 
       // ── NFL preseason: camp battle when offered, START SEASON, one game with the keyboard meter
       if (b.pending && b.pending.kind === 'KICKS') { await H.waitForScreen(page, 'campbattle', 15000); await forceSession(page, 'NFL camp battle'); }
       await settleEvents(page);
+      // the draft / contract card can still be the live screen: the last dispatch synced while it was pending
+      await page.evaluate(() => RTG.UI.Router.sync({ force: true }));
       await H.waitForScreen(page, 'hub', 15000);
       await shotIf(page, shots, 'full_hub_nfl_' + vp);
       if (await page.locator('.scr-hub [data-action="start-season"]').count()) {

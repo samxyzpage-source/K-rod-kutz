@@ -49,7 +49,9 @@ test('boot http phone: fonts blocked → still renders and a kick can be played'
     assert.match(font, /Press Start 2P/, 'font stack declared (fallback used when blocked)');
     const st = await H.debug(page, 'newCareer', { seed: 4242, name: 'Font Fallback' });
     assert.equal(st.stage, 'HS');
-    assert.equal(st.pending.kind, 'KICKS');
+    assert.equal(st.phase, 'SEASON');
+    await page.evaluate(() => { RTG.UI.store.dispatch('hsStartGame'); RTG.UI.Router.sync(); });
+    assert.equal((await H.debug(page, 'getState')).pending.kind, 'KICKS');
     const res = await H.debug(page, 'forceKick', { outcome: 'GOOD' });
     assert.equal(res.made, true);
     assert.equal(res.outcome, 'GOOD');
