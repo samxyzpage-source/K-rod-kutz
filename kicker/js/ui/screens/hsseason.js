@@ -25,6 +25,7 @@
     function hs() { var s = store.state; return s && RTG.HS ? RTG.HS.current(s) : null; }
 
     function scheduleRows(h) {
+      var punter = h.position === 'P';
       return h.games.map(function (g, i) {
         var next = i === h.idx;
         var row = c.el('div', {
@@ -38,9 +39,17 @@
           g.playoff ? c.chip('PLAYOFFS', 'gold') : null));
         if (g.played) {
           row.appendChild(c.el('span', { class: 'hs-gres num', text: (g.won ? 'W ' : 'L ') + g.us + '–' + g.them + (g.ot ? ' OT' : '') }));
-          var line = g.fgm + '/' + g.fga + ' FG';
-          if (g.xpa) line += ' · ' + g.xpm + '/' + g.xpa + ' XP';
-          if (g.gw) line += ' · GW';
+          var line;
+          if (punter) {
+            line = g.punts + ' punts · ' + g.net + ' net';
+            if (g.in20) line += ' · ' + g.in20 + ' inside the 20';
+            if (g.tbs) line += ' · ' + g.tbs + ' TB';
+            if (g.gw) line += ' · pinned it';
+          } else {
+            line = g.fgm + '/' + g.fga + ' FG';
+            if (g.xpa) line += ' · ' + g.xpm + '/' + g.xpa + ' XP';
+            if (g.gw) line += ' · GW';
+          }
           row.appendChild(c.el('span', { class: 'hs-gline small txt-grey', text: line }));
         } else {
           row.appendChild(c.el('span', { class: 'hs-gres num txt-grey', text: next ? 'NEXT' : '—' }));
@@ -77,6 +86,11 @@
       }
       var p = store.state.player;
       var t = h.totals, done = h.idx >= h.games.length;
+      var punter = h.position === 'P';
+      var livePunts = Math.max(0, (t.punts || 0) - (t.puntBlocked || 0));
+      function cell(value, label) {
+        return c.el('span', { class: 'hs-tot-cell' }, c.el('b', { class: 'num', text: String(value) }), c.el('span', { class: 'small txt-grey', text: label }));
+      }
       var head = c.el('header', { class: 'screen-head' });
       head.appendChild(c.el('h1', { class: 'screen-title', text: h.school.full.toUpperCase() }));
       head.appendChild(c.el('div', { class: 'screen-head-right' },
@@ -88,12 +102,19 @@
         body: [
           c.el('p', { class: 'small txt-grey', text: done
             ? 'The tape is in. ' + p.name.full + ' finished ' + t.wins + '–' + t.losses + '.'
-            : 'Five games left of ' + p.name.full + '’s senior year. Every kick is on tape — colleges are watching.' }),
-          c.el('div', { class: 'hs-tot row' },
-            c.el('span', { class: 'hs-tot-cell' }, c.el('b', { class: 'num', text: t.fgm + '/' + t.fga }), c.el('span', { class: 'small txt-grey', text: 'FIELD GOALS' })),
-            c.el('span', { class: 'hs-tot-cell' }, c.el('b', { class: 'num', text: t.xpm + '/' + t.xpa }), c.el('span', { class: 'small txt-grey', text: 'EXTRA POINTS' })),
-            c.el('span', { class: 'hs-tot-cell' }, c.el('b', { class: 'num', text: String(t.long) }), c.el('span', { class: 'small txt-grey', text: '45+ MADE' })),
-            c.el('span', { class: 'hs-tot-cell' }, c.el('b', { class: 'num', text: t.gw + '/' + t.gwa }), c.el('span', { class: 'small txt-grey', text: 'GAME-WINNERS' })))
+            : 'Five games left of ' + p.name.full + '’s senior year. Every '
+              + (punter ? 'punt' : 'kick') + ' is on tape — colleges are watching.' }),
+          c.el('div', { class: 'hs-tot row' }, punter ? [
+            cell(t.punts, 'PUNTS'),
+            cell(livePunts ? (t.net / livePunts).toFixed(1) : '0.0', 'NET AVERAGE'),
+            cell(t.in20, 'INSIDE THE 20'),
+            cell(t.gw + '/' + t.gwa, 'PINNED IT')
+          ] : [
+            cell(t.fgm + '/' + t.fga, 'FIELD GOALS'),
+            cell(t.xpm + '/' + t.xpa, 'EXTRA POINTS'),
+            cell(t.long, '45+ MADE'),
+            cell(t.gw + '/' + t.gwa, 'GAME-WINNERS')
+          ])
         ],
         footer: done ? null : [
           c.button({ label: 'PLAY WEEK ' + h.games[h.idx].week, kind: 'primary', icon: 'ball', action: 'play-hs-game', onClick: function () {

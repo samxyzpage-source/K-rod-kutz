@@ -2,6 +2,7 @@
  * Road to Glory: Kicker — screen 'kick' (SPEC §4.5 kick row, §4.6): the full-screen kick scene.
  *
  * Game mode (state.game.pending, params.mode 'game'): score / clock chips above the KickView HUD strip
+ * (a pending USER_PUNT runs the same scene on RTG.Punt: §2.14).
  * (`47 YDS · R HASH · WIND ← 12 · RAIN · ICED!`); on release dispatch('applyUserKick', input) → the returned
  * KickResult drives FLIGHT → RESULT; after the result beat (+ a short read-the-feedback pause, tap to skip)
  * → Router.sync() (→ 'game'). A pending USER_KICKOFF shows the one-tap timing bar (settings.playKickoffs)
@@ -91,8 +92,9 @@
       return { el: el, destroy: function () { destroyed = true; timers.forEach(root.clearTimeout); if (koBar) koBar.destroy(); } };
     }
 
-    // ── field goal / PAT ──
-    var model = RTG.Kick.model(ctx, null);
+    // ── punt (§2.14) ──
+    var isPunt = pend.type === 'USER_PUNT';
+    var model = isPunt ? RTG.Punt.model(ctx, null) : RTG.Kick.model(ctx, null);
     var continueBtn = null;
     function afterDone() {
       var wrap = c.el('div', { class: 'kick-continue' });
@@ -105,14 +107,15 @@
     view = KV().mount(stage, {
       ctx: ctx, model: model, settings: store.settings, store: store, mode: 'game',
       onInput: function (input) {
-        try { return store.dispatch('applyUserKick', input); }
-        catch (e) { if (root.console) root.console.error('applyUserKick failed', e); return null; }
+        var fn = isPunt ? 'applyUserPunt' : 'applyUserKick';
+        try { return store.dispatch(fn, input); }
+        catch (e) { if (root.console) root.console.error(fn + ' failed', e); return null; }
       },
       onResult: function () { if (score.refresh) score.refresh(); },
       onDone: afterDone
     });
     // auto resolution (auto-PAT rule / RTG.debug.autoKick)
-    if (KV().shouldAutoPat(ctx, store.settings, store)) {
+    if (!isPunt && KV().shouldAutoPat(ctx, store.settings, store)) {
       setTimer(function () {
         if (!store.state.game || !store.state.game.pending) { leave(); return; }
         var r = null;

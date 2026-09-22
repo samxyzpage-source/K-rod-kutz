@@ -196,6 +196,15 @@
   // ─────────────────────────── kicks ───────────────────────────
 
   var OUTCOMES = ['GOOD', 'WIDE_L', 'WIDE_R', 'SHORT', 'BLOCKED', 'DOINK_IN', 'DOINK_OUT', 'XBAR_IN', 'XBAR_OUT'];
+  /** A forced outcome asked of a punt: a Punt.GRADES name, or the nearest kicking word (§2.14). */
+  function puntGradeOf(name) {
+    var G = RTG.Punt ? RTG.Punt.GRADES : [];
+    if (G.indexOf(name) >= 0) return name;
+    if (name === 'GOOD' || name === 'DOINK_IN' || name === 'XBAR_IN') return 'GOOD';
+    if (name === 'BLOCKED') return 'BLOCKED';
+    if (name === 'SHORT') return 'SHANK';
+    return 'POOR';
+  }
 
   function nextSessionIdx(sess) {
     if (sess.kind && sess.kind.indexOf('COMBINE') === 0 && RTG.Draft && isFn(RTG.Draft.combineNextIdx)) return RTG.Draft.combineNextIdx(sess);
@@ -217,12 +226,18 @@
   D.forceKick = function (arg) {
     arg = arg || { outcome: 'GOOD' };
     var s = store(), st = state(), rng = s.rng, K = RTG.Kick;
-    var forced = arg.outcome ? { outcome: OUTCOMES.indexOf(arg.outcome) >= 0 ? arg.outcome : 'GOOD', sub: arg.sub, side: arg.side, blockReturnTd: arg.blockReturnTd } : null;
+    var known = OUTCOMES.indexOf(arg.outcome) >= 0 || (RTG.Punt && RTG.Punt.GRADES.indexOf(arg.outcome) >= 0);
+    var forced = arg.outcome ? { outcome: known ? arg.outcome : 'GOOD', sub: arg.sub, side: arg.side, blockReturnTd: arg.blockReturnTd } : null;
     var triple = forced ? null : { power: arg.power, aim: arg.aim, quality: arg.quality, holdMs: arg.holdMs };
     // 1. in-game pending
     if (st.game && st.game.pending) {
       var gp = st.game.pending;
       if (gp.type === 'USER_KICKOFF') return dispatch('applyUserKickoff', arg.timing !== undefined ? { timing: arg.timing } : null);
+      if (gp.type === 'USER_PUNT') {                                                // §2.14
+        var pr = RTG.Engine.applyUserPunt(st, rng, triple, forced ? { forced: puntGradeOf(arg.outcome) } : {});
+        s.touch('applyUserPunt', pr, { forced: !!forced, noSync: true });
+        return clone(pr);
+      }
       if (triple) return dispatch('applyUserKick', triple);
       var res = RTG.Engine.applyUserKick(st, rng, null, { forced: forced });   // 0 rng draws; the engine does the bookkeeping
       s.touch('applyUserKick', res, { forced: true, noSync: true });

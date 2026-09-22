@@ -209,6 +209,23 @@
   };
 
   /**
+   * The five attributes carry different names for a punter (§2.14): the leg still throws the ball, but what it
+   * is asked for is distance and hang rather than range and a straight strike.
+   * @param {'K'|'P'} position @returns {Object<string,string>} short labels by attribute code
+   */
+  Player.attrLabels = function (position) {
+    return position === 'P'
+      ? { POW: 'LEG', ACC: 'PLACE', CON: 'OPER', CLU: 'CLU', KO: 'HANG' }
+      : { POW: 'POW', ACC: 'ACC', CON: 'CON', CLU: 'CLU', KO: 'KO' };
+  };
+  /** The long name of an attribute for this position, for tooltips and the training screen. */
+  Player.attrNames = function (position) {
+    return position === 'P'
+      ? { POW: 'Leg strength', ACC: 'Placement', CON: 'Operation', CLU: 'Composure', KO: 'Hang time' }
+      : { POW: 'Power', ACC: 'Accuracy', CON: 'Consistency', CLU: 'Clutch', KO: 'Kickoff leg' };
+  };
+
+  /**
    * Apply (or re-apply) the star rating bonus relative to the player's current
    * stars: attrs +4·Δstars, POT bonus per §2.1.1, fame start per §2.2.
    * Intended to be called once at the end of the senior season (HS.finishSeason).
