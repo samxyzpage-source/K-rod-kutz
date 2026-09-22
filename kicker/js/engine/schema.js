@@ -314,7 +314,7 @@
       playoffs: null, bowls: null, goals: [],
       trainingDone: false, focus: null,
       userGameId: null, weekGameDone: false,
-      kickerStats: {}
+      kickerStats: {}, punterStats: {}
     };
   };
 

@@ -537,6 +537,8 @@
       // ───────────────────────────── §2.8 AWARDS ─────────────────────────────
       awards: {
         kickerScore: { fgm: 3, fgPct: 40, longDiv: 10, clutch: 4, fifty: 2, gw: 6, minFga: 12 },
+        // §2.14: net average carries a punting season; inside-20 and a booming gross sit behind it
+        punterScore: { net: 2.6, gross: 0.8, in20Rate: 30, in20: 0.8, longDiv: 12, tb: 3, blocked: 8, minPunts: 20 },
         weeklyMinFgm: 2,
         stpoy: { ratio: 1.15, minGw: 3 },
         comeback: { minFgPct: 0.85, injuryWeeks: 6 },
@@ -546,6 +548,10 @@
           ALL_CONF_1: { xp: 80, fame: 40 }, FRESHMAN_LEG: { xp: 100, fame: 60 }, IRON_LEG_COLLEGE: { xp: 60, fame: 40 },
           CLUTCH_KICK_COLLEGE: { xp: 100, fame: 80 }, CCG_MVP: { xp: 120, fame: 120 }, NATIONAL_MVP: { xp: 200, fame: 250 },
           ST_PLAYER_OF_WEEK: { xp: 15, fame: 8 },
+          GOLDEN_FOOT: { xp: 200, fame: 130 }, ALL_AMERICAN_P1: { xp: 150, fame: 90 }, ALL_AMERICAN_P2: { xp: 80, fame: 45 },
+          ALL_CONF_P1: { xp: 80, fame: 35 }, FRESHMAN_FOOT: { xp: 100, fame: 55 }, PIN_KING_COLLEGE: { xp: 60, fame: 40 },
+          GOLDEN_LEG_P: { xp: 200, fame: 130 }, ALL_LEAGUE_P1: { xp: 180, fame: 110 }, ALL_LEAGUE_P2: { xp: 100, fame: 55 },
+          PIN_KING_NFL: { xp: 60, fame: 40 },
           GOLDEN_LEG: { xp: 200, fame: 150 }, ALL_LEAGUE_1: { xp: 180, fame: 120 }, ALL_LEAGUE_2: { xp: 100, fame: 60 },
           PRO_CLASSIC: { xp: 60, fame: 40 }, STPOY: { xp: 220, fame: 150 }, IRON_LEG_NFL: { xp: 60, fame: 40 },
           CLUTCH_KICK_NFL: { xp: 100, fame: 80 }, CHAMPIONSHIP_MVP: { xp: 250, fame: 300 }, COMEBACK_LEG: { xp: 80, fame: 60 }
@@ -569,6 +575,12 @@
         weights: { fgm: 0.8, fifty: 2, ptsPer100: 2, gw: 12, allLeague1: 40, allLeague2: 15, stpoy: 60,
                    championships: 30, championshipKicks: 60, seasonsAsStarter: 8, pctBonus: 40, recordsHeld: 20 },
         pctBonusMin: 0.88, pctBonusMinFga: 300,
+        // §2.14: a punter's Hall case is net yards, the ones pinned and the seasons they owned the job
+        // volume is the floor, not the case: the teams, the titles and a net average that stood up are what
+        // separate a Hall punter from a long career
+        punter: { weights: { punts: 0.10, in20: 0.30, netBonus: 250, longPunt: 3, allLeague1: 80, allLeague2: 30,
+                             stpoy: 120, championships: 40, seasonsAsStarter: 16, recordsHeld: 45 },
+                  netBonusMin: 44, netBonusMinPunts: 400 },
         walkonMult: 1.15, udfaMult: 1.10,
         verdicts: { firstBallot: 1850, inducted: 1550, finalist: 1250 },   // SPEC BUMP: rescaled to the restored XP economy (was 750 / 550 / 400)
         inductionYears: [1, 5],
@@ -582,8 +594,10 @@
       // ───────────────────────────── §2.9 RECORDS (base values live in data/records.js) ───────────
       records: {
         keys: ['longFG', 'seasonFGM', 'seasonPts', 'seasonFGpct', 'season50plus', 'careerFGM', 'careerPts',
-               'careerFGpct', 'consecutiveFGM', 'careerGW', 'careerSeasons'],
-        minFgaSeasonPct: 20, minFgaCareerPct: 100
+               'careerFGpct', 'consecutiveFGM', 'careerGW', 'careerSeasons',
+               'longPunt', 'seasonNet', 'seasonIn20', 'careerPunts', 'careerNet', 'careerIn20', 'punterSeasons'],
+        minFgaSeasonPct: 20, minFgaCareerPct: 100,
+        minPuntsSeasonNet: 30, minPuntsCareerNet: 150          // §2.14
       },
 
       // ───────────────────────────── §3.5.12 STATS (E3, engine/stats.js) ─────────────────────────────

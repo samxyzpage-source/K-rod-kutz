@@ -82,6 +82,30 @@
     return Util.roundN(v, 2);
   };
 
+  /**
+   * §2.14: what a punting season is worth. Net average carries it — the yards the other team has to go are the
+   * whole job — with the ones downed inside the 20 and a booming gross behind it, and touchbacks and blocks
+   * taken back off. Null when there are too few punts to judge.
+   * @param {Object} s a KickerStats block @param {boolean} [ignoreMin] @returns {number|null}
+   */
+  Awards.punterScore = function (s, ignoreMin) {
+    if (!s) return null;
+    var P = TA().punterScore;
+    var live = num(s.punts, 0) - num(s.puntBlocked, 0);
+    if (!ignoreMin && live < P.minPunts) return null;
+    if (live <= 0) return ignoreMin ? 0 : null;
+    var net = num(s.puntNet, 0) / live, gross = num(s.puntYds, 0) / live;
+    var v = net * P.net + gross * P.gross + (num(s.in20, 0) / live) * P.in20Rate
+      + num(s.in20, 0) * P.in20 + num(s.puntLong, 0) / P.longDiv
+      - num(s.tbs, 0) * P.tb - num(s.puntBlocked, 0) * P.blocked;
+    return Util.roundN(v, 2);
+  };
+
+  /** The position this career plays (§2.14). */
+  function positionOf(state) { return state && state.player && state.player.position === 'P' ? 'P' : 'K'; }
+  /** The score a candidate is ranked on, for the position being judged. */
+  function scoreFor(pos, s, ignoreMin) { return pos === 'P' ? Awards.punterScore(s, ignoreMin) : Awards.kickerScore(s, ignoreMin); }
+
   // ═══════════════════════════════ candidates & ranking ═══════════════════════════════
 
   /**
@@ -93,20 +117,22 @@
    */
   function candidates(state) {
     var season = state.season, p = state.player;
+    var pos = positionOf(state);
     var league = leagueObj(state, season.league);
     var list = [];
     var userIn = p.league === season.league && !!p.teamId && p.role !== 'NONE';
-    var ks = season.kickerStats || {};
+    var ks = (pos === 'P' ? season.punterStats : season.kickerStats) || {};
     for (var teamId in ks) {
       if (!Object.prototype.hasOwnProperty.call(ks, teamId)) continue;
       if (userIn && teamId === p.teamId) continue;
       var team = teamIn(league, teamId);
       if (!team) continue;
-      list.push({ teamId: teamId, conf: team.conf || '', name: team.kicker ? team.kicker.name : (team.abbr + ' K'), isUser: false, stats: ks[teamId], score: Awards.kickerScore(ks[teamId]) });
+      var who = pos === 'P' ? (team.abbr + ' P') : (team.kicker ? team.kicker.name : (team.abbr + ' K'));
+      list.push({ teamId: teamId, conf: team.conf || '', name: who, isUser: false, stats: ks[teamId], score: scoreFor(pos, ks[teamId]) });
     }
     if (userIn) {
       var ut = teamIn(league, p.teamId);
-      list.push({ teamId: p.teamId, conf: ut ? ut.conf || '' : '', name: p.name.full, isUser: true, stats: state.stats.season, score: Awards.kickerScore(state.stats.season) });
+      list.push({ teamId: p.teamId, conf: ut ? ut.conf || '' : '', name: p.name.full, isUser: true, stats: state.stats.season, score: scoreFor(pos, state.stats.season) });
     }
     return list;
   }
@@ -120,7 +146,8 @@
     for (var i = 0; i < cands.length; i++) if (cands[i].score !== null) el.push(cands[i]);
     var tie = false;
     for (var a = 0; a < el.length && !tie; a++) for (var b = a + 1; b < el.length; b++) {
-      if (el[a].score === el[b].score && el[a].stats.fgm === el[b].stats.fgm && fgPct(el[a].stats) === fgPct(el[b].stats)) { tie = true; break; }
+      if (el[a].score === el[b].score && num(el[a].stats.fgm, 0) === num(el[b].stats.fgm, 0)
+        && fgPct(el[a].stats) === fgPct(el[b].stats) && num(el[a].stats.puntNet, 0) === num(el[b].stats.puntNet, 0)) { tie = true; break; }
     }
     var salt = tie && rng ? String(rng.next()) : '0';         // 1 draw, only on an exact tie
     el.sort(function (x, y) {
@@ -228,6 +255,34 @@
    * @param {CareerState} state @param {RNG} rng
    * @returns {Object[]} awards for the awards screen
    */
+  /** The punter's slate (§2.14): the same shape as the kicker's, ranked on net yards and the ones pinned. */
+  function punterAwards(state, rng, kind, cands, ranked, conf, out) {
+    var i, c;
+    var best = bestBy(ranked, cands, 'in20');
+    if (kind === 'COLLEGE') {
+      if (ranked[0]) { out.push(grant(state, 'GOLDEN_FOOT', ranked[0])); out.push(grant(state, 'ALL_AMERICAN_P1', ranked[0])); }
+      for (i = 1; i <= 2 && i < ranked.length; i++) out.push(grant(state, 'ALL_AMERICAN_P2', ranked[i], { rank: i + 1 }));
+      for (i = 0; i < conf.order.length; i++) { c = conf.order[i]; out.push(grant(state, 'ALL_CONF_P1', conf.groups[c][0], { conf: c })); }
+      var user = null;
+      for (i = 0; i < ranked.length; i++) if (ranked[i].isUser) user = ranked[i];
+      if (user && isFreshman(state)) out.push(grant(state, 'FRESHMAN_FOOT', user));
+      if (best) out.push(grant(state, 'PIN_KING_COLLEGE', best, { value: best.stats.in20 }));
+      return out;
+    }
+    if (ranked[0]) { out.push(grant(state, 'GOLDEN_LEG_P', ranked[0])); out.push(grant(state, 'ALL_LEAGUE_P1', ranked[0])); }
+    if (ranked[1]) out.push(grant(state, 'ALL_LEAGUE_P2', ranked[1]));
+    var perConf = TA().proClassicPerConf;
+    for (i = 0; i < conf.order.length; i++) {
+      c = conf.order[i];
+      for (var j = 0; j < perConf && j < conf.groups[c].length; j++) out.push(grant(state, 'PRO_CLASSIC', conf.groups[c][j], { conf: c }));
+    }
+    if (best) out.push(grant(state, 'PIN_KING_NFL', best, { value: best.stats.in20 }));
+    // §2.8: the special-teams award is open to punters too, on the same dominance rule
+    var ST = TA().stpoy;
+    if (ranked[0] && ranked[0].isUser && (!ranked[1] || ranked[0].score >= ST.ratio * ranked[1].score)) out.push(grant(state, 'STPOY', ranked[0]));
+    return out;
+  }
+
   Awards.compute = function (state, rng) {
     var season = state.season;
     if (!season || season.awardsComputed) return [];
@@ -238,7 +293,10 @@
     var conf = groupByConf(ranked);
     var i, c, hits;
 
-    if (kind === 'COLLEGE') {
+    var pos = positionOf(state);
+    if (pos === 'P') {
+      punterAwards(state, rng, kind, cands, ranked, conf, out);
+    } else if (kind === 'COLLEGE') {
       if (ranked[0]) { out.push(grant(state, 'GOLDEN_BOOT', ranked[0])); out.push(grant(state, 'ALL_AMERICAN_1', ranked[0])); }
       for (i = 1; i <= 2 && i < ranked.length; i++) out.push(grant(state, 'ALL_AMERICAN_2', ranked[i], { rank: i + 1 }));
       for (i = 0; i < conf.order.length; i++) { c = conf.order[i]; out.push(grant(state, 'ALL_CONF_1', conf.groups[c][0], { conf: c })); }
@@ -433,6 +491,30 @@
    * @param {CareerState} state
    * @returns {{score:number, verdict:'FIRST_BALLOT'|'INDUCTED'|'FINALIST'|'NOT_ON_BALLOT', tier:string, breakdown:Array<{key:string, label:string, count:number, weight:number, points:number}>, base:number, multiplier:number, inductionYear:number|null}}
    */
+  /**
+   * §2.14: the punter's Hall case. Nobody counts a punter's points, so the ledger is the yards the other team
+   * had to go: punts, the ones downed inside the 20, a career net average that stood up, and the seasons they
+   * owned the job — plus the All-League teams and the titles, which mean the same for everyone.
+   */
+  function hofRowsPunter(state, st, titles, starter, recs) {
+    var P = Tuning.hof.punter, W = P.weights;
+    var live = Math.max(0, num(st.punts, 0) - num(st.puntBlocked, 0));
+    var net = live ? num(st.puntNet, 0) / live : 0;
+    var netOk = live >= P.netBonusMinPunts && net >= P.netBonusMin ? 1 : 0;
+    return [
+      ['punts', 'Pro punts', num(st.punts, 0), W.punts],
+      ['in20', 'Downed inside the 20', num(st.in20, 0), W.in20],
+      ['longPunt', 'Longest punt / 10', num(st.puntLong, 0) / 10, W.longPunt],
+      ['allLeague1', 'All-League 1st', countAwards(state, 'ALL_LEAGUE_P1'), W.allLeague1],
+      ['allLeague2', 'All-League 2nd', countAwards(state, 'ALL_LEAGUE_P2'), W.allLeague2],
+      ['stpoy', 'ST Player of the Year', countAwards(state, 'STPOY'), W.stpoy],
+      ['championships', 'Championships', titles, W.championships],
+      ['seasonsAsStarter', 'Seasons as starter', starter, W.seasonsAsStarter],
+      ['netBonus', 'Career ' + P.netBonusMin + '+ net (' + P.netBonusMinPunts + ' punts)', netOk, W.netBonus],
+      ['recordsHeld', 'Records held', recs, W.recordsHeld]
+    ];
+  }
+
   Awards.hofScore = function (state) {
     var H = Tuning.hof, W = H.weights;
     var st = (state.stats && state.stats.nfl) || { fga: 0, fgm: 0, pts: 0, made50plus: 0, gameWinners: 0 };
@@ -447,7 +529,7 @@
     for (var k in rn) if (Object.prototype.hasOwnProperty.call(rn, k) && rn[k].isUser) recs++;
     var pctOk = num(st.fga, 0) >= H.pctBonusMinFga && fgPct(st) >= H.pctBonusMin ? 1 : 0;
     // labels say "Pro": the Hall only counts NFL kicks (stats.nfl), never the college line
-    var rows = [
+    var rows = positionOf(state) === 'P' ? hofRowsPunter(state, st, titles, starter, recs) : [
       ['fgm', 'Pro FGM', num(st.fgm, 0), W.fgm],
       ['fifty', 'Pro 50+ makes', num(st.made50plus, 0), W.fifty],
       ['pts', 'Pro points / 100', num(st.pts, 0) / 100, W.ptsPer100],

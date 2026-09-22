@@ -510,6 +510,17 @@
   };
 
   /**
+   * One AI punt onto its team's season block (§2.14) — the league's punting line, which the punter awards and
+   * records are ranked on.
+   * @param {SeasonState} season @param {string} teamId @param {Object} ctx @param {Object} result
+   */
+  Stats.recordAiPunt = function (season, teamId, ctx, result) {
+    if (!season.punterStats) season.punterStats = {};
+    var s = season.punterStats[teamId] || (season.punterStats[teamId] = emptyStats());
+    return Stats.applyPunt(s, ctx, result);
+  };
+
+  /**
    * Record a finished user game: games / gamesStarted / wins / losses on season, career and
    * league stats, plus `player.gamesPlayed`.
    * summary = GameSummary (§3.5.11): {won, tied?, started?, userLine, ...}. `started` defaults to
@@ -697,18 +708,32 @@
     var L = ensureStats(st[lg] || emptyStats()), S = ensureStats(st.season);
     var R = Tuning.records;
     var sameLeague = lgKey(state.season ? state.season.league : state.player.league) === lg;
-    var v = {
-      longFG: L.long, careerFGM: L.fgm, careerPts: L.pts, consecutiveFGM: L.bestConsecutive, careerGW: L.gameWinners
-    };
-    if (sameLeague) { v.seasonFGM = S.fgm; v.seasonPts = S.pts; v.season50plus = S.made50plus; }
-    if (final) {
-      if (sameLeague && S.fga >= R.minFgaSeasonPct) v.seasonFGpct = Util.round1(100 * S.fgm / S.fga);
-      if (L.fga >= R.minFgaCareerPct) v.careerFGpct = Util.round1(100 * L.fgm / L.fga);
-      if (lg === 'nfl') {
-        var n = 0, hs = state.history.seasons || [];
-        for (var i = 0; i < hs.length; i++) if (hs[i].league === 'NFL') n++;
-        v.careerSeasons = n;
+    var punter = state.player && state.player.position === 'P';
+    var v = {};
+    if (punter) {
+      // §2.14: a punter's book is net average, the ones pinned and the longest
+      var liveL = num(L.punts, 0) - num(L.puntBlocked, 0), liveS = num(S.punts, 0) - num(S.puntBlocked, 0);
+      v.longPunt = num(L.puntLong, 0);
+      v.careerPunts = num(L.punts, 0);
+      v.careerIn20 = num(L.in20, 0);
+      if (sameLeague) v.seasonIn20 = num(S.in20, 0);
+      if (final) {
+        if (sameLeague && liveS >= R.minPuntsSeasonNet) v.seasonNet = Util.round1(num(S.puntNet, 0) / liveS);
+        if (liveL >= R.minPuntsCareerNet) v.careerNet = Util.round1(num(L.puntNet, 0) / liveL);
       }
+    } else {
+      v.longFG = L.long; v.careerFGM = L.fgm; v.careerPts = L.pts;
+      v.consecutiveFGM = L.bestConsecutive; v.careerGW = L.gameWinners;
+      if (sameLeague) { v.seasonFGM = S.fgm; v.seasonPts = S.pts; v.season50plus = S.made50plus; }
+      if (final) {
+        if (sameLeague && S.fga >= R.minFgaSeasonPct) v.seasonFGpct = Util.round1(100 * S.fgm / S.fga);
+        if (L.fga >= R.minFgaCareerPct) v.careerFGpct = Util.round1(100 * L.fgm / L.fga);
+      }
+    }
+    if (final && lg === 'nfl') {
+      var n = 0, hs = state.history.seasons || [];
+      for (var i = 0; i < hs.length; i++) if (hs[i].league === 'NFL') n++;
+      v[punter ? 'punterSeasons' : 'careerSeasons'] = n;
     }
     return v;
   }
