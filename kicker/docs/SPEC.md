@@ -27,7 +27,6 @@
 - **rng**: the seeded RNG instance (mulberry32). The engine's only source of randomness. Its integer state is persisted in `state.rngState`.
 - **uiRng**: a separate, non-persisted RNG for cosmetics (crowd sway, particle jitter). Never touches state.
 - **Kick triple**: `{power, aim, quality}` — the ONLY thing the UI (or the AI) hands to the kick engine.
-- **Punt input**: `{power, aim, green?}` — what the scene (or `Punt.aiInput`) hands `RTG.Punt` for a punter's punt (§2.14). A punt reads no contact quality; `green` is the D21 assist claim and is re-checked by `Punt.inGreen`.
 - **Pending**: `state.pending` — the engine's way of asking the UI for something (a kick, an event choice, a decision). The UI never guesses what to show; it renders `state.pending` / `state.stage` / `state.phase`.
 - **Tuning**: `RTG.Tuning` — the single object holding every balance constant. Tests read it; nobody hardcodes a constant elsewhere.
 
@@ -70,7 +69,7 @@
 | D21 | Green = guaranteed (post-launch, at the player's request: "make it easier, green should be guaranteed") | A release inside the green band makes the kick outright — no random error, contact slop or block — and the band widened 0.15 → 0.20 (`Tuning.kick.range.greenBand`, also what the scene draws). Gated by `settings.greenAssist` (default on) and verified engine-side by `Kick.inGreen`. Aim-and-hold only; flick is unchanged. | The ask was for an easier game with a promise the bar can actually keep. Keeping it UI-flagged but engine-verified means the assist cannot leak into AI kicks, so the §2.3.6 make-rate table, the sim bands and the career balance targets all stand. Aim still decides every kick that misses the green. |
 | D22 | Real colleges (post-launch, at the player's request) | The 48 fictional schools and the 18 fictional bowls are replaced with real FBS programmes on 2026 alignment and the real bowl slate; conference codes become `SEC BIG XII ACC PAC AAC` (letters only — the id grammar is `[A-Z]{3}` + index) and each conference is ordered to put real rivalries on the `(0,7) (1,6) (2,5) (3,4)` slots. `verifiedFictional` is `false` for colleges and the blocklist lint now guards the NFL side only. **The NFL league stays fictional.** | The player asked for real colleges on their own project. Only 48 of ~134 FBS programmes fit the engine's 6×8 structure, so this is a selection, not the full sport; Notre Dame and the other independents have no conference slot. School nicknames and marks are trademarks — fine for a personal project, worth licensing thought if it is ever published commercially, which is why the pro league remains invented. |
 | D23 | The senior season replaces the showcase (post-launch, at the player's request: "instead of the college showcase can you play the last 5 games of high school to do offers for college") | The six-kick showcase is gone. A career opens at `HS.SEASON` on the last five games of the senior year (`engine/hs.js` → `RTG.HS`, session kind `HS_GAME`, screens `hsseason` / `hsgame`): every kick is a scoring chance inside a real game with a live scoreboard, the rivalry and playoff weeks end on the kicker, and a ten-school recruiting board moves after each game. The star formula keeps its shape but reads a 0–6 rating earned over the whole stretch (`HS.ratingOf`) instead of showcase makes, and the schools that reached the offer line join the offers list — capped at half of it. | Six kicks in an empty stadium had no stakes and nothing to follow; five games give the opening hour a scoreboard, a record and a recruitment to watch move. Building it as ordinary KickSessions kept the sim, save, autoplay and kick-scene machinery untouched — only the phase enum (`SHOWCASE` → `SEASON`), the session kind and the screens changed. |
-| D24 | A punter career path (post-launch, at the player's request: "a separate option in the game for being a punter") | A career picks `K` or `P` at creation. The punter runs the same road — senior season, offers, college, draft, pros, Hall — on the same aim-then-hold input, but the kick is a different problem: distance rises with power while hang time peaks lower, so the green band is the power that maximises NET yards from this spot, and aim trades downfield yards for a ball nobody returns (§2.14). Punting stats, awards, records and Hall scoring are parallel rows selected by `position`. **As built** the punter's contracts, camp battles, combine, job security, season goals, game XP and post-game grade still run on the kicker's machinery; §2.14.7 lists every place the build and this design parted, and §2.14 as a whole was rewritten from the code after integration. | The kicking game already had everything a punter needs — contexts, sessions, the scene, the career — and nothing it had measured applied. Building the punt as its own module over the shared machinery keeps the field-goal balance untouched while giving the second position a genuinely different decision to make, rather than a reskin of the same kick. |
+| D24 | A punter career path (post-launch, at the player's request: "a separate option in the game for being a punter") | A career picks `K` or `P` at creation. The punter runs the same road — senior season, offers, college, draft, pros, Hall — on the same aim-then-hold input, but the kick is a different problem: distance rises with power while hang time peaks lower, so the green band is the power that maximises NET yards from this spot, and aim trades downfield yards for a ball nobody returns (§2.14). Punting stats, awards, records and Hall scoring are parallel rows selected by `position`. | The kicking game already had everything a punter needs — contexts, sessions, the scene, the career — and nothing it had measured applied. Building the punt as its own module over the shared machinery keeps the field-goal balance untouched while giving the second position a genuinely different decision to make, rather than a reskin of the same kick. |
 
 ---
 
@@ -125,9 +124,6 @@ You are a leg. The most ignored player on the roster until the game is on your f
 | Kickoff | `KO` | touchback zone width, hang time, opponent field position |
 | Overall | `OVR` (derived) | `round(0.30·ACC + 0.25·POW + 0.20·CON + 0.17·CLU + 0.08·KO)` |
 | Potential | `POT` (hidden, per attribute) | Hard cap per attribute. `POT[a] ~ clamp(round(N(80, 8)), 60, 99)`; 5-star recruit `+6`, 4-star `+3`, walk-on `−3`. Revealed to the player by agent tier (§2.7.10). |
-
-A punter (§2.14) trains the same five numbers under different names (`Player.attrLabels('P')` / `Player.attrNames('P')`):
-`POW` = **LEG** (Leg strength: `maxDist`, the gross ceiling), `ACC` = **PLACE** (Placement: lateral σ, so the sideline is findable), `CON` = **OPER** (Operation: distance σ and the block get-off), `CLU` stays **CLU** (Composure), `KO` = **HANG** (Hang time: `maxHang`). `OVR` keeps the kicker's weights for both positions, so a punter's hang leg counts 8 % of OVR while it decides most of the net.
 
 **Starting attributes** (recruit creation, `Player.create`):
 
@@ -447,7 +443,7 @@ p_k  = max(0.02, base_k + shift_k·edge + situational_k) ; normalise
 stall yards-to-goal: ytg = clamp(round(N(25, 12)), 1, 50) ; college N(23, 12) ; D = ytg + 17
 drive time: max(30, N(mean, sd)) ; ×0.55 in hurry-up ; clipped to time left in the half
 ```
-Regulation: 4 quarters × 900 s. Halves: after Q2 the team that kicked off to start the game receives. Drive start after a score: kickoff (§2.3.10, auto for AI). After a punt: the drive first picks the punting team's line of scrimmage, `los = clamp(round(N(32, 11)), 4, 58)` (own yard, 2 draws), and the punt itself is resolved by `RTG.Punt` (§2.14.4), so the opponent starts where the ball actually died. The abstract spot `clamp(round(N(30, 10)), 5, 50)` survives only as the fallback when the punt engine is not loaded. After a turnover: at the mirrored spot `100 − (ytg at turnover ~ N(45, 20))`. After DOWNS: the mirrored ytg.
+Regulation: 4 quarters × 900 s. Halves: after Q2 the team that kicked off to start the game receives. Drive start after a score: kickoff (§2.3.10, auto for AI). After a punt: opponent at own `clamp(round(N(30, 10)), 5, 60)`. After a turnover: at the mirrored spot `100 − (ytg at turnover ~ N(45, 20))`. After DOWNS: the mirrored ytg.
 
 Expected: ≈ 11.5–12.5 drives/team, 21–27 points/team, 1.9–2.4 FGA/team, 2.4–3.0 PAT/team, regulation ties 4–6 %. FG distance histogram (attempts, both teams): <30: 14–19 %, 30–39: 26–31 %, 40–49: 30–35 %, 50+: 19–25 % (verified by Monte Carlo during spec authoring: 15.5 / 28.1 / 32.5 / 23.8).
 
@@ -501,7 +497,7 @@ thr = 0.55 − 0.20·trust01 − 0.10·coachAgg + (league === 'COLLEGE' ? 0.05 :
    trust01 = user kicker ? trust/100 : 0.5
 attempt if D ≤ maxFG + 3 and pm ≥ thr
 else if ytg ≤ 40 and (trailing in Q4 or rng.chance(0.15)): go for it → convert 45 % (drive continues as a fresh STALL/TD roll with ytg − 6) else DOWNS
-else PUNT from the stall spot (own 100 − ytg), resolved by RTG.Punt (§2.14.4); the abstract 100 − ytg − N(38, 8) roll (capped at own 20) is only the fallback without the punt engine
+else PUNT (from the stall spot; opponent starts at 100 − ytg − N(38, 8) capped at own 20)
 ```
 Trust 50 / agg 0.5: threshold 0.40 → a rookie is sent out to ≈ 52 yd, an elite to ≈ 58. Trust 90 / agg 0.8: 0.29 → elite gets 60+ tries. This is how Coach Trust creates glory and risk.
 
@@ -522,14 +518,11 @@ function step(gs, state, rng):
     TD:   gs.score[side] += 6 ; log ; decide PAT vs 2pt ; if PAT and side is user side and user is K1 and not injured: gs.pending = {type:'USER_KICK', ctx: buildCtx('PAT')} ; return {type:'USER_KICK'}
           else resolve AI PAT/2pt immediately ; queue kickoff
     STALL: decision = coachDecision(...) ; if FG: build ctx ; if user side → pending USER_KICK ; else AI resolve → 'AI_KICK' event ; PUNT/GO handled
-    PUNT: los = clamp(round(N(32, 11)), 4, 58) ; ctx = Punt.buildContext(...) ; if the user punts for this side (position 'P', K1, healthy):
-          gs.pending = {type:'USER_PUNT', ctx} ; return {type:'USER_PUNT'} ; else Punt.aiInput + Punt.resolve now (§2.14.4)
-          possession flips at 100 − oppStart ; a return TD or blocked-punt TD scores for the other side
-    TO/DOWNS: field position ; possession flips
+    PUNT/TO/DOWNS: field position ; possession flips
   if clock == 0: endQuarter/half/game (+ OT init) ; return END_HALF / OT_START / END_GAME
   return {type:'DRIVE', text: driveLogLine, gs}
 ```
-`simToNextUserKick` loops `step` until the event type is `USER_KICK`, `USER_PUNT`, `USER_KICKOFF`, `ICE_TIMEOUT` (immediately followed by `USER_KICK` on the next call) or `END_GAME`. `applyKick(gs, state, rng, result)` scores it, appends to `gs.kicks`, clears `pending`, queues the kickoff/possession change, and updates in-game stats.
+`simToNextUserKick` loops `step` until the event type is `USER_KICK`, `USER_KICKOFF`, `ICE_TIMEOUT` (immediately followed by `USER_KICK` on the next call) or `END_GAME`. `applyKick(gs, state, rng, result)` scores it, appends to `gs.kicks`, clears `pending`, queues the kickoff/possession change, and updates in-game stats.
 
 ### 2.6 League structures (engine: `engine/schedule.js`, `engine/standings.js`)
 
@@ -555,16 +548,15 @@ function step(gs, state, rng):
 #### 2.7.0 High-school senior season (stage `HS`, phase `SEASON`, engine `engine/hs.js` → `RTG.HS`) — D23
 
 A career opens on **the last five games of the senior year**, not a six-kick showcase. Each game is a KickSession
-of kind `HS_GAME` with a live scoreboard: for a kicker 3–5 scoring chances (extra points and field goals 23–51 yd), for a
-punter 3–6 punts (§2.14.5), in quarter order, the opponent answering between them, and the whole night on tape. `state.flags.hs` holds the season:
+of kind `HS_GAME` with a live scoreboard: 3–5 scoring chances (extra points and field goals 23–51 yd) in quarter
+order, the opponent answering between them, and the whole night on tape. `state.flags.hs` holds the season:
 
 | Field | What it is |
 |---|---|
 | `school` | `<hometown><qualifier?> <mascot>`, its abbreviation and the climate its weather is drawn from |
-| `games[5]` | weeks 6–10: opponent, home/away, the rivalry (index 3) and the state-playoff opener (index 4), then the result and the kicking line once played (a punter's line: `punts`, `gross` and `net` averages, `in20`, `tbs`, `puntLong`, `puntBlocked`; `gw`/`gwa` count the punts with the game on them) |
+| `games[5]` | weeks 6–10: opponent, home/away, the rivalry (index 3) and the state-playoff opener (index 4), then the result and the kicking line once played |
 | `board[10]` | the recruiting board: real colleges following the tape, `interest` 0–100, the move from the last game, and the per-school `pull` that decides how hard each one reacts |
-| `totals` | `fgm/fga`, `xpm/xpa`, 45+ makes, game-winners, W–L; for a punter also `punts`, `gross`/`net` (sums, not averages), `in20`, `tbs`, `puntLong`, `puntBlocked` |
-| `position` | `'K'` or `'P'`, copied from the player so the season knows which script to run (fixtures without one are kickers) |
+| `totals` | `fgm/fga`, `xpm/xpa`, 45+ makes, game-winners, W–L |
 | `rating`, `summary` | filled when the fifth game ends |
 
 - **Game scripts** (`HS.startGame`, 1 forked draw) build every chance up front so the generic session machinery
@@ -581,20 +573,11 @@ punter 3–6 punts (§2.14.5), in quarter order, the opponent answering between 
   losses drop it, scaled by the school's own `pull` and by `1 − 0.16·(prestige − 1)` — a blue blood takes more
   convincing than a MAC school. Bands: `OFFER` ≥ 70, `HIGH` ≥ 45, `WARM` ≥ 25, else `COLD`.
 
-- **A punter's night** (`scriptPunts`, `Tuning.hs.punter`): 3–6 punts from your own 8–48 (hash weighted L 45 / M 10 / R 45,
-  so the near sideline is usually the short way out); your offence's points land between the punts (0 / 3 / 7 weighted
-  30 / 30 / 40) and the opponent answers to `ratio ∈ [0.55, 1.35]` of them. The rivalry and playoff weeks end on the
-  punt instead of a kick: backed up on your own 6–22, protecting a 1–3 point lead with the clock gone. A punt is
-  `decisive` when your side leads by 1–3 at that moment; it counts as a game-winner (`gw`) when it lands inside the 20 or
-  nets ≥ 34 (`rating.clutchNet`). A blocked punt or a touchback is the miss the slot strip shows. The board moves on
-  `0.6·punts + 6·(net ≥ 36) + 4·in20 + 12·pinnedIt − 8·pinMissed − 5·touchbacks − 10·blocked` (+3 win / −2 loss).
-
 The five-game stretch produces one 0–6 rating (`HS.ratingOf`), which is what the star formula reads:
 
 ```
 rating = clamp(6·(0.55·fgPct + 0.20·patPct + 0.25·gwRate) + min(0.35·longMakes, 1), 0, 6)
 stars  = clamp(round(1.5 + 0.03·(OVR − 40) + 0.4·rating), 2, 5)
-punter: rating = clamp(6·(0.5·clamp((netAvg − 24)/14, 0, 1) + 0.25·in20Rate + 0.25·pinnedRate), 0, 6)   // an 18-year-old's scale: net 24 → 0, 38 → 1
 ```
 
 2★ = walk-on path (one prestige 1–2 offer, no scholarship, morale −5, `WALKON` flag → HOF ×1.15 legacy bonus). Fame start by stars: 2★ 0, 3★ 20, 4★ 40, 5★ 60.
@@ -704,22 +687,13 @@ Legacy tier: Journeyman < 150 · Solid Starter 150–299 · Franchise Leg 300–
 ```
 Sanity (test): a 14-season starter at 86 % with 320 FGM, 40 50+, 12 GW, 2 All-League 1st, 1 title ≈ 256+120+27+144+50+30+210+40 = 877 → first ballot; a 6-season 82 % journeyman ≈ 200 → Solid Starter. Target distribution over 200 auto-simmed Pro careers: first-ballot ≤ 10 %, inducted 15–25 %.
 
-**A punter's Hall case** (`hofRowsPunter`, `Tuning.hof.punter`; nobody counts a punter's points, so the ledger is the yards the other side had to go):
-
-```
-HOF_P = 0.10·proPunts + 0.30·downedInside20 + 3·(longestPunt/10) + 80·allLeagueP1 + 30·allLeagueP2 + 120·STPOY
-      + 40·championships + 16·seasonsAsStarter + 250·(careerNet ≥ 44 with ≥ 400 punts) + 45·recordsHeld
-      × the same WALKON / UDFA multipliers ; the same verdict thresholds (1850 / 1550 / 1250 after D19) and legacy tiers
-```
-Worked (seed 3, auto career): 990 punts, 580 inside the 20, 68-yd long, 7 All-League 1st, 1 second team, 1 STPOY, 1 title, 12 starter seasons, 43.2 net (no bonus), 3 records = 99 + 174 + 20 + 560 + 30 + 120 + 40 + 192 + 135 = **1370 → FINALIST, Franchise Leg**. Measured over 60 auto punter careers at Pro (seeds 1–60): first-ballot 3 %, inducted 18 %, finalist 57 %, off the ballot 22 % (§2.14.6).
-
 Legacy screen: bust portrait, tier, HOF score, career line, timeline, **top-10 moments** (`Stats.topMoments`: score = `pressure·D·(made ? 1 : 0.6) + 40·decisive + 20·doink + 15·playoff`), records held, a generated "documentary title" from templates, and the seed code.
 
 #### 2.7.10 Agents
 
 `player.agentTier` 0–2: 0 default; 1 at fame ≥ 250 via event #17 (5 % fee); 2 at fame ≥ 600. Tier reveals POT (tier 1: ±5 band; tier 2: exact), narrows draft projection, and widens counter acceptance (§2.7.7).
 
-### 2.8 Awards catalog (`data/awards.js`, computed by `Awards.compute(state, rng)` at AWARDS phase from simulated stats of every kicker in the league — or, for a punter, from every team's punting line in `season.punterStats`; the slate is chosen by `state.player.position`, and `Data.awardsFor(league, position)` filters the catalog by the same rule: rows without a `position` are the kicker's and `position: 'P'` rows are the punter's — so the shared `PRO_CLASSIC`, `STPOY` and season-goal rows, which carry no `position`, are granted to a punter by `punterAwards` / the goals check but are **not** listed by `awardsFor(league, 'P')`)
+### 2.8 Awards catalog (`data/awards.js`, computed by `Awards.compute(state, rng)` at AWARDS phase from simulated stats of every kicker in the league)
 
 `kickerScore = FGM·3 + FGpct·40 + long/10 + clutchMakes·4 + made50plus·2 + gameWinners·6 (min 12 FGA)`.
 
@@ -743,23 +717,6 @@ Legacy screen: bust portrait, tier, HOF score, career line, timeline, **top-10 m
 | NFL | **Comeback Leg** | ≥ 85 % season after a ≥ 6-week injury | 80 / +60 |
 | Both | **Season goals** ×3 | set in PRE | 40/60/100 |
 
-**The punter's slate** (§2.14; `Awards.punterScore`, `punterAwards`). `punterScore = netAvg·2.6 + grossAvg·0.8 + in20Rate·30 + in20·0.8 + puntLong/12 − touchbacks·3 − blocked·8` over live punts (punts − blocked), null under 20 live punts. AI candidates are named `<abbr> P` (no team carries a punter object yet). XP / fame from `Tuning.awards.rewards`:
-
-| League | Award (id) | Rule | XP / Fame |
-|---|---|---|---|
-| College | **Golden Foot Award** (`GOLDEN_FOOT`) + **All-American First Team (P)** (`ALL_AMERICAN_P1`) | rank 1 nationally by `punterScore` | 200 / +130 ; 150 / +90 |
-| College | **All-American Second Team (P)** (`ALL_AMERICAN_P2`) | rank 2–3 | 80 / +45 |
-| College | **All-Conference First Team (P)** (`ALL_CONF_P1`) | rank 1 in conference | 80 / +35 |
-| College | **Freshman Punter of the Year** (`FRESHMAN_FOOT`) | the user, ranked (≥ 20 live punts), in a freshman season | 100 / +55 |
-| College | **Coffin Corner Award** (`PIN_KING_COLLEGE`) | most punts downed inside the 20 | 60 / +40 |
-| NFL | **Golden Leg (Punter)** (`GOLDEN_LEG_P`) + **All-League First Team (P)** (`ALL_LEAGUE_P1`) | rank 1 league-wide | 200 / +130 ; 180 / +110 |
-| NFL | **All-League Second Team (P)** (`ALL_LEAGUE_P2`) | rank 2 | 100 / +55 |
-| NFL | **Pro Classic** (`PRO_CLASSIC`, shared) | top 2 punters per conference | 60 / +40 |
-| NFL | **Field Position Award** (`PIN_KING_NFL`) | most punts downed inside the 20 | 60 / +40 |
-| NFL | **Special Teams Player of the Year** (`STPOY`, shared) | the **user**, ranked first with `punterScore ≥ 1.15 ×` the runner-up (no game-winner clause; an AI punter never takes it, and a kicker season that fails its own STPOY test still prints the "a punter won it" note) | 220 / +150 |
-
-A punter's season is not eligible for Iron Leg, Clutch Kick, the MVPs, Comeback Leg or the weekly award, and the milestones below are kicker milestones (no punting milestone fires yet).
-
 Awards go to `history.awards[] = {year, league, id, name, teamId}` and the trophy case. Milestones (`Stats.checkRecords`): 100/200/300/400/500 FGM; 1,000/1,500/2,000 points; first 50+, first 60+; 20 consecutive makes; 10 game-winners; each fires a headline + fame +20.
 
 ### 2.9 Records & legends (`data/records.js`, `state.records`)
@@ -779,15 +736,6 @@ Per seed, `Names.legend(rng)` generates fictional holders (era names: Otis, Walt
 | `consecutiveFGM` | 26 | 44 | |
 | `careerGW` | 7 | 30 | |
 | `careerSeasons` | — | 22 | |
-| `longPunt` (P) | 78 | 82 | gross |
-| `seasonNet` (P, min 30 punts) | 44.8 | 46.4 | net average, `fmt: 'pct1'` |
-| `seasonIn20` (P) | 34 | 42 | |
-| `careerPunts` (P) | 230 | 1,100 | |
-| `careerNet` (P, min 150 punts) | 42.6 | 44.2 | |
-| `careerIn20` (P) | 96 | 460 | |
-| `punterSeasons` (P) | — | 22 | NFL only |
-
-Rows marked (P) carry `position: 'P'` in `Data.records.meta` and `minPunts` where a minimum applies (`Tuning.records.minPuntsSeasonNet` 30, `minPuntsCareerNet` 150). `Data.records.keysFor(league, position)` returns one position's keys; `Stats.checkRecords` reads the user's values from the punting block when `player.position === 'P'` (`userRecordValues`: `longPunt = nfl/college.puntLong`, `careerPunts`, `careerIn20`, `seasonIn20`; the two net averages only at season end and over the minimums; `punterSeasons` replaces `careerSeasons`). Every seed still generates legend holders for all 18 keys, so both positions' boards are populated.
 
 The records screen shows holder, year, and "yours" in gold. `records.crossSave` (localStorage `rtg.records`, UI-owned) keeps the best of every career on this device for the title screen ticker.
 
@@ -946,271 +894,76 @@ Nicknames (case-insensitive, singular/plural) that may not appear as any team's 
 
 ### 2.14 The punter path (engine: `engine/punt.js` → `RTG.Punt`) — D24
 
-A career picks a position at creation (`Engine.newCareer({position})` → `Player.create` → `state.player.position`):
-**`K`** (field goals, extra points, kickoffs — everything §2.3 describes) or **`P`** (punts). Old saves and fixtures
-without a position are kickers (`Save.migrate` fills `'K'`). The road is the same one — the senior season, the offers,
-college, the draft, the pros, the Hall — but the kick at the centre of it is a different problem, and so are the numbers
-it is judged on. This section describes the punter path **as built**; §2.14.7 records where the build left the original
-design.
+A career picks a position at creation: **`K`** (field goals, extra points, kickoffs — everything §2.3 describes)
+or **`P`** (punts). The road is the same one — the senior season, the offers, college, the draft, the pros, the
+Hall — but the kick at the centre of it is a different problem, and so are the numbers it is judged on.
 
-The punt module is pure over plain JSON: every random number comes from the rng passed in, and `resolve` reads
-attributes only from `ctx.kicker` (or an explicit `attrs`), so a punt replays exactly from `{ctx, input, rngState}`.
-It loads after `Kick` and before `Sim` (§3.2) and uses `Kick.buildContext`, `Kick.ballXFor`, `Tuning.kick.hash` and
-`Weather.components`.
-
-#### 2.14.1 The two curves (`Punt.model`, pure, no rng)
+#### 2.14.1 What a punt asks
 
 A field goal asks one question: is it through? A punt asks two at once, and they fight:
 
-```
-maxDist = clamp(46 + 0.26·(POW − 50) + 0.28·windAlong, 32, 64)        // yd; windAlong = tailwind mph, Weather.components(ctx.wind).along
-maxHang = clamp(4.35 + 0.022·(KO − 50), 3.2, 5.4)                       // s; a snapshot without KO reads CON
-dist(p) = maxDist · (0.30 + 0.70·p^1.30)                    p ≤ 1.0       // distance rises with power all the way to the leg's limit…
-        = maxDist · (1 − 0.28·(p − 1)/0.15)                  1.0 < p ≤ 1.15  // …then past 1.0 the ball comes off the foot badly
-hang(p) = max(2.2, maxHang · exp(−½·((p − 0.72)/0.42)²))                  // hang time is a bell around the sweet spot at 0.72
-```
-(`Tuning.punt.curve` and `.distance`.) Worked at all attributes 62, calm: `maxDist` 49.1, `maxHang` 4.61; at power 0.72
-the ball goes 37.2 yd and hangs 4.61 s, at 1.0 it goes 49.1 yd and hangs 3.69 s, at 1.15 it goes 35.4 yd and hangs
-2.73 s. POW 40 / 80 / 99 → 43.4 / 53.8 / 58.7 yd; KO 40 / 80 / 99 → 4.13 / 5.01 / 5.40 s.
+- **distance** rises with power, all the way to the leg's limit, then falls off past 1.0 as the ball comes off
+  the foot badly;
+- **hang time** peaks at a *lower* power (`Tuning.punt.curve.hangPeak`) and falls away either side of it.
 
-#### 2.14.2 What the situation wants: the green band (`bestPower`)
+A ball that outruns its coverage comes back. So the green band on the power bar is not "the power that gets
+there" — it is **the power that maximises net yards from this spot**, found by scanning both curves against the
+expected return, and, once the end zone is in range, the best net that still lands short of it. The band sits
+with the target near its top (`field.bandLead`), so over-hitting is the mistake the bar actually punishes.
 
-A ball that outruns its coverage comes back. So the green band on the power bar is not "the power that gets there" —
-it is **the power that maximises net yards from this spot**, found by scanning both curves against the expected return:
+That makes field position the whole game. From your own 12 there is nothing to pin and the band sits high: hit
+it. From the opponent's 45 the band drops — a boomed one is a touchback that hands back 20 yards.
 
-```
-expectedReturn(hang, oppST) = (1 − pFair) · mean                               // the coach's own estimate, straight down the middle
-  pFair = clamp(0.46 + 0.34·(hang − 4.3), 0, 1)
-  mean  = max(0, 9.5 − 4.2·(hang − 4.3) − 0.06·(oppST − 70))
-pin = toGoal ≤ 55                                                              // inside the opponent's 55 the ball is meant to die, not to travel
-for p in 0 … 1.15 in 60 steps (Tuning.punt.search.steps):
-  landing = los + dist(p) ;  net = dist(p) − expectedReturn(hang(p), oppST)
-  if landing ≥ 100 − 4:  net = pin ? −∞ : (80 − los) − 12                     // the end zone is worth a touchback minus a penalty, and never the target when pinning
-  else if landing ≥ 80:  net += 7                                              // pinning them is worth more than the yardage says
-  keep the best net → bestP, want = dist(bestP)
-if every power reaches the end zone: bestP = 0, want = dist(0)
-pNeed = clamp(bestP − 0.20·0.7, 0, 1.15 − 0.20)                                // the band is [pNeed, pNeed + greenBand]; the target sits 70 % up it (field.bandLead)
-```
-`Tuning.punt.field`: `greenBand` 0.20 (the same width as the kick's, D21), `bandLead` 0.7, `pinFrom` 55,
-`insideYards` 20, `touchbackYard` 20, `halfWidthYd` 26.65; `Tuning.punt.search`: `steps` 60, `endZoneMargin` 4,
-`touchbackPenalty` 12, `insideBonus` 7.
+**Aim** is the other half. The punter stands on a hash (`ctx.ballX`), so one sideline is the short way out.
+Pointing at it costs `cos(aim)` of the downfield distance and buys a ball nobody returns:
+`lateral = ballX + gross·tan(aim) + N(0, σ)`, and past `field.halfWidthYd` (26.65) the ball is out of bounds and
+dead where it crossed. Wide aim also widens σ, and a worse ACC widens it further.
 
-That makes field position the whole game. Worked at 62s, calm, NFL: from your own 8 through your own 45 the coach wants
-every yard (`want` 49, `pNeed` 0.86); from your own 50 the band drops (46 / 0.78), from the 55 (41 / 0.66), the 65
-(31 / 0.42), the 75 (21 / 0.13) and from the 85 it sits on the floor (15 / 0.00). `tbFrom` is the power that reaches
-the end zone (0.91 from the 55), always above the band once the end zone is in range.
+#### 2.14.2 Resolving a punt (`Punt.resolve`, draw order binding)
 
-**`PuntModel`** = `{losYard, toGoal, pin, maxDist, maxHang, want (rounded, ≤ toGoal), pNeed, greenBand, powerMax
-(1.15), windAlongYds, tbFrom, distance, hang, power, pBlock}` — `distance`/`hang`/`power` are for the power given in
-`opts.power` (default: the middle of the band). `Punt.inGreen(power, model)` is the engine's own check of the band
-(`pNeed ≤ power ≤ min(powerMax, pNeed + greenBand)`, 1e-6 tolerance).
+`1 block · 2,3 distance gauss · 4,5 hang gauss · 6,7 lateral gauss`, then the settle rolls
+(`8 fair catch · 9,10 return gauss · 11 return TD`). A blocked punt spends one more draw for whether the
+defence scores. `opts.forced` (a `Punt.GRADES` name) spends none.
 
-**Aim** is the other half. The punter stands on a hash (`ctx.ballX`: NFL ±3.083 yd, college ±6.667 yd), so one
-sideline is the short way out. Pointing at it costs `cos(aim)` of the downfield distance and buys a ball nobody
-returns: `lateral = ballX + gross·tan(aim) + N(0, σ_lat)`, and at `|lateral| ≥ 26.65` the ball is out of bounds and
-dead where it crossed. Wide aim also widens σ, and a worse ACC widens it further. The engine accepts
-`±Tuning.punt.aimMax` (30°); **the scene's meter clamps aim at ±12°** (`Input.CONST.aimMax`), so a human punter reaches
-the sideline mostly from the near hash while the AI (§2.14.3) uses the full range.
+| Landing | What happens |
+|---|---|
+| in the end zone | touchback; the receiving side starts at their 20 |
+| outside `halfWidthYd` | out of bounds, dead there, no return |
+| in play, high hang | fair catch or downed — `pFair = fairBase + fairPerHang·(hang − 4.3)` |
+| in play, low hang | returned `N(base − perHang·(hang − 4.3) − perOppST·(ST − 70), sd)`, capped at the goal line |
 
-#### 2.14.3 Resolving a punt (`Punt.resolve(rng, ctx, attrs, input, opts)`, draw order binding)
+`inside20` is any ball dead at or past the opponent's 20 that is not a touchback. Grades — `BLOCKED`, `SHANK`,
+`TOUCHBACK`, `POOR`, `OK`, `GOOD`, `BOOMING`, `COFFIN` — read off net yards against the punter's own ceiling,
+so "booming" means booming *for them*.
 
-```
-input null         → Punt.aiInput (power gauss 2 · aim gauss 2), result.auto = true and tag 'auto'
-opts.forced        → forcedResult (a Punt.GRADES name), 0 draws                                 // RTG.debug.forceKick
-input.green && inGreen(power, model) → assistedResult, 0 draws                                   // the D21 assist, see below
-1      blocked = chance(pBlock)         pBlock = clamp(0.006 + 0.0009·(oppST − 70) − 0.00035·(CON − 55) + 0.02·pressure, 0, 0.09)
-       blocked → 2 blockReturnTd = chance(0.22) ; gross = net = hang = 0 ; landing = los
-                 oppStart = blockReturnTd ? 100 : clamp(100 − los + 12, 1, 99) ; grade BLOCKED ; return
-2,3    gross   = max(0, dist(power)·cos(aim) + N(0, σ_dist))      σ_dist = 4.2·(1 + 0.012·(62 − CON))·(1 + 0.55·pressure)
-4,5    hang    = max(2.2, hang(power) + N(0, 0.24))
-6,7    lateral = ballX + gross·tan(aim) + N(0, σ_lat)              σ_lat = 3.4·(1 + 0.014·(62 − ACC))·(1 + 0.9·|aim|/30)
-settle (landing = los + gross):
-  landing ≥ 100          → TOUCHBACK: gross = 100 − los, landing = 100, oppStart = 20, net = 80 − los ; no more draws
-  |lateral| ≥ 26.65      → out of bounds, dead there: net = gross, oppStart = 100 − landing ; no more draws
-  else 8     fair = chance(pFair)    pFair = clamp(0.46 + 0.34·(hang − 4.3) + 0.45·|lateral|/26.65, 0, 1)   // a ball angled at the sideline pins the returner whether or not it crosses
-       fair → fairCatch: net = gross, oppStart = 100 − landing
-       else 9,10  ret = clamp(N(9.5 − 4.2·(hang − 4.3) − 0.06·(oppST − 70), 5.5), 0, landing)                // cannot run past the goal line
-            11    returnTd = chance(clamp(0.002 + 0.0016·ret, 0, 0.06)) → returnYds = landing, oppStart = 100
-                  else oppStart = 100 − landing + ret ; net = gross − ret
-  inside20 = !touchback && landing ≥ 80                              // judged where the ball LANDED, even if the return carried it back out
-```
-So a live punt spends 7 draws (blocked: 2; out of bounds or a touchback: 7; in play: 8 fair-caught, 10 returned, 11
-with the return-TD roll — `punt.test.js` asserts 7–11). `oppStart` is the receiving side's own yard line, clamped 1–99
-except that a touchdown reads 100. Constants: `Tuning.punt.spread`, `.block`, `.ret`.
+**The green assist (D21) applies to punts too**: a release the engine agrees was inside the band
+(`Punt.inGreen`) returns the punt the situation asked for, with no draws spent — a coffin corner when the spot
+is in pinning range, otherwise a fair-caught ball with real hang on it. It is never blocked and never returned.
 
-**Grades** (`Tuning.punt.grade`), in this order: `BLOCKED`; `TOUCHBACK`; `SHANK` when `gross ≤ 26`; `COFFIN` when
-`inside20` and the ball was out of bounds, fair-caught or returned ≤ 3; then net yards against the punter's **own**
-ceiling — `BOOMING` ≥ 0.92·`maxDist`, `GOOD` ≥ 0.80, `OK` ≥ 0.64, else `POOR` — so "booming" means booming for them.
-`outcome` mirrors the grade; `made` = not blocked, not a touchback, not a shank (what the log, the HUD and the slot
-strip read). `Punt.GRADE_TEXT` gives the banner: BLOCKED! · SHANKED · TOUCHBACK · SHORT · FAIR · GOOD PUNT · BOOMING! ·
-COFFIN CORNER!. `Punt.feedbackFor(result, ctx, model) → {title, detail, coach}`: `detail` is
-"`gross` yd (`net` net) · `hang`s hang · out of bounds at the N / into the end zone / fair catch / N yd return", and
-`coach` is one line for the case (blocked, touchback, shank, coffin, a return ≥ 15 yd = "not enough hang", booming,
-else "a little more hang").
+#### 2.14.3 What the career measures
 
-**The AI rule** (`Punt.aiInput`, 4 draws): `power = clamp(pNeed + 0.10 + N(0, 0.05), 0, 1.15)` — the middle of the
-band — and `aim = clamp((pin ? 22·ACC/62 : 0) + N(0, 1.6), −30, 30)`. The AI aims to the **right** (positive) sideline
-whenever it is pinning, whichever hash it stands on; it never sets `green`. Used for every AI punt, auto-resolved user
-punts (`auto: true`) and the balance test.
+Punting stats (`Schema.STAT_KEYS`): `punts`, `puntYds` (gross), `puntNet`, `in20`, `tbs`, `puntLong`,
+`puntBlocked`, `fairCatch`, `retYds`, `hangSum`. The line the game shows is **net average** and **inside-20
+rate**, because those are what a punter is actually paid for.
 
-**The green assist (D21) applies to punts too.** A release the engine agrees was inside the band returns the punt the
-situation asked for, with **no draws spent**: `gross = dist(power)·cos(aim)` with no noise, `hang = max(hang(power),
-4.4)` (`Tuning.punt.assist.hangFloor`), `assisted: true`, tag `'assisted'`. If it lands inside the 20 (`80 ≤ landing <
-100`) it is put out of bounds at the near sideline (the sign of `ballX`) and graded `COFFIN`; if it reaches the end zone
-it is a `TOUCHBACK` (the band itself can reach the end zone from deep in plus territory); otherwise it is fair-caught and
-graded normally. It is never blocked and never returned. An unverifiable claim falls through to the physics above.
+- **The senior season** (§2.7.0) gives a punter punts instead of field goals: the offence's drives stall and you
+  flip the field. The recruiting board reads net average, punts pinned inside the 20 and the ones that mattered.
+- **Games**: the sim hands the user every punt their team takes (both punt sites in `engine/sim.js`), with a real
+  line of scrimmage; field goals on their team are taken by the AI kicker. Kickoffs stay with the kicker, so a
+  punter's KO attribute is **hang time** instead.
+- **Awards, records and the Hall** have punter rows (`position: 'K'|'P'|'BOTH'` on the data rows), scored on net
+  average, inside-20 and the games flipped rather than on points.
+- **Contracts** run through the same OVR machinery with `Tuning.punt.career.marketMult`.
 
-**Forced grades** (`Tuning.punt.forced`, 0 draws): BLOCKED as above (no TD); TOUCHBACK; SHANK gross `min(18, room − 1)`,
-hang 2.8; COFFIN gross `clamp(room − 6, 1, maxDist)` out of bounds (re-graded honestly when the leg cannot reach the
-20); BOOMING gross `min(maxDist, room − 1)`, fair-caught; POOR / OK / GOOD gross `min(0.8·maxDist, room − 1)`,
-fair-caught; hang 4.4 and `net = gross` for all of them.
+#### 2.14.4 Balance targets
 
-**`PuntResult`** (§3.4): `{type:'PUNT', losYard, toGoal, power, aim, gross, net, hang, landing, lateral, oppStart,
-touchback, outOfBounds, fairCatch, downed (never set), returnYds, inside20, blocked, blockReturnTd, returnTd, grade,
-outcome, made, auto, assisted, forced, tags}`, every number rounded to 2 dp.
-
-**Context** (`Punt.buildContext(state, gs, situation, rng)`): `situation.losYard` (own yard 1–99, default 30) becomes
-`ctx.losYard`, `ctx.toGoal = 100 − losYard` and `ctx.distance = toGoal`; everything else is `Kick.buildContext`'s
-(`type: 'PUNT'`, wind 2 draws plus Legend gusts 2, pressure and its flags, `oppST` from the opponent team's ST or
-`Tuning.kick.defaults.oppST`, the kicker snapshot from `situation.kicker` / `situation.attrs` / the user). Then the hash:
-`Kick.buildContext` rolls one only for field goals, so the punt rolls its own weighted draw from
-`Tuning.kick.hash.snapDist[league]` when `situation.hash` is not given, and `ctx.ballX = Kick.ballXFor(league, hash)`.
-Draws: `Kick.buildContext`'s + 1.
-
-#### 2.14.4 Punts in the sim (`engine/sim.js`)
-
-- **Every punt in a simulated game goes through `RTG.Punt`** when it is loaded (`puntOrNull`); the pre-D24 abstract
-  rolls (`Tuning.sim.drive.puntStart`, `Tuning.sim.coach.puntNet`) are only the fallback without it. A `PUNT` drive
-  outcome first draws the line of scrimmage, `los = clamp(round(N(32, 11)), 4, 58)` (`drive.puntLos`, 2 draws); a `STALL`
-  the coach declines to kick or go for punts from the stall spot (own `100 − ytg`) with the stall text as a prefix.
-- **Who punts** (`userPunts`): the user, when it is their side, they are `K1`, healthy and `position === 'P'` →
-  `gs.pending = {type:'USER_PUNT', ctx}` and a `USER_PUNT` SimEvent ("Punt from own 32"). Otherwise the AI punter
-  (`aiPunterFor`: `team.punter` / `team.punter2`, which **no code populates yet**), else the **abstract leg**: all five
-  attributes `clamp(round(62 + 0.5·(ST − 70)), 30, 95)` from the team's special-teams rating (`Tuning.punt.abstract`),
-  resolved at once with `Punt.aiInput` (4) + `Punt.resolve` (7–11). Conversely `userKicks` requires `position !== 'P'`:
-  a punter's field goals and extra points are taken by the team's own AI kicker (`team.kicker`), never offered to the
-  user, and kickoffs stay simulated for both positions.
-- **`settlePunt`**: `gs.stats[side].punts++`, clears `pending`, records the punt (the user's through
-  `Stats.recordPunt` with `{gameId, teamId, oppId, week, year, rngState}`; everyone else's through `Stats.recordAiPunt`
-  onto `season.punterStats[teamId]` when the game is in the active league), writes the drive-log line ("44-yd punt,
-  fair catch - BOS takes over at own 22" · "PUNT BLOCKED - …" · "…, touchback - …" · "… out of bounds - …" · "…, 12-yd
-  return - …"), burns `clock.fgPlaySec` (5 s), and either scores the touchdown for the other side (`returnTd` or
-  `blockReturnTd`) or flips possession at `ytg = 100 − oppStart`. The event is a `DRIVE` with `result: 'PUNT'`, `punt`
-  and `ctx` (both drive paths pass `eventType: 'DRIVE'`; the `AI_PUNT` type exists only as the default when none is
-  given).
-- **Entry points**: `Sim.applyPunt(gs, state, rng, result)` (requires `pending.type === 'USER_PUNT'`);
-  `Sim.autoResolvePending` resolves a `USER_PUNT` with the AI rule and `auto: true`; `Engine.applyUserPunt(state, rng,
-  input|null, {forced?})` is the UI's one entry (it refuses a pending kick by name); `Engine.autoKick` covers whatever is
-  pending; `Engine.sessionKick` resolves `PUNT` session contexts through `Punt.resolve` (§2.7.0), mapping a forced kick
-  word onto a grade (GOOD → GOOD, BLOCKED → BLOCKED, SHORT → SHANK, else POOR). `RTG.debug.forceKick({outcome})` accepts a
-  `Punt.GRADES` name on a pending punt.
-- **What still reads the kicker's line** (as built): per-kick meters (`Player.applyKickMeters` is called from the kick
-  path only), game XP (`awardXp` reads FG/PAT rows; a punter earns the team-result XP and kickoff touchbacks only), the
-  post-game grade (`Stats.grade` on 0 FGA / 0 PAT reads a 100 % day → `B`), the headline tag (falls to
-  `postgame_win/loss`), Job Security (`Player.kickCounts` counts FG rows, so a punter's `js` is carried by the OVR gap
-  and the trust floor alone), and the season goals (`fgPct` cannot be met). Camp battles, the combine, the UDFA tryout
-  and the halftime-70 remain field-goal / kickoff sessions for a punter, and the draft's "needy team" rule and
-  `Contracts.marketValue` know nothing of the position (`Tuning.punt.career.{marketMult, xpMult}` exist but nothing
-  reads them).
-
-#### 2.14.5 What the career measures
-
-**Stats** — every `KickerStats` block (`Schema.STAT_KEYS`) carries `punts`, `puntYds` (gross sum), `puntNet` (net sum),
-`in20`, `tbs`, `puntLong`, `puntBlocked`, `fairCatch` (fair catches **and** balls out of bounds), `retYds`, `hangSum`,
-`pinned` (inside-20 punts at pressure ≥ the clutch threshold). `Stats.applyPunt`: `punts++`; a blocked punt adds only
-`puntBlocked` and nothing else; otherwise gross/net/hang accumulate, `puntLong` is the max gross (rounded), a touchback
-counts in `tbs` and never in `in20`. `Stats.puntLine(block)` → `{punts, gross, net, hang, in20, in20Pct, tbs, long,
-blocked, retYds}` with the averages over **live** punts (`punts − puntBlocked`); the UI uses it rather than dividing by
-hand. The line the game shows is **net average** and **inside-20 rate**, because those are what a punter is paid for.
-`Stats.recordPunt` also logs a `KickLogRow` of `type 'PUNT'` (`distance = round(gross)`, `outcome = grade`, `made =
-!blocked && !touchback`, `input.quality 0`, a `punt` sub-object with the landing spot, net, hang, `oppStart` and the
-flags; id `p<year>w<week>n<seq>`) into `stats.kicks` and the splits, so the kick log, the game screen and the season
-line see punts.
-
-**Records** (§2.9): `longPunt`, `seasonNet` (min 30 punts), `seasonIn20`, `careerPunts`, `careerNet` (min 150),
-`careerIn20`, `punterSeasons` (NFL only), each with `position: 'P'`; `Data.records.keysFor(league, position)` and the
-user's values from the punting block when the career is a punter's.
-
-**Awards** (§2.8): the punter slate — `GOLDEN_FOOT`, `ALL_AMERICAN_P1/P2`, `ALL_CONF_P1`, `FRESHMAN_FOOT`,
-`PIN_KING_COLLEGE` in college; `GOLDEN_LEG_P`, `ALL_LEAGUE_P1/P2`, `PIN_KING_NFL` plus the shared `PRO_CLASSIC` and
-`STPOY` in the NFL — ranked on `Awards.punterScore` over `season.punterStats` (every team's punting line, since every
-team punts) plus the user's season block; `Data.awardsFor(league, 'P')`.
-
-**The Hall** (§2.7.9): `Awards.hofScore` swaps in `hofRowsPunter` — punts, downed inside the 20, the longest, the
-All-League teams, STPOY, titles, starter seasons, a 44+ career net over 400 punts, records held — under the shared
-verdict thresholds.
-
-**The senior season** (§2.7.0): a punter's five games are 3–6 punts a night instead of scoring chances; the offence's
-drives die and you flip the field; the rivalry and playoff weeks end on a punt protecting a one-score lead; the board
-reads net average, the ones pinned inside the 20 and the ones with the game on them; the 0–6 rating is
-`6·(0.5·netScore + 0.25·in20Rate + 0.25·pinnedRate)`.
-
-**Attributes** (§2.1.1) are the same five numbers relabelled LEG · PLACE · OPER · CLU · HANG (`Player.attrLabels`),
-so a punter's `KO` is hang time. As built only the new-career archetype bars use the labels; the training screen's
-tiles and the attribute panels elsewhere still read POW / ACC / CON / CLU / KICKOFF for a punter.
-
-**Screens** (§4.5, §4.6): position cards on `newcareer`; the punter's lines on `hsseason` and `hsgame`; `game` routes a
-`USER_PUNT` to the kick scene ("YOUR PUNT: …") and SIM REST resolves it through `autoKick`; the kick scene draws the punt
-field (the strip inside the 20 and the tick at `model.want`), a `hang × 0.45` s flight, the grade banner and
-`Punt.feedbackFor`.
-
-#### 2.14.6 Balance (asserted in `test/punt.test.js` unless marked measured)
-
-The season harness: 1 200 AI punts per profile (`Punt.aiInput` → `Punt.resolve`), calm NFL, middle hash, no pressure,
-from own 10–45 (`los = 10 + (7·i mod 36)`), seed 4242, blocked punts excluded from the averages. Measured values are
-from that harness as it stands.
-
-| Metric | Target | Measured |
+| Metric | Target | Test |
 |---|---|---|
-| Good leg (POW / ACC / CON / KO all 80): gross average | 45–52 yd | 50.6 |
-| Good leg: net average | 38–48 yd | 44.8 |
-| Good leg: inside-20 rate | > 20 % | 44.6 % |
-| Good leg: touchback rate | < 12 % | 0.2 % |
-| Gap from a poor leg (all 45) to the good one, gross | > 7 yd | 9.0 (41.6 → 50.6) |
-| Gap, net | > 8 yd | 12.2 (32.6 → 44.8) |
-| Middle leg (all 62): gross / net / inside-20 | — | 46.4 / 38.6 / 32.6 % (measured) |
-| Blocks over 4 000 mixed punts (own 1–95, power 0.5–1.1, aim ±30°) | > 0 and < 10 % | rare; `pBlock` 0.36 % at 62s calm, 0 at CON 80 calm, 3.5 % at CON 30 under pressure 1 |
-| Draw contract | `resolve` 7–11 · `aiInput` 4 · forced 0 · assist 0 | exact |
-| Band geometry at own 1 / 10 / 25 / 40 / 55 / 70 / 85 / 95 | `pNeed ≥ 0`, `pNeed + band ≤ 1.15`, `0 ≤ want ≤ maxDist + 1`; `want ≥ 20` through own 60 | holds |
-| Near-sideline aim (own 55, right hash, +30°) vs straight | shorter gross; out of bounds > 20 %; returned < 50 % as often; the far sideline (−30°) not reached | holds |
-| Hang (KO 95 vs 30, 800 punts each) | < 75 % of the return yards | holds |
-| Punter Hall verdicts, 60 auto careers at Pro (seeds 1–60, `autoPlayCareer` to RETIRED) | — | **3 % first-ballot, 18 % inducted** (2 / 11 of 60), 57 % finalist, 22 % off the ballot (measured, not asserted) |
-| Those 60 careers: NFL career net / inside-20 rate / seasons / punts | — | medians 42.7 yd / 60 % / 12 / 998 (measured) |
-
-The punter distribution sits inside the kicker's §2.7.9 band (first-ballot ≤ 10 %, inducted 15–25 %) without a punter
-row in `career_balance`; a later balance phase may assert it there.
-
-#### 2.14.7 Design vs. build (for the record)
-
-Where the code, as integrated, differs from the §2.14 that was written ahead of it:
-
-1. **Balance targets** were 44–48 gross / 37–43 net / touchbacks < 6 % / blocked < 1 %; the test asserts 45–52 / 38–48
-   / < 12 % / blocks merely rare, plus the net gap and the inside-20 floor (table above).
-2. **`inside20` is judged on the landing spot**, not on where the ball was dead: a ball that lands at the 15 and is
-   returned to the 25 still counts. The old text said "dead at or past the 20".
-3. **The fair-catch probability has a sideline term** (`+0.45·|lateral|/26.65`) that the old formula omitted, and the
-   design's "high hang → fair catch, low hang → return" reads as one roll in the code, not two branches.
-4. **The end zone in the scan** is priced as a touchback minus 12 yards outside pinning range and excluded inside it
-   (`endZoneMargin` 4), not simply "the best net that still lands short of it".
-5. **The assist can produce a touchback**: when the band itself reaches the end zone the assisted ball is a
-   `TOUCHBACK`, not "a coffin corner or a fair catch". It is still never blocked and never returned.
-6. **Aim**: the engine's `aimMax` is 30° but the scene's meter clamps at ±12° (`Input.CONST.aimMax`), so a human never
-   aims as wide as the AI; and the AI aims right, not at the near sideline.
-7. **Contracts** do not use `Tuning.punt.career.marketMult` (nor `xpMult`); nothing reads either. Camp battles, the
-   combine, tryouts, halftime-70, job security, game XP, the post-game grade, headline tags and season goals still run
-   on field goals (§2.14.4).
-8. **No team carries a punter object** (`team.punter` / `punter2` are always null); every AI punt is the abstract leg
-   from the team's ST rating, and award candidates are labelled `<abbr> P`.
-9. **STPOY for a punter** goes only to the user, on the ratio alone (no game-winner clause), while a kicker season
-   that fails its own STPOY test still prints the "a punter won it" note (§2.8).
-10. `fairCatch` in the stats counts balls out of bounds too; `PuntResult.downed` is never set; the kick-log row's `made`
-    (`!blocked && !touchback`) differs from `PuntResult.made`, which also excludes a shank.
-11. `Tuning.punt.field.pinTarget` (6) and `safeTarget` (4) are not read by the code (the scan replaced them);
-    `Tuning.punt.distance.minWant` (20) is read only by the test.
-12. `Data.awardsFor(league, 'P')` lists only the six college and four NFL `position: 'P'` rows; the shared `PRO_CLASSIC`,
-    `STPOY` and season-goal rows carry no `position`, so they are granted to a punter but never listed as the punter's.
-13. `Player.attrLabels` / `attrNames` are read only by the new-career screen; the training, team and stats screens
-    still show a punter the kicker's attribute names.
+| Gross average, good leg (70 OVR profile) | 44–48 yd | `punt` |
+| Net average, good leg | 37–43 yd | `punt` |
+| Touchback rate | < 6 % | `punt` |
+| Gap from a poor leg (40) to a good one (70) | ≥ 7 yd gross | `punt` |
+| Punts blocked | < 1 % | `punt` |
 
 ---
 
@@ -1232,10 +985,6 @@ Where the code, as integrated, differs from the §2.14 that was written ahead of
 | Careers with ≥ 1 benching or cut in first 3 NFL seasons | 25–45 % | `career_balance` |
 | Career length (NFL seasons) for careers that reach OVR ≥ 80 | median 10–14 | `career_balance` |
 | HOF verdicts over 200 careers | first-ballot ≤ 10 %, inducted 15–25 % | `career_balance` |
-| Punt engine: good leg (all 80s) gross / net / inside-20 / touchbacks, 1 200 AI punts | 45–52 / 38–48 / > 20 % / < 12 % | `punt` (§2.14.6) |
-| Punt engine: gap from a poor leg (all 45s) to a good one, gross / net | > 7 / > 8 yd | `punt` |
-| Punt engine: draw contract (`resolve` 7–11, `aiInput` 4, forced 0, assist 0) and the band fits the bar at every LOS | always | `punt` |
-| Punter HOF verdicts over 60 auto careers (seeds 1–60, Pro) | first-ballot 3 %, inducted 18 % (measured; not asserted) | — (§2.14.6) |
 | Full auto career runtime (engine only) | < 4 s on Node (CI) | `career_balance` |
 | Save size after 20 seasons | < 400 KB | `save` |
 | Season sim without UI | < 250 ms | `season` |
@@ -1280,7 +1029,6 @@ kicker/
   js/engine/weather.js                E1   RTG.Weather
   js/engine/player.js                 E1   RTG.Player
   js/engine/kick.js                   E1   RTG.Kick
-  js/engine/punt.js                   E1   RTG.Punt (the punting engine, §2.14; needs Util, Tuning, Kick, Weather)
   js/engine/schedule.js               E2   RTG.Schedule
   js/engine/standings.js              E2   RTG.Standings (standings, tiebreaks, rankings, playoffs, bowls)
   js/engine/sim.js                    E2   RTG.Sim
@@ -1345,13 +1093,13 @@ kicker/
 ```
 00_namespace, engine/tuning, engine/util, engine/rng, engine/schema,
 data/blocklist, data/names, data/colleges, data/nfl, data/records, data/awards, data/events, data/headlines,
-engine/names, engine/weather, engine/player, engine/kick, engine/punt, engine/schedule, engine/standings, engine/sim,
+engine/names, engine/weather, engine/player, engine/kick, engine/schedule, engine/standings, engine/sim,
 engine/stats, engine/awards, engine/events, engine/contracts, engine/draft, engine/season, engine/career, engine/hs,
 engine/save, engine/api,
 ui/storage, ui/store, ui/router, ui/components, ui/sprites, ui/canvas, ui/audio, ui/input, ui/kickview,
 ui/screens/* (any order; each registers itself with Router), ui/app, debug
 ```
-`test/load.js` loads `00_namespace` → `engine/tuning` … → `engine/kick` → `engine/punt` → … → `engine/api` (everything before `ui/`) in the same order via `vm.runInThisContext(fs.readFileSync(...))` with `globalThis.RTG` captured, then exports `RTG`. A test that needs the UI does not exist (UI is tested by Playwright only).
+`test/load.js` loads `00_namespace` → `engine/tuning` … → `engine/api` (everything before `ui/`) in the same order via `vm.runInThisContext(fs.readFileSync(...))` with `globalThis.RTG` captured, then exports `RTG`. A test that needs the UI does not exist (UI is tested by Playwright only).
 
 ### 3.3 Namespace & the shim
 
@@ -1400,7 +1148,6 @@ CareerState = {
   week: int,                             // 1-based; PRE week 0; POST weeks continue numbering (college 14–17, NFL 19–22)
   player: {
     id: string, name: {first, last, full}, hometown: {city, state, region}, archetype: 'CANNON'|'SURGEON'|'ICEMAN'|'SOCCER',
-    position: 'K'|'P',                   // §2.14: chosen at creation, never changes; Save.migrate fills 'K' on older saves
     look: {skin: 0..3, hair: 0..5, boot: 0..3}, foot: 'R'|'L', age: int, stars: 2..5,
     attrs: {POW, ACC, CON, CLU, KO},     // ints 1–99
     pot:   {POW, ACC, CON, CLU, KO},     // hidden caps
@@ -1453,7 +1200,7 @@ CareerState = {
 
 League = {
   kind: 'COLLEGE'|'NFL', year: int,
-  teams: Team[],                         // Team per §2.5.1; college adds prestige, conf, rival; NFL adds conf/div; punter/punter2 slots exist (§2.14) but nothing fills them yet
+  teams: Team[],                         // Team per §2.5.1; college adds prestige, conf, rival; NFL adds conf/div
   teamIndex: {[id]: int},                // cache; NOT persisted (Save.serialize strips it); rebuilt by Schema.reindex on load
   cap: number, vetMin: number, tagValue: number,      // NFL only
   seasonHistory: {year, championId, userTeamId, userLine: string}[],
@@ -1470,8 +1217,7 @@ SeasonState = {
   goals: [{id, text, target, progress, met, xp}],
   trainingDone: bool, focus: 'POW'|'ACC'|'CON'|'CLU'|'KO'|'REST'|null,
   userGameId: string|null, weekGameDone: bool,
-  kickerStats: {[teamId]: KickerStats},  // AI kickers this season (awards, records)
-  punterStats: {[teamId]: KickerStats}   // every team's punting line this season, created on demand by Stats.recordAiPunt; the punter awards and records rank on it (§2.14)
+  kickerStats: {[teamId]: KickerStats}   // AI kickers this season (awards, records)
 }
 
 GameState = {
@@ -1483,7 +1229,7 @@ GameState = {
   drive: {n, startYtg, plays, side},
   driveLog: DriveLogRow[],               // {q, clock, side, text, ytg, result} capped 80
   kicks: KickLogRow[],                   // both teams, this game
-  pending: null | {type:'USER_KICK'|'USER_KICKOFF'|'USER_PUNT', ctx: KickContext},   // USER_PUNT only for a punter (§2.14.4)
+  pending: null | {type:'USER_KICK'|'USER_KICKOFF', ctx: KickContext},
   pendingKickoff: {side}|null,
   script: null | {ytg, down, toGo, plays, timeouts},          // end-of-game drill state
   ot: null | {period, mode:'NFL_REG'|'NFL_PLAYOFF'|'COLLEGE', firstPossession, bothPossessed, possessions: int},
@@ -1494,7 +1240,7 @@ GameState = {
 }
 
 KickContext = {
-  type: 'FG'|'PAT'|'KO'|'PUNT', league, distance, hash: -1|0|1, ballX,   // a PUNT context adds losYard (own yard 1–99) and toGoal (= distance = 100 − losYard)
+  type: 'FG'|'PAT'|'KO', league, distance, hash: -1|0|1, ballX,
   wind: {speed, dir}, weather, tempF, surface, altitude, dome,
   pressure, clutch, decisive, iced, playoff, rivalry, away, asTimeExpires, ot: bool,
   oppST, isUser: bool, difficulty,
@@ -1509,21 +1255,11 @@ KickResult = {
   tags: string[],                        // 'clutch','decisive','iced','gameWinner','tieForcer','asTimeExpires','playoff','fiftyPlus','auto'
   feedback: {timing: 'PURE'|'GOOD'|'FAIR'|'POOR', power: 'WEAK'|'SMOOTH'|'FULL'|'OVERSWING', missBy: {yd, side: 'L'|'R'|'SHORT'|null}, coachSaw: string}
 }
-PuntInput  = {power: 0..1.15, aim: -30..30 (deg; the scene's meter clamps at ±12), green?: bool}                       // §2.14; no quality
-PuntResult = {
-  type: 'PUNT', losYard, toGoal, power, aim, gross, net, hang, landing, lateral, oppStart (receiving side's own yard, 1–99; 100 = a TD),
-  touchback, outOfBounds, fairCatch, downed (always false as built), returnYds, inside20, blocked, blockReturnTd, returnTd,
-  grade: 'BLOCKED'|'SHANK'|'TOUCHBACK'|'POOR'|'OK'|'GOOD'|'BOOMING'|'COFFIN', outcome (= grade), made (not blocked, not a touchback, not a shank),
-  auto, assisted, forced, tags: string[]   // 'auto' | 'assisted' | 'forced'; every number 2 dp
-}
-KickLogRow = {id, year, week, league, gameId, teamId, oppId, type, distance, hash, wind:{speed,dir}, weather, pressure, outcome, made, tags, input:{power, aim, quality}, auto: bool, rngState: uint32, q, clock, scoreFor, scoreAgainst,
-              punt?: {losYard, gross, net, hang, oppStart, inside20, touchback, outOfBounds, fairCatch, returnYds, blocked}}   // PUNT rows: distance = round(gross), outcome = grade, made = !blocked && !touchback, quality 0, id 'p<year>w<week>n<seq>'
-KickerStats = {fga, fgm, pat, patMade, pts, long, buckets:{'0-29':{a,m}, '30-39':{a,m}, '40-49':{a,m}, '50-59':{a,m}, '60+':{a,m}}, clutchA, clutchM, decisiveA, decisiveM, gameWinners, tieForcers, blocked, doinks, doinkIn, wideL, wideR, short, made50plus, consecutive, bestConsecutive, games, gamesStarted, koTouchbacks, koCount, wins, losses,
-               punts, puntYds, puntNet, in20, tbs, puntLong, puntBlocked, fairCatch, retYds, hangSum, pinned}   // §2.14 punting keys (Schema.STAT_KEYS), zero on a kicker's block
+KickLogRow = {id, year, week, league, gameId, teamId, oppId, type, distance, hash, wind:{speed,dir}, weather, pressure, outcome, made, tags, input:{power, aim, quality}, auto: bool, rngState: uint32, q, clock, scoreFor, scoreAgainst}
+KickerStats = {fga, fgm, pat, patMade, pts, long, buckets:{'0-29':{a,m}, '30-39':{a,m}, '40-49':{a,m}, '50-59':{a,m}, '60+':{a,m}}, clutchA, clutchM, decisiveA, decisiveM, gameWinners, tieForcers, blocked, doinks, doinkIn, wideL, wideR, short, made50plus, consecutive, bestConsecutive, games, gamesStarted, koTouchbacks, koCount, wins, losses}
 SeasonLine = {year, league, teamId, teamName, age, ovr, role, stats: KickerStats, awards: string[], teamRecord: string, champion: bool, playoffResult: string, grade: 'A'..'F', salary}
 Decision = { kind:'OFFERS_COLLEGE'|'REDSHIRT'|'DECLARE'|'TRANSFER'|'COMBINE_PLAN'|'UDFA'|'EXTENSION'|'FREE_AGENCY'|'TAG'|'RETIRE'|'OFFSEASON_PLAN'|'CUT_NOTICE'|'HOF'|'TRAINING_BLOCKS', payload: any, options: {id, label, detail}[] }
-KickSession = { kind:'HS_GAME'|'CAMP'|'COMBINE_LADDER'|'COMBINE_ACC'|'COMBINE_KO'|'HALFTIME70'|'PRACTICE'|'TRYOUT', contexts: KickContext[], results: (KickResult|PuntResult)[], rival?: {name, results: KickResult[]}, idx: int,
-                position?: 'K'|'P' }     // HS_GAME sessions carry position, gameIdx, week, opp, score, chances, log (§2.7.0); a punter's chances are PUNT contexts
+KickSession = { kind:'HS_GAME'|'CAMP'|'COMBINE_LADDER'|'COMBINE_ACC'|'COMBINE_KO'|'HALFTIME70'|'PRACTICE', contexts: KickContext[], results: KickResult[], rival?: {name, results: KickResult[]}, idx: int }
 EventInstance = { id, text (rendered), sender, choices: [{label, preview}], rolledWeek, rolledYear }
 Modifier = { id, key, op:'mul'|'add', value, expires:{type:'week'|'game'|'season'|'never', at}, label, source }
 Settings (rtg.settings, UI-owned; mirrored subset in state.settings) = { audio: bool, autoPat: 'off'|'safe'|'all', playKickoffs: bool, simSpeed: 1|2|4, colorblind: bool, highContrast: bool, reducedMotion: bool, fontScale: 1|1.25|1.5, leftFooted: bool, inputMode: 'flick'|'meter', playClockMult: 1|2, tooltips: bool }
@@ -1540,10 +1276,10 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 #### 3.5.2 `RTG.RNG` (E1)
 `create(seed:uint32) → rng`; `rng.next() → [0,1)` (mulberry32, 1 draw), `int(lo, hi)` inclusive (1 draw), `float(lo, hi)` (1), `chance(p)` (1), `gauss(mu=0, sd=1)` (exactly 2 draws, Box–Muller, no caching), `pick(arr)` (1), `weighted(items, weightFn|key)` (1), `shuffle(arr)` in place (n−1 draws), `state() → uint32`, `setState(s)`, `fork(label) → rng` (derives a child seed `fnv1a(state+label)` for isolated sub-simulations such as other teams' games; advances parent by 1 draw). Test vectors in `rng.test.js`.
 
-#### 3.5.3 `RTG.Tuning` (E1) — object tree: `kick`, `punt` (§2.14: `aimMax`, `curve`, `distance`, `field`, `spread`, `search`, `block`, `ret`, `grade`, `assist`, `forced`, `ai`, `abstract`, `career`), `sim`, `progression`, `soft`, `contracts`, `draft`, `hs` (incl. `hs.punter`), `awards` (incl. `punterScore`), `hof` (incl. `hof.punter`), `records` (incl. `minPuntsSeasonNet`, `minPuntsCareerNet`), `difficulty[d]`, `save`, `events`. Frozen with `Object.freeze` deep. `RTG.debug.tune(path, value)` may replace values at runtime (debug only) by re-creating an unfrozen copy.
+#### 3.5.3 `RTG.Tuning` (E1) — object tree: `kick`, `sim`, `progression`, `soft`, `contracts`, `draft`, `hof`, `difficulty[d]`, `save`, `events`. Frozen with `Object.freeze` deep. `RTG.debug.tune(path, value)` may replace values at runtime (debug only) by re-creating an unfrozen copy.
 
 #### 3.5.4 `RTG.Schema` (E1)
-- `createCareer(opts:{name, archetype, position?, difficulty, seed, hometown, look, foot}, rng) → CareerState` — builds both leagues (`Data.colleges` + generated NFL ratings), AI kickers, legends/records, player (§2.1.1), stage `HS`/phase `SEASON`, `flags.hs` = the senior season (`HS.season`), `pending = null` until the first game is opened. RNG: many draws (documented order: player attrs → college ratings → NFL ratings → kickers → legends).
+- `createCareer(opts:{name, archetype, difficulty, seed, hometown, look, foot}, rng) → CareerState` — builds both leagues (`Data.colleges` + generated NFL ratings), AI kickers, legends/records, player (§2.1.1), stage `HS`/phase `SEASON`, `flags.hs` = the senior season (`HS.season`), `pending = null` until the first game is opened. RNG: many draws (documented order: player attrs → college ratings → NFL ratings → kickers → legends).
 - `createTeam(data, rng, league) → Team`; `createGameState(...)`; `createKickLogRow(ctx, result, meta)`; `emptyKickerStats()`.
 - `validate(state) → {ok, errors: string[]}` — checks types/ranges/enums, referential integrity (teamIds exist), caps, no cycles. Cheap enough to run after every dispatch in debug mode (< 5 ms).
 - `reindex(state)` — rebuilds non-persisted caches (`teamIndex`) after load.
@@ -1565,7 +1301,6 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 - `rollInjury(state, rng) → Injury|null` (1–2 draws).
 - `addMod(player, mod)`, `expireMods(player, {type, at})`, `modValue(player, key, op) → number` (product for `mul`, sum for `add`).
 - `effectiveAttrs(player) → attrs` (form applied to ACC; traits; not mods).
-- `attrLabels(position) → {POW, ACC, CON, CLU, KO: string}` short labels (`LEG PLACE OPER CLU HANG` for `'P'`); `attrNames(position)` the long names (§2.1.1, §2.14). Pure.
 
 #### 3.5.8 `RTG.Kick` (E1)
 - `buildContext(state, gs|null, situation) → KickContext` — `situation = {type, distance, hash?, decisive?, asTimeExpires?, playoff?, rivalry?, away?, oppST?, isUser, forSession?}`; computes pressure (§2.3.7) from `gs`/situation, snapshots kicker. RNG: hash draw (1) if `hash` undefined, per-kick wind via `Weather.perKick` (2).
@@ -1575,14 +1310,6 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 - `resolveKickoff(rng, ctx, attrs, input|null) → KickoffResult` (§2.3.10).
 - `pMakeAt(state, distance, opts) → number` — convenience for UI overlays and the coach.
 - `feedbackFor(ctx, model, input, result) → KickResult.feedback` (pure).
-
-#### 3.5.8b `RTG.Punt` (E1) — the punting engine (§2.14; `engine/punt.js`, after `Kick`)
-- `buildContext(state, gs|null, situation, rng?) → KickContext` (type `'PUNT'`) — `situation = {losYard (own yard, default 30), hash?, isUser, forSession?, calm?, wind?, pressure?, kicker?|attrs?, side?, teamId?, oppId?, league?, game?}`; runs `Kick.buildContext` with `toGoal = 100 − losYard` as the distance, then rolls the hash itself. RNG: `Kick.buildContext`'s wind 2 (+ Legend gusts 2) + hash 1 when `hash` is not given.
-- `model(ctx, attrs?, {power?}) → PuntModel` `{losYard, toGoal, pin, maxDist, maxHang, want, pNeed, greenBand, powerMax, windAlongYds, tbFrom, distance, hang, power, pBlock}` (§2.14.2). Pure.
-- `pBlock(ctx, attrs?) → number`; `inGreen(power, model) → bool` (the engine's own check of the band, §2.14.3).
-- `aiInput(rng, ctx, attrs?, model?) → {power, aim}` (draws: power gauss 2 · aim gauss 2). Never sets `green`.
-- `resolve(rng, ctx, attrs|null, input|null, opts?) → PuntResult` — `input` null → `aiInput` and `auto: true`; `opts.forced` a `GRADES` name (0 draws); `opts.noReturn` forces the fair catch. Draw order in §2.14.3.
-- `feedbackFor(result, ctx, model?) → {title, detail, coach}`; `GRADES` (8 names, in order), `GRADE_TEXT` (banner text by grade).
 
 #### 3.5.9 `RTG.Schedule` (E2)
 - `college(league, year, rng) → Game[]` (§2.6.1); `nfl(league, year, prevStandings, rng) → Game[]` (§2.6.2). RNG: shuffles/restarts only; deterministic for a seed.
@@ -1599,28 +1326,25 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 - `simToNextUserKick(gs, state, rng) → SimEvent` — loops `step`.
 - `applyKick(gs, state, rng, result) → void` — scores, logs, clears `pending`, queues kickoff.
 - `applyKickoff(gs, state, rng, koResult)`.
-- `applyPunt(gs, state, rng, puntResult) → SimEvent` — requires `pending.type === 'USER_PUNT'`; logs, records (`Stats.recordPunt`), hands the ball over at `100 − oppStart` or scores the return TD (§2.14.4).
-- `autoResolvePending(gs, state, rng) → KickResult|KickoffResult|PuntResult` — uses the position's AI rule (`Kick.aiInput` / `Punt.aiInput`); tags `auto`.
+- `autoResolvePending(gs, state, rng) → KickResult` — uses `aiInput`; tags `auto`.
 - `finishGame(gs, state, rng) → GameSummary` — `{gameId, score, won, userLine: {fga, fgm, pat, patMade, long, gw}, grade, xp: {items[], total}, meters: {morale, trust, fans, js, fame}, headline, kicks: KickLogRow[], drives}`; writes `season.schedule[game]`, `season.results`, `stats.*` (via `Stats.recordGame`), meters (via `Player`), records check; sets `state.game = null`, `season.weekGameDone = true`.
 - `simAiGame(state, rng, gameRef) → {score, kicks}` — full game between two AI teams (used by `Season.simOtherGames`), records AI kicker stats into `season.kickerStats`.
 - `driveLogLine(gs, event) → string` (pure text helper; UI may use).
 
-**SimEvent** = `{ type: 'DRIVE'|'SCORE'|'AI_KICK'|'USER_KICK'|'USER_PUNT'|'AI_PUNT'|'USER_KICKOFF'|'ICE_TIMEOUT'|'END_QUARTER'|'END_HALF'|'OT_START'|'END_GAME'|'END', text: string, side?: 'home'|'away', kick?: KickResult, punt?: PuntResult, ctx?: KickContext, result?: 'PUNT'|…, gs: GameState }`. A settled punt is a `DRIVE` event with `result: 'PUNT'`, `punt` and `ctx` (both drive paths pass `eventType: 'DRIVE'`; `AI_PUNT` is only the default when no type is given). `USER_PUNT` carries the pending `ctx`. After `END_GAME`, the caller must call `finishGame`.
+**SimEvent** = `{ type: 'DRIVE'|'SCORE'|'AI_KICK'|'USER_KICK'|'USER_KICKOFF'|'ICE_TIMEOUT'|'END_QUARTER'|'END_HALF'|'OT_START'|'END_GAME'|'END', text: string, side?: 'home'|'away', kick?: KickResult, gs: GameState }`. After `END_GAME`, the caller must call `finishGame`.
 
 #### 3.5.12 `RTG.Stats` (E3)
 - `recordKick(state, ctx, result, meta) → KickLogRow` — appends to `stats.kicks` (cap/aggregate), updates season/career/league `KickerStats` (buckets, streaks), `player.missStreak/makeStreak`.
 - `recordGame(state, summary)`; `recordAiKick(season, teamId, ctx, result)`.
-- Punting (§2.14.5): `applyPunt(block, ctx, result) → block` folds one punt into a KickerStats block; `recordPunt(state, ctx, result, meta) → KickLogRow` applies it to season / career / league blocks and logs a `PUNT` row (splits included); `recordAiPunt(season, teamId, ctx, result)` onto `season.punterStats[teamId]`; `puntLine(block) → {punts, gross, net, hang, in20, in20Pct, tbs, long, blocked, retYds}` with the averages already derived over live punts — use it rather than dividing by hand.
 - `finishSeason(state) → SeasonLine`; `rebuildSplits(state)`; `bucketOf(distance)`.
 - `checkRecords(state, ctx?, result?) → Milestone[]` — updates `records.*` when beaten (isUser), returns milestone/headline payloads.
 - `topMoments(state, n) → Moment[]`; `grade(summary) → 'A'..'F'` (`A: 100 % with ≥ 2 FGA or GW; B ≥ 85 %; C ≥ 70 %; D ≥ 50 %; F otherwise; decisive miss caps at D`).
 - `seasonFgPct(stats)`, `careerLine(state)`, `compareToLegends(state)`.
 
 #### 3.5.13 `RTG.Awards` (E3)
-- `compute(state, rng) → Award[]` — evaluates §2.8 across `season.kickerStats` + user (a punter: the punter slate across `season.punterStats` + user); appends to `history.awards`, applies XP/fame; returns the list for the awards screen. RNG: none except tie-breaks (1 draw; the tie test also compares `puntNet`).
-- `kickerScore(stats, ignoreMin?) → number|null`; `punterScore(stats, ignoreMin?) → number|null` (§2.8; null under 20 live punts).
+- `compute(state, rng) → Award[]` — evaluates §2.8 across `season.kickerStats` + user; appends to `history.awards`, applies XP/fame; returns the list for the awards screen. RNG: none except tie-breaks (1 draw).
 - `weekly(state) → Award|null` (ST Player of the Week).
-- `hofScore(state) → {score, verdict, tier, breakdown[]}` — the kicker rows, or `hofRowsPunter` when `player.position === 'P'` (§2.7.9).
+- `hofScore(state) → {score, verdict, tier, breakdown[]}`.
 - `seasonGoals(state, rng) → Goal[]` (3 goals at PRE); `checkGoals(state)`.
 
 #### 3.5.14 `RTG.Events` (E3)
@@ -1677,19 +1401,18 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 
 | Function | Returns | Notes |
 |---|---|---|
-| `newCareer(opts, now)` | `{state, rng}` | seed default `fnv1a(now)`; creates rng; `opts.position` `'K'` (default) or `'P'` (§2.14) |
+| `newCareer(opts, now)` | `{state, rng}` | seed default `fnv1a(now)`; creates rng |
 | `train(state, rng, focus)` | `{xp, moraleDelta}` | once per week |
 | `spendXp(state, attr)` | `{ok, cost}` | |
 | `startUserGame(state, rng)` | `GameState` | error if `weekGameDone` |
 | `simStep(state, rng)` / `simToKick(state, rng)` | `SimEvent` | on `state.game` |
 | `applyUserKick(state, rng, input)` | `KickResult` | resolves via `Kick.resolve` with `state.game.pending.ctx`, then `Sim.applyKick`, `Stats.recordKick` |
-| `autoKick(state, rng)` | `KickResult` \| `KickoffResult` \| `PuntResult` | auto-PAT / sim; resolves whatever is pending (`Sim.autoResolvePending`) |
+| `autoKick(state, rng)` | `KickResult` | auto-PAT / sim |
 | `applyUserKickoff(state, rng, input|null)` | `KickoffResult` | |
-| `applyUserPunt(state, rng, input|null, opts?)` | `PuntResult` | requires `game.pending.type === 'USER_PUNT'` (else throws and names the pending type); `input` `{power, aim, green?}` or null for the AI rule; `opts.forced` a `Punt.GRADES` name (0 draws); then `Sim.applyPunt` (§2.14.4) |
 | `finishUserGame(state, rng)` | `GameSummary` | |
 | `endWeek(state, rng)` | `WeekReport` | requires game done or bye; requires no pending |
 | `chooseEvent(state, rng, idx)` | `EventOutcome` | |
-| `sessionKick(state, rng, input)` | `{result, done, outcome?}` | for `pending.kind==='KICKS'`; a `PUNT` context resolves through `Punt.resolve` (a forced kick word is mapped onto a grade: GOOD → GOOD, BLOCKED → BLOCKED, SHORT → SHANK, else POOR); when the last kick is played, calls `Career.finishSession` |
+| `sessionKick(state, rng, input)` | `{result, done, outcome?}` | for `pending.kind==='KICKS'`; when the last kick is played, calls `Career.finishSession` |
 | `decide(state, rng, {kind, optionId, extra})` | `DecisionOutcome` | |
 | `nextPhase(state, rng)` | `{phase, stage}` | drives PRE→REG, AWARDS→OFF, OFF→next year, DRAFT sub-phases; idempotent when a `pending` exists (returns current) |
 | `autoPlayGame(state, rng)` | `GameSummary` | start (if needed) + auto kicks + finish |
@@ -1706,12 +1429,12 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 | (none) | — | `title` | New / Continue / Load / Settings | `newcareer` / load |
 | (none) | — | `newcareer` | name, archetype, look, difficulty, seed → `Engine.newCareer` | `HS.SEASON` |
 | HS.SEASON | — | `hsseason` | PLAY WEEK n → `Engine.hsStartGame` | `HS.SEASON` (pending KICKS `HS_GAME`) |
-| HS.SEASON | KICKS(HS_GAME) | `hsgame` | 3–5 kicks (a punter: 3–6 punts) → `sessionKick` | `HS.SEASON` (games 1–4) · `HS.OFFERS` after the fifth |
+| HS.SEASON | KICKS(HS_GAME) | `hsgame` | 3–5 kicks → `sessionKick` | `HS.SEASON` (games 1–4) · `HS.OFFERS` after the fifth |
 | HS.OFFERS | DECISION | `offers` | pick → `decide` | `COLLEGE.PRE` |
 | COLLEGE/NFL.PRE | DECISION(CAMP)? / KICKS(camp) | `hub` (pre card) → `campbattle` | `sessionKick`, then `nextPhase` | `.REG` week 1 |
 | .REG (week w) | none | `hub` | `train`, `spendXp`, view screens; Play → `startUserGame` | `game` |
-| .REG | none, `state.game` | `game` | `simToKick` / `simStep`; on `USER_KICK` or `USER_PUNT` → `kick` | `kick` |
-| .REG | `game.pending` | `kick` | flick/meter → `applyUserKick` (a punter: aim-then-hold → `applyUserPunt`; or `autoKick`) | back to `game`; on `END_GAME` → `finishUserGame` → `postgame` |
+| .REG | none, `state.game` | `game` | `simToKick` / `simStep`; on `USER_KICK` → `kick` | `kick` |
+| .REG | `game.pending` | `kick` | flick/meter → `applyUserKick` (or `autoKick`) | back to `game`; on `END_GAME` → `finishUserGame` → `postgame` |
 | .REG | none | `postgame` | Continue → `endWeek` | `hub` (next week) or EVENT |
 | .REG | EVENT | `inbox` (event modal) | `chooseEvent` | `hub` |
 | .REG bye week | none | `hub` (bye card: Rest/Grind) | `train`, `endWeek` | next week |
@@ -1734,7 +1457,6 @@ Invariant: **the UI only ever calls `Engine.*`**, and after any call it re-rende
   "playtimeSec": 5400, "checksum": "a1b2c3d4", "career": { …CareerState… } }
 ```
 - `v` = save schema version = `RTG.SAVE_VERSION`. Bump when `CareerState` changes incompatibly; add `Save.migrations[oldV] = blob => blob` (with a fixture `test/fixtures/save_v<oldV>.json`). A save newer than the app → refuse with "This save is from a newer version".
-- The punter path (D24) changed the shape without a version bump: `Save.migrate` fills `player.position = 'K'`, and `Stats` fills the zero punting keys on any KickerStats block it touches (`ensureStats`), so pre-punter saves load as kickers.
 - `checksum` = `fnv1a(JSON.stringify(career))`; mismatch → refuse to load (offers export for support).
 - Keys: `rtg.save.1|2|3`, `rtg.save.auto`, `rtg.settings`, `rtg.records`. Autosave after every `finishUserGame`, `endWeek`, `chooseEvent`, `decide`, `nextPhase`; manual save any time (not mid-kick).
 - Size: `stats.kicks` capped at 600 rows (older rows are aggregated; season/career totals are always exact), `driveLog` ≤ 80 rows and only for the in-progress game, `season.schedule[].log` only for user games of the current season, `inbox` ≤ 60, `headlines` ≤ 40, `history.moments` ≤ 50. Target < 400 KB per slot.
@@ -1748,7 +1470,6 @@ RTG.debug.getState() → CareerState (deep clone)         RTG.debug.setState(sta
 RTG.debug.newCareer({seed, difficulty, archetype, name}) → state
 RTG.debug.jumpTo({stage, phase?, year?, week?})         // fast-forwards with Engine.autoPlay* until the target; throws if unreachable in 30 years
 RTG.debug.forceKick({outcome}|{power, aim, quality})    // applies to the current pending kick (game or session) and returns KickResult
-                                                        // on a pending punt (USER_PUNT or a PUNT session context) `outcome` may be a Punt.GRADES name; kick words map GOOD→GOOD, BLOCKED→BLOCKED, SHORT→SHANK, else POOR; returns the PuntResult
 RTG.debug.autoKick(bool)                                // UI resolves all user kicks via autoKick without input
 RTG.debug.simGame() → GameSummary   simWeek() → WeekReport   simSeason() → SeasonLine   simCareer({untilStage:'RETIRED'|…, maxYears}) → state
 RTG.debug.setAttrs({POW:90,…})  setSoft({trust:90, js:80, fame:600})  addXp(n)  addMod(mod)
@@ -1830,15 +1551,15 @@ Each entry: layout · components · engine calls.
 | Screen | Layout & components | Engine / store calls |
 |---|---|---|
 | **title** | Canvas strip (goalposts at dusk, ball wobble via uiRng); logo; buttons NEW CAREER · CONTINUE (last autosave summary) · LOAD · SETTINGS; ticker of `rtg.records` best careers; version/seed in the corner | `Storage.getItem('rtg.save.auto')` summary via `Save.slotSummary` |
-| **newcareer** | Name input + "Generate" dice (`Names.player(uiRng)`), position cards ×2 (KICKER / PUNTER, §2.14; the archetype bars relabel through `Player.attrLabels`), archetype cards ×4 (attr preview bars), look swatches (skin 4 × hair 6 × boot 4), foot, hometown dropdown (60), difficulty pills ×4, seed field (editable, "Random") | `Engine.newCareer(opts, Date.now())` → `Store.replace` |
-| **hsseason** | The senior season between games: school header, season line, the five-game schedule with each night's kicking line, and the recruiting board (interest bar, tier, last move). A punter's card reads PUNTS · NET AVERAGE · INSIDE THE 20 · PINNED IT and each night's line `n punts · net · inside the 20 · TB · pinned it` | PLAY WEEK n → `Engine.hsStartGame` |
-| **hsgame** | KickView full-screen with a live scoreboard (your school, the opponent, quarter, running score) and a slot strip of the night's chances; the tutorial overlay runs on the first game only. Punt slots read `OWN n`; a resolved punt shows ✗ (blocked), TB, ★ (inside the 20) or its net yards | `Engine.sessionKick`; on done → `Router.sync` |
+| **newcareer** | Name input + "Generate" dice (`Names.player(uiRng)`), archetype cards ×4 (attr preview bars), look swatches (skin 4 × hair 6 × boot 4), foot, hometown dropdown (60), difficulty pills ×4, seed field (editable, "Random") | `Engine.newCareer(opts, Date.now())` → `Store.replace` |
+| **hsseason** | The senior season between games: school header, season line, the five-game schedule with each night's kicking line, and the recruiting board (interest bar, tier, last move) | PLAY WEEK n → `Engine.hsStartGame` |
+| **hsgame** | KickView full-screen with a live scoreboard (your school, the opponent, quarter, running score) and a slot strip of the night's chances; the tutorial overlay runs on the first game only | `Engine.sessionKick`; on done → `Router.sync` |
 | **offers** | Card carousel (swipe/arrows): crest, prestige ★, depth pill (OPEN/VET/STAR), coach line, NIL, climate icon, "near home" tag; COMPARE toggle → 2-column table | `Engine.decide({kind:'OFFERS_COLLEGE', optionId})` |
 | **hub** | Top: team bar (crest, record, rank/seed). Week Card: opponent crest, venue, forecast (icon + °F + wind mph/dir), spread text, 2 storylines (headlines), meters row (Trust, Fans, Morale, Job Security as 5-block bars; Fame tier chip). Inbox preview (3 newest). Buttons: TRAIN (if not done), PLAY GAME / SIM GAME, SIM TO END OF SEASON (confirm). Bye week: "Rest or Grind" card. PRE: goals card + camp-battle button. POST: bracket card. | `Season.userGameRef` (read), `Engine.train`, `Engine.startUserGame`, `Engine.autoPlayGame`, `Engine.endWeek`, `Engine.autoPlaySeason` |
 | **inbox** | Chat-bubble list with sender avatars (coach/agent/GM/press/fan/family); events open as a modal with 2–3 big buttons; effect preview per difficulty (numbers / icons / hidden); consequence toast | `Engine.chooseEvent(idx)`, `Events.markRead` |
 | **training** | 6 focus tiles (POW/ACC/CON/CLU/KO/REST) with projected XP and the 25 % discount tag; attribute panel: 5 rows with bars, current/POT hint (agent tier), cost, "+" button, XP balance, AUTO button; traits list; "Practice" button (M4) | `Engine.train(focus)`, `Engine.spendXp(attr)`, `Player.costToRaise` (read) |
-| **game** | Scoreboard (DOM "LED": crests, score, Q, clock, possession dot); drive log (monospace lines coloured by side, auto-scroll, `aria-live=polite`); speed pills ×1/×2/×4; buttons NEXT KICK ▶ (default) / WATCH / SIM REST; kick history chip strip (this game). On `USER_KICK` → `Router.go('kick')`; on `USER_PUNT` → drive-log line `YOUR PUNT: …` then `Router.go('kick')` (SIM REST resolves it through `autoKick`); on `USER_KICKOFF` → KO timing bar inline; on `ICE_TIMEOUT` → "ICED!" toast then kick; on `END_GAME` → `finishUserGame` → postgame | `Engine.simToKick`, `Engine.simStep` (watch mode timer 400 ms/drive ÷ speed; uses `setTimeout`, cancelled in `destroy`), `Engine.autoKick` (auto-PAT rule), `Engine.applyUserKickoff`, `Engine.finishUserGame` |
-| **kick** | Full-width KickView (§4.6) + HUD strip: `47 YDS · R HASH · WIND ← 12 · 🌧 · ICED!`; pressure heartbeat icon; play-clock ring; result banner overlay; feedback line ("Wide right by 2 ft · Timing: GOOD · Power: 91 %"); "What's my range?" toggle (shows `Kick.model` pMake at this distance). A pending `USER_PUNT` runs the same scene on `RTG.Punt` (§2.14): HUD `PUNT · OWN 32 · R HASH · WIND …`, the punt field instead of uprights, banner from `Punt.GRADE_TEXT`, feedback from `Punt.feedbackFor`; the auto-PAT rule does not apply | `Engine.applyUserKick(input)`; reads `state.game.pending.ctx` and `Kick.model`. Punts: `Engine.applyUserPunt(input)` and `Punt.model` |
+| **game** | Scoreboard (DOM "LED": crests, score, Q, clock, possession dot); drive log (monospace lines coloured by side, auto-scroll, `aria-live=polite`); speed pills ×1/×2/×4; buttons NEXT KICK ▶ (default) / WATCH / SIM REST; kick history chip strip (this game). On `USER_KICK` → `Router.go('kick')`; on `USER_KICKOFF` → KO timing bar inline; on `ICE_TIMEOUT` → "ICED!" toast then kick; on `END_GAME` → `finishUserGame` → postgame | `Engine.simToKick`, `Engine.simStep` (watch mode timer 400 ms/drive ÷ speed; uses `setTimeout`, cancelled in `destroy`), `Engine.autoKick` (auto-PAT rule), `Engine.applyUserKickoff`, `Engine.finishUserGame` |
+| **kick** | Full-width KickView (§4.6) + HUD strip: `47 YDS · R HASH · WIND ← 12 · 🌧 · ICED!`; pressure heartbeat icon; play-clock ring; result banner overlay; feedback line ("Wide right by 2 ft · Timing: GOOD · Power: 91 %"); "What's my range?" toggle (shows `Kick.model` pMake at this distance) | `Engine.applyUserKick(input)`; reads `state.game.pending.ctx` and `Kick.model` |
 | **postgame** | Big score with crests; your line in gold (FG 3/3 · Long 48 · PAT 2/2 · GW ★); letter grade stamp (animated 300 ms); headline card; XP breakdown list; meter deltas with arrows; coach quote; CONTINUE | `Engine.endWeek` on continue |
 | **schedule** | Week list with results (W/L, score, your line); tap → box score modal (drives summary, kicks) | read `state.season.schedule` |
 | **standings** | Tabs: Division/Conference (NFL) or Conference/Top 25/Playoff picture (college); bracket view in POST; tiebreak note | read `state.season.standings/rankings/playoffs` |
@@ -1882,8 +1603,6 @@ Each entry: layout · components · engine calls.
 
 **Result beat (1.2 s; 0.4 s with reduced motion):** refs' arms (up = good, wave-off = no good), crowd row colour flip, banner "GOOD!" / "WIDE RIGHT" / "SHORT" / "BLOCKED!" / "DOINK!" with palette flash; score ticker rolls in the HUD. **Doink:** freeze 500 ms on the post with the ball squashed against it, metallic TING, crowd "ooh" bar, then the ruling banner. **Block:** 6-frame rush sprite overlay before the swing when `result.outcome === 'BLOCKED'` (the result is known before the animation, so the rush is drawn convincingly). **Clutch (pressure ≥ 0.6):** vignette, heartbeat SFX at `60 + 90·pressure` bpm, crowd muted → roar on the result, "GAME ON THE LINE" banner on decisive kicks; camera shake amplitude `2·pressure` px (0 with reduced motion); aim-line sway per §2.3.7.
 
-**Punts in the scene (§2.14):** a `PUNT` context mounts the same view with `Punt.model` as the model. The green band is `[model.pNeed, model.pNeed + model.greenBand]` (0.20, `Tuning.punt.field.greenBand`) and the meter's `greenZone` reads the model's own band and `powerMax`; a release inside it sets `input.green` exactly as for a kick. Aim uses the same arrows and the same `Input.CONST.aimMax` clamp (±12°), although the engine accepts ±30°. Instead of uprights the field draws the strip inside the opponent's 20 (gold, from `ctx.toGoal − 20` to the goal line) and a mint tick at `model.want`, the yardage the coach asks for. The flight lasts `hang × 0.45` s (`TIMING.puntFlightScale`), there is no doink, a block runs the rush overlay, and the ball lands at `gross / toGoal` of the way up the field. The banner is `Punt.GRADE_TEXT[grade]` (COFFIN CORNER! is styled as a make, BLOCKED! as a block); the feedback lines are `Punt.feedbackFor(result, ctx, model).detail` and `.coach`; the aria text is the grade, the gross yards and the receiving side's yard line.
-
 **Timings summary:** snap+hold 400 ms · pull ≤ play clock · swing 5 frames @ 60 ms · contact flash 4 frames · flight 0.9–1.9 s · result 1.2 s · banner fade 300 ms · post-kick feedback line persists until the next event.
 
 **Auto-PAT rule (settings.autoPat):** `off` = kick every PAT; `safe` (default after the first college season) = auto unless `pressure ≥ 0.5` (a tying PAT in Q4 is always yours); `all` = auto. Auto kicks use `Engine.autoKick` (AI input with the user's attributes; 1 % honest auto-miss floor at ACC < 70 is inherent in the model).
@@ -1923,13 +1642,12 @@ Runner: `node kicker/test/run.js` (plain `node:assert` + `node:test`, no npm dep
 | `kick.test.js` | E1 | `maxFG` values at POW 40/62/82/99 (49.4/56.2/62.4/67.7 ±0.05); `carryMax`, `Rneed`, `h(D)` closed forms; σ at the four profiles (3.07/2.80/2.09/1.84 ±0.01 before multipliers); shank rate by CON; deterministic `resolve` for a fixed seed (golden JSON of 20 results); **rng draw order** asserted by counting draws per outcome branch; doink bands (x = ±3.05 → DOINK, ±3.30 → WIDE); crossbar band; wind drift sign (+dir pushes right) and magnitude (15 mph @ 45 yd = 1.77 yd ±0.01); hash `targetDeg` (college R hash @ 30 yd = −12.53°); overswing penalty (σ ×1.375 at 1.15) and bias sign by foot; block probability bounds (0.2 %–15 %) and `allOut` bump; PAT distance by league; `pMakeAt` monotone decreasing in D and increasing in ACC; kickoff touchback rate at KO 50 vs 90 (≈ 35 % vs ≈ 75 %); `feedbackFor` labels. |
 | `kick_model.test.js` | E1 | `Kick.model().pMake` vs 50k-kick Monte Carlo within ±2 pts at 25/35/45/52/58 yd for rookie and elite; `windowDeg` asymmetry from hashes; `pClear` = 0.5 exactly at pNeed where carry = Rneed. |
 | `kick_calibration.test.js` `[balance]` | E1 | The §2.3.6 table, 30k kicks/cell, ±4 (56–60: ±6); human-vs-AI: quality 0.95/aim sd 0.3 beats AI profile by 2–5 pts at 40–49; quality 0.5 loses 5–12; difficulty σ multipliers ordering. Prints the table (also `test/balance_report.js`). |
-| `punt.test.js` | E1 | `RTG.Punt` (§2.14): public API and `Tuning.punt`; a `PUNT` context carries `losYard` / `toGoal`; distance rises with power to 1.0 and falls past it while hang peaks at `curve.hangPeak` and falls either side (the boomed ball is longer and hangs less); POW moves `maxDist` by > 8 yd from 40 to 90, KO moves `maxHang`, tail/head wind move the ceiling; the band moves with the field (own 8: `want ≥ maxDist − 1`, not pinning; own 55: pinning, `want` inside the 20 and ≥ 2 yd short of the goal line, lower `pNeed`, `tbFrom` above the band) and fits the bar at every LOS with `want ≥ 20` through own 60; `inGreen` edges; **draw contract** (`resolve` 7–11 draws, forced 0, `aiInput` 4, assist 0); `resolve` is a pure function of `{ctx, input, rngState}`; 4 000 mixed punts close the arithmetic (`oppStart = 100 − landing + return` clamped, net ≤ gross, touchbacks start at 20, out-of-bounds and fair catches return nothing, inside-20 means landed at ≥ 80, blocks > 0 and < 10 %); aiming at the near sideline travels less, finds the sideline > 20 % of the time and is returned < half as often, the far sideline is not reached; high KO gives up < 75 % of the return yards; `pBlock` doubles from calm/CON 80 to pressure 1/CON 30 and stays ≤ `block.max`; the verified assist is never blocked or returned, hangs ≥ 4.4 and pins from plus territory, an unverifiable claim falls through to the physics, the AI never claims it; forced grades produce their shape and legal spots; `feedbackFor` titles, details and coach lines; **balance** (1 200 AI punts per profile, own 10–45): good leg (80s) gross 45–52, net 38–48, inside-20 > 20 %, touchbacks < 12 %; poor leg (45s) > 7 yd worse gross and > 8 net. |
-| `sim.test.js` `[balance]` | E2 | 2 000 NFL games (random teams 58–88, kickers 62–92) → points/team 21–27, FGA/team 1.9–2.4, PAT/team 2.4–3.0, distance buckets per §2.13, regulation ties 3–7 %, decisive attempts/game 0.10–0.25, ice timeouts ≤ 0.6 × decisive; college 1 000 games → 24–32 pts, FGA 1.5–2.2, PAT 2.8–4.2; clock never negative, drives/team 10–14; OT rules (NFL both-possess, playoff continues, college alternating from 25, 2-pt from period 2, 3+ alternating tries) by scripted fixtures; `step` after `END` throws; a scripted `applyKick` sequence reproduces an exact final score; **determinism**: same seed → identical `driveLog` and score; `simToNextUserKick` returns only user-kick or end events; blocked PAT return-for-2 occurs; a scripted `PUNT` outcome resolves through the punt engine from `drive.puntLos.mean`, the other side starts at `100 − oppStart`, the punt counts in `gs.stats` and burns clock; punt spots in the drive log read "own N" / "the N" (never own 51+). |
+| `sim.test.js` `[balance]` | E2 | 2 000 NFL games (random teams 58–88, kickers 62–92) → points/team 21–27, FGA/team 1.9–2.4, PAT/team 2.4–3.0, distance buckets per §2.13, regulation ties 3–7 %, decisive attempts/game 0.10–0.25, ice timeouts ≤ 0.6 × decisive; college 1 000 games → 24–32 pts, FGA 1.5–2.2, PAT 2.8–4.2; clock never negative, drives/team 10–14; OT rules (NFL both-possess, playoff continues, college alternating from 25, 2-pt from period 2, 3+ alternating tries) by scripted fixtures; `step` after `END` throws; a scripted `applyKick` sequence reproduces an exact final score; **determinism**: same seed → identical `driveLog` and score; `simToNextUserKick` returns only user-kick or end events; blocked PAT return-for-2 occurs. |
 | `schedule.test.js` | E2 | College: every team 12 games, 7 conference (each conference opponent once), 5 non-conference vs 5 distinct other conferences, week 12 = rival, no team plays twice in a week, no self-games, home/away 6/6 ±1; NFL: 17 games, 6 divisional, 4+4 rotating divisions, 2+1 place-based, 8/9 home split alternating by year, one bye in weeks 5–14, 18 weeks, ≤ 16 games per week, generation < 50 ms, deterministic by seed, 100 consecutive years all valid. |
 | `standings.test.js` | E2 | Tiebreak fixtures (H2H, division record, common games, conference record, point diff, coin) for NFL divisions and wild cards; college ranking formula & stickiness; 5-champs + 7-at-large selection with the 6th champion as at-large; seeds 1–4 byes; bracket advancement; bowl pairing never same-conference; draft order (worst first, playoff exits). |
 | `season.test.js` | E2 | A full college season via `Engine.autoPlaySeason` on a fixture: 13 REG weeks, CCG, bowls/playoff produce a champion, `phase` sequence PRE→REG→POST→AWARDS→OFF, `season.kickerStats` populated for all 48 teams, awards non-empty, user stats consistent with kick log, runtime < 250 ms; NFL season likewise (18 weeks + 4 playoff weeks, Championship Bowl winner); `endWeek` refuses with a pending event; injuries tick; mods expire. |
 | `stats.test.js` | E3 | bucket assignment, streaks, long, 50+ counts, clutch/decisive counters, kick-log cap & aggregation preserving totals, splits rebuild, `grade` table, `topMoments` ordering, `checkRecords` beats legends and flags `isUser`, milestones fire once. |
-| `awards.test.js` | E3 | Golden Boot/Leg goes to the max `kickerScore` with min FGA; All-League 1st/2nd distinct; STPOY threshold rule (else the "a punter won it" note); weekly award; season goals generation/checking; `hofScore` worked examples (877 → FIRST_BALLOT; ≈ 200 → Solid Starter) and monotonicity in each input. |
+| `awards.test.js` | E3 | Golden Boot/Leg goes to the max `kickerScore` with min FGA; All-League 1st/2nd distinct; STPOY threshold rule; weekly award; season goals generation/checking; `hofScore` worked examples (877 → FIRST_BALLOT; ≈ 200 → Solid Starter) and monotonicity in each input. |
 | `events.test.js` | E3 | Every event: `cond` evaluates on fixtures for its stages without throwing; each choice applies and clamps soft stats 0–100 / fame 0–1000; branches respect probabilities (10k trials ±3 %); `once` respected; recent-ring exclusion; actions returned for TRANSFER/TRADE/CAMP_BATTLE; headline ring buffer never repeats within 40; template slots all resolve (no `{` left). |
 | `contracts.test.js` | E3 | AAV worked values (OVR 75 → 3.0, 85 → 5.1, 92 → 6.8, cap 8.0 ±0.05), age/fame/market multipliers, rookie scale by round, guaranteed %, tag value growth and second-tag ×1.2, max two tags, extension eligibility rule, counter acceptance bounds, FA offer counts 1–4 and withdrawal odds, cut rules, earnings accumulate, `teamsNeedingK` rule. |
 | `draft.test.js` | E3 | `draftValue` → round table boundaries; shock event 1 % (100k trials ±0.2 %); team selection prefers needy teams; ticker length; UDFA invites 2–3; tryout branch; combine score clamp ±8. |
@@ -1971,7 +1689,7 @@ Before anything else: `00_namespace.js`, `tuning.js`, `util.js`, `rng.js`, `sche
 ### 6.2 Work packages
 
 #### WP1 — Core & Kick (E1)
-Files: `00_namespace`, `engine/tuning`, `engine/util`, `engine/rng`, `engine/schema`, `engine/weather`, `engine/player`, `engine/kick`, `engine/punt` (D24), `test/load`, `test/run`, tests `purity, rng, util, schema, weather, player, kick, kick_model, kick_calibration, punt`, `test/balance_report.js`, `fixtures/{schema,kick,player}.js`.
+Files: `00_namespace`, `engine/tuning`, `engine/util`, `engine/rng`, `engine/schema`, `engine/weather`, `engine/player`, `engine/kick`, `test/load`, `test/run`, tests `purity, rng, util, schema, weather, player, kick, kick_model, kick_calibration`, `test/balance_report.js`, `fixtures/{schema,kick,player}.js`.
 Deliverables in order: (1) namespace/tuning/util/rng/schema + loader (day 0–2); (2) `Kick.model/resolve/aiInput` + calibration test green (day 3–5) — **nothing in the UI is tuned before this is green**; (3) `Player`, `Weather`; (4) `buildContext`, kickoffs, feedback, forced outcomes for debug.
 Contracts provided: `RTG.Schema` typedefs/factories (everyone), `RTG.Kick` (E2 sim, E4 scene, E5 debug), `RTG.Player` (E2/E3), `RTG.Weather` (E2), `RTG.RNG`/`Util`/`Tuning` (all).
 
