@@ -4,7 +4,10 @@
  *
  *   const kfx = require('./fixtures/career');
  *   const { state, rng } = kfx.hsGame(RTG);            // HS.SEASON with senior-season game 1 open
- *   const { state, rng } = kfx.hsOffers(RTG);          // HS.OFFERS with the OFFERS_COLLEGE decision pending
+ *   const { state, rng } = kfx.hsCamps(RTG);           // HS.CAMPS: the season played with AI kicks, the tour not started
+ *   const { state, rng } = kfx.hsOffers(RTG);          // HS.OFFERS with the OFFERS_COLLEGE decision pending (season + camps on AI kicks)
+ *   kfx.playHsSeason(RTG, state, rng, made);           // the five games with forced makes / misses → HS.CAMPS
+ *   kfx.playCamps(RTG, state, rng, made);              // every camp of the tour with forced makes / misses → HS.OFFERS
  *   const c = kfx.collegePre(RTG);                     // COLLEGE.PRE right after committing (camp session may be pending)
  *   const b = kfx.campBattle(RTG);                     // COLLEGE.PRE with a pending CAMP session vs a strong rival
  *   const o = kfx.collegeOff(RTG, { seasons: 3 });     // COLLEGE.OFF, season finished, chain not started
@@ -51,7 +54,7 @@ function fillSession(session, pattern, hang) {
 
 /**
  * Play the whole senior season with a fixed make pattern: `made` is a boolean (every kick) or fn(ctx, i, gameIdx).
- * Leaves the career at HS.OFFERS with the OFFERS_COLLEGE decision pending.
+ * Leaves the career at HS.CAMPS with the camp invites built and nothing pending (the tour is played by playCamps).
  * @returns {Object} the HS_SEASON outcome
  */
 function playHsSeason(RTG, state, rng, made) {
@@ -68,6 +71,25 @@ function playHsSeason(RTG, state, rng, made) {
   return out;
 }
 
+/**
+ * Play every camp of the recruiting tour with a fixed make pattern: `made` is a boolean (every kick) or
+ * fn(ctx, i, campIdx, session). Leaves the career at HS.OFFERS with the OFFERS_COLLEGE decision pending.
+ * @returns {Object|null} the last RECRUIT_CAMP outcome (campsDone true, decision set)
+ */
+function playCamps(RTG, state, rng, made) {
+  var pick = typeof made === 'function' ? made : function () { return !!made; };
+  var out = null, guard = 40;
+  while (state.phase === 'CAMPS' && guard-- > 0) {
+    var sess = RTG.Engine.hsStartCamp(state, rng);
+    var idx = sess.campIdx;
+    for (var i = 0; i < sess.contexts.length; i++) {
+      var r = RTG.Engine.sessionKick(state, rng, null, { forced: { outcome: pick(sess.contexts[i], i, idx, sess) ? 'GOOD' : 'WIDE_L' } });
+      if (r.outcome) out = r.outcome;
+    }
+  }
+  return out;
+}
+
 /** HS.SEASON with game 1 open (pending KICKS session, kind HS_GAME). @returns {{state, rng, session}} */
 function hsGame(RTG, opts) {
   var r = newCareer(RTG, opts);
@@ -75,11 +97,22 @@ function hsGame(RTG, opts) {
   return r;
 }
 
-/** HS.OFFERS — the five senior-season games played with AI kicks, OFFERS_COLLEGE decision pending. @returns {{state, rng}} */
-function hsOffers(RTG, opts) {
+/** HS.CAMPS — the five senior-season games played with AI kicks, the invites built, nothing pending. @returns {{state, rng}} */
+function hsCamps(RTG, opts) {
   var r = newCareer(RTG, opts);
   var guard = 20;
   while (r.state.phase === 'SEASON' && guard-- > 0) RTG.Engine.settlePending(r.state, r.rng, { max: 1 });
+  return r;
+}
+
+/**
+ * HS.OFFERS — the senior season AND every camp of the tour played with AI kicks (settlePending opens each game and
+ * each camp in turn), OFFERS_COLLEGE decision pending. @returns {{state, rng}}
+ */
+function hsOffers(RTG, opts) {
+  var r = newCareer(RTG, opts);
+  var guard = 40;
+  while ((r.state.phase === 'SEASON' || r.state.phase === 'CAMPS') && guard-- > 0) RTG.Engine.settlePending(r.state, r.rng, { max: 1 });
   return r;
 }
 
@@ -215,6 +248,8 @@ module.exports = {
   fillSession: fillSession,
   hsGame: hsGame,
   playHsSeason: playHsSeason,
+  playCamps: playCamps,
+  hsCamps: hsCamps,
   hsOffers: hsOffers,
   bestOfferId: bestOfferId,
   collegePre: collegePre,

@@ -1,7 +1,8 @@
 /**
  * full_career.spec (integrator): one whole career through the REAL screens.
  *
- *   title → NEW CAREER form → the senior season (five games, real mouse flicks) → offers (COMMIT) → college hub (TRAIN, XP "+")
+ *   title → NEW CAREER form → the senior season (five games, real mouse flicks) → the recruiting camps (GO TO CAMP from the
+ *   itinerary; the first camp kick by kick on the armed scene, the rest forced through) → offers (COMMIT) → college hub (TRAIN, XP "+")
  *   → PLAY GAME → NEXT KICK ▶ / kick screen (a real flick, then RTG.debug.forceKick) → postgame → CONTINUE → event
  *   modals → the first week, one bye and the last REG week played for real (RTG.debug.simWeek for the rest) →
  *   postseason → awards CONTINUE → the offseason wizard (every card through its real button) → simSeason until the
@@ -27,12 +28,17 @@ const SEED = '31337';
 
 // ─────────────────────────── page helpers ───────────────────────────
 
-/** A compact signature of "where the career is" (stage, phase, week, game, pending) — polled to detect a change. */
+/**
+ * A compact signature of "where the career is" (stage, phase, week, game, pending) — polled to detect a change. A
+ * pending decision counts its option ids and its countered flag too: a rejected counter whose offer stands re-pends
+ * the same EXTENSION card with COUNTER gone, and that must read as a change.
+ */
 const SIG_SRC = `(function () {
   var s = RTG.UI.store.state; if (!s) return 'none';
-  var p = s.pending;
+  var p = s.pending, d = p && p.decision;
   return [s.stage, s.phase, s.year, s.week, s.game ? 'G' + (s.game.pending ? s.game.pending.type : '') : '-',
-    p ? p.kind + ':' + (p.decision ? p.decision.kind : p.session ? p.session.kind + ':' + p.session.results.length : p.event ? p.event.id : '') : '-'].join('|');
+    p ? p.kind + ':' + (d ? d.kind + '[' + (d.options || []).map(function (o) { return o.id; }).join(',') + ']' + (d.payload && d.payload.countered ? ':countered' : '')
+      : p.session ? p.session.kind + ':' + p.session.results.length : p.event ? p.event.id : '') : '-'].join('|');
 })()`;
 const sig = page => page.evaluate(SIG_SRC);
 async function waitChange(page, before, timeout) {
@@ -230,6 +236,41 @@ async function forceSession(page, label) {
   return n;
 }
 
+/**
+ * The camp tour from the itinerary (§2.7.0): GO TO CAMP for every invite in turn. The first camp is kicked one armed
+ * scene at a time (forceSession); the rest are forced straight through — the scene animates the first kick and hands
+ * back to the itinerary by itself. Returns how many camps were played.
+ */
+async function playCamps(page, vp, shots) {
+  let n = 0;
+  for (let g = 0; g < 12; g++) {
+    const st = await page.evaluate(() => { const s = RTG.UI.store.state, c = s.flags.hs.camps; return { phase: s.phase, idx: c ? c.idx : 0, n: c ? c.invites.length : 0 }; });
+    if (st.phase !== 'CAMPS') break;
+    await H.waitForScreen(page, 'hscamps', 15000);
+    assert.equal(await page.locator('.scr-hscamps .hsc-row.next').count(), 1, 'the next camp is marked on the itinerary');
+    await page.locator('.scr-hscamps [data-action="go-camp"]').click();
+    await H.waitForScreen(page, 'hscamp', 15000);
+    if (n === 0) {
+      assert.match((await page.locator('.hsc-header .hsc-school').textContent()).trim(), / CAMP/, 'the camp header names the school');
+      assert.equal(await page.locator('.hsc-header .slot-strip .slot').count(), 5, 'five kicks on the strip');
+      await shotIf(page, shots, 'full_hscamp_' + vp);
+      await forceSession(page, 'camp 1');
+    } else {
+      for (let i = 0; i < 8; i++) {
+        const open = await page.evaluate(() => { const s = RTG.UI.store.state; return !!(s.pending && s.pending.kind === 'KICKS'); });
+        if (!open) break;
+        await H.debug(page, 'forceKick', { outcome: 'GOOD' });
+        await page.waitForTimeout(40);
+      }
+    }
+    await page.waitForFunction(() => RTG.UI.Router.current() !== 'hscamp', null, { timeout: 20000 });
+    n++;
+    const row = page.locator('.scr-hscamps .hsc-row[data-camp="' + (n - 1) + '"]');
+    if (await row.count()) assert.match((await row.locator('.hsc-verdict').textContent()).trim(), /OFFER EARNED|NO OFFER/, 'a verdict on the row');
+  }
+  return n;
+}
+
 /** Click the real button of a pending DECISION card. */
 async function clickDecision(page, kind, o) {
   const scr = await H.screenId(page);
@@ -386,12 +427,32 @@ H.matrix(({ mode, vp }) => {
         assert.equal(hs.games[g].played, true);
       }
       assert.ok(flicks >= 15, 'a senior season is 15-25 real kicks (' + flicks + ')');
+      await H.waitForScreen(page, 'hscamps', 20000);
+      b = await brief(page);
+      assert.equal(b.stage + '.' + b.phase, 'HS.CAMPS');
+      assert.equal(b.pending, null, 'the itinerary pauses with nothing pending');
+      let hs = (await H.debug(page, 'getState')).flags.hs;
+      assert.equal(hs.summary.stars, (await H.debug(page, 'getState')).player.stars, 'the stars came from the season');
+      assert.ok(hs.camps && hs.camps.invites.length >= 1, 'the season earned camp invites');
+      assert.equal(await page.locator('.scr-hscamps .hsc-row').count(), hs.camps.invites.length, 'an itinerary row per invite');
+      await H.noHorizontalScroll(page, 'hscamps');
+      await shotIf(page, shots, 'full_hscamps_' + vp);
+      await checkpoint(page, app, 'senior season done');
+
+      // ── the camps: instant flights for the tour (the first camp still runs every scene phase), full motion again after
+      await page.evaluate(() => RTG.UI.store.setSetting('reducedMotion', true));
+      const camps = await playCamps(page, vp, shots);
+      await page.evaluate(() => RTG.UI.store.setSetting('reducedMotion', false));
+      hs = (await H.debug(page, 'getState')).flags.hs;
+      assert.equal(camps, hs.camps.invites.length, 'every camp played from the itinerary (' + camps + ')');
+      assert.equal(hs.camps.idx, hs.camps.invites.length);
+      assert.ok(hs.camps.invites.every(i => i.done), 'a verdict on every invite');
       await H.waitForScreen(page, 'offers', 20000);
       b = await brief(page);
       assert.equal(b.stage + '.' + b.phase, 'HS.OFFERS');
-      const hs = (await H.debug(page, 'getState')).flags.hs;
-      assert.equal(hs.summary.stars, (await H.debug(page, 'getState')).player.stars, 'the stars came from the season');
-      await checkpoint(page, app, 'senior season done');
+      const offered = (await H.debug(page, 'getState')).pending.decision.payload.offers.map(o => o.teamId);
+      assert.ok(hs.camps.earned.every(id => offered.indexOf(id) >= 0), 'every camp offer is on the table');
+      await checkpoint(page, app, 'camp tour done');
 
       // ── offers: browse, compare, commit
       assert.ok(await page.locator('.scr-offers .offer-card').count() >= 1, 'offer cards');

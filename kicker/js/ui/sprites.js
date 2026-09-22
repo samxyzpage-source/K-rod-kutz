@@ -346,6 +346,76 @@
     'wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww'
   ]);
 
+  // ───────────────────────────── stands (the kick scene's stadium) ─────────────────────────────
+  // A tier of seats is a base tile per 8-px row ('seats' / 'bench', opaque) with people drawn over it in 8-px
+  // slots cut from a 'fans_*' tile (heads on rows 0–1, bodies on 2–4; the base shows through the gaps), so the
+  // scene can leave seats empty. 'fansfar_*' / 'seatsfar' are the 4-px rows of an upper deck; 'band_*' is a
+  // marching band (plumes, gold coats, brass). The '_b' frames are the crowd on its feet.
+  def('seats', [
+    'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn',
+    'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn',
+    'vvvnvvvnvvvnvvvnvvvnvvvnvvvnvvvn',
+    'vvvnvvvnvvvnvvvnvvvnvvvnvvvnvvvn',
+    'vvvnvvvnvvvnvvvnvvvnvvvnvvvnvvvn',
+    'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn',
+    'nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn',
+    'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+  ]);
+  def('bench', [
+    'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk',
+    'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk',
+    'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+    'yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy',
+    'yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy',
+    'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+    'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk',
+    'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+  ]);
+  def('fans_a', [
+    '.ss..ss..ss..ss..ss..ss..ss..ss.',
+    '.ss..ss..ss..ss..ss..ss..ss..ss.',
+    'JJJJvvvvJJJJCCCCJJJJJJJJvvvvJJJJ',
+    'JJJJvvvvJJJJCCCCJJJJJJJJvvvvJJJJ',
+    'JJJJvvvvJJJJCCCCJJJJJJJJvvvvJJJJ'
+  ]);
+  def('fans_b', [
+    '.ss..ss..ss..ss..ss..ss..ss..ss.',
+    'JssJvssvJssJCssCJssJJssJvssvJssJ',
+    'JJJJvvvvJJJJCCCCJJJJJJJJvvvvJJJJ',
+    'JJJJvvvvJJJJCCCCJJJJJJJJvvvvJJJJ',
+    'JJJJvvvvJJJJCCCCJJJJJJJJvvvvJJJJ'
+  ]);
+  def('seatsfar', [
+    'nnnnnnnnnnnnnnnn',
+    'vvnvvnvvnvvnvvnv',
+    'vvnvvnvvnvvnvvnv',
+    'nnnnnnnnnnnnnnnn'
+  ]);
+  def('fansfar_a', [
+    '.s.s.s.s.s.s.s.s',
+    'JJvvJJCCJJJJvvJJ',
+    'JJvvJJCCJJJJvvJJ'
+  ]);
+  def('fansfar_b', [
+    's.s.s.s.s.s.s.s.',
+    'JJvvJJCCJJJJvvJJ',
+    'JJvvJJCCJJJJvvJJ'
+  ]);
+  def('band_a', [
+    '.ww..ww..ww..ww.',
+    '.ss..ss..ss..ss.',
+    'gggggggggggggggg',
+    'ggeeggeeggeeggee',
+    'gggggggggggggggg'
+  ]);
+  def('band_b', [
+    '.ww..ww..ww..ww.',
+    'gssggssggssggssg',
+    'gggggggggggggggg',
+    'ggeeggeeggeeggee',
+    'gggggggggggggggg'
+  ]);
+
   // ───────────────────────────── referee (8×16 ×3) ─────────────────────────────
   def('ref_up', [
     'w......w', 'w......w', 'w..kk..w', '.w.kk.w.', '.wkwwkw.', '..kwwk..', '..wkkw..', '..kwwk..',

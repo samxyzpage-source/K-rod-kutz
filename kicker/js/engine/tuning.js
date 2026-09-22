@@ -457,13 +457,16 @@
           jitter: 2, longExtra: 2,
           pressure: 0.15, lastPressure: 0.5,                // a camp is calm-ish; the staff watches the last one
           windCap: 8,                                       // the school's own weather, with the wind held to a breeze
-          oppST: 40                                         // no rush at a camp: the block chance sits near its floor
+          oppST: 40,                                        // no rush at a camp: the block chance sits near its floor
+          safetyBelow: 2                                    // a safety school (prestige ≤ 2) joins the offers only when fewer camps than this were earned
         }
       },
 
       // ───────────────────────────── §2.7.1 / §2.7.5 / §2.7.6 DRAFT ─────────────────────────────
       draft: {
-        stars: { base: 1.5, perOvr: 0.03, ovrAnchor: 40, seasonW: 0.55, min: 2, max: 5, walkon: 2 },   // seasonW 0.4 → 0.55: a perfect senior year (rating 6) at a recruit's OVR must round to 5★, not 4
+        // base 1.5 / seasonW 0.4 → 1.0 / 0.6: a perfect senior year (rating 6) at a recruit's OVR (~50) must round to 5★, not 4
+        // (5★ from rating 5.33, 4★ from 3.67, 3★ from 2.0, walk-on below — measured over 25 seeds × play qualities, see BALANCE)
+        stars: { base: 1.0, perOvr: 0.03, ovrAnchor: 40, seasonW: 0.6, min: 2, max: 5, walkon: 2 },
         offers: { min: 3, max: 6, walkon: 1, safetyPrestigeMax: 2, weightOffset: 0.5,
                   depth: { VET: { ovr: [66, 78], years: [1, 1] }, STAR: { ovr: [74, 84], years: [2, 3] } },
                   prestigeBumpPer: 2, prestigeAnchor: 3 },

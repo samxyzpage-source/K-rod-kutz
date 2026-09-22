@@ -1,6 +1,6 @@
 /**
  * career.test.js — RTG.Career (SPEC §2.7 career systems, §2.2 camp battle, §2.10.1 event actions, §3.5.18 API,
- * §3.6 flow, §5.1 "career"): showcase → stars formula; offers by stars (walk-on 1); camp battle scoring and the
+ * §3.6 flow, §5.1 "career"): the senior season → stars formula; offers earned at the recruiting camps (walk-on 1); camp battle scoring and the
  * tie → incumbent rule; declare eligibility (3 seasons, redshirt excluded, senior auto); transfer resets; `decide`
  * rejects unknown kinds; offseasonChain order; changeTeam bookkeeping; retirement rules (two offer-less offseasons,
  * age 42); HOF verdict thresholds; legacy report fields; event actions; the draft hand-off.
@@ -64,13 +64,19 @@ test('§3.5.18 public API', () => {
 
 // ═══════════════════════════════ §2.7.1 stars ═══════════════════════════════
 
-test('stars formula: round(1.5 + 0.03·(OVR − 40) + 0.4·rating) clamped 2–5 (per-point weight; the literal /6 makes every recruit a walk-on)', () => {
+test('stars formula: round(1.0 + 0.03·(OVR − 40) + 0.6·rating) clamped 2–5 (per-point weight; the literal /6 makes every recruit a walk-on)', () => {
   const S = Tuning.draft.stars;
+  assert.equal(S.base, 1.0); assert.equal(S.seasonW, 0.6);   // BALANCE: a perfect senior year at a recruit's OVR must round to 5★ (SPEC D23, BALANCE)
   const f = (ovr, r) => Math.max(S.min, Math.min(S.max, Math.round(S.base + S.perOvr * (ovr - S.ovrAnchor) + S.seasonW * r)));
   for (const ovr of [40, 47, 52, 60, 70]) for (let m = 0; m <= 6; m++) assert.equal(Career.starsFor(ovr, m), f(ovr, m), 'ovr ' + ovr + ' rating ' + m);
   assert.equal(Career.starsFor(47, 0), 2, 'a season with nothing on tape → walk-on');
-  assert.equal(Career.starsFor(47, 4), 3);
-  assert.equal(Career.starsFor(47, 6), 4);
+  assert.equal(Career.starsFor(47, 3), 3, 'a middling senior year at a recruit\'s OVR is a 3-star');
+  assert.equal(Career.starsFor(47, 4), 4);
+  assert.equal(Career.starsFor(47, 6), 5, 'a perfect senior year is a 5-star even at 47 OVR');
+  // the thresholds at a recruit's OVR of 50: 5★ from a 5.34 rating, 4★ from 3.67, 3★ from 2.0, walk-on below
+  assert.equal(Career.starsFor(50, 5.34), 5); assert.equal(Career.starsFor(50, 5.3), 4);
+  assert.equal(Career.starsFor(50, 3.67), 4); assert.equal(Career.starsFor(50, 3.6), 3);
+  assert.equal(Career.starsFor(50, 2.0), 3); assert.equal(Career.starsFor(50, 1.9), 2);
   assert.equal(Career.starsFor(62, 6), 5, 'a 62-OVR recruit with a perfect senior year is a 5-star');
   assert.equal(Career.starsFor(99, 6), 5, 'clamped at 5');
 });
@@ -776,7 +782,9 @@ test('QA1-01 / QA1-04: a college commitment is a \'commit\' headline without mon
   // a walk-on gets the walk-on flavour (cond walkon) and still no money
   const w = kfx.newCareer(RTG, { seed: 777, archetype: 'CANNON' });
   kfx.playHsSeason(RTG, w.state, w.rng, false);
-  assert.equal(w.state.flags.WALKON, true);
+  assert.equal(w.state.flags.WALKON, undefined, 'the walk-on verdict waits for the camp tour');
+  kfx.playCamps(RTG, w.state, w.rng, false);
+  assert.equal(w.state.flags.WALKON, true, 'a 2★ season and nothing earned at camp: walk-on');
   Engine.decide(w.state, w.rng, { kind: 'OFFERS_COLLEGE', optionId: w.state.pending.decision.options[0].id });
   const wh = w.state.headlines.filter((h) => h.tag === 'commit')[0];
   assert.ok(wh && !/\$/.test(wh.text), 'walk-on commit headline without money: ' + (wh && wh.text));

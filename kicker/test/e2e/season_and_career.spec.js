@@ -1,5 +1,5 @@
 /**
- * season_and_career.spec (SPEC §5.2): simSeason ×N (college) until the offseason declare card → DECLARE → combine
+ * season_and_career.spec (SPEC §5.2): the senior season and the camp tour on forced kicks → COMMIT → simSeason ×N (college) until the offseason declare card → DECLARE → combine
  * (the one COMBINE_LADDER session, played with forceKick) → the draft screen shows a pick (ticker + stinger, or the
  * undrafted branch) → contract / hub / camp in the NFL; then simCareer({untilStage:'RETIRED'}) → the legacy screen
  * shows the tier and the HOF score and rtg.records is updated. No console errors throughout (U2's kick-scene errors are
@@ -47,9 +47,27 @@ H.matrix(({ mode, vp }) => {
         if (!st.open) { await page.evaluate(() => RTG.UI.store.dispatch('hsStartGame')); continue; }
         await H.debug(page, 'forceKick', { outcome: 'GOOD' });
       }
+      // the recruiting camps the season earned: every camp opened from the itinerary in turn, every kick forced
+      // good, until the offers are on the table (§2.7.0)
+      await page.evaluate(() => RTG.UI.Router.sync());
+      await H.waitForScreen(page, 'hscamps');
+      const invites = await page.evaluate(() => RTG.UI.store.state.flags.hs.camps.invites.length);
+      assert.ok(invites >= 1, 'camp invites after the senior season (' + invites + ')');
+      for (let g = 0; g < 80; g++) {
+        const st = await page.evaluate(() => {
+          const s = RTG.UI.store.state;
+          return { phase: s.phase, open: !!(s.pending && s.pending.kind === 'KICKS') };
+        });
+        if (st.phase !== 'CAMPS') break;
+        if (!st.open) { await page.evaluate(() => RTG.UI.store.dispatch('hsStartCamp')); continue; }
+        await H.debug(page, 'forceKick', { outcome: 'GOOD' });
+      }
+      const camps = await page.evaluate(() => { const c = RTG.UI.store.state.flags.hs.camps; return { idx: c.idx, n: c.invites.length, earned: c.earned.length }; });
+      assert.equal(camps.idx, camps.n, 'every camp played');
+      assert.equal(camps.earned, camps.n, 'a perfect tour earns every camp');
       await page.evaluate(() => RTG.UI.Router.sync());
       await H.waitForScreen(page, 'offers');
-      assert.ok(await page.locator('.scr-offers .offer-card').count() >= 1, 'offer cards rendered');
+      assert.equal(await page.locator('.scr-offers .offer-card').count(), camps.earned, 'an offer card per camp earned');
       await page.locator('.carousel-slide.active [data-action^="pick-"]').click();
       await H.clickButton(page, 'COMMIT', page.locator('.modal'));
       await page.waitForFunction(() => RTG.UI.store.state.stage === 'COLLEGE');

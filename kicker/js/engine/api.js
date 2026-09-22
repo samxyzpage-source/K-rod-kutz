@@ -9,6 +9,8 @@
  * greedy XP spend, game, endWeek, event choice 0), autoPlaySeason (PRE → OFF), autoPlayOffseason (default choices from
  * Tuning.career.autoplay: best offer, redshirt when offered, declare as soon as eligible — see the DEVIATION note in
  * autoOption — accept the extension, retire when forced or from 34 unless still elite), autoPlayCareer (HS → RETIRED).
+ * The senior season and the recruiting camps that follow it pause with nothing pending between games / camps;
+ * settle() opens the next one (hsOpenNext) so every auto player keeps moving.
  *
  * Pure over plain JSON + rng: no DOM, no clock (the UI passes `now`), no ambient randomness.
  */
@@ -165,6 +167,18 @@
     checkState(state, 'hsStartGame'); checkRng(rng, 'hsStartGame');
     var H = need(RTG.HS, 'HS', 'hsStartGame');
     return sync(state, rng, H.startGame(state, rng));
+  };
+
+  /**
+   * Open the next recruiting camp of the tour (§2.7.0): builds the KickSession (kind RECRUIT_CAMP) and sets
+   * state.pending. Throws outside HS.CAMPS, with something pending, or once every camp is played (the offers
+   * decision is pending then). Draws: 1 (fork).
+   * @param {Object} state @param {RNG} rng @returns {Object} KickSession (kind RECRUIT_CAMP)
+   */
+  Engine.hsStartCamp = function (state, rng) {
+    checkState(state, 'hsStartCamp'); checkRng(rng, 'hsStartCamp');
+    var H = need(RTG.HS, 'HS', 'hsStartCamp');
+    return sync(state, rng, H.startCamp(state, rng));
   };
 
   /**
@@ -330,7 +344,7 @@
   }
 
   /**
-   * Play one kick of the pending KickSession (senior-season game / camp / combine / halftime-70 / tryout / practice). `input`
+   * Play one kick of the pending KickSession (senior-season game / recruiting camp / camp battle / combine / halftime-70 / tryout / practice). `input`
    * = a kick triple ({timing} for a kickoff), or null for the AI rule. The last kick calls Career.finishSession.
    * @returns {{result:Object, idx:number, done:boolean, outcome:Object|null, remaining:number}}
    */
@@ -379,7 +393,7 @@
     if (state.pending) return cur(state);
     var Se = need(Season(), 'Season', 'nextPhase'), C = need(Career(), 'Career', 'nextPhase');
     var stage = state.stage, phase = state.phase;
-    if (stage === 'HS') fail('nextPhase', phase === 'SEASON' ? 'play the senior season first' : 'pick a college offer first');
+    if (stage === 'HS') fail('nextPhase', phase === 'SEASON' ? 'play the senior season first' : phase === 'CAMPS' ? 'go to the camps first' : 'pick a college offer first');
     if (stage === 'RETIRED') return sync(state, rng, cur(state));
     if (stage === 'DRAFT') {
       if (phase === 'DECLARE') { C.enterDraft(state, rng); return sync(state, rng, cur(state)); }
@@ -535,15 +549,16 @@
   }
 
   /**
-   * The senior season carries no pending between its five games (§2.7.0) — open the next one so the auto
-   * players keep moving instead of stalling on an empty HS.SEASON.
+   * The senior season carries no pending between its five games, and the camp tour none between its camps
+   * (§2.7.0) — open the next one so the auto players keep moving instead of stalling on an empty HS.SEASON /
+   * HS.CAMPS.
    */
   function hsOpenNext(state, rng) {
     var H = RTG.HS;
-    if (state.pending || state.stage !== 'HS' || state.phase !== 'SEASON') return false;
-    if (!H || !isFn(H.inSeason) || !H.inSeason(state)) return false;
-    H.startGame(state, rng);
-    return true;
+    if (state.pending || state.stage !== 'HS' || !H) return false;
+    if (state.phase === 'SEASON' && isFn(H.inSeason) && H.inSeason(state)) { H.startGame(state, rng); return true; }
+    if (state.phase === 'CAMPS' && isFn(H.inCamps) && H.inCamps(state)) { H.startCamp(state, rng); return true; }
+    return false;
   }
 
   /** Resolve every pending thing in turn (at most opts.max when given, else until nothing is pending). @returns {Object[]} */

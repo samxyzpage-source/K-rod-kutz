@@ -38,7 +38,7 @@
   var AUTOSAVE = {
     finishUserGame: 1, endWeek: 1, chooseEvent: 1, decide: 1, nextPhase: 1,
     autoPlayGame: 1, autoPlayWeek: 1, autoPlaySeason: 1, autoPlayOffseason: 1, autoPlayCareer: 1, settlePending: 1,
-    hsStartGame: 1
+    hsStartGame: 1, hsStartCamp: 1
   };
 
   /**

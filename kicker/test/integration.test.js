@@ -1,8 +1,9 @@
 /**
  * integration.test.js — the whole engine end to end through the RTG.Engine facade (SPEC §3.5.20, §3.6, §6.3).
  *
- *  (a) a hand-driven career start: Engine.newCareer → the 6 showcase kicks via Engine.sessionKick (Kick.aiInput
- *      triples) → college offers → Engine.decide → COLLEGE.PRE (camp battle via sessionKick when the §2.2 rule
+ *  (a) a hand-driven career start: Engine.newCareer → the five senior-season games via hsStartGame + Engine.sessionKick
+ *      (Kick.aiInput triples) → the recruiting camps via hsStartCamp + sessionKick → college offers → Engine.decide
+ *      → COLLEGE.PRE (camp battle via sessionKick when the §2.2 rule
  *      applies) → Engine.nextPhase → week 1 via startUserGame / simToKick / applyUserKick (+ applyUserKickoff,
  *      ICE_TIMEOUT) until END_GAME → finishUserGame → endWeek. Schema.validate passes after EVERY Engine call,
  *      state.rngState is kept in sync with the rng and changes on every drawing call.
@@ -126,7 +127,7 @@ function playGame(track, onPending) {
 
 // ═══════════════════════════════ (a) hand-driven career start ═══════════════════════════════
 
-test('(a) newCareer → senior season → offers → COLLEGE.PRE → week 1 game → endWeek, validating after every Engine call', () => {
+test('(a) newCareer → senior season → camps → offers → COLLEGE.PRE → week 1 game → endWeek, validating after every Engine call', () => {
   const created = Engine.newCareer({ name: 'Sam Page', archetype: 'CANNON', difficulty: 'pro', seed: 42 }, NOW);
   const track = { state: created.state, rng: created.rng, calls: 0, drawing: 0 };
   const { state, rng } = track;
@@ -136,7 +137,7 @@ test('(a) newCareer → senior season → offers → COLLEGE.PRE → week 1 game
   assert.equal(state.pending, null, 'the senior season pauses between games');
   assert.equal(state.flags.hs.games.length, RTG.Tuning.hs.games, 'five senior-season games');
 
-  // the senior season → stars + college offers
+  // the senior season → stars + the camp invites
   let show = null;
   for (let g = 0; g < RTG.Tuning.hs.games; g++) {
     const sess = step(track, 'hsStartGame(' + g + ')', true, () => Engine.hsStartGame(state, rng));
@@ -147,12 +148,34 @@ test('(a) newCareer → senior season → offers → COLLEGE.PRE → week 1 game
   }
   assert.ok(show.outcome.seasonDone && show.outcome.season, 'the fifth game closes the season');
   assert.ok(state.player.stars >= 2 && state.player.stars <= 5, 'stars ' + state.player.stars);
+  assert.equal(state.stage, 'HS'); assert.equal(state.phase, 'CAMPS');
+  assert.equal(state.pending, null, 'the tour pauses on the itinerary between camps');
+  const camps = state.flags.hs.camps;
+  assert.ok(camps && camps.invites.length >= 1 && camps.invites.length <= RTG.Tuning.hs.camps.maxInvites, 'camp invites');
+  assert.throws(() => Engine.nextPhase(state, rng), /camps first/, 'nextPhase refuses until the tour is played');
+
+  // the camps → the college offers
+  let camp = null;
+  for (let c = 0; c < camps.invites.length; c++) {
+    const sess = step(track, 'hsStartCamp(' + c + ')', true, () => Engine.hsStartCamp(state, rng));
+    assert.equal(sess.kind, 'RECRUIT_CAMP'); assert.equal(sess.campIdx, c); assert.equal(sess.teamId, camps.invites[c].teamId);
+    assert.equal(sess.contexts.length, RTG.Tuning.hs.camps.kicks);
+    camp = playSession(track);
+    assert.equal(camp.outcome.kind, 'RECRUIT_CAMP');
+    assert.equal(camp.outcome.campIdx, c);
+    assert.equal(camps.invites[c].done, true); assert.equal(camps.invites[c].earned, camp.outcome.earned);
+    assert.equal(camps.idx, c + 1);
+    assert.equal(camp.outcome.campsDone, c === camps.invites.length - 1);
+  }
+  assert.ok(camp.outcome.campsDone && camp.outcome.decision, 'the last camp hands off to the offers');
   assert.equal(state.stage, 'HS'); assert.equal(state.phase, 'OFFERS');
   assert.equal(state.pending && state.pending.kind, 'DECISION');
   const dec = state.pending.decision;
   assert.equal(dec.kind, 'OFFERS_COLLEGE');
   assert.ok(dec.options.length >= 1, 'at least one offer');
   assert.ok(dec.payload.offers.every((o) => Schema.teamIn(state.leagues.college, o.teamId)), 'offers reference college teams');
+  assert.ok(dec.payload.offers.every((o) => o.earned || o.safety || o.walkon), 'every offer was earned at camp, or is the safety school / walk-on path');
+  assert.ok(camps.earned.every((id) => dec.payload.offers.some((o) => o.teamId === id && o.earned)), 'every earned camp is an offer');
 
   // pick the first offer → COLLEGE.PRE
   const out = step(track, 'decide(OFFERS_COLLEGE)', true, () => Engine.decide(state, rng, { kind: 'OFFERS_COLLEGE', optionId: dec.options[0].id }));

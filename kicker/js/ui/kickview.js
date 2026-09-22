@@ -11,6 +11,11 @@
  *     onForced?(info) → KickResult|null    a forced/auto result arrived from the store while waiting for input
  *   }) → {el, canvas, destroy(), skip(), next(ctx, model, sessionInfo?), playResult(result, input?), phase(), layout()}
  *
+ * The stands behind the field come from KickView.VENUES: a high-school field (bleacher, board on poles, light
+ * poles, a tree line), a college bowl whose upper deck grows with the home side's prestige, or a two-deck pro
+ * stadium with a roof ring and a jumbotron — pre-rendered per layout into three crowd frames (buildStadium)
+ * and copied with one drawImage a frame. The field, the uprights and the input geometry are untouched by it.
+ *
  * State machine: SETUP → PULL → PRE (snap · approach · swing · contact) → FLIGHT → [FREEZE] → RESULT → DONE
  * (meter mode: SETUP → POWER → NEEDLE → PRE …). Camera A (setup) is behind the kicker with the tee at 78 % of
  * the height and the uprights scaled by distance; Camera B (flight) drifts 4 px and z-sorts the ball behind the
@@ -112,6 +117,42 @@
     DOINK_IN: 'DOINK! GOOD', DOINK_OUT: 'DOINK! NO GOOD', XBAR_IN: 'OFF THE BAR! GOOD', XBAR_OUT: 'OFF THE BAR! NO GOOD'
   };
   KickView.OUTCOME_TEXT = OUTCOME_TEXT;
+
+  // ═══════════════════════════════ the stadium behind the field ═══════════════════════════════
+  /**
+   * The three places a kick happens, as the scene paints them into the sky band above the horizon (L.yH).
+   * Presentation only: nothing here reaches the kick model or the input geometry, and every height is a
+   * fraction of the band so one table serves the 192×320 portrait scene and the 320×192 landscape one.
+   *   night            dark sky and lit lamps — Friday nights and pro prime time; college kicks off in daylight
+   *   lower / upper    tier heights at the far end; college reads its upper deck from upperByPrestige[prestige − 1]
+   *   edgeRise         how much taller the tiers get at the screen edges (the near sideline of a bowl)
+   *   roof             the overhang that carries the floodlight ring (NFL), lampEvery px apart
+   *   fill             share of seats taken, + perPressure × pressure (+ perPrestige × (prestige − 1)); a clutch kick packs the house
+   *   awayShare        share of the crowd in the visiting colours
+   *   bleacher         one low set of aluminium bleachers (HS): width as a fraction of W, rows of 8 px
+   *   jumbotron        the video board above the end zone (NFL): width as a fraction of W (capped), height of the band
+   */
+  var VENUES = {
+    HS: { night: true, bleacher: { width: 0.56, rows: 2 }, fill: 0.35, perPressure: 0.45, awayShare: 0.15, stars: 18, trees: true, poles: [[0.12, 0.62, 6], [0.88, 0.62, 6], [0.985, 0.92, 8]] },
+    COLLEGE: { night: false, lower: 0.30, upperByPrestige: [0, 0.10, 0.18, 0.26, 0.34], edgeRise: 0.35, fill: 0.5, perPrestige: 0.1, perPressure: 0.2, awayShare: 0.1, band: true, towers: [0.1, 0.9] },
+    NFL: { night: true, lower: 0.30, upper: 0.32, roof: 0.10, edgeRise: 0.35, fill: 0.9, perPressure: 0.1, awayShare: 0.15, jumbotron: { width: 0.42, maxWidth: 96, height: 0.30 }, lampEvery: 20 }
+  };
+  KickView.VENUES = VENUES;
+
+  /** The venue a context plays in; contexts saved before the scene knew about venues fall back to the league. */
+  function venueOf(ctx) {
+    var v = ctx && ctx.venue;
+    if (v === 'HS' || v === 'COLLEGE' || v === 'NFL') return v;
+    return ctx && ctx.league === 'NFL' ? 'NFL' : 'COLLEGE';
+  }
+  KickView.venueOf = venueOf;
+
+  /** Deterministic 0..1 for a seat or a star, so the three crowd frames agree and nothing here touches the rng. */
+  function noise(i, j, k) {
+    var n = (i * 374761393 + j * 668265263 + (k || 0) * 1274126177) | 0;
+    n = Math.imul(n ^ (n >>> 13), 1103515245);
+    return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+  }
 
   /** Wind text for a context honouring the difficulty's drift preview: full/numeric → 'WIND ← 12', arrow → 'WIND ←'. */
   function windText(ctx, row) {
@@ -219,9 +260,6 @@
       if (state && state.player && state.player.look) look = state.player.look;
     } catch (e) { /* cosmetic */ }
     var sprOpts = { tint: teamTint, look: look };
-    var crowdTint = ctx.away ? oppTint : teamTint;
-    var crowdA = Sp.get('crowd_a', { tint: crowdTint }), crowdB = Sp.get('crowd_b', { tint: crowdTint });
-    var crowdDim = Sp.get('crowd_a', { tint: [pal('navy2'), pal('grey')] });
     var kickerSpr = {};
     ['idle', 'lean1', 'lean2', 'lean3', 'approach1', 'approach2', 'approach3', 'plant', 'swing', 'follow'].forEach(function (n) {
       kickerSpr[n] = Sp.get('kicker_' + n, sprOpts);
@@ -250,6 +288,8 @@
     var snapS = 0, rushS = -1, doinkDrop = 0;
     var particles = null, pCount = 0, pKind = null;
     var vignette = null;
+    var stadium = null;                           // {a, b, dim} pre-rendered stands (buildStadium)
+    var venue = venueOf(ctx), prestige = clamp(num(ctx.prestige, 3), 1, 5);
     var destroyed = false, unsub = null, timers = [];
     var forcedPending = null;
     var lastInput = null, lastMeta = null;
@@ -306,6 +346,7 @@
       L.ring = 11;
       L.D = D;
       buildVignette();
+      buildStadium();
       if (phase === 'SETUP' || phase === 'PULL' || phase === 'POWER' || phase === 'NEEDLE') placeIdle();
     }
     function persp(u) { var k = 1.2; return u * (1 + k) / (1 + k * u); }
@@ -708,27 +749,261 @@
     if (store && typeof store.subscribe === 'function') unsub = store.subscribe(onStore);
 
     // ───────────────────────────── drawing ─────────────────────────────
-    function drawSky() {
-      var W = L.W, H = L.H;
+    // ───────────────────────────── the stadium (pre-rendered) ─────────────────────────────
+    /**
+     * The stands behind the field, pre-rendered once per layout (mount, resize, each arm) into three W × yH
+     * frames — the crowd seated, on its feet, and dimmed for the groan after a miss — that draw() copies with a
+     * single drawImage per frame. Never rebuilt inside the loop: kicker/test/e2e/perf.spec.js holds the scene
+     * at a frame p95 under 20 ms.
+     */
+    function buildStadium() {
+      var spec = VENUES[venue] || VENUES.COLLEGE;
+      var homeTint = ctx.away ? oppTint : teamTint, visitTint = ctx.away ? teamTint : oppTint;
+      var dimTint = [pal('navy2'), pal('grey')];
+      stadium = {
+        a: paintStadium(spec, 'fans_a', 'fansfar_a', 'band_a', homeTint, visitTint),
+        b: paintStadium(spec, 'fans_b', 'fansfar_b', 'band_b', homeTint, visitTint),
+        dim: paintStadium(spec, 'fans_a', 'fansfar_a', 'band_a', dimTint, dimTint)
+      };
+    }
+    function paintStadium(spec, fansName, farName, bandName, homeTint, visitTint) {
+      var W = L.W, h = Math.max(1, L.yH);
+      var c = doc.createElement('canvas'); c.width = W; c.height = h;
+      var s = c.getContext('2d'); s.imageSmoothingEnabled = false;
+      var tiles = {
+        seats: Sp.get('seats'), bench: Sp.get('bench'), seatsFar: Sp.get('seatsfar'), band: Sp.get(bandName),
+        fans: Sp.get(fansName, { tint: homeTint }), fansAway: Sp.get(fansName, { tint: visitTint }),
+        far: Sp.get(farName, { tint: homeTint }), farAway: Sp.get(farName, { tint: visitTint })
+      };
+      var fill = clamp(num(spec.fill, 0.5) + num(spec.perPressure, 0) * pressure + num(spec.perPrestige, 0) * (prestige - 1) + (clutch ? 0.1 : 0), 0, 1);
+      paintSky(s, spec, W, h);
+      if (spec.bleacher) paintSchool(s, spec, tiles, fill, W, h);
+      else paintBowl(s, spec, tiles, fill, W, h);
+      return c;
+    }
+    function steel() { return pal('steel') || (Sp.PALETTE && Sp.PALETTE.steel) || '#c9ccd6'; }
+    /** Sky for the band: a dome ceiling, a night sky with the last of the dusk on the horizon, or daylight. */
+    function paintSky(s, spec, W, h) {
       var dome = ctx.dome || ctx.weather === 'dome';
       var grey = ctx.weather === 'rain' || ctx.weather === 'fog' || ctx.weather === 'snow';
-      g.fillStyle = dome ? pal('navy2') : (grey ? pal('grey') : pal('sky'));
-      g.fillRect(0, 0, W, L.yH);
-      if (!dome && !grey) {
-        g.fillStyle = pal('dusk');
-        g.globalAlpha = ctx.weather === 'cold' ? 0.55 : 0.25;
-        g.fillRect(0, Math.round(L.yH * 0.55), W, L.yH - Math.round(L.yH * 0.55));
-        g.globalAlpha = 1;
-      }
       if (dome) {
-        g.fillStyle = pal('chalk');
-        for (var x = 8; x < W; x += 24) g.fillRect(x, 4, 3, 2);
+        s.fillStyle = pal('navy2'); s.fillRect(0, 0, W, h);
+        s.fillStyle = pal('chalk');
+        for (var x = 8; x < W; x += 24) s.fillRect(x, 4, 3, 2);
+        return;
+      }
+      if (spec.night) {
+        s.fillStyle = grey ? pal('navy2') : pal('night'); s.fillRect(0, 0, W, h);
+        if (grey) return;
+        s.fillStyle = pal('navy'); s.fillRect(0, Math.round(h * 0.45), W, h);
+        s.fillStyle = pal('dusk'); s.globalAlpha = 0.6; s.fillRect(0, Math.round(h * 0.72), W, h);
+        s.fillStyle = pal('sunset'); s.globalAlpha = 0.35; s.fillRect(0, Math.round(h * 0.9), W, h);
+        s.globalAlpha = 0.7; s.fillStyle = pal('chalk');
+        for (var i = 0; i < num(spec.stars, 0); i++) s.fillRect(Math.floor(noise(i, 2, 9) * W), Math.floor(noise(i, 3, 9) * h * 0.55), 1, 1);
+        s.globalAlpha = 1;
+        return;
+      }
+      s.fillStyle = grey ? pal('grey') : pal('sky'); s.fillRect(0, 0, W, h);
+      if (!grey) {
+        s.fillStyle = pal('dusk'); s.globalAlpha = ctx.weather === 'cold' ? 0.55 : 0.25;
+        s.fillRect(0, Math.round(h * 0.55), W, h - Math.round(h * 0.55));
+        s.globalAlpha = 1;
       }
     }
-    function drawCrowd() {
-      var tile = crowdMode === 'groan' ? crowdDim : (crowdFrame ? crowdB : crowdA);
-      var y = L.yH - 8;
-      for (var x = 0; x < L.W; x += 32) g.drawImage(tile, x, y);
+    /** fillRect per run of columns whose [top, bottom) come from the two functions (integer y). */
+    function fillColumns(s, W, topAt, botAt, color, alpha) {
+      s.fillStyle = color;
+      if (alpha) s.globalAlpha = alpha;
+      var x = 0;
+      while (x < W) {
+        var t = topAt(x), b = botAt(x), x1 = x + 1;
+        while (x1 < W && topAt(x1) === t && botAt(x1) === b) x1++;
+        if (b > t) s.fillRect(x, t, x1 - x, b - t);
+        x = x1;
+      }
+      if (alpha) s.globalAlpha = 1;
+    }
+    /** Run `paint` clipped to the columns between topAt(x) and botAt(x) — integer rects, so the edges stay crisp. */
+    function clippedColumns(s, W, topAt, botAt, paint) {
+      s.save(); s.beginPath();
+      var x = 0;
+      while (x < W) {
+        var t = topAt(x), b = botAt(x), x1 = x + 1;
+        while (x1 < W && topAt(x1) === t && botAt(x1) === b) x1++;
+        if (b > t) s.rect(x, t, x1 - x, b - t);
+        x = x1;
+      }
+      s.clip(); paint(); s.restore();
+    }
+    /**
+     * Rows of seats from o.yBot upward between o.x0 and o.x1: the base tile per row, then people in 8-px slots
+     * wherever the noise lands under o.fill (a share of them in the visiting colours); o.band replaces the
+     * people on its bottom rows with the marching band.
+     */
+    function paintTier(s, o) {
+      var base = o.base, tw = base.width, th = base.height, slot = 8, x, r, y, w, sx, t, k;
+      for (r = 0; r < o.rows; r++) {
+        y = o.yBot - th * (r + 1);
+        for (x = o.x0; x < o.x1; x += tw) { w = Math.min(tw, o.x1 - x); s.drawImage(base, 0, 0, w, th, x, y, w, th); }
+        for (x = o.x0; x < o.x1; x += slot) {
+          w = Math.min(slot, o.x1 - x);
+          if (o.band && r < o.band.rows && x >= o.band.x0 && x < o.band.x1) {
+            t = o.band.tile; sx = (x - o.band.x0) % t.width;
+            s.drawImage(t, sx, 0, Math.min(w, t.width - sx), t.height, x, y, Math.min(w, t.width - sx), t.height);
+            continue;
+          }
+          k = (x - o.x0) / slot;
+          if (noise(k, r, o.key) >= o.fill) continue;
+          t = noise(k, r, o.key + 7) < o.awayShare ? o.fansAway : o.fans;
+          sx = (x - o.x0) % t.width;
+          s.drawImage(t, sx, 0, Math.min(w, t.width - sx), t.height, x, y, Math.min(w, t.width - sx), t.height);
+        }
+      }
+    }
+    /** 'HOME 14  GUEST 10' from the context's scores (scoreFor is the kicker's side). */
+    function scoreLine(labelHome, labelGuest) {
+      var g2 = ctx.game || {}, sf = num(g2.scoreFor, 0), sa = num(g2.scoreAgainst, 0);
+      var home = ctx.away ? sa : sf, guest = ctx.away ? sf : sa;
+      return { home: home, guest: guest, text: labelHome + ' ' + home + '  ' + labelGuest + ' ' + guest };
+    }
+    function periodText() {
+      var q = num(ctx.game && ctx.game.q, 1), Q = num(T().sim && T().sim.clock && T().sim.clock.quarters, 4);
+      return q > Q ? 'OT' : 'Q' + q;
+    }
+    /** A framed board with one line of 3×5 text, centred on cx and kept inside the band. */
+    function paintBoard(s, cx, yBot, text, bh, frame, fillCol, textCol, W) {
+      var bw = Sp.textWidth(text, 1) + 8;
+      var x0 = clamp(Math.round(cx - bw / 2), 1, Math.max(1, W - bw - 1)), y0 = yBot - bh;
+      s.fillStyle = frame; s.fillRect(x0 - 1, y0 - 1, bw + 2, bh + 2);
+      s.fillStyle = fillCol; s.fillRect(x0, y0, bw, bh);
+      Sp.drawText(s, text, x0 + 4, y0 + Math.round((bh - 5) / 2), textCol, 1);
+      return { x0: x0, x1: x0 + bw, y0: y0, y1: yBot };
+    }
+    /** A light bank on a pole: chalk lamps, and at night a gold halo under them. */
+    function paintLamp(s, x, top, w, night) {
+      s.fillStyle = pal('chalk'); s.fillRect(x - (w >> 1), top, w, 2);
+      if (!night) return;
+      s.fillStyle = pal('gold');
+      s.globalAlpha = 0.45; s.fillRect(x - (w >> 1) - 1, top + 2, w + 2, 1);
+      s.globalAlpha = 0.2; s.fillRect(x - (w >> 1) - 2, top + 3, w + 4, 2);
+      s.globalAlpha = 1;
+    }
+
+    /** HS: a tree line and a fence on the horizon, one bleacher behind the end zone, a board on two poles, light poles. */
+    function paintSchool(s, spec, tiles, fill, W, h) {
+      var cx = Math.round(W / 2), x, i;
+      if (spec.trees) {
+        s.fillStyle = pal('ink');
+        for (x = 0; x < W; x += 4) {
+          var treeH = 5 + Math.round(noise(x >> 2, 1, 3) * 7);
+          s.fillRect(x, h - treeH, 4, treeH);
+          s.fillRect(x + 1, h - treeH - 1, 2, 1);
+        }
+      }
+      // a low chain-link fence in front of the trees
+      s.fillStyle = pal('grey'); s.fillRect(0, h - 3, W, 1);
+      s.fillStyle = steel();
+      for (x = 2; x < W; x += 12) s.fillRect(x, h - 4, 1, 4);
+      // light poles: two far corners and a taller one near the right edge
+      var poles = spec.poles || [];
+      for (i = 0; i < poles.length; i++) {
+        var pole = poles[i], px = Math.round(W * pole[0]), top = h - Math.round(h * pole[1]);
+        s.fillStyle = pal('grey'); s.fillRect(px, top, 1, h - top);
+        paintLamp(s, px, top, pole[2], spec.night);
+      }
+      // the bleacher, and the scoreboard on two poles behind it
+      var rows = spec.bleacher.rows, bh = rows * tiles.bench.height;
+      var bw = Math.round(W * spec.bleacher.width), x0 = cx - (bw >> 1), x1 = x0 + bw;
+      var line = scoreLine('HOME', 'GUEST');
+      var board = paintBoard(s, cx, h - bh - 6, line.text, 11, pal('gold'), pal('navy'), pal('chalk'), W);
+      s.fillStyle = pal('grey');
+      s.fillRect(board.x0 + 5, board.y1, 1, h - board.y1); s.fillRect(board.x1 - 6, board.y1, 1, h - board.y1);
+      paintTier(s, { x0: x0, x1: x1, yBot: h, rows: rows, base: tiles.bench, fans: tiles.fans, fansAway: tiles.fansAway, fill: fill, awayShare: spec.awayShare, key: 1, band: null });
+      s.fillStyle = steel(); s.fillRect(x0, h - bh - 1, bw, 1);
+      s.fillStyle = pal('grey'); s.fillRect(x0 - 1, h - bh - 1, 1, bh + 1); s.fillRect(x1, h - bh - 1, 1, bh + 1);
+    }
+
+    /** College and NFL: tiers that rise toward the screen edges, a concourse between them, a roof ring (NFL), boards. */
+    function paintBowl(s, spec, tiles, fill, W, h) {
+      var cx = W / 2, flatHalf = Math.round(W * 0.22), x, i;
+      var upFrac = spec.upperByPrestige ? spec.upperByPrestige[clamp(prestige, 1, 5) - 1] : num(spec.upper, 0);
+      var lowC = Math.round(h * spec.lower), upC = Math.round(h * upFrac), conc = h >= 70 ? 3 : 2, roofH = Math.round(h * num(spec.roof, 0));
+      var rise = num(spec.edgeRise, 0);
+      function edge(xx) { var d = Math.abs(xx - cx) - flatHalf; return d <= 0 ? 0 : Math.min(1, d / Math.max(1, cx - flatHalf)); }
+      function lowerTop(xx) { return h - Math.round(lowC * (1 + rise * edge(xx))); }
+      function upperBot(xx) { return lowerTop(xx) - conc; }
+      function upperTop(xx) { return upperBot(xx) - Math.round(upC * (1 + rise * edge(xx))); }
+      function roofTop(xx) { return upperTop(xx) - roofH; }
+      function horizon() { return h; }
+      var rimTop = upC > 0 ? upperTop : lowerTop;
+      var seatH = tiles.seats.height, farH = tiles.seatsFar.height;
+      // upper deck: small far rows, aligned to the deck's bottom at the far end
+      if (upC > 0) {
+        clippedColumns(s, W, upperTop, upperBot, function () {
+          paintTier(s, { x0: 0, x1: W, yBot: upperBot(cx), rows: Math.ceil((upC * (1 + rise) + lowC * rise) / farH) + 1, base: tiles.seatsFar, fans: tiles.far, fansAway: tiles.farAway, fill: fill, awayShare: spec.awayShare, key: 3, band: null });
+        });
+        fillColumns(s, W, upperBot, lowerTop, pal('navy'));
+        if (spec.night && conc >= 3) { s.fillStyle = pal('gold'); for (x = 3; x < W; x += 6) s.fillRect(x, upperBot(x) + 1, 2, 1); }
+      }
+      // lower tier around the end zone, with the band on the far-end's right on the bottom rows
+      var band = spec.band ? { x0: Math.round(cx + flatHalf) - 48, x1: Math.round(cx + flatHalf), rows: 2, tile: tiles.band } : null;
+      clippedColumns(s, W, lowerTop, horizon, function () {
+        paintTier(s, { x0: 0, x1: W, yBot: h, rows: Math.ceil(Math.round(lowC * (1 + rise)) / seatH) + 1, base: tiles.seats, fans: tiles.fans, fansAway: tiles.fansAway, fill: fill, awayShare: spec.awayShare, key: 5, band: band });
+      });
+      fillColumns(s, W, lowerTop, function (xx) { return lowerTop(xx) + 1; }, steel());
+      fillColumns(s, W, rimTop, function (xx) { return rimTop(xx) + 1; }, steel());
+      // roof with the floodlight ring (NFL): a navy overhang, its rim in steel, ink along the underside
+      if (roofH > 0) {
+        fillColumns(s, W, roofTop, upperTop, pal('navy'));
+        fillColumns(s, W, roofTop, function (xx) { return roofTop(xx) + 1; }, steel());
+        fillColumns(s, W, function (xx) { return upperTop(xx) - 1; }, upperTop, pal('ink'));
+        for (x = 10; x < W; x += num(spec.lampEvery, 20)) paintLamp(s, x, upperTop(x) - 3, 3, spec.night);
+      }
+      var line = scoreLine('HOME', spec.jumbotron ? 'AWAY' : 'GUEST');
+      if (spec.jumbotron) {
+        // the video board hangs over the far end, between the concourse and the roof
+        var jw = Math.min(spec.jumbotron.maxWidth, Math.round(W * spec.jumbotron.width)), jh = Math.round(h * spec.jumbotron.height);
+        var jx = clamp(Math.round(L.xPost - jw / 2), 2, W - jw - 2), jy1 = upperBot(cx), jy0 = jy1 - jh;
+        s.fillStyle = steel(); s.fillRect(jx + (jw >> 2), roofTop(cx), 1, jy0 - roofTop(cx)); s.fillRect(jx + jw - (jw >> 2), roofTop(cx), 1, jy0 - roofTop(cx));
+        s.fillStyle = pal('ink'); s.fillRect(jx, jy0, jw, jh);
+        s.fillStyle = pal('navy2'); s.fillRect(jx + 2, jy0 + 2, jw - 4, jh - 4);
+        var qs = periodText();
+        if (jh - 4 >= 18) {
+          Sp.drawText(s, 'HOME', jx + 5, jy0 + 4, pal('chalk'), 1);
+          Sp.drawText(s, 'AWAY', jx + jw - 5 - Sp.textWidth('AWAY', 1), jy0 + 4, pal('chalk'), 1);
+          Sp.drawText(s, String(line.home), jx + 5, jy0 + 11, pal('gold'), 2);
+          Sp.drawText(s, String(line.guest), jx + jw - 5 - Sp.textWidth(String(line.guest), 2), jy0 + 11, pal('gold'), 2);
+          Sp.drawText(s, qs, jx + Math.round(jw / 2 - Sp.textWidth(qs, 1) / 2), jy0 + 13, pal('sky'), 1);
+        } else {
+          var one = 'HOME ' + line.home + ' ' + qs + ' ' + line.guest + ' AWAY';
+          Sp.drawText(s, one, jx + Math.round(jw / 2 - Sp.textWidth(one, 1) / 2), jy0 + Math.round((jh - 5) / 2), pal('gold'), 1);
+        }
+      } else {
+        // the scoreboard on the far rim, and press boxes on the sideline rims once the place has an upper deck
+        var bh = h >= 70 ? 12 : 10;
+        var bd = paintBoard(s, cx, rimTop(Math.round(cx)) - 2, line.text, bh, pal('gold'), pal('navy'), pal('chalk'), W);
+        s.fillStyle = steel(); s.fillRect(bd.x0 + 6, bd.y1, 1, 3); s.fillRect(bd.x1 - 7, bd.y1, 1, 3);
+        if (upC > 0) {
+          var pw = 20, ph = 5, boxes = [4, W - 4 - pw];
+          for (i = 0; i < boxes.length; i++) {
+            var bx = boxes[i], by = rimTop(bx + (pw >> 1)) - ph;
+            s.fillStyle = pal('navy'); s.fillRect(bx, by, pw, ph);
+            s.fillStyle = steel(); s.fillRect(bx, by, pw, 1);
+            s.fillStyle = pal('chalk'); for (x = bx + 2; x < bx + pw - 1; x += 3) s.fillRect(x, by + 2, 2, 1);
+          }
+        }
+        if (spec.towers) {
+          for (i = 0; i < spec.towers.length; i++) {
+            var tx = Math.round(W * spec.towers[i]), tt = rimTop(tx) - Math.round(h * 0.18);
+            s.fillStyle = pal('grey'); s.fillRect(tx, tt, 1, rimTop(tx) - tt);
+            paintLamp(s, tx, tt, 5, spec.night);
+          }
+        }
+      }
+    }
+    function drawStadium() {
+      if (!stadium) buildStadium();
+      g.drawImage(crowdMode === 'groan' ? stadium.dim : (crowdFrame ? stadium.b : stadium.a), 0, 0);
     }
     function drawField() {
       var W = L.W, H = L.H;
@@ -921,8 +1196,7 @@
     function draw() {
       g.save();
       g.translate(camX, camY);
-      drawSky();
-      drawCrowd();
+      drawStadium();
       drawField();
       var ballFront = !ballBehind;
       if (ballFront) drawUprights();
@@ -973,6 +1247,7 @@
       teardownInput();
       ctx = newCtx; model = newModel || (K ? K.model(ctx, null) : null); sessionInfo = newSession || null;
       row = diffRow(ctx);
+      venue = venueOf(ctx); prestige = clamp(num(ctx.prestige, 3), 1, 5);
       pressure = num(ctx.pressure, 0);
       clu = num(ctx.kicker && ctx.kicker.attrs && ctx.kicker.attrs.CLU, 50);
       swayAmp = T().kick.pressure.swayDeg * pressure * (1 - clu / T().kick.pressure.swayCluDiv);
@@ -1011,6 +1286,9 @@
       layout: function () { return L; },
       ctx: function () { return ctx; },
       model: function () { return model; },
+      /** The venue the scene is drawing ('HS' | 'COLLEGE' | 'NFL') and its pre-rendered frames (specs / RTG.debug). */
+      venue: function () { return venue; },
+      stadium: function () { return stadium; },
       /** Current aim in degrees (arrow keys / hold mode) and the live power-bar fill — used by the specs. */
       aim: function () { return aimDeg; },
       meterPower: function () { return meterP; },

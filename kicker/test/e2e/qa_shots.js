@@ -129,9 +129,8 @@ async function run(size) {
     await H.waitForScreen(page, 'newcareer');
     await shot(page, 'newcareer', size);
     await kickScene(page, size);
-    // offers
     // the rest of the senior season (kickScene played two kicks for real): force alternating makes / misses,
-    // opening each remaining game, until the offers are on the table
+    // opening each remaining game, until the camp invites are in
     for (let i = 0; i < 60; i++) {
       const st = await page.evaluate(() => {
         const s = RTG.UI.store.state;
@@ -145,6 +144,37 @@ async function run(size) {
       await H.debug(page, 'forceKick', { outcome: i % 3 === 2 ? 'WIDE_R' : 'GOOD' });
       await page.waitForTimeout(200);
     }
+    // the recruiting camps: the itinerary, the first camp on its scene (armed, mid-tour, the verdict back on the
+    // row), then the rest of the tour forced through with instant flights until the offers are on the table
+    await page.waitForFunction(() => RTG.UI.store.state.phase === 'CAMPS', null, { timeout: 20000 });
+    await page.evaluate(() => RTG.UI.Router.sync());
+    await H.waitForScreen(page, 'hscamps');
+    await page.waitForTimeout(200);
+    await shot(page, 'hscamps', size);
+    await page.locator('.scr-hscamps [data-action="go-camp"]').click();
+    await H.waitForScreen(page, 'hscamp');
+    await K.waitPhase(page, 'SETUP', 10000);
+    await page.waitForTimeout(300);
+    await shot(page, 'hscamp', size);
+    await page.evaluate(() => RTG.UI.store.setSetting('reducedMotion', true));
+    for (let i = 0; i < 3; i++) { await K.waitSetup(page, i, 15000); await H.debug(page, 'forceKick', { outcome: i === 1 ? 'WIDE_R' : 'GOOD' }); }
+    await K.waitSetup(page, 3, 15000);
+    await shot(page, 'hscamp_mid', size);
+    for (let i = 3; i < 5; i++) { await K.waitSetup(page, i, 15000); await H.debug(page, 'forceKick', { outcome: 'GOOD' }); }
+    await page.waitForFunction(() => RTG.UI.Router.current() !== 'hscamp', null, { timeout: 15000 });
+    if ((await H.screenId(page)) === 'hscamps') { await page.waitForTimeout(200); await shot(page, 'hscamps_verdict', size); }
+    for (let i = 0; i < 80; i++) {
+      const st = await page.evaluate(() => {
+        const s = RTG.UI.store.state;
+        return { phase: s.phase, open: !!(s.pending && s.pending.kind === 'KICKS') };
+      });
+      if (st.phase !== 'CAMPS') break;
+      if (!st.open) { await page.evaluate(() => { RTG.UI.store.dispatch('hsStartCamp'); RTG.UI.Router.sync(); }); await page.waitForTimeout(150); continue; }
+      await H.debug(page, 'forceKick', { outcome: i % 4 === 3 ? 'WIDE_R' : 'GOOD' });
+      await page.waitForTimeout(40);
+    }
+    await page.evaluate(() => RTG.UI.store.setSetting('reducedMotion', false));
+    // offers
     await page.waitForFunction(() => RTG.UI.store.state.phase === 'OFFERS', null, { timeout: 20000 });
     await page.evaluate(() => RTG.UI.Router.sync());
     await H.waitForScreen(page, 'offers');

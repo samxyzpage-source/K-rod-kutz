@@ -626,3 +626,38 @@ html { overflow-x: hidden; }   /* on html only: it propagates to the viewport, s
   .hs-brow { grid-template-columns: 18px 1fr auto 52px; }
   .hs-brow .hs-btier { display: none; }
 }
+
+/* ---------- the recruiting camps (SPEC §2.7.0, D23) ---------- */
+.scr-hscamps .hsc-tot { gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.scr-hscamps .hsc-tot-cell { display: flex; flex-direction: column; gap: 2px; min-width: 76px; }
+.scr-hscamps .hsc-tot-cell b { color: var(--gold); font-size: 1.15em; font-variant-numeric: tabular-nums; }
+
+.hsc-list { display: flex; flex-direction: column; gap: 4px; }
+.hsc-row {
+  display: grid; grid-template-columns: 22px 1fr auto; grid-template-areas: "crest name verdict" ". ask verdict" ". line line";
+  gap: 2px 8px; align-items: center; padding: 6px 8px;
+  border-left: 4px solid var(--navy2); background: var(--navy2);
+}
+.hsc-row.next { border-left-color: var(--gold); }
+.hsc-row.earned { border-left-color: var(--mint); }
+.hsc-row.missed { border-left-color: var(--red); }
+.hsc-row .crest { grid-area: crest; }
+.hsc-row .hsc-name { grid-area: name; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.hsc-row .hsc-school { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hsc-row .hsc-stars { color: var(--gold); font-size: 0.8em; letter-spacing: 1px; }
+.hsc-row .hsc-ask { grid-area: ask; }
+.hsc-row .hsc-verdict { grid-area: verdict; text-align: right; white-space: nowrap; }
+.hsc-row .hsc-line { grid-area: line; }
+.hsc-row .hsc-line:empty { display: none; }
+
+@media (max-width: 520px) {
+  .hsc-row { grid-template-columns: 22px 1fr; grid-template-areas: "crest name" ". ask" ". verdict" ". line"; }
+  .hsc-row .hsc-verdict { text-align: left; }
+}
+
+/* the camp scene header (screen 'hscamp'): one line above the slot strip, like the senior-season scoreboard */
+.hsc-header .session-title { gap: 8px; flex-wrap: wrap; }
+.hsc-header .hsc-school { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.hsc-header .hsc-stars { color: var(--gold, #f6c445); font-size: max(8px, 0.8em); letter-spacing: 1px; }
+.hsc-header .hsc-ask { white-space: nowrap; }
+.hsc-header .hsc-tally { color: var(--cream, #f4e9d0); font-variant-numeric: tabular-nums; white-space: nowrap; }

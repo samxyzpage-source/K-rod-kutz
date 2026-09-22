@@ -2,16 +2,16 @@
  * Road to Glory: Kicker — RTG.Career (SPEC §2.7 career systems, §2.2 camp battle, §2.10.1 event actions,
  * §3.4 Decision / KickSession / pending, §3.5.18 API, §3.6 career flow state machine)
  *
- * The stage machine of a career: the star rating the senior season earns (RTG.HS), college offers, the single
- * `decide` entry point for every Decision kind, kick sessions (senior-season games / camp battle / combine /
- * halftime-70 / tryout), the offseason
+ * The stage machine of a career: the star rating the senior season earns (RTG.HS), college offers (earned at the
+ * recruiting camps that follow the senior season), the single `decide` entry point for every Decision kind, kick
+ * sessions (senior-season games / recruiting camps / camp battle / combine / halftime-70 / tryout), the offseason
  * wizard chain, team changes, event actions, the draft hand-off into the NFL, retirement and the legacy report.
  *
  * Pure over plain JSON + the rng passed in: no DOM, no clock, no ambient randomness. Sibling modules (Schema,
  * Player, Kick, Season, Contracts, Draft, Events, Stats, Awards, Names) are resolved AT CALL TIME.
  *
  * State extensions (all JSON-safe, all optional):
- *   state.flags.hs              the senior season (RTG.HS): school, five games, recruiting board, totals
+ *   state.flags.hs              the senior season (RTG.HS): school, five games, recruiting board, totals, the camp tour
  *   state.flags.offseason       the wizard chain {key, year, league, steps[], idx, done, log[], skipped[] (indices of steps
  *                               that produced nothing for the player), resigned, talksFailed, transferred, noOffers}
  *                               (Career.offseasonChain; stale chains are replaced by key)
@@ -250,10 +250,11 @@
   // ═══════════════════════════════ §2.7.1 stars & session hooks ═══════════════════════════════
 
   /**
-   * Star rating (§2.7.1): clamp(round(1.5 + 0.03·(OVR − 40) + 0.4·rating), 2, 5), where `rating` is the 0–6 mark
-   * the senior season earned (HS.ratingOf).
-   * DEVIATION: the spec's literal `0.4·makes/6` makes every recruit a 2★ walk-on (OVR 49–52 → 2.17–2.26), which
-   * contradicts §2.7.2 (3–6 offers, star bonuses); the per-point weight makes the senior year matter.
+   * Star rating (§2.7.1): clamp(round(base + 0.03·(OVR − 40) + seasonW·rating), 2, 5), where `rating` is the 0–6
+   * mark the senior season earned (HS.ratingOf) and base / seasonW are 1.0 / 0.6 (Tuning.draft.stars).
+   * DEVIATION: the spec's literal `1.5 + 0.4·makes/6` makes every recruit a 2★ walk-on (OVR 49–52 → 2.17–2.26),
+   * which contradicts §2.7.2 (3–6 offers, star bonuses); the per-point weight makes the senior year matter, and
+   * 1.0 / 0.6 puts a perfect season at 5★ (rating 6 → 4.9 at OVR 50) with 4★ from 3.67, 3★ from 2.0.
    * @param {number} ovr @param {number} rating 0..6 @returns {number} 2..5
    */
   Career.starsFor = function (ovr, rating) {
@@ -337,7 +338,7 @@
     else { set(k, 'kicker'); team.kicker2 = null; }
   }
 
-  function offerLabel(o) { return o.school + ' (' + o.prestige + '★)' + (o.safety ? ' · safety school' : ''); }
+  function offerLabel(o) { return o.school + ' (' + o.prestige + '★)' + (o.safety ? ' · safety school' : '') + (o.earned ? ' · earned at camp' : ''); }
   function offerDetail(o) {
     var parts = [(DEPTH_TEXT[o.depth] || o.depth) + (o.incumbent ? ' — ' + o.incumbent.name + ' (' + o.incumbent.ovr + ' OVR)' : ''), COACH_TEXT[o.coach] || o.coach];
     if (o.walkon) parts.push('walk-on, no scholarship');
@@ -352,12 +353,16 @@
    *   RECRUIT : 3–6 offers (walk-on: 1) from schools with prestige stars−1..stars, weighted 1/(1 + |prestige − (stars − 0.5)|),
    *             the last one a "safety" school of prestige ≤ 2; each with depth (from the real kicker room), coach type, NIL, nearHome.
    *   TRANSFER: 2–3 offers within ±1 of the OVR-implied tier (current school excluded) + a STAY option.
-   * `opts.from` (senior-season recruiting, §2.7.0) seeds the list with the schools that already offered on the
-   * board, before the prestige-band pool fills the rest; `opts.interest` tilts that pool towards the schools that
+   * `opts.earned` (the recruiting camps, §2.7.0 — what RTG.HS.finishCamps passes) makes the RECRUIT list exactly
+   * the schools whose staff was won over at camp: no count, no prestige band, a safety school (prestige ≤ 2) only
+   * when fewer than Tuning.hs.camps.safetyBelow were earned; with flags.WALKON set (a 2★ season and nothing earned)
+   * the walk-on path runs as before.
+   * `opts.from` (the older board hand-off) seeds the list with the schools that already offered on the board,
+   * before the prestige-band pool fills the rest; `opts.interest` tilts that pool towards the schools that
    * followed the tape.
    * Draws: exactly 1 on `rng` (rng.fork); all sampling happens on the child.
    * @param {Object} state @param {RNG} rng @param {'RECRUIT'|'TRANSFER'} mode
-   * @param {{from?:string[], interest?:Array<{teamId:string, interest:number}>}} [opts]
+   * @param {{earned?:string[], from?:string[], interest?:Array<{teamId:string, interest:number}>}} [opts]
    * @returns {Object} Decision {kind:'OFFERS_COLLEGE'|'TRANSFER', payload:{mode, stars, walkon, myOvr, offers[]}, options}
    */
   Career.generateCollegeOffers = function (state, rng, mode, opts) {
@@ -393,8 +398,22 @@
     var safety = mode === 'RECRUIT' && !walkon;
     var want = safety ? Math.max(1, count - 1) : count;
     var taken = {};
-    // the board fills at most half the list — the prestige band the star rating earned always gets a say
-    if (mode === 'RECRUIT' && Array.isArray(opts.from) && opts.from.length) {
+    var earnedMode = mode === 'RECRUIT' && !walkon && Array.isArray(opts.earned);
+    if (earnedMode) {
+      // the camps decided it: the offers are exactly the schools whose staff was won over, and a safety school
+      // joins only when fewer than safetyBelow were earned (none earned → the safety school alone)
+      for (var e = 0; e < opts.earned.length; e++) {
+        var et = teamIn(lg, opts.earned[e]);
+        if (!et || taken[et.id]) continue;
+        taken[et.id] = true;
+        var eo = buildCollegeOffer(state, child, et, offers.length, false, mode);
+        eo.earned = true;
+        offers.push(eo);
+      }
+      want = offers.length;
+      safety = offers.length < Tuning.hs.camps.safetyBelow;
+    } else if (mode === 'RECRUIT' && Array.isArray(opts.from) && opts.from.length) {
+      // the board fills at most half the list — the prestige band the star rating earned always gets a say
       var fromMax = Math.max(1, Math.floor(want / 2));
       for (var k = 0; k < opts.from.length && offers.length < Math.min(want, fromMax); k++) {
         var ft = teamIn(lg, opts.from[k]);
@@ -416,9 +435,9 @@
     if (safety) {
       var sp = [];
       for (var j = 0; j < lg.teams.length; j++) {
-        var s = lg.teams[j], taken = false;
-        for (var o = 0; o < offers.length; o++) if (offers[o].teamId === s.id) taken = true;
-        if (!taken && s.prestige <= O.safetyPrestigeMax) sp.push(s);
+        var s = lg.teams[j], dup = false;
+        for (var o = 0; o < offers.length; o++) if (offers[o].teamId === s.id) dup = true;
+        if (!dup && s.prestige <= O.safetyPrestigeMax) sp.push(s);
       }
       if (sp.length) {
         var st = child.weighted(sp, weight);
@@ -433,7 +452,7 @@
     for (var q = 0; q < offers.length; q++) options.push(option(offers[q].id, offerLabel(offers[q]), offerDetail(offers[q])));
     if (mode === 'TRANSFER') options.push(option('STAY', 'Stay at ' + teamName(userTeam(state)), 'Keep the job fight where it is'));
     return decision(mode === 'TRANSFER' ? 'TRANSFER' : 'OFFERS_COLLEGE',
-      { mode: mode, stars: stars, walkon: walkon, myOvr: myOvr, offers: offers }, options);
+      { mode: mode, stars: stars, walkon: walkon, myOvr: myOvr, offers: offers, earned: earnedMode ? opts.earned.slice() : null }, options);
   };
 
   /** The offer behind an option id of an offers decision. */
@@ -633,7 +652,8 @@
   }
 
   /**
-   * Resolve the pending KickSession (§3.5.18): HS_GAME → the senior-season game (RTG.HS); CAMP → K1 / K2; COMBINE_* → combineScore;
+   * Resolve the pending KickSession (§3.5.18): HS_GAME → the senior-season game (RTG.HS); RECRUIT_CAMP → the camp's
+   * verdict (RTG.HS.finishCamp); CAMP → K1 / K2; COMBINE_* → combineScore;
    * HALFTIME70 → fame / fans (Events.resolveHalftime70); TRYOUT → UDFA invites / spring league; PRACTICE → nothing.
    * @param {Object} state @param {RNG} rng @returns {Object} SessionOutcome {kind, ...}
    */
@@ -643,6 +663,7 @@
     var sess = pd.session;
     switch (sess.kind) {
       case 'HS_GAME': return need(RTG.HS, 'HS', 'finishSession').finishGame(state, rng, sess);
+      case 'RECRUIT_CAMP': return need(RTG.HS, 'HS', 'finishSession').finishCamp(state, rng, sess);
       case 'CAMP': state.pending = null; return finishCamp(state, rng, sess);
       case 'COMBINE_LADDER': case 'COMBINE_ACC': case 'COMBINE_KO': state.pending = null; return finishCombine(state, rng, sess);
       case 'HALFTIME70': {

@@ -180,7 +180,7 @@ test('applyUserKick with a pending kickoff throws (and vice versa); autoKick res
 
 // ═══════════════════════════════ sessions, events, decisions ═══════════════════════════════
 
-test('sessionKick: a senior-season game (AI input when null) → the HS_GAME outcome, then the next game; the fifth ends at OFFERS_COLLEGE', () => {
+test('sessionKick: a senior-season game (AI input when null) → the HS_GAME outcome, then the next game; the fifth closes into the camps, the last camp into OFFERS_COLLEGE', () => {
   const { state, rng, session } = kfx.hsGame(RTG, { seed: 8 });
   const n = session.contexts.length;
   assert.ok(n >= RTG.Tuning.hs.chances[0] && n <= RTG.Tuning.hs.chances[1], 'chances in range (' + n + ')');
@@ -200,13 +200,31 @@ test('sessionKick: a senior-season game (AI input when null) → the HS_GAME out
   assert.equal(state.pending, null, 'the senior season pauses between games');
   assert.throws(() => Engine.sessionKick(state, rng, null), /no pending kick session/);
   ok(state, 'after senior-season game 1');
-  // the rest of the season, then the offers
+  // the rest of the season: settlePending opens each game (nothing is pending between them)
   let guard = 20;
   while (state.phase === 'SEASON' && guard-- > 0) Engine.settlePending(state, rng, { max: 1 });
   assert.equal(state.flags.hs.idx, RTG.Tuning.hs.games);
-  assert.equal(state.phase, 'OFFERS'); assert.equal(state.pending.decision.kind, 'OFFERS_COLLEGE');
+  assert.equal(state.phase, 'CAMPS'); assert.equal(state.pending, null, 'the fifth game hands to the camp itinerary, nothing pending');
   assert.ok(state.flags.hs.summary.stars >= 2 && state.flags.hs.summary.stars <= 5, JSON.stringify(state.flags.hs.summary));
+  const camps = state.flags.hs.camps;
+  assert.ok(camps && camps.invites.length >= 1, 'camp invites in the mail');
+  assert.throws(() => Engine.hsStartGame(state, rng), /season is over/);
+  assert.throws(() => Engine.nextPhase(state, rng), /camps first/);
   ok(state, 'after the senior season');
+  // the tour: one camp per settlePending step (hsOpenNext), each a RECRUIT_CAMP session
+  for (let c = 0; c < camps.invites.length; c++) {
+    const log = Engine.settlePending(state, rng, { max: 1 });
+    assert.equal(log.length, 1); assert.equal(log[0].kind, 'KICKS'); assert.equal(log[0].session, 'RECRUIT_CAMP', 'camp ' + c);
+    assert.equal(log[0].outcome.kind, 'RECRUIT_CAMP'); assert.equal(log[0].outcome.campIdx, c);
+    assert.equal(typeof log[0].outcome.earned, 'boolean');
+    assert.equal(camps.idx, c + 1);
+    assert.equal(camps.invites[c].done, true);
+  }
+  assert.equal(state.phase, 'OFFERS'); assert.equal(state.pending.decision.kind, 'OFFERS_COLLEGE');
+  assert.throws(() => Engine.hsStartCamp(state, rng), /camps are over/, 'no camp after the tour');
+  const offered = state.pending.decision.payload.offers.map((o) => o.teamId);
+  assert.ok(camps.earned.every((id) => offered.indexOf(id) >= 0), 'every camp offer is on the table');
+  ok(state, 'after the camp tour');
 });
 
 test('chooseEvent applies the choice, runs the actions and resumes the offseason chain', () => {
@@ -342,7 +360,17 @@ test('applyUserKick / sessionKick accept opts.forced (debug): requested outcome,
     if (!state.pending) Engine.hsStartGame(state, rng);
     while (state.pending && state.pending.kind === 'KICKS') Engine.sessionKick(state, rng, null, { forced: { outcome: 'GOOD' } });
   }
+  assert.equal(state.stage, 'HS'); assert.equal(state.phase, 'CAMPS');
+  // the camp tour the same way: open each camp, force every kick
+  const b1 = rng.state();
+  guard = 60;
+  while (state.phase === 'CAMPS' && guard-- > 0) {
+    if (!state.pending) Engine.hsStartCamp(state, rng);
+    while (state.pending && state.pending.kind === 'KICKS') Engine.sessionKick(state, rng, null, { forced: { outcome: 'GOOD' } });
+  }
   assert.equal(state.stage, 'HS'); assert.equal(state.phase, 'OFFERS');
+  assert.ok(state.flags.hs.camps.invites.every((i) => i.done && i.earned), 'a perfect tour earns every camp');
+  assert.notEqual(rng.state(), b1, 'opening the camps forks the rng; the forced kicks themselves draw nothing');
   Engine.autoPlayCareer(state, rng, { untilStage: 'COLLEGE' });
   Engine.nextPhase(state, rng);
   Engine.startUserGame(state, rng);

@@ -1040,7 +1040,10 @@
    *   {type, distance (or ytg), hash?, decisive?, asTimeExpires?, playoff?, rivalry?, away?, late?, iced?, ot?, oppST?,
    *    isUser, forSession?, calm?, pressure? (override), side? ('home'|'away'), teamId?, oppId?, league?,
    *    kicker? | attrs? (AI kicker / rival / bare attrs), wind? (used verbatim, no draws), gameWeather?,
-   *    weather?, tempF?, surface?, altitude?, dome?, game? (snapshot overrides), rng?}
+   *    weather?, tempF?, surface?, altitude?, dome?, game? (snapshot overrides), venue? ('HS'|'COLLEGE'|'NFL'), rng?}
+   * The context also names where the kick happens for the scene: `venue` ('HS' for the senior season and, when
+   * a camp says so, its field; otherwise the league) and `prestige` (the home side's 1–5 at a college venue,
+   * null elsewhere). Both are presentation only — resolve and the model never read them.
    * Draws: hash 1 (FG with hash undefined) · wind 2 (game weather present, not calm, no explicit wind)
    * · gusts 2 (Legend, user kick, wind > 0). The rng is the 4th argument or situation.rng; without either a
    * deterministic fallback derived from state.rngState is used (the caller's rng never advances).
@@ -1071,6 +1074,14 @@
     var leagueObj = leagueObjFor(state, league);
     var team = findTeam(leagueObj, teamId), opp = findTeam(leagueObj, oppId);
     var oppST = num(situation.oppST, opp ? num(opp.ST, DF.oppST) : DF.oppST);
+
+    // where the kick happens (the scene draws the venue behind the field): the senior season plays on a
+    // high-school field, everything after it in the league's stadium; a camp may name its venue outright.
+    // A college venue carries the home side's prestige so the scene can size the bowl.
+    var venue = situation.venue === 'HS' || situation.venue === 'COLLEGE' || situation.venue === 'NFL' ? situation.venue
+      : (state && state.stage === 'HS' ? 'HS' : league);
+    var home = side === 'away' ? opp : team;
+    var prestige = venue === 'COLLEGE' && home && typeof home.prestige === 'number' ? home.prestige : null;
 
     // kicker snapshot (the ONLY attribute source for resolve)
     var kicker = Kick.snapshotKicker(kickerSource(state, situation, isUser, leagueObj, teamId));
@@ -1127,6 +1138,7 @@
       away: pr.flags.away, asTimeExpires: pr.flags.asTimeExpires, ot: pr.flags.ot, late: pr.flags.late,
       iceImmune: pr.flags.iceImmune,
       oppST: oppST, isUser: isUser, difficulty: difficulty,
+      venue: venue, prestige: prestige,
       game: {
         q: num(sg.q, num(g.q, 1)), clock: num(sg.clock, num(g.clock, Tuning.sim.clock.quarterSec)),
         scoreFor: num(sg.scoreFor, scoreFor), scoreAgainst: num(sg.scoreAgainst, scoreAgainst),
