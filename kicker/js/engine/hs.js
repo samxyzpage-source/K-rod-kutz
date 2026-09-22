@@ -601,7 +601,7 @@
       var last = i === n - 1;
       var ctx = K.buildContext(state, null, {
         type: 'FG', distance: inv.distances[i], hash: 0, isUser: true, forSession: true,
-        league: 'COLLEGE', side: 'home', teamId: inv.teamId, oppId: inv.teamId, oppST: C.oppST,
+        league: 'COLLEGE', venue: 'COLLEGE', side: 'home', teamId: inv.teamId, oppId: inv.teamId, oppST: C.oppST,
         gameWeather: weather, weather: weather.weather, tempF: weather.tempF, surface: weather.surface,
         altitude: weather.altitude, dome: weather.dome, wind: wind,
         pressure: last ? C.lastPressure : C.pressure,

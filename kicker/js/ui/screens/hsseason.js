@@ -109,7 +109,7 @@
         title: 'RECRUITING BOARD',
         right: c.el('span', { class: 'small txt-grey', text: h.idx ? 'after week ' + h.games[h.idx - 1].week : 'before week ' + h.games[0].week }),
         body: [
-          c.el('p', { class: 'small txt-grey', text: 'How hard each programme is following the tape. Reach ' + RTG.Tuning.hs.interest.offerAt + ' and the offer is on the table.' }),
+          c.el('p', { class: 'small txt-grey', text: 'How hard each programme is following the tape. Reach ' + RTG.Tuning.hs.interest.warmAt + ' (WARM) and the school invites you to its camp after the season — the offer is earned there.' }),
           c.el('div', { class: 'hs-board-list', role: 'list' }, boardRows(h))
         ]
       }));

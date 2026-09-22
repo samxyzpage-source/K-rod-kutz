@@ -172,6 +172,8 @@
    * @property {number} pressure @property {boolean} clutch @property {boolean} decisive @property {boolean} iced
    * @property {boolean} playoff @property {boolean} rivalry @property {boolean} away @property {boolean} asTimeExpires @property {boolean} ot
    * @property {number} oppST @property {boolean} isUser @property {string} difficulty
+   * @property {'HS'|'COLLEGE'|'NFL'} venue  presentation: which stadium the scene draws (Kick.buildContext: situation.venue, else 'HS' at the HS stage, else the league)
+   * @property {number|null} prestige  the home school's 1–5 at a COLLEGE venue (sizes its upper deck), null elsewhere
    * @property {{q:number, clock:number, scoreFor:number, scoreAgainst:number, week:number, oppId:string|null, teamId:string|null}} game
    * @property {{attrs:Attrs, form:number, mods:Modifier[], traits:string[], foot:'R'|'L', flags:Object}} kicker
    */

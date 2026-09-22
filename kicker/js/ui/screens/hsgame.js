@@ -3,7 +3,7 @@
  * One game of the high-school senior season: KickView full-screen with a live scoreboard on top (your school,
  * the opponent, the quarter and the running score) and a slot strip of the night's scoring chances. Drives
  * state.pending.session (kind HS_GAME) through dispatch('sessionKick', input); when the game ends the screen
- * hands back to 'hsseason' (or, after the fifth game, to the offers).
+ * hands back to 'hsseason' (or, after the fifth game, to the recruiting camps).
  */
 (function (root) {
   'use strict';

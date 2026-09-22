@@ -183,9 +183,9 @@ const CONTRACT = {
   'engine/draft': { ns: 'Draft', fns: ['combineSession', 'scoreCombine', 'draftValue', 'projection', 'run', 'tryout'] },
   'engine/season': { ns: 'Season', fns: ['start', 'beginRegular', 'userGameRef', 'simOtherGames', 'endWeek', 'startPostseason', 'postseasonWeek', 'finishSeason', 'offseason', 'advanceYear'] },
   'engine/career': { ns: 'Career', fns: ['starsFor', 'afterSessionKick', 'generateCollegeOffers', 'decide', 'campBattle', 'finishSession', 'offseasonChain', 'changeTeam', 'handleActions', 'enterDraft', 'runDraft', 'enterNfl', 'retire', 'stageInfo'] },
-  'engine/hs': { ns: 'HS', fns: ['season', 'startGame', 'afterKick', 'finishGame', 'finishSeason', 'ratingOf', 'tierOf', 'inSeason', 'current'] },
+  'engine/hs': { ns: 'HS', fns: ['season', 'startGame', 'afterKick', 'finishGame', 'finishSeason', 'ratingOf', 'tierOf', 'inSeason', 'current', 'camps', 'inCamps', 'nextCamp', 'askOf', 'startCamp', 'judgeCamp', 'finishCamp', 'finishCamps'] },
   'engine/save': { ns: 'Save', fns: ['serialize', 'deserialize', 'migrate', 'exportString', 'importString', 'slotSummary'] },
-  'engine/api': { ns: 'Engine', fns: ['newCareer', 'train', 'spendXp', 'startUserGame', 'simStep', 'simToKick', 'applyUserKick', 'autoKick', 'applyUserKickoff', 'finishUserGame', 'endWeek', 'chooseEvent', 'sessionKick', 'decide', 'nextPhase', 'autoPlayGame', 'autoPlayWeek', 'autoPlaySeason', 'autoPlayOffseason', 'autoPlayCareer', 'save', 'load', 'settlePending', 'markRead', 'hsStartGame'] }
+  'engine/api': { ns: 'Engine', fns: ['newCareer', 'train', 'spendXp', 'startUserGame', 'simStep', 'simToKick', 'applyUserKick', 'autoKick', 'applyUserKickoff', 'finishUserGame', 'endWeek', 'chooseEvent', 'sessionKick', 'decide', 'nextPhase', 'autoPlayGame', 'autoPlayWeek', 'autoPlaySeason', 'autoPlayOffseason', 'autoPlayCareer', 'save', 'load', 'settlePending', 'markRead', 'hsStartGame', 'hsStartCamp'] }
 };
 
 const RTG = load();

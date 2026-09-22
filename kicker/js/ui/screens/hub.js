@@ -267,6 +267,7 @@
       Kit.tip(c.chip('NIL $' + num(o.nil) + 'k', 'gold', 'money'), 'Name-image-likeness money per year: +fame, +morale, unlocks NIL events'),
       Kit.climateChip(t || o),
       o.nearHome ? Kit.tip(c.chip('NEAR HOME', 'mint', 'home'), 'Hometown region: morale +5 per season, family events') : null,
+      o.earned ? Kit.tip(c.chip('EARNED AT CAMP', 'mint', 'check'), 'You made their bar at the recruiting camp: this offer was kicked for') : null,
       o.safety ? Kit.tip(c.chip('SAFETY', 'grey'), 'The safety school: always available') : null,
       o.walkon ? Kit.tip(c.chip('WALK-ON', 'red'), 'No scholarship') : null);
     var coach = c.el('p', { class: 'small offer-coach mt-1' }, c.el('span', { class: 'txt-sky', text: (t && t.coach ? t.coach : 'Coach') + ': ' }), c.el('span', { text: Kit.coachStyleText(o.coach) || o.coach }));

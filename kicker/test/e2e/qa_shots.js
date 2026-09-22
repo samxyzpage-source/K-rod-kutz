@@ -90,18 +90,25 @@ async function kickScene(page, size) {
   await page.locator('.kv-range-btn').click();
   await shot(page, 'hsgame_range', size);
   await page.locator('.kv-range-btn').click();
-  // keyboard meter mode
+  // aim-then-hold mode (D20): ► ►, then hold Space — the bar fills — and let go in the green
   await page.evaluate(() => RTG.UI.store.setSetting('inputMode', 'meter'));
   await page.evaluate(() => RTG.UI.Router.go('hsgame', {}, { replace: true }));
   await K.waitPhase(page, 'SETUP', 10000);
-  await page.keyboard.press('Space');
-  await page.waitForTimeout(350);
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  const holdMs = await page.evaluate(() => {
+    const v = RTG.UI.KickView.current(), m = v && v.model(), M = RTG.UI.Input.CONST.meter, C = RTG.UI.Input.CONST;
+    const need = m ? m.pNeed : 0.7;
+    return Math.round(Math.min(C.powerMax, need + 0.075) / C.powerMax * M.holdMs);
+  });
+  await page.keyboard.down('Space');
+  await page.waitForFunction(() => RTG.UI.KickView.current() && RTG.UI.KickView.current().phase() === 'POWER', null, { timeout: 4000 });
+  await page.waitForTimeout(Math.min(holdMs, 350));
   await shot(page, 'hsgame_meter', size);
-  await page.keyboard.press('Space');
-  await page.waitForTimeout(150);
-  await shot(page, 'hsgame_needle', size);
-  await page.keyboard.press('Space');
+  if (holdMs > 350) await page.waitForTimeout(holdMs - 350);
+  await page.keyboard.up('Space');
   await K.waitPhase(page, 'RESULT', 12000);
+  await shot(page, 'hsgame_meter_result', size);
   await page.evaluate(() => RTG.UI.store.setSetting('inputMode', 'flick'));
 }
 
