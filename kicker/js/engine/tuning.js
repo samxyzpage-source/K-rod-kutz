@@ -168,7 +168,6 @@
           minTimeSec: 30, pMin: 0.02, edgeDiv: 100, homeAdv: 3,
           stallYtg: { NFL: { mean: 25, sd: 12 }, COLLEGE: { mean: 23, sd: 12 }, min: 1, max: 50 },
           puntStart: { mean: 30, sd: 10, min: 5, max: 50 },                            // receiving team's OWN yard after a punt: never past midfield (max 50), so the drive log never prints "own 51+"
-          puntLos: { mean: 32, sd: 11, min: 4, max: 58 },                              // §2.14: the punting team's OWN yard when a drive that never threatened dies
           turnoverYtg: { mean: 45, sd: 20 },
           downsYtg: { mean: 40, sd: 15 },                                              // E2 (sim.js): spot of a failed 4th down (yards-to-goal of the offence)
           ratingNoiseSd: 3, perGameNoiseDraws: 4
@@ -408,55 +407,6 @@
         retirement: { offerFromAge: 33, forcedAge: 42, ringChaseTopN: 5 }
       },
 
-      // ───────────────────────────── §2.6 PUNTING (D24) ─────────────────────────────
-      // A punt asks two questions at once: distance rises with power all the way, hang time peaks lower and
-      // falls off either side. The green band is "the power the situation wants", not "the power that gets
-      // there" — see engine/punt.js.
-      punt: {
-        aimMax: 30,                                        // degrees either side: enough, from a hash, to find the sideline
-        curve: {
-          powerMax: 1.15,
-          distBase: 0.30, distExp: 1.30,                   // gross = maxDist·(0.45 + 0.55·power^1.35) below 1.0
-          overswingLoss: 0.28,                             // …and past 1.0 it comes off the foot badly
-          hangPeak: 0.72, hangWidth: 0.42, hangMin: 2.2,   // hang is a bell around the sweet spot
-          hangBase: 4.35, hangPerKo: 0.022, hangAnchor: 50, hangFloor: 3.2, hangCeil: 5.4
-        },
-        distance: { base: 46, perPow: 0.26, powAnchor: 50, min: 32, max: 64, minWant: 20, windAlongPerMph: 0.28 },
-        field: {
-          pinFrom: 55,             // inside the opponent's 55 the coach wants it dead, not deep
-          pinTarget: 6,            // …aimed at their 6
-          safeTarget: 4,           // otherwise: every yard short of the end zone
-          greenBand: 0.20,         // the window the release has to land in (§4.6, D21)
-          insideYards: 20,         // "inside the 20"
-          bandLead: 0.7,           // the target sits near the TOP of the band, not its floor
-          touchbackYard: 20,
-          halfWidthYd: 26.65       // half the field's width in yards: past this the ball is out of bounds
-        },
-        spread: {
-          distSd: 4.2, distPerCon: 0.012, conAnchor: 62, pressure: 0.55,
-          hangSd: 0.24,
-          latSd: 3.4, latPerAcc: 0.014, accAnchor: 62, latPerAim: 0.9
-        },
-        // the coach's own search for the power that maximises net yards
-        search: { steps: 60, endZoneMargin: 4, touchbackPenalty: 12, insideBonus: 7 },
-        block: { base: 0.006, perOppST: 0.0009, stAnchor: 70, perCon: 0.00035, conAnchor: 55, pressure: 0.02,
-                 max: 0.09, returnTdProb: 0.22, spotGain: 12 },
-        ret: {
-          fairBase: 0.46, fairPerHang: 0.34, hangAnchor: 4.3,
-          // a ball angled at the sideline pins the returner whether or not it crosses the line
-          fairPerSideline: 0.45,
-          base: 9.5, perHang: 4.2, perOppST: 0.06, stAnchor: 70, sd: 5.5,
-          tdBase: 0.002, tdPerYd: 0.0016, tdMax: 0.06, longReturn: 15
-        },
-        grade: { shankBelow: 26, coffinRet: 3, boomingPct: 0.92, goodPct: 0.80, okPct: 0.64 },
-        assist: { hangFloor: 4.4 },
-        forced: { hang: 4.4, shank: 18, shankHang: 2.8, coffinYard: 6, okPct: 0.8 },
-        ai: { powerSd: 0.05, aimSd: 1.6, pinAim: 22, accAnchor: 62 },
-        // a team with no punter object: the special-teams rating stands in for one
-        abstract: { base: 62, perSt: 0.5 },
-        // what a punting career is worth next to a kicker's
-        career: { marketMult: 0.88, xpMult: 1.0 }
-      },
       // ───────────────────────────── §2.7.0 HIGH SCHOOL SENIOR SEASON (D23) ─────────────────────────────
       // The career opens on the last five games of the senior year. Every kick is a real scoring chance in a
       // real game, and the recruiting board moves after each one (RTG.HS).
@@ -484,22 +434,7 @@
           offerAt: 70, highAt: 45, warmAt: 25, min: 0, max: 100
         },
         // the 0-6 rating the star formula reads, from the whole five-game stretch
-        rating: { fgW: 0.55, patW: 0.20, gwW: 0.25, scale: 6, longAdd: 0.35, longMax: 1 },
-
-        // §2.14: a punter's senior year. The offence's drives die and you flip the field; your team's points
-        // arrive around you, and the last punt of the rivalry and playoff weeks is the one that wins it.
-        punter: {
-          chances: [3, 6],                                  // punts a night
-          losRange: [8, 48],                                // your own 8 to your own 48
-          finishLos: [6, 22],                               // the scripted finish: backed up, protecting a lead
-          finishLead: [1, 3],                               // …by this much, with the clock gone
-          ourScore: [{ p: 0, w: 30 }, { p: 3, w: 30 }, { p: 7, w: 40 }],   // what the offence manages between punts
-          oppRatio: [0.55, 1.35],
-          rating: { netW: 0.5, in20W: 0.25, pinW: 0.25, scale: 6,
-                    netFloor: 24, netCeil: 38,              // an 18-year-old's scale: net 24 → 0, 38 → 1
-                    clutchNet: 34 },                        // a punt with the game on it: pin them, or net a real one
-          interest: { punt: 0.6, netGame: 6, netGameFrom: 36, in20: 4, pin: 12, pinMiss: -8, tb: -5, blockedAgainst: -10 }
-        }
+        rating: { fgW: 0.55, patW: 0.20, gwW: 0.25, scale: 6, longAdd: 0.35, longMax: 1 }
       },
 
       // ───────────────────────────── §2.7.1 / §2.7.5 / §2.7.6 DRAFT ─────────────────────────────

@@ -150,7 +150,7 @@
    * @property {{n:number, startYtg:number, plays:number, side:string}} drive
    * @property {DriveLogRow[]} driveLog   capped Tuning.save.driveLogCap
    * @property {KickLogRow[]} kicks
-   * @property {null|{type:'USER_KICK'|'USER_KICKOFF'|'USER_PUNT', ctx: KickContext}} pending
+   * @property {null|{type:'USER_KICK'|'USER_KICKOFF', ctx: KickContext}} pending
    * @property {{side:string}|null} pendingKickoff
    * @property {null|{ytg:number, down:number, toGo:number, plays:number, timeouts:number}} script
    * @property {null|{period:number, mode:'NFL_REG'|'NFL_PLAYOFF'|'COLLEGE', firstPossession:string, bothPossessed:boolean, possessions:number}} ot
@@ -246,7 +246,6 @@
       RETIRED: ['LEGACY']
     },
     difficulties: ['rookie', 'pro', 'allpro', 'legend'],
-    positions: ['K', 'P'],
     archetypes: ['CANNON', 'SURGEON', 'ICEMAN', 'SOCCER'],
     leagues: ['COLLEGE', 'NFL'],
     roles: ['K1', 'K2', 'NONE'],
@@ -255,12 +254,11 @@
     surfaces: ['grass', 'turf'],
     contractTypes: ['SCHOLARSHIP', 'WALKON', 'ROOKIE', 'UDFA', 'VET', 'TAG', 'MIN'],
     gameKinds: ['REG', 'CCG', 'BOWL', 'PLAYOFF', 'WC', 'DIV', 'CONF', 'CHAMP'],
-    kickTypes: ['FG', 'PAT', 'KO', 'PUNT'],
+    kickTypes: ['FG', 'PAT', 'KO'],
     outcomes: ['GOOD', 'WIDE_L', 'WIDE_R', 'SHORT', 'BLOCKED', 'DOINK_IN', 'DOINK_OUT', 'XBAR_IN', 'XBAR_OUT'],
-    puntGrades: ['BLOCKED', 'SHANK', 'TOUCHBACK', 'POOR', 'OK', 'GOOD', 'BOOMING', 'COFFIN'],
     subs: ['', 'DEAD_CENTER', 'SNEAKS', 'LINE_DRIVE'],
     pendingKinds: ['EVENT', 'DECISION', 'KICKS'],
-    gamePendingTypes: ['USER_KICK', 'USER_KICKOFF', 'USER_PUNT'],
+    gamePendingTypes: ['USER_KICK', 'USER_KICKOFF'],
     sessionKinds: ['HS_GAME', 'CAMP', 'COMBINE_LADDER', 'COMBINE_ACC', 'COMBINE_KO', 'HALFTIME70', 'PRACTICE', 'TRYOUT'],
     decisionKinds: ['OFFERS_COLLEGE', 'REDSHIRT', 'DECLARE', 'TRANSFER', 'COMBINE_PLAN', 'UDFA', 'EXTENSION', 'FREE_AGENCY', 'TAG',
                     'RETIRE', 'OFFSEASON_PLAN', 'CUT_NOTICE', 'HOF', 'TRAINING_BLOCKS', 'BODY_CHECK', 'CAMP'],
@@ -277,9 +275,7 @@
   var ATTRS = ['POW', 'ACC', 'CON', 'CLU', 'KO'];
   var STAT_KEYS = ['fga', 'fgm', 'pat', 'patMade', 'pts', 'long', 'clutchA', 'clutchM', 'decisiveA', 'decisiveM', 'gameWinners',
     'tieForcers', 'blocked', 'doinks', 'doinkIn', 'wideL', 'wideR', 'short', 'made50plus', 'consecutive', 'bestConsecutive',
-    'games', 'gamesStarted', 'koTouchbacks', 'koCount', 'wins', 'losses',
-    // §2.14 punting: a punter's line is net average and how often the ball dies inside the 20
-    'punts', 'puntYds', 'puntNet', 'in20', 'tbs', 'puntLong', 'puntBlocked', 'fairCatch', 'retYds', 'hangSum', 'pinned'];
+    'games', 'gamesStarted', 'koTouchbacks', 'koCount', 'wins', 'losses'];
 
   // ═══════════════════════════════ SMALL FACTORIES ═══════════════════════════════
 
@@ -426,7 +422,7 @@
       climate: data.climate || (data.dome ? 'dome' : 'temperate'),
       dome: !!data.dome || data.climate === 'dome',
       altitude: !!data.altitude, windy: !!data.windy, rainy: !!data.rainy,
-      surface: 'grass', kicker: null, kicker2: null, punter: null, punter2: null,
+      surface: 'grass', kicker: null, kicker2: null,
       coach: '',
       region: data.region || ''
     };
@@ -625,8 +621,7 @@
 
     // 1. player
     var player = Player.create(rng, {
-      name: opts.name, archetype: opts.archetype, hometown: opts.hometown, look: opts.look, foot: opts.foot,
-      position: opts.position
+      name: opts.name, archetype: opts.archetype, hometown: opts.hometown, look: opts.look, foot: opts.foot
     });
     // 2./3. leagues
     var college = Schema.createLeague('COLLEGE', colleges, rng, 1);
@@ -819,14 +814,14 @@
     function validateCtx(o, k, pfx) {
       if (!obj(o, k, pfx)) return;
       var c = o[k], p = pfx + '.' + k;
-      enm(c, 'type', ENUM.kickTypes, p); num(c, 'distance', c.type === 'PUNT' ? 0 : 1, 99, p);
+      enm(c, 'type', ENUM.kickTypes, p); num(c, 'distance', 1, 99, p);
       if (c.pressure !== undefined) num(c, 'pressure', 0, 1, p);
       if (c.kicker !== undefined && obj(c, 'kicker', p)) validateAttrs(c.kicker, 'attrs', p + '.kicker');
     }
     function validateKickRow(r, pfx) {
       if (!isObj(r)) { err(pfx, '', 'not an object'); return; }
-      str(r, 'id', pfx); enm(r, 'type', ENUM.kickTypes, pfx); num(r, 'distance', 0, 99, pfx);
-      enm(r, 'outcome', r.type === 'PUNT' ? ENUM.puntGrades : ENUM.outcomes, pfx); bool(r, 'made', pfx);
+      str(r, 'id', pfx); enm(r, 'type', ENUM.kickTypes, pfx); num(r, 'distance', 1, 99, pfx);
+      enm(r, 'outcome', ENUM.outcomes, pfx); bool(r, 'made', pfx);
       if (r.teamId !== null && r.teamId !== undefined && !ids[r.teamId]) err(pfx, 'teamId', 'unknown team ' + r.teamId);
       if (!isArray(r.tags)) err(pfx, 'tags', 'not an array');
     }
@@ -877,8 +872,6 @@
             if (kind === 'COLLEGE') int(t, 'prestige', 1, 5, tp);
             if (!nullable(t, 'kicker')) validateAiKicker(t, 'kicker', tp);
             if (!nullable(t, 'kicker2')) validateAiKicker(t, 'kicker2', tp);
-            if (t.punter !== undefined && !nullable(t, 'punter')) validateAiKicker(t, 'punter', tp);
-            if (t.punter2 !== undefined && !nullable(t, 'punter2')) validateAiKicker(t, 'punter2', tp);
           }
           if (L.kickers !== undefined && obj(L, 'kickers', LP)) {
             for (var kid in L.kickers) if (!leagueIds[kind][kid]) err(LP + '.kickers', kid, 'unknown team');
@@ -893,7 +886,6 @@
         if (obj(p, 'name', PP)) str(p.name, 'full', PP + '.name');
         obj(p, 'hometown', PP);
         enm(p, 'archetype', ENUM.archetypes, PP);
-        enm(p, 'position', ENUM.positions, PP);
         if (obj(p, 'look', PP)) { int(p.look, 'skin', 0, 3, PP + '.look'); int(p.look, 'hair', 0, 5, PP + '.look'); int(p.look, 'boot', 0, 3, PP + '.look'); }
         enm(p, 'foot', ENUM.feet, PP); int(p, 'age', 15, 60, PP); int(p, 'stars', 2, 5, PP);
         validateAttrs(p, 'attrs', PP); validateAttrs(p, 'pot', PP);

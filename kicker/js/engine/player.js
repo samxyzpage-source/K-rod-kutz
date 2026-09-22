@@ -129,7 +129,7 @@
    *   3. trait: chance(0.25) (1 draw); if it fires, weighted pick (1 draw)
    * Star bonus (+4·(stars−3) attrs, POT bonus, fame start) uses opts.stars (default 3).
    * @param {RNG} rng
-   * @param {{name?:{first,last,full}|string, archetype?:string, position?:'K'|'P', hometown?:object, look?:object, foot?:'R'|'L', stars?:number, id?:string, age?:number}} opts
+   * @param {{name?:{first,last,full}|string, archetype?:string, hometown?:object, look?:object, foot?:'R'|'L', stars?:number, id?:string, age?:number}} opts
    * @returns {object} Player
    */
   Player.create = function (rng, opts) {
@@ -179,7 +179,6 @@
       name: { first: name.first, last: name.last, full: name.full },
       hometown: { city: hometown.city, state: hometown.state, region: hometown.region },
       archetype: arch,
-      position: opts.position === 'P' ? 'P' : 'K',        // §2.14: kicker or punter
       look: { skin: look.skin | 0, hair: look.hair | 0, boot: look.boot | 0 },
       foot: opts.foot === 'L' ? 'L' : 'R',
       age: opts.age === undefined ? 18 : opts.age,

@@ -433,7 +433,7 @@
     for (var i = 0; i < guard && !gs.done; i++) {
       var e = Sm.simToNextUserKick(gs, state, rng);
       if (e.type === 'END_GAME' || e.type === 'END') break;
-      if ((e.type === 'USER_KICK' || e.type === 'USER_KICKOFF' || e.type === 'USER_PUNT') && gs.pending) Sm.autoResolvePending(gs, state, rng);
+      if ((e.type === 'USER_KICK' || e.type === 'USER_KICKOFF') && gs.pending) Sm.autoResolvePending(gs, state, rng);
       // ICE_TIMEOUT: the next simToNextUserKick delivers the announced USER_KICK
     }
     if (!gs.done) throw new Error('Season.simUserGameAuto: step guard exceeded');

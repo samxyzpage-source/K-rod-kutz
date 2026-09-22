@@ -92,7 +92,7 @@
 
   /**
    * Create a career (§3.5.4 / §3.5.20). Seed: opts.seed (number or string, via RNG.toSeed), default fnv1a32(String(now)).
-   * @param {{name?:string|Object, archetype?:string, position?:'K'|'P', difficulty?:string, seed?:number|string, hometown?:Object, look?:Object, foot?:'R'|'L', settings?:Object}} opts
+   * @param {{name?:string|Object, archetype?:string, difficulty?:string, seed?:number|string, hometown?:Object, look?:Object, foot?:'R'|'L', settings?:Object}} opts
    * @param {number} now ms (supplied by the UI)
    * @returns {{state:Object, rng:Object}}
    */
@@ -224,41 +224,13 @@
     return sync(state, rng, result);
   };
 
-  /** A forced kick outcome asked of a punt: map the kicking vocabulary onto the punt grades (§2.14). */
-  function puntGrade(forced) {
-    var name = typeof forced === 'string' ? forced : (forced && forced.outcome) || 'OK';
-    if (RTG.Punt && RTG.Punt.GRADES.indexOf(name) >= 0) return name;
-    if (name === 'GOOD' || name === 'DOINK_IN' || name === 'XBAR_IN') return 'GOOD';
-    if (name === 'BLOCKED') return 'BLOCKED';
-    if (name === 'SHORT') return 'SHANK';
-    return 'POOR';
-  }
-
   /** A neutral kick triple (AI power for the distance, aim 0, quality 0.85) — used when a forced outcome is requested without an input. */
   function neutralInput(K, ctx) {
     var g = K.geometry(ctx, null);
     return { power: K.aiPower(g.pNeed), aim: 0, quality: Tuning.kick.ai.modelQuality };
   }
 
-  /**
-   * Resolve the pending user punt (§2.14). `input` is {power, aim, green?} from the scene, or null for the AI
-   * rule; `opts.forced` is a Punt.GRADES name (0 draws).
-   * @returns {Object} PuntResult
-   */
-  Engine.applyUserPunt = function (state, rng, input, opts) {
-    checkState(state, 'applyUserPunt'); checkRng(rng, 'applyUserPunt');
-    var gs = game(state, 'applyUserPunt');
-    if (!gs.pending) fail('applyUserPunt', 'no pending punt (sim to the next play first)');
-    if (gs.pending.type !== 'USER_PUNT') fail('applyUserPunt', 'the pending play is a ' + gs.pending.type + ' — use applyUserKick');
-    var Pu = need(RTG.Punt, 'Punt', 'applyUserPunt'), Sm = need(Sim(), 'Sim', 'applyUserPunt');
-    var forced = opts && opts.forced ? opts.forced : null;
-    var inp = input && typeof input === 'object' ? input : null;
-    var result = Pu.resolve(rng, gs.pending.ctx, null, inp, forced ? { forced: forced } : {});
-    Sm.applyPunt(gs, state, rng, result);
-    return sync(state, rng, result);
-  };
-
-  /** Resolve the pending kick / kickoff / punt with the AI rule (auto-PAT, sim mode). @returns {Object} KickResult|KickoffResult|PuntResult */
+  /** Resolve the pending kick / kickoff with the AI rule (auto-PAT, sim mode). @returns {Object} KickResult|KickoffResult */
   Engine.autoKick = function (state, rng) {
     checkState(state, 'autoKick'); checkRng(rng, 'autoKick');
     var gs = game(state, 'autoKick');
@@ -373,10 +345,7 @@
     var forced = opts && opts.forced ? opts.forced : null;
     var result;
     if (ctx.type === 'KO') result = K.resolveKickoff(rng, ctx, null, input || null);
-    else if (ctx.type === 'PUNT') {                                                                // §2.14
-      var Pu = need(RTG.Punt, 'Punt', 'sessionKick');
-      result = Pu.resolve(rng, ctx, null, input || null, forced ? { forced: puntGrade(forced) } : {});
-    } else if (forced) result = K.resolve(rng, ctx, null, input || neutralInput(K, ctx), { forced: forced });   // debug: 0 draws
+    else if (forced) result = K.resolve(rng, ctx, null, input || neutralInput(K, ctx), { forced: forced });   // debug: 0 draws
     else result = K.resolve(rng, ctx, null, input || K.aiInput(rng, ctx, null), input ? {} : { auto: true });
     sess.results[idx] = result;
     sess.idx = sess.results.length;

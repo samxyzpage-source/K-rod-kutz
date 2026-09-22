@@ -409,7 +409,7 @@
 
     // player
     if (isObj(c.player)) {
-      fillDefaults(c.player, { position: 'K', agentTier: 0, agentName: '', tags: 0, seasonsAsStarter: 0, mods: [], traits: [], flags: {}, redshirt: false,
+      fillDefaults(c.player, { agentTier: 0, agentName: '', tags: 0, seasonsAsStarter: 0, mods: [], traits: [], flags: {}, redshirt: false,
         collegeSeasons: 0, nflSeasons: 0, nil: 0, missStreak: 0, makeStreak: 0, injury: null, form: 0, xpSpent: 0, gamesPlayed: 0 });
       if (c.player.contract === undefined) c.player.contract = null;
     }

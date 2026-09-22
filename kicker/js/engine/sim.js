@@ -60,7 +60,6 @@
   function S() { return Tuning.sim; }
   function KT() { return Tuning.kick; }
   function Kick() { return RTG.Kick; }
-  function Punt() { return RTG.Punt; }
   function Schema() { return RTG.Schema; }
   function Stats() { return RTG.Stats; }
   function Player() { return RTG.Player; }
@@ -96,44 +95,21 @@
     return null;
   }
 
-  /** Is the user the starting specialist for `side` right now? (own team, K1, healthy) */
-  function userStarts(gs, state, side) {
+  /** Does the user kick for `side` right now? (own team, K1, healthy) */
+  function userKicks(gs, state, side) {
     if (!gs.userSide || gs.userSide !== side || !state || !state.player) return false;
     return state.player.role === 'K1' && !state.player.injury;
   }
-  /** Does the user kick the field goals for `side`? (§2.14: only a kicker does) */
-  function userKicks(gs, state, side) {
-    return userStarts(gs, state, side) && state.player.position !== 'P';
-  }
-  /** Does the user punt for `side`? (§2.14: only a punter does) */
-  function userPunts(gs, state, side) {
-    return userStarts(gs, state, side) && state.player.position === 'P';
-  }
 
-  /**
-   * The AI kicker who kicks for `side`. On the user's team that is the rival (Player.rivalOvr's rule) when the
-   * user is a kicker, and the team's own kicker when the user is the punter — someone still has to kick the
-   * field goals while you punt.
-   */
+  /** The AI kicker who kicks for `side` (on the user's team: the rival, per Player.rivalOvr's rule). */
   function aiKickerFor(state, gs, side) {
     var team = teamOf(state, gs, side);
     if (!team) return null;
     if (gs.userSide === side && state && state.player) {
       var p = state.player;
-      if (p.position === 'P') return team.kicker || team.kicker2 || null;
       return (p.role === 'K1' ? (team.kicker2 || team.kicker) : (team.kicker || team.kicker2)) || null;
     }
     return team.kicker || team.kicker2 || null;
-  }
-  /** The AI punter for `side` (only the user's team and a camp rival ever carry one; else the abstract leg). */
-  function aiPunterFor(state, gs, side) {
-    var team = teamOf(state, gs, side);
-    if (!team) return null;
-    if (gs.userSide === side && state && state.player && state.player.position === 'P') {
-      var p = state.player;
-      return (p.role === 'K1' ? (team.punter2 || team.punter) : (team.punter || team.punter2)) || null;
-    }
-    return team.punter || team.punter2 || null;
   }
 
   function deficit(gs, side) { return gs.score[other(side)] - gs.score[side]; }
@@ -406,97 +382,6 @@
 
   // ═══════════════════════════════ kicks ═══════════════════════════════
 
-  // ═══════════════════════════════ §2.14 punts ═══════════════════════════════
-
-  /**
-   * A punt for `side` from `losYard` (their own-yard line). User → pending USER_PUNT for the scene to play;
-   * AI → Punt.aiInput (4) + Punt.resolve (7+) and settle immediately. When RTG.Punt is absent the caller falls
-   * back to the abstract net roll it always used.
-   */
-  function attemptPunt(gs, state, rng, side, losYard, opts) {
-    opts = opts || {};
-    var Pu = Punt();
-    var isUser = userPunts(gs, state, side);
-    var situation = {
-      losYard: losYard, side: side, teamId: gs[side + 'Id'], oppId: gs[other(side) + 'Id'],
-      isUser: isUser, league: gs.league
-    };
-    if (!isUser) {
-      var punter = aiPunterFor(state, gs, side);
-      if (punter) situation.kicker = punter;
-      else situation.attrs = abstractPunterAttrs(state, gs, side);
-    }
-    var ctx = Pu.buildContext(state, gs, situation, rng);                                   // hash 1 · wind 2
-    if (isUser) {
-      gs.pending = { type: 'USER_PUNT', ctx: ctx };
-      var text = opts.text || ('Punt from ' + spotText(FIELD_YARDS - losYard));
-      return ev(gs, 'USER_PUNT', text, { side: side, ctx: ctx, prefix: opts.prefix });
-    }
-    var result = Pu.resolve(rng, ctx, null, Pu.aiInput(rng, ctx, null));                    // draws: 4 + 7…
-    return settlePunt(gs, state, rng, ctx, result, true, opts);
-  }
-
-  /** The leg of a team that carries no punter object: the special-teams rating stands in for one. */
-  function abstractPunterAttrs(state, gs, side) {
-    var team = teamOf(state, gs, side);
-    var st = team ? num(team.ST, 70) : 70;
-    var A = Tuning.punt.abstract;
-    var v = clamp(Math.round(A.base + A.perSt * (st - 70)), 30, 95);
-    return { POW: v, ACC: v, CON: v, CLU: v, KO: v };
-  }
-
-  /** Log a punt, hand the ball over and record it (the user's punts go through Stats). */
-  function settlePunt(gs, state, rng, ctx, result, ai, opts) {
-    opts = opts || {};
-    var side = sideOfCtx(gs, ctx), opp = other(side);
-    gs.stats[side].punts++;
-    gs.pending = null;
-    recordPuntRow(gs, state, rng, ctx, result, ai);
-    var los = num(ctx.losYard, 30);
-    var text = puntText(gs, ctx, result, side, opp);
-    pushLog(gs, side, text, FIELD_YARDS - los, 'PUNT');
-    if (hasClock(gs)) advanceClock(gs, Math.min(S().clock.fgPlaySec, timeLeftInHalf(gs)));
-    var type = opts.eventType || (ai ? 'AI_PUNT' : 'DRIVE');
-    var event = ev(gs, type, (opts.prefix ? opts.prefix + ' - ' : '') + text, { side: side, result: 'PUNT', punt: result, ctx: ctx });
-    if (result.returnTd || result.blockReturnTd) {
-      return scoreTouchdown(gs, state, rng, opp, result.blockReturnTd
-        ? 'Punt blocked and returned for a TOUCHDOWN' : 'Punt returned all the way for a TOUCHDOWN');
-    }
-    var ytg = clamp(Math.round(FIELD_YARDS - num(result.oppStart, 30)), 1, FIELD_YARDS - 1);
-    return flipPossession(gs, state, rng, opp, ytg, event);
-  }
-
-  function puntText(gs, ctx, result, side, opp) {
-    var spot = Math.round(clamp(num(result.oppStart, 20), 1, FIELD_YARDS - 1));
-    var where = nameOf(gs, opp) + ' takes over at ' + spotText(FIELD_YARDS - spot);
-    if (result.blocked) return 'PUNT BLOCKED - ' + where;
-    var head = Math.round(num(result.gross, 0)) + '-yd punt';
-    if (result.touchback) return head + ', touchback - ' + where;
-    if (result.outOfBounds) return head + ' out of bounds - ' + where;
-    if (result.fairCatch) return head + ', fair catch - ' + where;
-    return head + ', ' + Math.round(num(result.returnYds, 0)) + '-yd return - ' + where;
-  }
-
-  /** The user's punts land in the career stats; everyone else's are just a drive-log line. */
-  function recordPuntRow(gs, state, rng, ctx, result, ai) {
-    var St = Stats();
-    if (!ctx.isUser || ai || !St || !isFn(St.recordPunt) || !state || !state.stats) return null;
-    return St.recordPunt(state, ctx, result, {
-      gameId: gs.id, teamId: gs[sideOfCtx(gs, ctx) + 'Id'], oppId: gs[other(sideOfCtx(gs, ctx)) + 'Id'],
-      week: gs.week, year: state ? num(state.year, 0) : 0,
-      rngState: rng && isFn(rng.state) ? rng.state() : 0
-    });
-  }
-
-  /**
-   * Hand a punt to whoever takes it: the punt engine when it is loaded, otherwise the abstract net roll the
-   * sim has always used. Returns null when the caller should fall back.
-   */
-  function puntOrNull(gs, state, rng, side, losYard, opts) {
-    if (!Punt() || !isFn(Punt().buildContext)) return null;
-    return attemptPunt(gs, state, rng, side, losYard, opts);
-  }
-
   /**
    * A FG / PAT attempt for `side` with a built context. Icing (§2.3.7): once per decisive kick when the
    * defence has a timeout (1 draw). User → pending USER_KICK (ICE_TIMEOUT first when iced);
@@ -745,17 +630,12 @@
         return scoreTouchdown(gs, state, rng, side, 'Touchdown drive by ' + nameOf(gs, side));
       case 'STALL':
         return handleStall(gs, state, rng, side);
-      case 'PUNT': {
-        // where the drive died, so the punt has a real line of scrimmage (§2.14)
-        var los = clamp(Math.round(rng.gauss(D.puntLos.mean, D.puntLos.sd)), D.puntLos.min, D.puntLos.max);      // draws 4, 5
-        var punted = puntOrNull(gs, state, rng, side, los, { eventType: 'DRIVE' });
-        if (punted) return punted;
-        own = clamp(Math.round(rng.gauss(D.puntStart.mean, D.puntStart.sd)), D.puntStart.min, D.puntStart.max);
+      case 'PUNT':
+        own = clamp(Math.round(rng.gauss(D.puntStart.mean, D.puntStart.sd)), D.puntStart.min, D.puntStart.max);   // draws 4, 5
         gs.stats[side].punts++;
         text = 'Punt - ' + nameOf(gs, opp) + ' takes over at ' + spotText(FIELD_YARDS - own);
         pushLog(gs, side, text, FIELD_YARDS - own, 'PUNT');
         return flipPossession(gs, state, rng, opp, FIELD_YARDS - own, ev(gs, 'DRIVE', text, { side: side, result: 'PUNT' }));
-      }
       case 'TO':
         spot = clamp(Math.round(rng.gauss(D.turnoverYtg.mean, D.turnoverYtg.sd)), 1, FIELD_YARDS - 1);           // draws 4, 5
         gs.stats[side].to++;
@@ -827,13 +707,11 @@
       pushLog(gs, side, failText, ytg, 'DOWNS');
       return flipPossession(gs, state, rng, opp, FIELD_YARDS - ytg, ev(gs, 'DRIVE', failText, { side: side, result: 'DOWNS' }));
     }
-    var stallPunt = puntOrNull(gs, state, rng, side, FIELD_YARDS - ytg, { eventType: 'DRIVE', prefix: stallText });
-    if (stallPunt) return stallPunt;
     var own = clamp(Math.round(FIELD_YARDS - ytg - rng.gauss(C.puntNet.mean, C.puntNet.sd)), C.puntCapOwn, D.puntStart.max);   // draws: punt
     gs.stats[side].punts++;
-    var puntLine = stallText + ' - punt, ' + nameOf(gs, opp) + ' at ' + spotText(FIELD_YARDS - own);
-    pushLog(gs, side, puntLine, ytg, 'PUNT');
-    return flipPossession(gs, state, rng, opp, FIELD_YARDS - own, ev(gs, 'DRIVE', puntLine, { side: side, result: 'PUNT' }));
+    var puntText = stallText + ' - punt, ' + nameOf(gs, opp) + ' at ' + spotText(FIELD_YARDS - own);
+    pushLog(gs, side, puntText, ytg, 'PUNT');
+    return flipPossession(gs, state, rng, opp, FIELD_YARDS - own, ev(gs, 'DRIVE', puntText, { side: side, result: 'PUNT' }));
   }
 
   // ═══════════════════════════════ end-of-game script (§2.5.3) ═══════════════════════════════
@@ -1236,14 +1114,14 @@
   };
 
   /**
-   * Loop `step` until USER_KICK, USER_KICKOFF, USER_PUNT, ICE_TIMEOUT (the next call yields USER_KICK), END_GAME or END.
+   * Loop `step` until USER_KICK, USER_KICKOFF, ICE_TIMEOUT (the next call yields USER_KICK), END_GAME or END.
    * @param {Object} gs @param {Object} state @param {RNG} rng @returns {Object} SimEvent
    */
   Sim.simToNextUserKick = function (gs, state, rng) {
     var guard = S().summary.maxSteps;
     for (var i = 0; i < guard; i++) {
       var e = Sim.step(gs, state, rng);
-      if (e.type === 'USER_KICK' || e.type === 'USER_KICKOFF' || e.type === 'USER_PUNT' || e.type === 'ICE_TIMEOUT' || e.type === 'END_GAME' || e.type === 'END') return e;
+      if (e.type === 'USER_KICK' || e.type === 'USER_KICKOFF' || e.type === 'ICE_TIMEOUT' || e.type === 'END_GAME' || e.type === 'END') return e;
     }
     throw new Error('Sim.simToNextUserKick: step guard exceeded');
   };
@@ -1270,20 +1148,6 @@
    * @param {Object} gs @param {Object} state @param {RNG} rng @param {Object} koResult Kick.resolveKickoff result
    * @returns {Object} SimEvent
    */
-  /**
-   * Apply the user's punt (§2.14): logs it, records it and hands the ball over at the spot the punt earned.
-   * @param {Object} gs @param {Object} state @param {RNG} rng @param {Object} result Punt.resolve result
-   * @returns {Object} SimEvent
-   */
-  Sim.applyPunt = function (gs, state, rng, result) {
-    if (!gs.pending || gs.pending.type !== 'USER_PUNT') throw new Error('Sim.applyPunt: no pending user punt');
-    if (!result || typeof result.gross !== 'number') throw new Error('Sim.applyPunt: a PuntResult is required');
-    var ctx = gs.pending.ctx;
-    var e = settlePunt(gs, state, rng, ctx, result, false);
-    if (PERIOD_EVENTS[e.type]) gs.announce = { type: e.type, text: e.text, side: e.side || null };
-    return e;
-  };
-
   Sim.applyKickoff = function (gs, state, rng, koResult) {
     if (!gs.pending || gs.pending.type !== 'USER_KICKOFF') throw new Error('Sim.applyKickoff: no pending user kickoff');
     if (!koResult) throw new Error('Sim.applyKickoff: a KickoffResult is required');
@@ -1305,12 +1169,6 @@
       var ko = K.resolveKickoff(rng, ctx, null, null);
       Sim.applyKickoff(gs, state, rng, ko);
       return ko;
-    }
-    if (gs.pending.type === 'USER_PUNT') {
-      var Pu = Punt();
-      var pr = Pu.resolve(rng, ctx, null, Pu.aiInput(rng, ctx, null), { auto: true });
-      Sim.applyPunt(gs, state, rng, pr);
-      return pr;
     }
     var input = K.aiInput(rng, ctx, null);
     var result = K.resolve(rng, ctx, null, input, { auto: true });

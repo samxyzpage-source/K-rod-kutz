@@ -119,7 +119,7 @@
   /** Expected return yards off a punt with this hang, before it is kicked (the coach's own estimate). */
   function expectedReturn(hang, oppST) {
     var R = P().ret;
-    var pFair = clamp(R.fairBase + R.fairPerHang * (hang - R.hangAnchor), 0, 1);   // straight down the middle
+    var pFair = clamp(R.fairBase + R.fairPerHang * (hang - R.hangAnchor), 0, 1);
     var mean = Math.max(0, R.base - R.perHang * (hang - R.hangAnchor) - R.perOppST * (num(oppST, R.stAnchor) - R.stAnchor));
     return (1 - pFair) * mean;
   }
@@ -186,7 +186,7 @@
       tbFrom: rd(powerForDistance(toGoal, maxDist)),           // the power that reaches the end zone
       distance: rd(distanceFor(power, maxDist)), hang: rd(hangFor(power, maxHang)),
       power: rd(power),
-      pBlock: Util.roundN(Punt.pBlock(ctx, attrs), 4)      // a block is a fraction of a percent: 2 dp rounds it away
+      pBlock: rd(Punt.pBlock(ctx, attrs))
     };
   };
 
@@ -268,8 +268,7 @@
       return res;
     }
     // in play: a high ball is fair-caught or downed, a low one is returned
-    var pinned = clamp(Math.abs(res.lateral) / halfWidth, 0, 1);            // angled at the sideline
-    var pFair = clamp(R.fairBase + R.fairPerHang * (res.hang - R.hangAnchor) + R.fairPerSideline * pinned, 0, 1);
+    var pFair = clamp(R.fairBase + R.fairPerHang * (res.hang - R.hangAnchor), 0, 1);
     var fair = opts && opts.noReturn ? true : rng.chance(pFair);                               // draw
     if (fair) {
       res.fairCatch = true;
@@ -327,7 +326,7 @@
     // the §4.6 assist: a release the engine agrees was inside the band is the punt the situation asked for
     if (inp.green && Punt.inGreen(power, m)) return assistedResult(res, ctx, m, power, aim, opts);
 
-    res.blocked = rng.chance(Punt.pBlock(ctx, attrs));                                         // draw 1
+    res.blocked = rng.chance(m.pBlock);                                                        // draw 1
     if (res.blocked) {
       res.blockReturnTd = rng.chance(T.block.returnTdProb);                                    // draw 2
       res.grade = 'BLOCKED';
