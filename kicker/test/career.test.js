@@ -345,13 +345,13 @@ test('decide: unknown kinds throw; a mismatched pending kind throws; unknown opt
 
 // ═══════════════════════════════ offseason chain ═══════════════════════════════
 
-test('offseasonChain (college): BODY_CHECK (preview, ages on ack) → TRAINING_BLOCKS → REDSHIRT? → TRANSFER? → 2 events → DECLARE?; idempotent', () => {
+test('offseasonChain (college): BODY_CHECK (preview, ages on ack) → TRAINING_BLOCKS → FINANCES → REDSHIRT? → TRANSFER? → 2 events → DECLARE?; idempotent', () => {
   const r = kfx.collegeOff(RTG, { seasons: 1, role: 'K2', js: 60, trust: 60 });
   const p = r.state.player, age0 = p.age, xp0 = p.xp;
   const ch = Career.offseasonChain(r.state, r.rng);
   assert.equal(Career.offseasonChain(r.state, r.rng), ch, 'idempotent: the same chain object');
   assert.equal(RTG.Season.offseason(r.state, r.rng), ch, 'Season.offseason returns the same chain');
-  assert.deepEqual(J(ch.steps), ['BODY_CHECK', 'TRAINING_BLOCKS', 'REDSHIRT', 'TRANSFER', 'EVENT', 'EVENT', 'DECLARE']);
+  assert.deepEqual(J(ch.steps), ['BODY_CHECK', 'TRAINING_BLOCKS', 'FINANCES', 'REDSHIRT', 'TRANSFER', 'EVENT', 'EVENT', 'DECLARE']);
   assert.equal(r.state.pending.decision.kind, 'BODY_CHECK');
   assert.equal(p.age, age0, 'the body-check card is a preview: no aging yet');
   assert.equal(r.state.pending.decision.payload.age, age0 + 1);
@@ -372,6 +372,16 @@ test('offseasonChain (college): BODY_CHECK (preview, ages on ack) → TRAINING_B
   assert.ok(out.result.raised >= 1 && out.result.raised <= X.offseasonBlocks * TC.trainingBlocks.raisesPerBlock);
   assert.equal(p.attrs.ACC, acc0 + out.result.raised);
   assert.ok(p.xp + p.xpSpent >= xp0 + per * X.offseasonBlocks, 'the blocks land in the pool (spent or banked)');
+  // the books open right after the blocks: the year is ticked, DONE first, closing with nothing staged spends nothing
+  assert.equal(r.state.pending.decision.kind, 'FINANCES');
+  const fin = r.state.pending.decision;
+  assert.deepEqual(J(fin.options.map((o) => o.id)), ['DONE', 'SKIP']);
+  assert.equal(r.state.finance.lastTick, r.state.year);
+  assert.equal(fin.payload.bank, r.state.finance.bank);
+  const bank0 = r.state.finance.bank;
+  const closed = Engine.decide(r.state, r.rng, { kind: 'FINANCES', optionId: 'DONE' });
+  assert.equal(closed.result.bankAfter, bank0); assert.deepEqual(J(closed.result.applied), []);
+  assert.equal(r.state.finance.bank, bank0);
   // year-1 K2 → REDSHIRT offered
   assert.equal(r.state.pending.decision.kind, 'REDSHIRT');
   Engine.decide(r.state, r.rng, { kind: 'REDSHIRT', optionId: 'REDSHIRT' });
@@ -392,14 +402,15 @@ test('offseasonChain (college): BODY_CHECK (preview, ages on ack) → TRAINING_B
   assert.equal(j.state.stage, 'DRAFT'); assert.equal(j.state.phase, 'DECLARE');
 });
 
-test('offseasonChain (NFL): BODY_CHECK → TRAINING_BLOCKS → CUT_NOTICE? → EXTENSION → (TAG) / FREE_AGENCY → RETIRE? → 2 events; money paid first', () => {
+test('offseasonChain (NFL): BODY_CHECK → TRAINING_BLOCKS → FINANCES → CUT_NOTICE? → EXTENSION → (TAG) / FREE_AGENCY → RETIRE? → 2 events; money paid first', () => {
   const r = kfx.nflOff(RTG, { needy: 8 });
-  const p = r.state.player, earnings0 = r.state.history.earnings;
+  const p = r.state.player, earnings0 = r.state.history.earnings, bank0 = r.state.finance.bank;
   const ch = Career.offseasonChain(r.state, r.rng);
-  assert.deepEqual(J(ch.steps), ['BODY_CHECK', 'TRAINING_BLOCKS', 'CUT_NOTICE', 'EXTENSION', 'FREE_AGENCY', 'RETIRE', 'EVENT', 'EVENT']);
+  assert.deepEqual(J(ch.steps), ['BODY_CHECK', 'TRAINING_BLOCKS', 'FINANCES', 'CUT_NOTICE', 'EXTENSION', 'FREE_AGENCY', 'RETIRE', 'EVENT', 'EVENT']);
   assert.ok(r.state.history.earnings > earnings0, 'Contracts.payoutSeason ran when the offseason opened');
+  assert.equal(r.state.finance.bank - bank0, Math.round((r.state.history.earnings - earnings0) * 1000 * Tuning.finance.takeHome.NFL), 'the take-home of the season landed in the bank');
   const seen = runChain(r.state, r.rng, 'EXTENSION');
-  assert.deepEqual(J(seen), ['BODY_CHECK', 'TRAINING_BLOCKS', 'EXTENSION'], 'no cut for a satisfied team; extension offered in the final year');
+  assert.deepEqual(J(seen), ['BODY_CHECK', 'TRAINING_BLOCKS', 'FINANCES', 'EXTENSION'], 'no cut for a satisfied team; extension offered in the final year');
   const ext = r.state.pending.decision;
   assert.deepEqual(J(ext.options.map((o) => o.id)), ['ACCEPT', 'COUNTER', 'DECLINE']);
   const out = Engine.decide(r.state, r.rng, { kind: 'EXTENSION', optionId: 'ACCEPT' });
@@ -441,7 +452,7 @@ test('offseasonChain (NFL): a cut (js < 20) → CUT_NOTICE then FREE_AGENCY; sit
   r.state.player.js = 10;
   const team = Schema.userTeam(r.state);
   const seen = runChain(r.state, r.rng, 'CUT_NOTICE');
-  assert.deepEqual(J(seen), ['BODY_CHECK', 'TRAINING_BLOCKS', 'CUT_NOTICE']);
+  assert.deepEqual(J(seen), ['BODY_CHECK', 'TRAINING_BLOCKS', 'FINANCES', 'CUT_NOTICE']);
   const cn = r.state.pending.decision;
   assert.equal(cn.payload.reason, 'JOB_SECURITY');
   assert.equal(r.state.player.contract, null); assert.equal(r.state.player.teamId, null); assert.equal(r.state.player.role, 'NONE');
@@ -543,7 +554,9 @@ test('retire → LegacyReport {tier, hof, line, moments, records, docTitle, time
   const rng = counting(9);
   const report = Career.retire(r.state, rng, 'CHOICE');
   assert.equal(rng.draws, 2, 'documentary title pick + headline');
-  for (const k of ['tier', 'hof', 'line', 'moments', 'records', 'docTitle', 'timeline']) assert.ok(report[k] !== undefined, 'report.' + k);
+  for (const k of ['tier', 'hof', 'line', 'moments', 'records', 'docTitle', 'timeline', 'finance', 'netWorth']) assert.ok(report[k] !== undefined, 'report.' + k);
+  assert.equal(report.netWorth, RTG.Finance.netWorth(r.state), 'the money line rides on the report ($k)');
+  assert.deepEqual(J(report.finance), J(RTG.Finance.summary(r.state)));
   assert.equal(report.hof.score, RTG.Awards.hofScore(r.state).score);
   const expected = report.hof.score >= V.firstBallot ? 'FIRST_BALLOT' : (report.hof.score >= V.inducted ? 'INDUCTED' : (report.hof.score >= V.finalist ? 'FINALIST' : 'NOT_ON_BALLOT'));
   assert.equal(report.hof.verdict, expected);

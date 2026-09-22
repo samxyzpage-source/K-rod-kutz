@@ -15,7 +15,7 @@
   function C() { return RTG.UI.C; }
   function K() { return RTG.UI.Kit; }
 
-  var KIND_ICON = { AWARD: 'trophy', RECORD: 'star', MILESTONE: 'star', EVENT: 'envelope', TEAM: 'team', CAMP: 'bolt', BENCHED: 'flag', SEASON: 'clock', TRAINING: 'train', CONTRACT: 'money', DRAFTED: 'star', UNDRAFTED: 'x', CUT: 'x', TAG: 'flag', FA: 'money', RETIRED: 'heart', HS_GAME: 'ball', HS_SEASON: 'boot', RETIRE: 'clock', INJURY: 'heart' };
+  var KIND_ICON = { AWARD: 'trophy', RECORD: 'star', MILESTONE: 'star', EVENT: 'envelope', TEAM: 'team', CAMP: 'bolt', BENCHED: 'flag', SEASON: 'clock', TRAINING: 'train', CONTRACT: 'money', DRAFTED: 'star', UNDRAFTED: 'x', CUT: 'x', TAG: 'flag', FA: 'money', RETIRED: 'heart', HS_GAME: 'ball', HS_SEASON: 'boot', RETIRE: 'clock', INJURY: 'heart', MONEY: 'money' };
   var RESULT_TEXT = { BOWL_W: 'Bowl win', BOWL_L: 'Bowl loss', CHAMP: 'CHAMPIONS', NONE: '' };
 
   function factory(store) {

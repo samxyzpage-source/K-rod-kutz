@@ -448,6 +448,11 @@
       var e0 = state.history.earnings || 0;
       state.history.earnings = Math.max(0, Math.round((e0 + money / 1000) * 1000) / 1000);   // $k → $M, 3 decimals
       addNum(res, 'money', money);
+      // …and the bank ($k; RTG.Finance, 0 draws): a cost may take the bank below zero
+      if (typeof RTG.Finance === 'object' && RTG.Finance && isFn(RTG.Finance.deposit)) {
+        var evRow = eventsById()[evId], title = (evRow && evRow.title) || evId || 'Event';
+        if (money > 0) RTG.Finance.deposit(state, money, 'EVENT', title); else RTG.Finance.charge(state, -money, 'EVENT', title);
+      }
     }
     if (eff.attrs) applyAttrs(state, eff.attrs, res);
     if (eff.mods) applyMods(state, eff.mods, evId, res);

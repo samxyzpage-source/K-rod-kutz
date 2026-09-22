@@ -265,6 +265,14 @@
     return { morale: p.morale, trust: p.trust, fans: p.fans, js: p.js, fame: p.fame, form: p.form, xp: p.xp };
   };
   D.addXp = function (n) { var p = state().player; p.xp = Math.max(0, Math.round(p.xp + (n | 0))); store().touch('addXp', p.xp); return p.xp; };
+  /** Add $k to the bank through Finance.deposit (an EVENT ledger row 'debug'); negative amounts charge. Returns the bank. */
+  D.money = function (k) {
+    var st = state(), F = RTG.Finance;
+    k = Math.round(Number(k) || 0);
+    if (k >= 0) F.deposit(st, k, 'EVENT', 'debug'); else F.charge(st, -k, 'EVENT', 'debug');
+    store().touch('money', st.finance.bank);
+    return st.finance.bank;
+  };
   D.addMod = function (mod) { var m = RTG.Player.addMod(state().player, mod); store().touch('addMod', m); return clone(m); };
 
   // ─────────────────────────── analysis ───────────────────────────
@@ -388,6 +396,10 @@
       run('NEXT PHASE', function () { return D.nextPhase(); }),
       run('EVENT', function () { return D.triggerEvent('NIL_TRUCK'); }),
       run('+500 XP', function () { return D.addXp(500); }),
+      run('+$100k', function () {
+        if (typeof D.money !== 'function' || !RTG.Finance) throw new Error('RTG.debug.money is not available (no finance engine loaded)');
+        return D.money(100);   // $k into the bank through Finance.deposit; D.money syncs the store itself
+      }),
       run('VALIDATE', function () { var v = D.validate(); c.toast(v.ok ? 'state valid' : v.errors.slice(0, 2).join(' | '), v.ok ? 'good' : 'bad'); return v; }),
       run('SAVE', function () { return D.save('auto'); }),
       run('LOAD', function () { return D.load('auto'); }),

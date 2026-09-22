@@ -348,3 +348,30 @@ test('lookup helpers: teamIn / teamById / leagueOf / userTeam / activeLeague / c
   assert.equal(league.teams[3].ST, Math.round(Tuning.league.stBlend * before + (1 - Tuning.league.stBlend) * rookie.ovr));
   assert.equal(Schema.validate(state).ok, true);
 });
+
+test('finance (the money system): createCareer opens the books, validate checks the block (required from v2) and rejects a bad one', (t) => {
+  if (!hasData) { t.skip(dataNote); return; }
+  const state = Schema.createCareer({ name: 'Penny Wise', archetype: 'SURGEON', seed: 21, createdAt: 1 }, RTG.RNG.create(21));
+  assert.equal(state.v, 2, 'save version 2 carries the finance block');
+  deq(state.finance, { bank: 0, lifestyle: 'FRUGAL', planCost: null, owned: [], paid: {}, services: [], holdings: [], closed: [], ledger: [],
+    totals: { earned: 0, spent: 0, invested: 0, returned: 0, lost: 0, peakNetWorth: 0 }, debtYears: 0, lastTick: 0, nextId: 1 });
+  assert.equal(Schema.validate(state).ok, true);
+  deq(Object.keys(Schema.ENUM).filter((k) => ['lifestyles', 'holdingKinds', 'holdingRisks', 'ledgerKinds'].includes(k)).sort(), ['holdingKinds', 'holdingRisks', 'ledgerKinds', 'lifestyles']);
+  assert.ok(Schema.ENUM.decisionKinds.includes('FINANCES'));
+  const bad = (mutate, re, why) => {
+    const s = JSON.parse(JSON.stringify(state));
+    Schema.reindex(s);
+    mutate(s);
+    const v = Schema.validate(s);
+    assert.equal(v.ok, false, why + ' must not validate');
+    assert.ok(v.errors.some((e) => re.test(e)), why + ': ' + v.errors.slice(0, 4).join('; '));
+  };
+  bad((s) => { s.finance.holdings.push({ id: 'h1', oppId: 'INDEX_FUND', name: 'Index Fund', kind: 'INDEX', risk: 'LOW', invested: 10, value: -1, year: 1, log: [] }); }, /holdings.*value|value/, 'a negative holding value');
+  bad((s) => { s.finance.lifestyle = 'ROYAL'; }, /lifestyle/, 'an unknown tier');
+  bad((s) => { s.finance.owned = ['BOAT', 'BOAT']; }, /duplicate/, 'a purchase owned twice');
+  bad((s) => { s.finance.ledger.push({ year: 1, kind: 'TIP', label: 'x', delta: 1 }); }, /ledger/, 'an unknown ledger kind');
+  bad((s) => { s.finance.bank = 'rich'; }, /bank/, 'a non-numeric bank');
+  bad((s) => { delete s.finance; }, /finance/, 'no books on a v2 state');
+  // the fixtures of every phase carry the books
+  for (const [name, s] of Object.entries(fx.all(RTG))) assert.ok(s.finance && typeof s.finance.bank === 'number', name + ' fixture has the books');
+});

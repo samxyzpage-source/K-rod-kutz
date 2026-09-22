@@ -48,7 +48,26 @@
    * @property {string[]} recentEventIds     ring ≤ 12
    * @property {Settings} settings
    * @property {Object<string, *>} flags  WALKON, UDFA, giveMe60, under55, ultimatum, farewell, …
+   * @property {Finance} finance          the money system (RTG.Finance; §2.7.10) — required from save version 2
    */
+
+  /**
+   * @typedef {Object} Finance  (engine/finance.js; every amount $k, integers)
+   * @property {number} bank                              negative = overdraft
+   * @property {'FRUGAL'|'COMFORTABLE'|'FLASHY'|'BALLER'} lifestyle   the plan charged at the next tick
+   * @property {number|null} planCost                     $k the plan costs at the next tick, quoted when the books last closed (null = price at the tick's scale)
+   * @property {string[]} owned                           purchase ids (Data.finance.purchases), each at most once
+   * @property {Object<string, number>} paid              $k paid per owned purchase (resale = paid × Tuning.finance.resale; upkeep = paid × upkeep / price)
+   * @property {string[]} services                        service ids bought for the coming season (ENUM.serviceIds, unique; cleared by Finance.applyServices)
+   * @property {Holding[]} holdings
+   * @property {Object[]} closed                          sold / liquidated holdings {id, name, kind, risk, invested, value, year, pct} (cap Tuning.finance.closedCap)
+   * @property {{year:number, kind:string, label:string, delta:number}[]} ledger   newest last, cap Tuning.finance.ledgerCap
+   * @property {{earned:number, spent:number, invested:number, returned:number, lost:number, peakNetWorth:number}} totals
+   * @property {number} debtYears                         consecutive ticks closed in debt
+   * @property {number} lastTick                          state.year of the last Finance.tick
+   * @property {number} nextId
+   */
+  /** @typedef {{id:string, oppId:string, name:string, kind:'INDEX'|'PROPERTY'|'BUSINESS'|'CRYPTO'|'STARTUP'|'SCAM', risk:'LOW'|'MED'|'HIGH'|'WILD', invested:number, value:number, year:number, log:number[]}} Holding */
 
   /**
    * @typedef {Object} Player
@@ -263,7 +282,12 @@
     gamePendingTypes: ['USER_KICK', 'USER_KICKOFF'],
     sessionKinds: ['HS_GAME', 'RECRUIT_CAMP', 'CAMP', 'COMBINE_LADDER', 'COMBINE_ACC', 'COMBINE_KO', 'HALFTIME70', 'PRACTICE', 'TRYOUT'],
     decisionKinds: ['OFFERS_COLLEGE', 'REDSHIRT', 'DECLARE', 'TRANSFER', 'COMBINE_PLAN', 'UDFA', 'EXTENSION', 'FREE_AGENCY', 'TAG',
-                    'RETIRE', 'OFFSEASON_PLAN', 'CUT_NOTICE', 'HOF', 'TRAINING_BLOCKS', 'BODY_CHECK', 'CAMP'],
+                    'RETIRE', 'OFFSEASON_PLAN', 'CUT_NOTICE', 'HOF', 'TRAINING_BLOCKS', 'BODY_CHECK', 'CAMP', 'FINANCES'],
+    lifestyles: ['FRUGAL', 'COMFORTABLE', 'FLASHY', 'BALLER'],
+    serviceIds: ['PRIVATE_COACH', 'PHYSIO', 'PSYCH'],
+    holdingKinds: ['INDEX', 'PROPERTY', 'BUSINESS', 'CRYPTO', 'STARTUP', 'SCAM'],
+    holdingRisks: ['LOW', 'MED', 'HIGH', 'WILD'],
+    ledgerKinds: ['INCOME', 'LIFESTYLE', 'PURCHASE', 'UPKEEP', 'SERVICE', 'INVEST', 'RETURN', 'SELL', 'EVENT', 'DEBT', 'LIQUIDATION'],
     focus: ['POW', 'ACC', 'CON', 'CLU', 'KO', 'REST'],
     modKeys: ['sigma', 'windDrift', 'pressure', 'block', 'range', 'trainMult', 'moraleTarget', 'injury', 'iceImmune'],
     modExpires: ['week', 'game', 'season', 'never'],
@@ -648,8 +672,11 @@
       records: null,
       inbox: [], headlines: [], recentHeadlineIds: [], recentEventIds: [],
       settings: Schema.mirrorSettings(opts.settings),
-      flags: {}
+      flags: {},
+      finance: null
     };
+    // the money system (RTG.Finance, 0 draws): bank 0, lifestyle FRUGAL
+    if (RTG.Finance && typeof RTG.Finance.init === 'function') RTG.Finance.init(state); else delete state.finance;
     // 4. records & legends
     state.records = Schema.createRecords(rng, state.leagues, data.records);
     // 5. the senior season (§2.7.0): the schedule and the recruiting board; HS.startGame opens game 1
@@ -1018,6 +1045,66 @@
       arr(state, 'recentEventIds', R, Tuning.save.recentEventIds);
       if (obj(state, 'settings', R)) enm(state.settings, 'autoPat', ENUM.autoPat, 'settings');
       obj(state, 'flags', R);
+
+      // ── finance (required from save version 2; validated whenever present)
+      if (!nullable(state, 'finance') || (isInt(state.v) && state.v >= 2)) {
+        if (obj(state, 'finance', R)) {
+          var fn = state.finance, FP = 'finance', TF = Tuning.finance || {};
+          int(fn, 'bank', -INF, INF, FP);
+          enm(fn, 'lifestyle', ENUM.lifestyles, FP);
+          if (!nullable(fn, 'planCost')) int(fn, 'planCost', 0, INF, FP);
+          int(fn, 'debtYears', 0, INF, FP); int(fn, 'lastTick', 0, isInt(state.year) ? state.year : INF, FP); int(fn, 'nextId', 1, INF, FP);
+          if (arr(fn, 'owned', FP)) {
+            var seenOwned = {};
+            for (var oi = 0; oi < fn.owned.length; oi++) {
+              if (typeof fn.owned[oi] !== 'string') err(FP + '.owned', oi, 'not a string');
+              else if (seenOwned[fn.owned[oi]]) err(FP + '.owned', oi, 'duplicate ' + fn.owned[oi]);
+              seenOwned[fn.owned[oi]] = true;
+            }
+          }
+          if (!nullable(fn, 'paid') && obj(fn, 'paid', FP)) for (var pk in fn.paid) if (!isNum(fn.paid[pk])) err(FP + '.paid', pk, 'not a number');
+          if (arr(fn, 'services', FP)) {
+            var seenS = {};
+            for (var si = 0; si < fn.services.length; si++) {
+              if (ENUM.serviceIds.indexOf(fn.services[si]) < 0) err(FP + '.services', si, 'unknown service ' + fn.services[si]);
+              else if (seenS[fn.services[si]]) err(FP + '.services', si, 'duplicate ' + fn.services[si]);
+              seenS[fn.services[si]] = true;
+            }
+          }
+          var yearCap = isInt(state.year) ? state.year : INF;
+          if (arr(fn, 'holdings', FP)) {
+            var seenH = {};
+            for (var hx = 0; hx < fn.holdings.length; hx++) {
+              var hd = fn.holdings[hx], HP2 = FP + '.holdings[' + hx + ']';
+              if (!isObj(hd)) { err(FP + '.holdings', hx, 'not an object'); continue; }
+              if (str(hd, 'id', HP2)) { if (seenH[hd.id]) err(HP2, 'id', 'duplicate ' + hd.id); seenH[hd.id] = true; }
+              str(hd, 'oppId', HP2); str(hd, 'name', HP2);
+              enm(hd, 'kind', ENUM.holdingKinds, HP2); enm(hd, 'risk', ENUM.holdingRisks, HP2);
+              num(hd, 'invested', 0, INF, HP2); num(hd, 'value', 0, INF, HP2); int(hd, 'year', 0, yearCap, HP2);
+              if (arr(hd, 'log', HP2)) for (var li = 0; li < hd.log.length; li++) if (!isNum(hd.log[li]) || hd.log[li] < -1) err(HP2 + '.log', li, 'bad pct');
+            }
+          }
+          if (!nullable(fn, 'closed') && arr(fn, 'closed', FP, TF.closedCap)) {
+            for (var cx = 0; cx < fn.closed.length; cx++) {
+              var cr = fn.closed[cx], CP2 = FP + '.closed[' + cx + ']';
+              if (!isObj(cr)) { err(FP + '.closed', cx, 'not an object'); continue; }
+              str(cr, 'id', CP2); str(cr, 'name', CP2);
+              enm(cr, 'kind', ENUM.holdingKinds, CP2); enm(cr, 'risk', ENUM.holdingRisks, CP2);
+              num(cr, 'invested', 0, INF, CP2); num(cr, 'value', 0, INF, CP2); int(cr, 'year', 0, yearCap, CP2); num(cr, 'pct', -1, INF, CP2);
+            }
+          }
+          if (arr(fn, 'ledger', FP, TF.ledgerCap)) {
+            for (var lx = 0; lx < fn.ledger.length; lx++) {
+              var lr = fn.ledger[lx];
+              if (!isObj(lr) || !isInt(lr.year) || typeof lr.label !== 'string' || !isNum(lr.delta) || ENUM.ledgerKinds.indexOf(lr.kind) < 0) err(FP + '.ledger', lx, 'bad row');
+            }
+          }
+          if (obj(fn, 'totals', FP)) {
+            var tk = ['earned', 'spent', 'invested', 'returned', 'lost', 'peakNetWorth'];
+            for (var ti = 0; ti < tk.length; ti++) num(fn.totals, tk[ti], 0, INF, FP + '.totals');   // every total is a sum of absolute amounts
+          }
+        }
+      }
 
       // ── JSON-safety: cycles, functions, undefined, non-finite numbers
       jsonSafe(state, errors);

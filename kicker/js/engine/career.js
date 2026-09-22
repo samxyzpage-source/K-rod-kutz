@@ -28,7 +28,9 @@
  *   finishSession CAMP    : headline 1 · COMBINE: headline 1 · TRYOUT: pass → Contracts.generateOffers | fail → spring league
  *   changeTeam            : headline 1 · retire: docTitle pick 1 → headline 1
  *   decide                : per kind (see handlers) + Career.resume (chain steps: Season.ageTick 2 in the growth window — the
- *                           BODY_CHECK card previews it from a rewound rng — Contracts.extensionOffer 2, generateOffers 1 + n, Events.roll 1–2)
+ *                           BODY_CHECK card previews it from a rewound rng — Finance.decision 2 (two forks; 1 when the year was
+ *                           already ticked), Contracts.extensionOffer 2, generateOffers 1 + n, Events.roll 1–2)
+ *   FINANCES handler      : 0 (Finance.apply) · offseasonChain take-home deposit: 0 (Finance.deposit after Contracts.payoutSeason)
  *   handleActions         : TRADE chance 1 (+ pick 1 + changeTeam 1) · INJURY int 1 · others as the functions they call
  */
 (function (root) {
@@ -41,7 +43,7 @@
   var IN_SEASON = { REG: true, POST: true };
   var PCT = 100;
   var DECISION_KINDS = ['OFFERS_COLLEGE', 'REDSHIRT', 'DECLARE', 'TRANSFER', 'COMBINE_PLAN', 'UDFA', 'EXTENSION', 'FREE_AGENCY',
-    'TAG', 'RETIRE', 'OFFSEASON_PLAN', 'CUT_NOTICE', 'HOF', 'TRAINING_BLOCKS', 'BODY_CHECK', 'CAMP'];
+    'TAG', 'RETIRE', 'OFFSEASON_PLAN', 'CUT_NOTICE', 'HOF', 'TRAINING_BLOCKS', 'BODY_CHECK', 'CAMP', 'FINANCES'];
   var ACTIONS = ['TRANSFER', 'TRADE', 'HOLDOUT', 'CAMP_BATTLE', 'CHANGE_TEAM', 'SKIP_GAME', 'INJURY', 'RETIRE', 'HALFTIME70'];
   var DEPTH_TEXT = { OPEN: 'job is open', VET: 'veteran incumbent (1 yr left)', STAR: 'star incumbent — likely K2 in year 1' };
   var COACH_TEXT = { TRUSTING: 'trusting coach', CAUTIOUS: 'cautious coach', WHISPERER: 'kicker-whisperer' };
@@ -58,6 +60,7 @@
   function Schema() { return RTG.Schema; }        function Player() { return RTG.Player; }        function Kick() { return RTG.Kick; }
   function Season() { return RTG.Season; }        function Contracts() { return RTG.Contracts; }  function Draft() { return RTG.Draft; }
   function Events() { return RTG.Events; }        function Stats() { return RTG.Stats; }          function Awards() { return RTG.Awards; }
+  function Finance() { return RTG.Finance; }
   function TC() { return Tuning.career; }
   function isFn(f) { return typeof f === 'function'; }
   function num(v, d) { return typeof v === 'number' && v === v ? v : d; }
@@ -928,9 +931,12 @@
     }
     var title = docTitle(state, rng, hof.tier);                                                       // 1 draw
     var tl = (state.history.timeline || []).slice(-TC().legacy.timeline);
+    var Fi = Finance();
     var report = {
       tier: hof.tier, hof: hof, line: line, moments: moments, records: records, docTitle: title, timeline: tl,
       seasons: (state.history.seasons || []).length, nflSeasons: num(p.nflSeasons, 0), earnings: num(state.history.earnings, 0),
+      finance: Fi && isFn(Fi.summary) ? Fi.summary(state) : null,                                  // the money line (0 draws)
+      netWorth: Fi && isFn(Fi.netWorth) ? Fi.netWorth(state) : 0,                                  // $k
       age: p.age, retiredYear: state.year, reason: reason, seed: state.seed, name: p.name ? p.name.full : ''
     };
     state.stage = 'RETIRED';
@@ -954,11 +960,11 @@
   function stepsFor(state) {
     var p = state.player, f = sflags(state);
     if (p.league === 'NFL' || state.stage === 'NFL') {
-      var steps = ['BODY_CHECK', 'TRAINING_BLOCKS', 'CUT_NOTICE', 'EXTENSION'];
+      var steps = ['BODY_CHECK', 'TRAINING_BLOCKS', 'FINANCES', 'CUT_NOTICE', 'EXTENSION'];
       if (f.springLeague && typeof f.springLeague === 'object' && !p.contract) steps.push('REDRAFT');
       return steps.concat(['FREE_AGENCY', 'RETIRE', 'EVENT', 'EVENT']);
     }
-    return ['BODY_CHECK', 'TRAINING_BLOCKS', 'REDSHIRT', 'TRANSFER', 'EVENT', 'EVENT', 'DECLARE'];
+    return ['BODY_CHECK', 'TRAINING_BLOCKS', 'FINANCES', 'REDSHIRT', 'TRANSFER', 'EVENT', 'EVENT', 'DECLARE'];
   }
 
   /** TRAINING_BLOCKS decision (§2.1.2): 3 blocks of 70·moraleMult (× difficulty xpMult) XP, a focus attribute or the bank. */
@@ -1018,6 +1024,11 @@
       ]));
     },
     TRAINING_BLOCKS: function (state) { setPending(state, trainingBlocksDecision(state)); },
+    FINANCES: function (state, rng) {
+      var F = Finance();
+      if (!F || !isFn(F.decision)) return;
+      setPending(state, F.decision(state, rng));                                                  // 2 draws (tick fork + pitches fork)
+    },
     REDSHIRT: function (state) {
       var p = state.player, R = TC().redshirt;
       if (p.redshirt || p.league !== 'COLLEGE' || num(p.collegeSeasons, 0) !== R.afterSeason || p.role !== 'K2') return;
@@ -1145,10 +1156,11 @@
 
   /**
    * Open the offseason wizard chain (§3.5.18), idempotent per season (Season.offseason and Engine.nextPhase may both
-   * call it; the same chain object is returned). Pays the season's money first (Contracts.payoutSeason; NIL fame /
-   * morale and nearHome morale for college), then runs the steps in order until one needs the user:
-   *   college: BODY_CHECK → TRAINING_BLOCKS → REDSHIRT? → TRANSFER? → EVENT ×2 → DECLARE?
-   *   NFL    : BODY_CHECK → TRAINING_BLOCKS → CUT_NOTICE? → EXTENSION? → [REDRAFT] → FREE_AGENCY? → RETIRE? → EVENT ×2
+   * call it; the same chain object is returned). Pays the season's money first (Contracts.payoutSeason, then the take-home
+   * into the bank through Finance.deposit; NIL fame / morale and nearHome morale for college), then runs the steps in
+   * order until one needs the user:
+   *   college: BODY_CHECK → TRAINING_BLOCKS → FINANCES → REDSHIRT? → TRANSFER? → EVENT ×2 → DECLARE?
+   *   NFL    : BODY_CHECK → TRAINING_BLOCKS → FINANCES → CUT_NOTICE? → EXTENSION? → [REDRAFT] → FREE_AGENCY? → RETIRE? → EVENT ×2
    * (DEVIATION: college events roll before DECLARE because DECLARE moves the stage to DRAFT.) Each step sets
    * state.pending = {kind:'DECISION'|'EVENT'|'KICKS', …}; Career.resume continues the chain after every resolution.
    * @param {Object} state @param {RNG} rng @returns {Object} the chain {key, year, league, steps, idx, done, log}
@@ -1156,8 +1168,16 @@
   Career.offseasonChain = function (state, rng) {
     var f = sflags(state), p = state.player, key = chainKey(state);
     if (f.offseason && f.offseason.key === key) return f.offseason;
-    var C = Contracts();
-    if (C && isFn(C.payoutSeason)) C.payoutSeason(state);
+    var C = Contracts(), F = Finance();
+    if (C && isFn(C.payoutSeason)) {
+      var paid = C.payoutSeason(state);
+      // the take-home reaches the bank (Finance.deposit, 0 draws): gross $M × 1000 × Tuning.finance.takeHome[league]
+      if (paid && num(paid.total, 0) > 0 && F && isFn(F.deposit)) {
+        var lg = p.league === 'NFL' ? 'NFL' : 'COLLEGE';
+        F.deposit(state, Math.round(paid.total * 1000 * num(Tuning.finance.takeHome[lg], 1)), 'INCOME',
+          lg === 'NFL' ? 'Salary and bonus, after tax and agent' : 'NIL money, after tax');
+      }
+    }
     if (p.league === 'COLLEGE' && p.teamId) {
       var N = Tuning.contracts.nil;
       if (num(p.nil, 0) > 0) {
@@ -1295,6 +1315,10 @@
       out.result = { retired: false, oneMoreYear: true };
     },
     TRAINING_BLOCKS: function (state, rng, dec, opt, extra, out) { out.result = applyTrainingBlocks(state, dec, opt.id); },
+    FINANCES: function (state, rng, dec, opt, extra, out) {
+      var F = need(Finance(), 'Finance', 'decide');
+      out.result = F.apply(state, rng, dec, extra);                                                  // 0 draws; extra = the staged actions
+    },
     HOF: function (state, rng, dec, opt, extra, out) { sflags(state).legacyAcked = true; out.result = { acknowledged: true }; },
     OFFSEASON_PLAN: function (state, rng, dec, opt, extra, out) { out.result = { acknowledged: true }; },
     BODY_CHECK: function (state, rng, dec, opt, extra, out) {

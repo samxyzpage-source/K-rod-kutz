@@ -285,6 +285,15 @@ async function clickDecision(page, kind, o) {
     case 'TRANSFER': if (!(await first('[data-action="opt-STAY"]'))) assert.ok(await first('[data-action^="opt-"]')); return;
     case 'REDSHIRT': if (!(await first('[data-action="opt-PLAY"]'))) assert.ok(await first('[data-action^="opt-"]')); return;
     case 'TRAINING_BLOCKS': await page.locator('.scr-offseason .block-tile[data-option]').first().click(); return;
+    case 'FINANCES': {
+      // the MONEY step lives on its own screen: CLOSE THE BOOKS in the sticky footer (nothing staged → nothing spent)
+      assert.equal(scr, 'finances', 'the FINANCES decision opens the finances screen');
+      const close = page.locator('.scr-finances .fin-footer [data-action="close-books"]');
+      assert.equal(await close.count(), 1, 'CLOSE THE BOOKS in the footer');
+      assert.ok(!(await close.isDisabled()), 'the books can always be closed unspent');
+      await close.click();
+      return;
+    }
     case 'RETIRE':
       if (!(await first(o.retire ? '[data-action="opt-RETIRE"]' : '[data-action="opt-ONE_MORE_YEAR"]'))) assert.ok(await first('[data-action^="opt-"]'));
       return;

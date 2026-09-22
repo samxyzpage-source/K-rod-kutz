@@ -702,6 +702,50 @@
         }
       },
 
+      // ───────────────────────────── §2.7.10 MONEY (engine/finance.js → RTG.Finance; state.finance) ─────────────────────────────
+      // Every amount here is $k at scale 1 (college); Finance.scale multiplies catalogue prices by league so a $30k
+      // college truck is a $300k car in the NFL. "Mostly lifestyle but a little bit of play": lifestyle and big buys move
+      // the soft meters only; the three services are the only gameplay edge; investments carry real risk, real loss.
+      finance: {
+        scale: { COLLEGE: 1, NFL: 10 },              // catalogue price multiplier by league
+        takeHome: { COLLEGE: 0.85, NFL: 0.52 },      // share of gross money (history.earnings) that reaches the bank (tax + agent)
+        ledgerCap: 60,                               // ledger rows kept (newest last)
+        closedCap: 20,                               // sold / liquidated holdings remembered for the legacy card (best / worst)
+        resale: 0.5,                                 // an owned purchase counts for paid × resale in net worth and a forced sale
+        migrateShare: 0.5,                           // v1 → v2 saves: this share of career earnings to date seeds the bank
+        lifestyle: {                                 // cost $k/yr at scale 1 · yearly meter effects while the tier is the plan
+          tiers: {
+            FRUGAL:      { cost: 0,   morale: 0, fame: 0,  fans: 0, trust: 0 },
+            COMFORTABLE: { cost: 12,  morale: 2, fame: 0,  fans: 0, trust: 0 },
+            FLASHY:      { cost: 40,  morale: 4, fame: 15, fans: 2, trust: 0 },
+            BALLER:      { cost: 110, morale: 6, fame: 40, fans: 4, trust: -3 }
+          }
+        },
+        debt: { rate: 0.12, morale: -6, liquidateAfter: 3, grace: 10 },   // yearly interest on an overdraft · morale hit per year in debt · forced sale after this many consecutive years in the red · $k × scale: an overdraft no deeper than this is not a debt year (no interest, no morale hit, the plan stays)
+        // BALANCE (money probe, 40 careers × 3 personas): liquidateAfter was 2 — the NFL rookie cliff (a $988k bonus year sets a FLASHY plan, years 2–4 pay $364–416k) forced a sale on 65 % of reckless careers; two warning years bring it to 30 %
+        // grace 10: 5–11 % of careers that never spent a dollar hit the full debt step (−6 morale, a debt year) on a $1–21k college overdraft from event costs alone; the forced sale itself fires only when the debt exceeds what could be sold (net worth < 0) or after liquidateAfter red years
+        invest: {
+          perYear: 3,                                // opportunities pitched per offseason
+          // fallback return models by risk when a holding's catalogue entry is gone (Data.finance missing / renamed ids)
+          models: {
+            LOW:  { mean: 0.06, sd: 0.10, bust: 0.00, boom: 0.00, boomX: 1 },
+            MED:  { mean: 0.08, sd: 0.25, bust: 0.05, boom: 0.03, boomX: 2 },
+            HIGH: { mean: 0.10, sd: 0.45, bust: 0.15, boom: 0.05, boomX: 3 },
+            WILD: { mean: 0.10, sd: 0.80, bust: 0.35, boom: 0.08, boomX: 6 }
+          }
+        },
+        services: {                                  // the one-season gameplay services (Data.finance.services)
+          coachXp: 40,                               // PRIVATE_COACH: XP granted when the season opens
+          coachTrainMult: 1.15,                      // PRIVATE_COACH: trainMult × this for the season
+          physioInjury: 0.6,                         // PHYSIO: injury × this for the season
+          psychPressure: -0.10                       // PSYCH: pressure add (Kick reads pressure mods additively — see finance.js)
+        },
+        timeline: {
+          minDelta: 25,                              // $k × scale: a return or a purchase at least this big makes the timeline
+          impact: { return: 1, bust: 3, boom: 3, liquidation: 3, purchase: 1 }
+        }
+      },
+
       // ───────────────────────────── §2.13 / §3.9 ENGINE BUDGETS (test/perf.test.js, INT) ─────────────────────────────
       perf: {
         seasonMs: 250,            // a full auto season (Engine.autoPlaySeason, warm, main realm) — §3.9 "full auto season < 250 ms"

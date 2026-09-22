@@ -442,10 +442,14 @@ test('applyCut pays the unpaid guaranteed money as dead money, ends the contract
   const state = cfx.nflFinalYear(RTG);
   state.player.contract = { type: 'VET', years: 4, yearIdx: 1, aav: 4.0, gtdPct: 0.5, signingBonus: 4.0, startYear: 8, paid: 5.0, paidThrough: 0 };
   state.history.contracts.push({ year: 8, league: 'NFL', teamId: 'BOS', type: 'VET', years: 4, aav: 4.0, total: 16, gtdPct: 0.5, signingBonus: 4.0, round: null, endYear: null, reason: 'SIGNED' });
-  const earnings = state.history.earnings;
+  const earnings = state.history.earnings, bank0 = state.finance.bank;
   const r = Contracts.applyCut(state, 'CUT');
   near(r.deadMoney, 16 * 0.5 - 5.0, 1e-9);
   near(state.history.earnings, earnings + r.deadMoney, 1e-9);
+  // the take-home of the dead money reaches the bank (one INCOME row)
+  assert.equal(state.finance.bank, bank0 + Math.round(r.deadMoney * 1000 * RTG.Tuning.finance.takeHome.NFL));
+  const paidRow = state.finance.ledger[state.finance.ledger.length - 1];
+  assert.equal(paidRow.kind, 'INCOME'); assert.match(paidRow.label, /Guaranteed money/);
   assert.equal(state.player.contract, null);
   assert.equal(state.player.role, 'NONE');
   assert.equal(state.flags.cutFa, true);

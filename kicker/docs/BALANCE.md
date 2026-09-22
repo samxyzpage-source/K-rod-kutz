@@ -5,14 +5,15 @@ here is regenerable:
 
 | What | Command | Time |
 |---|---|---|
-| Kick calibration table + season-level make rates (§2.3.6, §2.13) | `node kicker/test/balance_report.js` | ≈ 11 s |
-| Game simulation targets (§2.13 sim rows) | `node kicker/test/run.js sim_balance --balance` | ≈ 2 s |
-| 200 auto careers (§2.13 career rows) — asserted | `node kicker/test/run.js career_balance --balance` | ≈ 190 s on 3 workers |
+| Kick calibration table + season-level make rates (§2.3.6, §2.14) | `node kicker/test/balance_report.js` | ≈ 11 s |
+| Game simulation targets (§2.14 sim rows) | `node kicker/test/run.js sim_balance --balance` | ≈ 2 s |
+| 200 auto careers (§2.14 career rows) — asserted | `node kicker/test/run.js career_balance --balance` | ≈ 190 s on 3 workers |
 | 200 auto careers — the tables below | `node kicker/test/career_report.js` | ≈ 105 s on 3 workers |
-| Engine budgets (§2.13 / §3.9) | `node kicker/test/perf.test.js` | ≈ 5 s |
-| Whole suite | `node kicker/test/run.js` (fast, 23 files ≈ 33 s) · `node kicker/test/run.js --balance` (26 files ≈ 230 s) | |
+| Engine budgets (§2.14 / §3.9) | `node kicker/test/perf.test.js` | ≈ 5 s |
+| Whole suite | `node kicker/test/run.js` (fast, 25 files ≈ 49 s) · `node kicker/test/run.js --balance` (28 files ≈ 240 s) | |
+| The star curve and the money tiers (§6, §7) | Node probes through `test/load.js` (described in §7; not in the repo yet — a `test/finance_report.js` in the style of `career_report.js` is the natural home) | ≈ 2 s + ≈ 40 s |
 
-Suite status at the time of writing: **fast 23/23 and balance 26/26 files green**, no skipped tests.
+Suite status at the time of writing (the D27 money pass, on top of commit `0cdb041`): **fast 25/25 files green in 48.7 s** with the new `finance.test.js` (36 tests incl. the `[risk]` row) and the D27 additions to `career`, `schema`, `season`, `events`, `contracts`, `engine_api`, `save` and `integration`; the balance files were not re-run on this pass. Sections 1–5 are unchanged since the integration pass (§2.14 was §2.13 then); §6–§7 were measured on the D27 working tree.
 
 ---
 
@@ -84,7 +85,7 @@ round trip after every season (`career_balance.test.js`, 9/9 green with the retu
 
 Run: `node kicker/test/career_report.js` · 3 workers · 127 s wall · failures: 0 · retired: 200/200
 
-| Metric | Spec §2.13 target | Measured |
+| Metric | Spec §2.14 target | Measured |
 |---|---|---|
 | Rookie NFL season FG% (first NFL season with ≥ 12 FGA), median | 78–83 % | 85.5 % (OVR median 73, n=200) |
 | Year-4 NFL starter FG%, median | 84–88 % | 89.7 % (OVR median 80, n=199) |
@@ -175,12 +176,12 @@ loader's builtin-shadowing wrapper (the vm sandbox resolved every `Math.*`/`Obje
 | `contracts.aav.base / per` | 0.9 / 0.055 | 0.9783 / 0.0598 (÷0.92) | E3 — the §2.7.7 worked values (75 → 3.0, 85 → 5.1, 92 → 6.8) only hold with `fameMul` 0.92 at fame 0 |
 | `progression.xp` game/offseason sources | fgMade 8 + 0.5/yd, 50+ 8, clutch 12, GW 30, TF 18, miss 2, PAT 1, win/loss 4/1, block 70, goals 40/60/100 | 1 + 0.05/yd, 1, 2, 8, 4, 1, 0, 1/0, 10, 15/25/40 | E3 — see §5.2; the reduction slows POT saturation by about one season but cannot prevent it |
 | `career.autoplay` | declare only when projected round ≤ 4; retire when forced | declare when eligible; retire from 34 unless OVR ≥ 84, hard stop 38 | E3 — the spec policies never declare early (round ≤ 4 needs OVR ≈ 95) and would end every career at 42 |
-| §2.7.1 stars | `1.5 + 0.03·(OVR − 40) + 0.4·makes/6` | `… + 0.4·makes` | E3 — the literal formula makes every recruit a 2★ walk-on |
+| §2.7.1 stars | `1.5 + 0.03·(OVR − 40) + 0.4·makes/6` | since D23/D26: `clamp(round(1.0 + 0.03·(OVR − 40) + 0.6·rating), 2, 5)` over the senior season's 0–6 rating (`Tuning.draft.stars` base 1.0 / seasonW 0.6; §6) | E3 — the literal formula made every recruit a 2★ walk-on; the showcase itself is gone |
 | `perf` (new block) | — | `seasonMs 250, careerMs 4000, warmupSeasons 1` | INT — budgets read by `test/perf.test.js` |
 
 ### 5.2 Spec bump — progression, Hall of Fame, draft value (orchestrator, after integration)
 
-The §2.13 bands were unattainable under the spec's own pinned formulas (POT ~ N(80, 8) reachable with ≈ 2 200 XP against a
+The §2.14 bands were unattainable under the spec's own pinned formulas (POT ~ N(80, 8) reachable with ≈ 2 200 XP against a
 career income of ≈ 14 000; every auto career entered the NFL at OVR ≈ 80 and retired first-ballot). Rather than starve the
 reward loop (E3 had cut a made FG to 1 XP), the economy was re-based at the root and the numbers re-measured over 200 careers:
 
@@ -209,8 +210,146 @@ calibration table itself is met); rookie FG% 85 % vs the spec's 78–83 (rookies
 ### 5.3 Observations worth a look before the UI balance pass
 
 - The Training screen has nothing to buy after NFL year 1 for most careers (see 5.2.1) — the single biggest feel issue.
-- 26 % of auto careers lose the rookie camp battle (start as K2); combined with benchings the §2.13 25–45 % band is met, but almost
+- 26 % of auto careers lose the rookie camp battle (start as K2); combined with benchings the §2.14 25–45 % band is met, but almost
   no one is cut (1.5 %) because the cut rule needs FG% < 75 % and OVR < 68, which a POT-capped kicker never shows.
 - Draft rounds are 5–7 / UDFA (5 first-round-shock careers); nobody projects to rounds 1–3, so the "stay unless round ≤ 4" hook is dead.
 - Every auto career retires by choice (no forced retirements): forced rules trigger at 42 / two offer-less offseasons / injury, and the
   default policy leaves at 34–38.
+
+---
+
+## 6. Recruiting: the star curve and the camp bars (D23 / D26) — measured on the D27 working tree
+
+`Career.starsFor(ovr, rating) = clamp(round(1.0 + 0.03·(OVR − 40) + 0.6·rating), 2, 5)` (`Tuning.draft.stars`: base 1.0,
+perOvr 0.03, ovrAnchor 40, seasonW 0.6, min 2, max 5, walkon 2), where `rating` is the senior season's 0–6 mark
+(`HS.ratingOf`, one decimal). Thresholds read back from the engine (the lowest rating that rounds up):
+
+| Recruit OVR | 3★ from | 4★ from | 5★ from | Note |
+|---|---|---|---|---|
+| 44 | 2.3 | 4.0 | 5.7 | a perfect season (6.0) is still 5★ |
+| **50** (the spec's anchor) | **2.0** | **3.7** | **5.4** | exactly the §2.7.0 figures |
+| 56 | 1.7 | 3.4 | 5.1 | |
+
+A blank season (0) is 2★ at every recruit OVR — the walk-on line — and the star bonus never touches the archetype's
+signature attribute (D24: `Player.signatureOf`, POT pinned at 99).
+
+**The camp bars** (`Tuning.hs.camps`; a camp is 5 kicks from the middle hash at that school, wind held to 8 mph,
+`oppST` 40, pressure 0.15 on the first four and 0.5 on the fifth; the first four distances wander ±2 yd, the long one
+adds 0–2 and never drops under the bar):
+
+| Prestige | Makes of 5 | The long one from | Distances (yd) |
+|---|---|---|---|
+| 1 | 3 | — | 27 32 36 40 44 |
+| 2 | 3 | — | 29 34 38 42 46 |
+| 3 | 4 | 48+ | 31 36 41 45 48 |
+| 4 | 4 | 52+ | 32 38 43 47 52 |
+| 5 | 4 | 55+ | 34 40 45 50 55 |
+
+Invites: every board school at WARM (interest ≥ 25) or better, plus off-board programmes by star rating (5★ → 3–4 of
+prestige 5, 4★ → 2–3 of prestige 4, 3★ → one of prestige 3), never zero (1–2 prestige ≤ 2 fallbacks), capped at 8,
+sorted small camps first. Not measured here: the share of camps a human-quality tape earns per prestige — worth a
+Playwright or engine probe with forced makes before the next balance pass.
+
+---
+
+## 7. Money (D27) — measured at the D27 working tree on top of commit `0cdb041` (2026-09-22); refresh after any retune
+
+Every number below comes from the code as it stands in `Tuning.finance` and `Data.finance` on that tree. Method, so
+the section can be regenerated: (a) **investments** — one holding of $1 000k per catalogue entry, 10 000 seeds
+(`RNG.create(1000003·i + 17)`), `Finance.tick` ten times with `state.year` advancing (the real revaluation: bust /
+boom / gauss draws in the tick's own order, `state.player = null` and no timeline so nothing else moves), end value
+per $1 in read at year 3 and year 10; (b) **the all-WILD career** — 12 offseasons, each a tick followed by a $1 stake
+in a WILD pitch drawn by `weight` (Parking App 3, Rocket Coin 4, Sure Thing 2), then a 13th tick; (c) **take-home** —
+24 auto careers (`Engine.newCareer` seeds 5000–5023, Pro, `autoPlayCareer`), the `INCOME` ledger rows grouped by
+league and contract phase; (d) the star thresholds of §6 read from `Career.starsFor`.
+
+### 7.1 Take-home vs the lifestyle tiers
+
+`Tuning.finance.takeHome`: college 0.85 (NIL money), NFL 0.52 (salary, bonus, dead money); catalogue prices ×
+`Tuning.finance.scale` (college 1, NFL 10). Measured take-home per season (24 auto careers, $k):
+
+| Take-home ($k) | n | p10 | median | p90 |
+|---|---|---|---|---|
+| College season (NIL × 0.85; NIL by prestige `Tuning.contracts.nil.byPrestige`) | 78 | 8 | 32 | 96 |
+| NFL rookie-deal year 1 (salary + the 25 % signing bonus, × 0.52) | 24 | 832 | 988 | 988 |
+| NFL rookie-deal years 2–4 | 69 | 364 | 416 | 416 |
+| NFL second contract and later, per season | 237 | 2 236 | 2 964 | 6 396 |
+| Net event money over a career | 24 | 231 | 247 | 287 |
+| Bank at retirement (autoplay spends nothing: FRUGAL, nothing owned, no stakes — verified on every seed) | 24 | 33 396 | 38 874 | 41 520 |
+
+What a year of each plan costs against those incomes (`Tuning.finance.lifestyle.tiers`):
+
+| Tier | Cost college · NFL ($k/yr) | Yearly effects | Share of a median college season ($32k) | of a rookie year 2–4 ($416k) | of a second-contract season ($2.96M) |
+|---|---|---|---|---|---|
+| FRUGAL | 0 · 0 | — | 0 % | 0 % | 0 % |
+| COMFORTABLE | 12 · 120 | morale +2 | 38 % | 29 % | 4 % |
+| FLASHY | 40 · 400 | morale +4, fame +15, fans +2 | 125 % | 96 % | 14 % |
+| BALLER | 110 · 1 100 | morale +6, fame +40, fans +4, trust −3 | 344 % | 264 % | 37 % |
+
+Reading: in college only COMFORTABLE is sustainable on NIL money (a prestige-5 NIL deal at $60–120k gross clears
+FLASHY); a rookie can live COMFORTABLE and afford FLASHY only by spending the year-1 bonus; BALLER is a second-contract
+plan by design. The eleven purchases run $4k–$350k at scale 1 ($40k–$3.5M in the NFL: the lake house is 1.2
+second-contract seasons, the parents' house $1.8M), upkeep 3–8 % of the price (season tickets 50 %, they renew); the
+services $12–20k ($120–200k). Debt: 12 % interest, morale −6 per year in the red, the plan forced to FRUGAL, a forced
+sale after 2 years or when the debt exceeds the net worth — and note that any negative bank triggers it, so a college
+year-1 overdraft of a few $k from event costs (seen in the engine probes: −$13k after a $10k NIL deposit and $22k of
+event charges) already pays interest and the morale hit. A grace floor (only below −$X × scale) is the obvious
+retune; the contract asked for `bank < 0`, so none was added.
+
+### 7.2 Investments — end value per $1 in, 10 000 ten-year holds through `Finance.tick`
+
+| id | risk · kind | 3 y p10 / median / p90 | 3 y mean · P(loss) · P(zero) | 10 y p10 / median / p90 | 10 y mean · P(loss) · P(zero) |
+|---|---|---|---|---|---|
+| `INDEX_FUND` | LOW · INDEX | 0.98 / 1.21 / 1.48 | 1.22 · 12 % · 0 % | 1.28 / 1.88 / 2.74 | 1.96 · 2 % · 0 % |
+| `MUNI_BONDS` | LOW · INDEX | 1.06 / 1.16 / 1.25 | 1.16 · 1 % · 0 % | 1.39 / 1.62 / 1.88 | 1.63 · 0 % · 0 % |
+| `RENTAL_DUPLEX` | MED · PROPERTY | 0.78 / 1.23 / 1.84 | 1.27 · 26 % · 3 % | 0.47 / 1.91 / 4.25 | 2.22 · 19 % · 9 % |
+| `CAR_WASH` | MED · BUSINESS | 0.50 / 1.22 / 2.00 | 1.24 · 32 % · 9 % | 0.00 / 1.55 / 4.75 | 2.07 · 37 % · 26 % |
+| `HOMETOWN_GYM` | MED · BUSINESS | 0.54 / 1.19 / 1.90 | 1.21 · 33 % · 9 % | 0.00 / 1.50 / 4.25 | 1.89 · 37 % · 26 % |
+| `BUYOUT_FUND` (NFL, fame ≥ 200) | MED · BUSINESS | 0.60 / 1.31 / 2.12 | 1.34 · 25 % · 9 % | 0.00 / 2.09 / 5.98 | 2.66 · 30 % · 26 % |
+| `WING_JOINT` | HIGH · BUSINESS | 0.00 / 1.20 / 2.81 | 1.39 · 41 % · 14 % | 0.00 / 0.70 / 7.88 | 2.98 · 54 % · 40 % |
+| `MEMORABILIA` | HIGH · BUSINESS | 0.00 / 1.15 / 3.20 | 1.50 · 44 % · 12 % | 0.00 / 0.65 / 9.52 | 3.95 · 56 % · 35 % |
+| `SMOOTHIE_FRANCHISE` | HIGH · BUSINESS | 0.00 / 1.16 / 2.41 | 1.27 · 41 % · 14 % | 0.00 / 0.78 / 6.00 | 2.26 · 53 % · 40 % |
+| `PARKING_APP` (exploit-pass retune: bust 0.30, boom 0.05) | WILD · STARTUP | 0.00 / 0.00 / 1.71 | 0.83 · 85 % · 71 % | 0.00 / 0.00 / 0.00 | 2.22 · 99 % · 98 % |
+| `ROCKET_COIN` (exploit-pass retune: mean 0, bust 0.20) | WILD · CRYPTO | 0.00 / 0.00 / 2.73 | 0.91 · 79 % · 63 % | 0.00 / 0.00 / 0.00 | 0.86 · 98 % · 96 % |
+| `SURE_THING` | WILD · **SCAM** | 0.00 / 0.00 / 0.00 | 0.00 · 100 % · 100 % | 0.00 / 0.00 / 0.00 | 0.00 · 100 % · 100 % |
+
+Tier checks (SPEC §2.14): LOW ten-year medians 1.62–1.88 (≥ 1.5 ✓, ≤ 2 % losses); MED 1.50–2.09 with 19–37 % ten-year
+loss odds; HIGH is a three-year coin flip (41–44 % losses) whose ten-year median is under 1 (0.65–0.78) with a 6–10×
+p90 tail — the "sell after the boom" tier, since nothing has an exit of its own; WILD medians 0 (98–99 % ten-year
+losses, a mean above 1 only for the start-up, carried by the ≈ 2 % that pop); SCAM 0. **The exploit pass** found the
+first WILD models +EV per year (Parking App 1.37, Rocket Coin 1.18 — above every LOW model), and an all-in gambler who
+never sold beat cash in 20 of 30 careers; the retune (Parking App bust 0.25 → 0.30, boom 0.12 → 0.05; Rocket Coin
+mean 0.15 → 0, bust 0.12 → 0.20) puts every WILD model's yearly E[×] under 1 (0.95 / 0.97; `finance.test.js` `[risk]`
+pins the analytic figure and checks it against the tick) — measured over 30 shared seeds the never-sell gambler now
+finishes below cash in 19 of 30 careers and below a 60 %-into-LOW/MED saver in 24 of 30, a gambler who sells after
+every boom is short of the saver in 17 of 30 (p50 0.59 × gross vs the saver's 0.64) though still above plain cash in
+21 of 30 — "a little bit of play" with a real downside, not a money loop. **The all-WILD career** (one $1 stake a
+year for 12 years, ridden to a 13th tick) **loses money 88.8 % of the time** (everything gone 7.7 %; end value p10 /
+median / p90 = 0.14 / 2.44 / 13.46 on $12 in, mean 7.7); the "real risk, real loss" bar (> 50 %) holds with room.
+Departures from the contract's example models, kept on purpose (all in `Data.finance`, trivially retunable): Wing
+Joint bust 0.05 not 0.15 (at 0.15 HIGH was indistinguishable from the WILD start-up), Parking App bust 0.30 / boom
+0.05 / ×8 not 0.45 / 0.10 / ×6 (the contract's shape had a per-year EV of 0.83 with no pop worth the name; the
+content pass's 0.25 / 0.12 / ×8 was the +EV trap the exploit pass caught), duplex 0.01 / car wash and gym 0.03 /
+memorabilia 0.04 / franchise 0.05 busts so MED sits at 19–37 % ten-year losses instead of ~50 %; crypto at mean 0 /
+0.8 / bust 0.20 (the −100 % gauss floor adds ≈ 5 % effective bust a year on top).
+
+### 7.3 Open for the balance pass
+
+- ~~A grace floor for the debt step (§7.1)~~ — done in the exploit pass: `Tuning.finance.debt.grace` 10 ($k × scale);
+  an overdraft no deeper than that is not a debt year. The same pass fixed the forced sale (it fires only once the
+  debt exceeds what could be sold, or after `liquidateAfter` red years, and sells the smallest asset that clears the
+  debt), charges the lifestyle plan at the price quoted when it was picked (a college BALLER is not $1.1M at the first
+  NFL tick) and upkeep off what was paid, and refuses a dearer plan while the bank is red.
+- NFL scale ×10 makes the Sure Thing ask $100–500k and the lake house $5M; a per-league `min` / `max` cap on the
+  pitches (or a smaller scale for the buy-ins than for the purchases) if that reads wrong.
+- ~~The opportunity card prints the holding `kind` next to the pitcher ("A DM · SCAM")~~ — the card now prints a
+  display label (INDEX and SCAM both read FUND).
+- A sale haircut for HIGH / WILD holdings (or a one-year lock after a boom) if the sell-after-the-boom play should
+  cost something: it still beats plain cash in about two careers out of three (never the saver's median).
+- Purchase effect sizes sit at the low end of the contract's ranges (morale 2–8, fame 5–20, fans 1–6, trust ±3);
+  BALLER's trust −3 a year is the only standing meter cost — whether it should bite harder against Coach Trust's
+  long-attempt gate (§2.5.6) is a feel question.
+- Autoplay never touches the books (`finance.test.js` on 3 auto careers, `engine_api`, `integration`), so §3's career
+  tables are unaffected; `finance.test.js`'s `[risk]` row asserts the direction of the tier checks above on 200 seeds
+  (all-WILD loses in > 100 / 200, all-LOW in < 20 / 200 and never to zero). Still open: a 200-career `career_balance`
+  assertion (bank ≥ 0, nothing owned, FRUGAL) and a checked-in `finance_report.js` for the full tables.

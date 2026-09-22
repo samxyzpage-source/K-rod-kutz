@@ -661,3 +661,107 @@ html { overflow-x: hidden; }   /* on html only: it propagates to the viewport, s
 .hsc-header .hsc-stars { color: var(--gold, #f6c445); font-size: max(8px, 0.8em); letter-spacing: 1px; }
 .hsc-header .hsc-ask { white-space: nowrap; }
 .hsc-header .hsc-tally { color: var(--cream, #f4e9d0); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ---------- the money system: hub bank chip + screen 'finances' (SPEC §4.5 finances row) ---------- */
+.chip-warn { background: var(--sunset); color: var(--ink); }          /* HIGH risk: between gold (MED) and red (WILD) */
+body.hc .chip-warn { color: var(--ink); }
+.scr-hub button.hub-bank { cursor: pointer; font: inherit; min-height: 28px; }
+.scr-hub .hub-nav { width: 100%; }
+.scr-hub .hub-nav > .btn { flex: 1 1 auto; }
+
+.scr-finances { padding-bottom: calc(16px + var(--safe-b)); }
+.scr-finances .screen-head .back-btn { flex: 0 0 auto; }
+.scr-finances .fin-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.scr-finances .fin-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 8px; background: var(--navy); border: var(--border) solid var(--ink); }
+.scr-finances .fin-stat b { font-size: 1.1em; line-height: 1.4; overflow-wrap: anywhere; }
+@media (max-width: 419px) { .scr-finances .fin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .scr-finances .fin-stat:first-child { grid-column: 1 / -1; } }
+.scr-finances .fin-debt { display: flex; align-items: center; justify-content: center; gap: 6px; text-align: center; text-transform: none; line-height: 1.6; }
+.scr-finances .fin-fx-key { font-size: 0.85em; letter-spacing: 0.02em; }
+.scr-finances .fin-fx-yearly { border-style: dashed; }
+.scr-finances .fin-sub { margin: 12px 0 4px; }
+.scr-finances .dim { opacity: 0.55; }
+.scr-finances .dim .btn:disabled { opacity: 0.6; }
+.scr-finances .fin-return .chips, .scr-finances .fin-return .row { flex-wrap: nowrap; }
+
+/* lifestyle tiers: 2 × 2 on a phone, a row of four on desktop; the plan is gold, this year's tier is marked NOW */
+.scr-finances .fin-tiers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 900px) { .scr-finances .fin-tiers { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.scr-finances .fin-tier {
+  display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 96px; padding: 8px; margin: 0;
+  text-align: left; font: inherit; color: var(--cream); background: var(--navy); border: var(--border) solid var(--grey);
+  box-shadow: 3px 3px 0 var(--shadow); line-height: 1.5;
+}
+.scr-finances button.fin-tier { cursor: pointer; }
+.scr-finances button.fin-tier:hover { border-color: var(--gold); }
+.scr-finances button.fin-tier:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--shadow); }
+/* a dearer plan while the bank is red: off (the engine refuses it too) */
+.scr-finances button.fin-tier[disabled] { cursor: not-allowed; opacity: 0.55; }
+.scr-finances button.fin-tier[disabled]:hover { border-color: var(--grey); }
+.scr-finances button.fin-tier[disabled]:active { transform: none; box-shadow: 3px 3px 0 var(--shadow); }
+.scr-finances .fin-tier.current { border-color: var(--sky); }
+.scr-finances .fin-tier.selected { border-color: var(--gold); outline: 2px solid var(--gold); outline-offset: -1px; }
+.scr-finances .fin-tier-head { gap: 4px; align-items: flex-start; }
+.scr-finances .fin-tier-name { color: var(--gold); font-size: 0.95em; overflow-wrap: anywhere; }
+.scr-finances .fin-tier-cost { font-size: 0.9em; }
+.scr-finances .fin-tier-fx { gap: 3px; }
+.scr-finances .fin-tier-text { line-height: 1.5; white-space: normal; }
+
+/* services (GAME PLAN) */
+.scr-finances .fin-service { align-items: center; }
+.scr-finances .fin-service.staged { background: var(--navy); margin: 0 -4px; padding: 0 4px; }
+.scr-finances .fin-service-btn { min-width: 6.5em; }
+
+/* big buys: 2 columns on a phone, 3 at tablet width, 4 on desktop */
+.scr-finances .fin-buys { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 600px) { .scr-finances .fin-buys { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 900px) { .scr-finances .fin-buys { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.scr-finances .fin-buy { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 8px; background: var(--navy); border: var(--border) solid var(--ink); line-height: 1.5; }
+.scr-finances .fin-buy.owned { border-color: var(--mint); }
+.scr-finances .fin-buy.staged { border-color: var(--gold); }
+.scr-finances .fin-buy-head { gap: 6px; align-items: flex-start; }
+.scr-finances .fin-buy-icon { flex: 0 0 auto; display: inline-flex; padding: 4px; background: var(--navy-2); border: var(--border) solid var(--ink); color: var(--gold); }
+.scr-finances .fin-buy-name { font-size: 0.9em; overflow-wrap: anywhere; }
+.scr-finances .fin-buy-price { gap: 4px 8px; }
+.scr-finances .fin-buy-fx { gap: 3px; }
+.scr-finances .fin-buy-text { white-space: normal; }
+.scr-finances .fin-buy-foot { margin-top: auto; display: flex; }
+.scr-finances .fin-buy-foot > .btn { width: 100%; }
+
+/* invest: the opportunity cards and the amount stepper */
+.scr-finances .fin-opps { display: flex; flex-direction: column; gap: 8px; }
+.scr-finances .fin-opp { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 8px; background: var(--navy); border: var(--border) solid var(--ink); border-left-width: 4px; }
+.scr-finances .fin-opp.staged { border-color: var(--gold); }
+.scr-finances .fin-opp-head { align-items: flex-start; }
+.scr-finances .fin-opp-name { overflow-wrap: anywhere; line-height: 1.4; }
+.scr-finances .fin-opp-pitch { line-height: 1.7; color: var(--cream); overflow-wrap: anywhere; }
+.scr-finances .fin-opp-act { gap: 8px; margin-top: 2px; }
+.scr-finances .fin-stepper { display: inline-flex; align-items: center; gap: 4px; flex: 1 1 auto; min-width: 0; }
+.scr-finances .fin-stepper .btn { flex: 0 0 auto; min-width: 36px; }
+.scr-finances .fin-amount { flex: 1 1 auto; min-width: 5em; text-align: center; padding: 6px 4px; background: var(--night); border: var(--border) solid var(--ink); color: var(--cream); }
+.scr-finances .fin-opp-act > .btn { flex: 0 0 auto; min-width: 7em; }
+@media (max-width: 419px) { .scr-finances .fin-opp-act > .btn { flex: 1 1 100%; } }
+.scr-finances .fin-holding { align-items: center; }
+.scr-finances .fin-holding.staged { background: var(--navy); margin: 0 -4px; padding: 0 4px; }
+.scr-finances .fin-holding .btn { min-width: 5.5em; }
+.scr-finances .fin-ledger-row { align-items: center; }
+
+/* the draft footer: sticky above the tab bar (phone) / the window edge (desktop), never under the safe area */
+.scr-finances .fin-footer {
+  position: sticky; bottom: calc(var(--tabbar-h) + 8px + var(--safe-b)); z-index: 20;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 10px; margin-top: 4px;
+  background: var(--navy-2); border: var(--border) solid var(--gold); box-shadow: 3px 3px 0 var(--shadow);
+}
+.scr-finances .fin-footer.over { border-color: var(--red); }
+.scr-finances .fin-footer-sum { flex: 1 1 8em; line-height: 1.3; }
+.scr-finances .fin-footer-sum b { font-size: 1.2em; }
+.scr-finances .fin-footer-btns { display: flex; gap: 8px; flex: 1 1 auto; justify-content: flex-end; flex-wrap: wrap; margin-top: 0; }
+.scr-finances .fin-footer-btns > .btn-primary { flex: 1 1 auto; }
+html.is-landscape .scr-finances .fin-footer { bottom: calc(40px + 8px + var(--safe-b)); }
+@media (min-width: 900px) { .scr-finances .fin-footer { bottom: 8px; } }
+.scr-finances .fin-actions > .btn { flex: 1 1 auto; }
+@media (pointer: coarse) and (min-height: 500px) {
+  .scr-hub button.hub-bank { min-height: var(--touch); min-width: var(--touch); justify-content: center; }
+  .scr-finances .fin-stepper .btn { min-width: var(--touch); }
+  .scr-finances .fin-holding .btn, .scr-finances .fin-service-btn, .scr-finances .fin-opp-act > .btn { min-height: var(--touch); }
+}

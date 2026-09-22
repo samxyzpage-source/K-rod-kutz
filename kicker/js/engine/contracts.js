@@ -679,6 +679,11 @@
       var gtdTotal = c.aav * c.years * (c.gtdPct || 0);
       dead = Math.max(0, round1(gtdTotal - (c.paid || 0)));
       state.history.earnings = round1(state.history.earnings + dead);
+      // the take-home of the dead money reaches the bank (RTG.Finance, 0 draws)
+      if (dead > 0 && RTG.Finance && typeof RTG.Finance.deposit === 'function') {
+        var TF = Tuning.finance || {}, share = TF.takeHome && typeof TF.takeHome.NFL === 'number' ? TF.takeHome.NFL : 1;
+        RTG.Finance.deposit(state, Math.round(dead * K_PER_M * share), 'INCOME', 'Guaranteed money paid out, after tax and agent');
+      }
       var rec = openContractRecord(state);
       if (rec) { rec.endYear = state.year; rec.reason = reason || 'CUT'; rec.deadMoney = dead; }
     }

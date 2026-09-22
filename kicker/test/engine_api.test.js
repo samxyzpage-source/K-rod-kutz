@@ -317,8 +317,39 @@ test('autoPlayCareer reaches the requested stage, then RETIRED.LEGACY with a val
   assert.equal(a.state.stage, 'RETIRED'); assert.equal(a.state.phase, 'LEGACY'); assert.equal(a.state.pending, null, 'the HOF card is acknowledged');
   assert.ok(a.state.history.seasons.filter((s) => s.league === 'NFL').length >= 1, 'at least one NFL season');
   assert.ok(a.state.flags.legacy && typeof a.state.flags.legacy.score === 'number');
+  // the books: every offseason closed them unspent (the FINANCES default is DONE), the take-home landed in the bank
+  const fin = a.state.finance;
+  assert.ok(fin && Number.isInteger(fin.bank) && fin.lastTick > 0, 'the money system ran through the career');
+  assert.deepEqual(J(fin.owned), []); assert.deepEqual(J(fin.holdings), []); assert.equal(fin.totals.invested, 0);
+  assert.ok(fin.totals.earned > 0 && fin.ledger.some((l) => l.kind === 'INCOME'), 'a career earns take-home');
+  assert.equal(RTG.Finance.netWorth(a.state), fin.bank, 'nothing owned, nothing held: net worth is the bank');
   ok(a.state, 'retired'); clean(a.state, 'retired');
   assert.ok(Date.now() - t0 < 60000, 'a whole career in well under a minute');
+});
+
+test('the FINANCES step: autoOption picks DONE (first option), settlePending closes the books with no actions, decide with extra passes the staged actions to Finance.apply', () => {
+  const ffx = require('./fixtures/finance');
+  const r = ffx.financesPending(RTG, { bank: 200 });
+  assert.equal(r.state.pending.decision.kind, 'FINANCES');
+  assert.equal(Engine.autoOption(r.state, r.state.pending.decision), 'DONE');
+  const bank = r.state.finance.bank;
+  const log = Engine.settlePending(r.state, r.rng, { max: 1 });
+  assert.equal(log[0].kind, 'DECISION'); assert.equal(log[0].decision, 'FINANCES'); assert.equal(log[0].optionId, 'DONE');
+  assert.equal(r.state.finance.bank, bank, 'unattended: nothing spent');
+  ok(r.state, 'settled');
+  const s = ffx.financesPending(RTG, { bank: 200 });
+  const price = RTG.Data.finance.purchasesById.GOLF_CART.price;
+  const out = Engine.decide(s.state, s.rng, { kind: 'FINANCES', optionId: 'DONE', extra: { buy: ['GOLF_CART'], lifestyle: 'COMFORTABLE' } });
+  assert.equal(out.kind, 'FINANCES'); assert.equal(out.optionId, 'DONE');
+  assert.deepEqual(J(out.result.applied.map((x) => x.what)), ['lifestyle', 'buy']);
+  assert.equal(out.result.bankAfter, s.state.finance.bank);
+  assert.deepEqual(J(s.state.finance.owned), ['GOLF_CART']); assert.equal(s.state.finance.lifestyle, 'COMFORTABLE');
+  assert.equal(s.state.finance.bank, 200 + s.income - price);
+  assert.equal(s.state.rngState, s.rng.state(), 'the facade syncs the rng state');
+  ok(s.state, 'closed with actions');
+  // the default option when none is given is DONE as well
+  const d = ffx.financesPending(RTG, { bank: 50 });
+  assert.equal(Engine.decide(d.state, d.rng, { kind: 'FINANCES' }).optionId, 'DONE');
 });
 
 // ═══════════════════════════════ save / load ═══════════════════════════════

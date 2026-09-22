@@ -727,3 +727,36 @@ test('QA1-03: college AI kickers are 18–22 at creation (NFL 22–36) and leave
   assert.ok(after.every((a) => a < K.college.leaveAge), 'nobody older than the eligibility limit after the tick (max ' + Math.max.apply(null, after) + ')');
   ok(st, 'college year 2');
 });
+
+// ═══════════════════════════════ the money system's services ═══════════════════════════════
+
+test('Season.start turns the services bought in the offseason into one-season mods (trainMult / injury / pressure, source finance) and clears finance.services; finishSeason expires them', () => {
+  const state = enrol(RTG, 'COLLEGE', { seed: 15 });
+  const rng = RTG.RNG.create(15);
+  const F = RTG.Finance, S = Tuning.finance.services;
+  F.init(state);
+  state.finance.services = ['PRIVATE_COACH', 'PHYSIO', 'PSYCH'];
+  const p = state.player, xp0 = p.xp;
+  Season.start(state, rng);
+  deq(state.finance.services, [], 'consumed by the season start');
+  const mine = p.mods.filter((m) => m.source === 'finance');
+  deq(mine.map((m) => m.key).sort(), ['injury', 'pressure', 'trainMult']);
+  assert.equal(RTG.Player.modValue(p, 'trainMult', 'mul'), S.coachTrainMult);
+  assert.equal(RTG.Player.modValue(p, 'injury', 'mul'), S.physioInjury);
+  assert.equal(RTG.Player.modValue(p, 'pressure', 'add'), S.psychPressure);
+  assert.ok(mine.every((m) => m.expires.type === 'season' && m.expires.at === state.year), 'one season');
+  assert.equal(p.xp, xp0 + S.coachXp, 'the coach grants XP when the season opens');
+  while (state.pending) settle(RTG, state, rng);          // camp battle (Career loaded) → auto kicks
+  Season.beginRegular(state, rng);
+  Season.simUserGameAuto(state, rng);
+  Season.endWeek(state, rng);
+  assert.equal(p.mods.filter((m) => m.source === 'finance').length, 3, 'still on through the season');
+  Season.finishSeason(state, rng);
+  assert.equal(p.mods.filter((m) => m.source === 'finance').length, 0, 'gone at the season close');
+  ok(state, 'after a season with services');
+  // nothing booked: Season.start leaves the mods alone
+  const plain = enrol(RTG, 'COLLEGE', { seed: 16 });
+  F.init(plain);
+  Season.start(plain, RTG.RNG.create(16));
+  assert.equal(plain.player.mods.filter((m) => m.source === 'finance').length, 0);
+});

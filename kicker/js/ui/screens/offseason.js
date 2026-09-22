@@ -18,8 +18,8 @@
   function C() { return RTG.UI.C; }
   function K() { return RTG.UI.Kit; }
 
-  var STEP_NAMES = { BODY_CHECK: 'BODY', TRAINING_BLOCKS: 'TRAINING', REDSHIRT: 'REDSHIRT', TRANSFER: 'PORTAL', EVENT: 'EVENT', DECLARE: 'DECLARE', CUT_NOTICE: 'ROSTER', EXTENSION: 'EXTENSION', REDRAFT: 'DRAFT', FREE_AGENCY: 'FREE AGENCY', RETIRE: 'RETIRE?' };
-  var TITLES = { BODY_CHECK: 'BODY CHECK', TRAINING_BLOCKS: 'TRAINING BLOCKS', REDSHIRT: 'REDSHIRT?', DECLARE: 'DECLARE FOR THE DRAFT?', TRANSFER: 'TRANSFER PORTAL', RETIRE: 'ONE MORE YEAR?', OFFSEASON_PLAN: 'OFFSEASON PLAN', CAMP: 'CAMP BATTLE AHEAD', COMBINE_PLAN: 'COMBINE PLAN' };
+  var STEP_NAMES = { BODY_CHECK: 'BODY', TRAINING_BLOCKS: 'TRAINING', FINANCES: 'MONEY', REDSHIRT: 'REDSHIRT', TRANSFER: 'PORTAL', EVENT: 'EVENT', DECLARE: 'DECLARE', CUT_NOTICE: 'ROSTER', EXTENSION: 'EXTENSION', REDRAFT: 'DRAFT', FREE_AGENCY: 'FREE AGENCY', RETIRE: 'RETIRE?' };
+  var TITLES = { BODY_CHECK: 'BODY CHECK', TRAINING_BLOCKS: 'TRAINING BLOCKS', FINANCES: 'THE BOOKS', REDSHIRT: 'REDSHIRT?', DECLARE: 'DECLARE FOR THE DRAFT?', TRANSFER: 'TRANSFER PORTAL', RETIRE: 'ONE MORE YEAR?', OFFSEASON_PLAN: 'OFFSEASON PLAN', CAMP: 'CAMP BATTLE AHEAD', COMBINE_PLAN: 'COMBINE PLAN' };
 
   function factory(store, params) {
     var c = C(), Kit = K(), R = RTG.UI.Router;
@@ -160,10 +160,19 @@
       return c.card({ title: TITLES[dec.kind] || dec.kind.replace(/_/g, ' '), kind: 'gold', body: body, footer: optionButtons(dec) });
     }
 
+    /** The MONEY step lives on its own screen (Router.resolve → 'finances'); this card is only a door to it. */
+    function financesCard(state, dec) {
+      var pl = dec.payload || {}, fin = state.finance || {};
+      var bank = typeof pl.bank === 'number' ? pl.bank : (typeof fin.bank === 'number' ? fin.bank : 0);
+      var body = [c.el('p', { class: 'small' }, 'The offseason is when the money moves: the year’s pay is in, the lifestyle and the upkeep are due, and the pitches are waiting. Bank ', c.el('strong', { class: 'num ' + (bank < 0 ? 'txt-red' : 'txt-gold'), text: Kit.money ? Kit.money(bank) : String(bank) }), '.')];
+      return c.card({ title: TITLES.FINANCES, kind: 'gold', icon: 'money', body: body, footer: [c.button({ label: 'OPEN THE BOOKS', kind: 'primary', block: true, icon: 'money', action: 'open-books', onClick: function () { R.go('finances'); } })] });
+    }
+
     function decisionCard(state, dec) {
       switch (dec.kind) {
         case 'BODY_CHECK': return bodyCheck(state, dec);
         case 'TRAINING_BLOCKS': return trainingBlocks(state, dec);
+        case 'FINANCES': return financesCard(state, dec);
         case 'DECLARE': return declareCard(state, dec);
         case 'TRANSFER': return transferCard(state, dec);
         case 'RETIRE': return retireCard(state, dec);

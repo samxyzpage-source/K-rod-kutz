@@ -139,6 +139,11 @@ test('migration: fixtures/save_v0.json (older shape) upgrades to the current ver
   assert.equal(st.leagues.college.teams[2].kicker2.seasonStats.fga, 0);
   assert.ok(st.flags && st.settings && Array.isArray(st.recentEventIds));
   assert.equal(st.player.name.full, blob.career.player.name.full);
+  // v1 → v2 (the money system) ran too: a finance block seeded from the career earnings to date
+  assert.ok(st.finance && st.finance.lifestyle === 'FRUGAL' && Array.isArray(st.finance.ledger), 'a finance block after the migration');
+  assert.equal(st.finance.bank, Math.round(st.history.earnings * 1000 * Tuning.finance.migrateShare), 'the bank is seeded from the earnings to date');
+  assert.equal(st.finance.ledger.length, st.finance.bank > 0 ? 1 : 0);
+  if (st.finance.bank > 0) { assert.equal(st.finance.ledger[0].kind, 'INCOME'); assert.equal(st.finance.ledger[0].label, 'Career to date'); }
   assert.equal(blob.v, 0, 'the input blob is not mutated');
   // migrate() alone re-checksums the upgraded blob so it can be saved back
   const m = Save.migrate(JSON.parse(JSON.stringify(blob)));

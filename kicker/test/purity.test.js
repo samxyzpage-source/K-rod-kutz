@@ -157,7 +157,7 @@ test('every file parses on its own (syntax) and the engine loads without throwin
 
 /** §3.5 namespaces and their binding functions, checked only for delivered files. */
 const CONTRACT = {
-  'engine/tuning': { ns: 'Tuning', keys: ['kick', 'sim', 'progression', 'soft', 'contracts', 'draft', 'hs', 'hof', 'difficulty', 'save', 'events'] },
+  'engine/tuning': { ns: 'Tuning', keys: ['kick', 'sim', 'progression', 'soft', 'contracts', 'draft', 'hs', 'hof', 'difficulty', 'save', 'events', 'finance'] },
   'engine/util': { ns: 'Util', fns: ['clamp', 'lerp', 'round1', 'sum', 'mean', 'indexBy', 'deepClone', 'fnv1a', 'erf', 'phi', 'fmtMoney', 'fmtPct', 'fmtClock', 'ordinal', 'template', 'pad', 'assert'] },
   'engine/rng': { ns: 'RNG', fns: ['create'] },
   'engine/schema': { ns: 'Schema', fns: ['createCareer', 'createTeam', 'createGameState', 'createKickLogRow', 'emptyKickerStats', 'validate', 'reindex'] },
@@ -169,6 +169,7 @@ const CONTRACT = {
   'data/awards': { ns: 'Data.awards', type: 'any' },
   'data/events': { ns: 'Data.events', type: 'any' },
   'data/headlines': { ns: 'Data.headlines', type: 'any' },
+  'data/finance': { ns: 'Data.finance', type: 'object' },
   'engine/names': { ns: 'Names', fns: ['player', 'coach', 'reporter', 'legend', 'hometown', 'unique'] },
   'engine/weather': { ns: 'Weather', fns: ['forGame', 'perKick', 'monthFor'] },
   'engine/player': { ns: 'Player', fns: ['create', 'ovr', 'fameTier', 'ageMult', 'costToRaise', 'spendXp', 'applyTraining', 'weeklyTick', 'updateJobSecurity', 'applyKickMeters', 'ageTick', 'rollInjury', 'addMod', 'expireMods', 'modValue', 'effectiveAttrs'] },
@@ -184,6 +185,7 @@ const CONTRACT = {
   'engine/season': { ns: 'Season', fns: ['start', 'beginRegular', 'userGameRef', 'simOtherGames', 'endWeek', 'startPostseason', 'postseasonWeek', 'finishSeason', 'offseason', 'advanceYear'] },
   'engine/career': { ns: 'Career', fns: ['starsFor', 'afterSessionKick', 'generateCollegeOffers', 'decide', 'campBattle', 'finishSession', 'offseasonChain', 'changeTeam', 'handleActions', 'enterDraft', 'runDraft', 'enterNfl', 'retire', 'stageInfo'] },
   'engine/hs': { ns: 'HS', fns: ['season', 'startGame', 'afterKick', 'finishGame', 'finishSeason', 'ratingOf', 'tierOf', 'inSeason', 'current', 'camps', 'inCamps', 'nextCamp', 'askOf', 'startCamp', 'judgeCamp', 'finishCamp', 'finishCamps'] },
+  'engine/finance': { ns: 'Finance', fns: ['init', 'deposit', 'charge', 'netWorth', 'scale', 'tick', 'opportunities', 'decision', 'apply', 'summary', 'applyServices'] },
   'engine/save': { ns: 'Save', fns: ['serialize', 'deserialize', 'migrate', 'exportString', 'importString', 'slotSummary'] },
   'engine/api': { ns: 'Engine', fns: ['newCareer', 'train', 'spendXp', 'startUserGame', 'simStep', 'simToKick', 'applyUserKick', 'autoKick', 'applyUserKickoff', 'finishUserGame', 'endWeek', 'chooseEvent', 'sessionKick', 'decide', 'nextPhase', 'autoPlayGame', 'autoPlayWeek', 'autoPlaySeason', 'autoPlayOffseason', 'autoPlayCareer', 'save', 'load', 'settlePending', 'markRead', 'hsStartGame', 'hsStartCamp'] }
 };

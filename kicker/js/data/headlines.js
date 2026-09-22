@@ -4,6 +4,9 @@
  * RTG.Data.headlines : [{id, tags:[...], w?, cond?:fn(ctx)→bool, text}]   (≥ 160)
  *   Slots: {name} {first} {last} {team} {nick} {opp} {city} {dist} {pct} {coach} {rival} {week}
  *          {score} {year} {age} {agent} {line} {n} {award} {money} {years} {round} {pick}
+ *          money pool (Finance.tick: bust / boom / forced sale): {name} is the HOLDING's name there, {money} the $k
+ *          moved (a number → Util.fmtMoney), {pct} a signed string ('+500 %' / '-100 %'); vars.event, when a caller
+ *          passes one ('bust'|'boom'|'liquidation'), gates the lines; otherwise the sign of {pct} / the fallback text does.
  *   cond receives the render ctx: the caller's vars merged with state facts
  *          {league, stage, phase, year, week, age, clu, fame, fans, trust, role, nflSeasons, collegeSeasons,
  *           weather, dist, made, iced, playoff, rivalry, snow, rookie, walkon}
@@ -45,6 +48,16 @@
   var isShort = function (c) { return Number(c.dist) > 0 && Number(c.dist) < 35; };
   var isOld = function (c) { return Number(c.age) >= 34; };
   var isWindy = function (c) { return Number(c.windSpeed) >= 15; };
+  /** money pool: what Finance.tick is reporting — an explicit vars.event, else the fallback text / the sign of {pct}. */
+  function moneyEvent(c) {
+    if (c.event) return c.event;
+    if (/overdraft|forced sale/i.test(String(c.text || ''))) return 'liquidation';
+    var s = String(c.pct || '').charAt(0);
+    return s === '+' ? 'boom' : (s === '-' ? 'bust' : null);
+  }
+  var isBoom = function (c) { return moneyEvent(c) === 'boom'; };
+  var isBust = function (c) { return moneyEvent(c) === 'bust'; };
+  var isForcedSale = function (c) { return moneyEvent(c) === 'liquidation'; };
 
   var headlines = [
     // ── postgame_win (13)
@@ -338,7 +351,21 @@
     h('re1', 'retire', 'RETIRED: {last} hangs up the boot after {n} seasons; the boot "relieved"'),
     h('re2', 'retire', 'FAREWELL: {last} kicks his last as {team} say goodbye to a {n}-year leg'),
     h('re3', 'retire', 'Hall call: {last} elected to the Hall of Fame; punters "still waiting"', { cond: function (c) { return !!c.hof; } }),
-    h('re4', 'retire', 'The debate rages on: {last} falls short of the Hall, again; his mom "writing letters"', { cond: function (c) { return !!c.finalist; } })
+    h('re4', 'retire', 'The debate rages on: {last} falls short of the Hall, again; his mom "writing letters"', { cond: function (c) { return !!c.finalist; } }),
+
+    // ── money (12) — Finance.tick: a bust, a boom or a forced sale. {name} = the holding, {money} = $ moved, {pct} signed
+    h('mo1', 'money', 'GONE: {last}\'s {name} money is now {name} memories; {money} vanishes, agent "was not consulted"', { cond: isBust }),
+    h('mo2', 'money', '{last} learns what "illiquid" means as {name} goes to zero; teammates "also in, also quiet"', { cond: isBust }),
+    h('mo3', 'money', 'ZERO: {last}\'s {name} stake is now worth exactly what the pitch was: nothing', { cond: isBust }),
+    h('mo4', 'money', '{name} folds and takes {money} of {last}\'s with it; {last} "still has the leg, checked"', { cond: isBust }),
+    h('mo5', 'money', 'WIRED, THEN WEIRD: {last}\'s {name} contact stops answering; {money} "in transit", forever', { cond: isBust }),
+    h('mo6', 'money', 'JACKPOT: {last}\'s {name} bet pays {pct}; agent "suddenly very interested in finance"', { cond: isBoom }),
+    h('mo7', 'money', '{last} up {money} on {name} overnight; holder "asking about opportunities"', { cond: isBoom }),
+    h('mo8', 'money', 'MONEY LEG: {name} comes in {pct} for {last}, who "did not read the paperwork either"', { cond: isBoom }),
+    h('mo9', 'money', '{name} {pct}: {last} "knew all along", per {last}, per nobody else', { cond: isBoom }),
+    h('mo10', 'money', 'THE BANK CALLS: {last} forced to sell {name} to cover the overdraft; teammates "chipping in, sort of"', { cond: isForcedSale }),
+    h('mo11', 'money', 'REPO LEG: {last}\'s {name} goes under the hammer for {money}; lifestyle "downgraded to rice"', { cond: isForcedSale }),
+    h('mo12', 'money', 'FINANCIAL NEWS: {last}\'s {name} position moves {pct}; {last} "will let the accountant explain it"')
   ];
 
   // ───────────────────────────── inbox messages ─────────────────────────────

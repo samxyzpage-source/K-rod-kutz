@@ -368,6 +368,8 @@
   /**
    * Modal dialog with a focus trap. buttons: [{label, kind, onClick(close), close?:false, icon}] — a button closes the
    * modal after onClick unless `close === false`. closable (default true) adds the ✕ and Escape/backdrop closing.
+   * Focus: `o.focus` (a selector) wins; else a closable modal focuses its first control and a non-closable one (an
+   * EVENT) the dialog itself, so a key press that just closed the previous step never answers it unread.
    * @returns {{el:HTMLElement, close:function, body:HTMLElement}}
    */
   C.modal = function (o) {
@@ -432,7 +434,10 @@
     modalRoot().appendChild(backdrop);
     var focusables = box.querySelectorAll(FOCUSABLE);
     var target = o.focus ? box.querySelector(o.focus) : null;
-    if (!target) { target = focusables.length ? focusables[o.title && closable && focusables.length > 1 ? 1 : 0] : box; }
+    // a modal that cannot be dismissed (an EVENT) opens with the focus on the dialog itself, not on its first choice:
+    // the key press that closed the previous step (Enter / Space on CLOSE THE BOOKS, a decision button) must not
+    // answer the event unread — the player Tabs to the choices. A closable modal focuses its first control as before.
+    if (!target) { target = !closable ? box : (focusables.length ? focusables[o.title && closable && focusables.length > 1 ? 1 : 0] : box); }
     if (target === box) box.setAttribute('tabindex', '-1');
     try { target.focus(); } catch (e) { /* ignore */ }
     return handle;

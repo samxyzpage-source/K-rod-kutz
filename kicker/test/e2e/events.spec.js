@@ -39,6 +39,13 @@ H.matrix(({ mode, vp }) => {
       // Escape must not close an event modal
       await page.keyboard.press('Escape');
       assert.equal(await page.locator('.styled-event').count(), 1, 'event modal is not closable');
+      // the modal opens with the focus on the dialog itself, never on a choice: the key that closed the previous step
+      // (Enter / Space on CLOSE THE BOOKS or a decision button) must not answer the event unread; Tab reaches choice 0
+      assert.ok(await page.evaluate(() => { const a = document.activeElement; return !!a && a.getAttribute('role') === 'dialog' && a.classList.contains('styled-event'); }), 'focus rests on the dialog, not a choice');
+      await page.keyboard.press('Enter');
+      assert.equal(await page.locator('.styled-event').count(), 1, 'a stray Enter answers nothing');
+      await page.keyboard.press('Tab');
+      assert.ok(await page.evaluate(() => !!document.activeElement.closest('.styled-event')), 'Tab stays inside the modal');
       await buttons.nth(0).click();
       await page.waitForFunction(() => document.querySelectorAll('.styled-event').length === 0);
       const st = await H.debug(page, 'getState');

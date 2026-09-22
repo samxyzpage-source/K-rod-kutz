@@ -482,6 +482,38 @@
     return blob;
   };
 
+  /**
+   * v1 → v2: the money system (state.finance, engine/finance.js). A fresh block through Finance.init, then the bank
+   * is seeded with Tuning.finance.migrateShare of the career's gross earnings to date (history.earnings, $M → $k) as
+   * one INCOME ledger row 'Career to date' stamped year 0 (it is money from before the books, not this year's
+   * take-home — the FINANCES card sums this year's INCOME rows) — an old career does not start broke. A save taken in
+   * the middle of an offseason keeps its persisted step list, so 'FINANCES' is spliced in after 'TRAINING_BLOCKS'
+   * when the chain has not passed that point yet (mirrors Career.stepsFor); a chain already past it is left alone.
+   * Runs on the packed career (before unpack); `finance` is never packed, so it is written as a plain object.
+   * @param {Object} blob @returns {Object}
+   */
+  Save.migrations[1] = function (blob) {
+    var c = blob.career;
+    if (!isObj(c)) return blob;
+    var F = RTG.Finance;
+    if (!F || typeof F.init !== 'function') return blob;      // partial load (tests): validate reports the missing block
+    if (!isObj(c.finance)) {
+      delete c.finance;
+      F.init(c);
+      var TF = Tuning.finance || {};
+      var earned = c.history && typeof c.history.earnings === 'number' ? c.history.earnings : 0;
+      var share = typeof TF.migrateShare === 'number' ? TF.migrateShare : 0.5;
+      var seed = Math.round(earned * 1000 * share);
+      if (seed > 0) F.deposit(c, seed, 'INCOME', 'Career to date').year = 0;
+    }
+    var ch = c.flags && isObj(c.flags.offseason) ? c.flags.offseason : null;
+    if (ch && Array.isArray(ch.steps) && ch.steps.indexOf('FINANCES') < 0) {
+      var tb = ch.steps.indexOf('TRAINING_BLOCKS');
+      if (tb >= 0 && (typeof ch.idx !== 'number' || ch.idx <= tb + 1)) ch.steps.splice(tb + 1, 0, 'FINANCES');
+    }
+    return blob;
+  };
+
   // ═══════════════════════════════ base64 (UTF-8 safe) ═══════════════════════════════
 
   /** UTF-8 encode a string into an array of byte values. */

@@ -295,6 +295,12 @@ test('(b) autoPlayCareer seeds 1..5 reach RETIRED with JSON-safe, valid states t
     scanBad(state, bad, 'state', 0);
     assert.deepEqual(bad, [], 'seed ' + seed + ': NaN / undefined / functions in state: ' + bad.join(', '));
     validate(state, 'seed ' + seed + ' final state');
+    // the money system rode along: integer bank, take-home on the ledger, nothing bought or held (autoplay closes the books unspent)
+    const fin = state.finance;
+    assert.ok(fin && Number.isInteger(fin.bank) && fin.totals.earned > 0 && fin.lastTick > 0, 'seed ' + seed + ': the books ran');
+    assert.deepEqual(fin.owned.concat(fin.holdings), [], 'seed ' + seed + ': autoplay never spends');
+    assert.equal(fin.bank, fin.totals.earned - fin.totals.spent, 'seed ' + seed + ': bank = earned − spent');
+    assert.ok(isFinite(RTG.Finance.netWorth(state)) && fin.ledger.length <= RTG.Tuning.finance.ledgerCap, 'seed ' + seed + ': net worth and ledger cap');
     assert.ok(state.flags.legacy || state.history.timeline.some((e) => e.kind === 'RETIRED' || /retire/i.test(e.text)), 'seed ' + seed + ': a retirement record');
     const hof = RTG.Awards.hofScore(state);
     assert.ok(typeof hof.score === 'number' && isFinite(hof.score) && hof.verdict, 'seed ' + seed + ': a HOF verdict');
@@ -344,7 +350,7 @@ test('(e) determinism: the same seed and difficulty produce identical final stat
   const a = careers.get(1) || runCareer(1, false);
   const b = runCareer(1, false);
   assert.equal(b.rng.state(), a.rng.state(), 'identical rng state');
-  const pick = (s) => ({ stats: s.stats, seasons: s.history.seasons, awards: s.history.awards, earnings: s.history.earnings, teams: s.history.teams, player: s.player, year: s.year, records: s.records });
+  const pick = (s) => ({ stats: s.stats, seasons: s.history.seasons, awards: s.history.awards, earnings: s.history.earnings, teams: s.history.teams, player: s.player, year: s.year, records: s.records, finance: s.finance });
   const diff = Util.deepDiff(JSON.parse(JSON.stringify(pick(b.state))), JSON.parse(JSON.stringify(pick(a.state))));
   assert.equal(diff, '', 'careers differ at ' + diff);
   const full = Util.deepDiff(canon(b.state), canon(a.state));

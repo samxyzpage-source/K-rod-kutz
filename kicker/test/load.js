@@ -28,11 +28,11 @@ const ORDER = [
   '00_namespace',
   'engine/tuning', 'engine/util', 'engine/rng', 'engine/schema',
   'data/blocklist', 'data/names', 'data/colleges', 'data/nfl', 'data/records',
-  'data/awards', 'data/events', 'data/headlines',
+  'data/awards', 'data/events', 'data/headlines', 'data/finance',
   'engine/names', 'engine/weather', 'engine/player', 'engine/kick',
   'engine/schedule', 'engine/standings', 'engine/sim',
   'engine/stats', 'engine/awards', 'engine/events', 'engine/contracts', 'engine/draft',
-  'engine/season', 'engine/career', 'engine/hs',
+  'engine/season', 'engine/career', 'engine/hs', 'engine/finance',
   'engine/save', 'engine/api',
 ];
 

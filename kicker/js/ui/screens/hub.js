@@ -57,6 +57,9 @@
   /** Tooltip helper honouring the settings (C.tooltip already does); returns the element. */
   Kit.tip = function (el, text) { if (el && text) C().tooltip(el, text); return el; };
 
+  /** Bank money ($k, the finance block's unit) as text: '$30k' / '$1.5M' / '-$40k' (Util.fmtMoney takes $M). */
+  Kit.money = function (k) { return C().fmt.money(num(k) / 1000); };
+
   /** A tabular number with a tooltip. */
   Kit.numEl = function (text, tipText, cls) {
     var e = C().el('span', { class: 'num' + (cls ? ' ' + cls : ''), text: String(text) });
@@ -580,9 +583,23 @@
       var chips = c.el('div', { class: 'chips mt-1 hub-chips' },
         Kit.tip(c.chip(Kit.fameTier(p.fame), 'gold', 'star'), 'Fame ' + Math.round(p.fame) + ' / 1000 — tiers at 100 / 250 / 500 / 800'),
         Kit.tip(c.el('button', { type: 'button', class: 'chip chip-sky hub-xp', 'aria-label': 'XP ' + p.xp + ', open training', onClick: function () { R.go('training'); } }, c.icon('bolt', 10), ' XP ' + p.xp), 'Unspent XP — tap to train'),
-        Kit.tip(c.chip(c.fmt.money(num(state.history && state.history.earnings)), 'grey', 'money'), 'Career earnings'),
+        Kit.tip(c.chip(c.fmt.money(num(state.history && state.history.earnings)), 'grey', 'money'), 'Career earnings (gross, before tax and the agent)'),
         p.injury ? null : (p.flags && p.flags.rested ? Kit.tip(c.chip('RESTED', 'mint', 'heart'), 'Injury chance halved next game') : null));
-      return c.card({ title: 'METERS', kind: 'flat', body: [meters, chips] });
+      // the hub's navigation row: the screens that have no tab of their own
+      var nav = c.el('div', { class: 'btn-row hub-nav' },
+        c.button({ label: 'FINANCES', kind: 'ghost', icon: 'money', action: 'finances', onClick: function () { R.go('finances'); } }));
+      return c.card({ title: 'METERS', kind: 'flat', body: [meters, chips], footer: nav });
+    }
+
+    /** The bank chip in the hub head (the finance block's $k), red when in debt; tap → the finances screen. */
+    function bankChip(state) {
+      var fin = state.finance;
+      if (!fin || typeof fin.bank !== 'number') return null;
+      var bank = fin.bank;
+      var nw = null;
+      if (RTG.Finance && isFn(RTG.Finance.netWorth)) { try { nw = RTG.Finance.netWorth(state); } catch (e) { nw = null; } }
+      var chip = c.el('button', { type: 'button', class: 'chip hub-bank ' + (bank < 0 ? 'chip-red' : 'chip-gold'), 'data-action': 'bank', 'aria-label': 'Bank ' + Kit.money(bank) + ', open finances', onClick: function () { R.go('finances'); } }, c.icon('money', 10), ' ' + Kit.money(bank));
+      return Kit.tip(chip, 'Bank ' + Kit.money(bank) + (typeof nw === 'number' ? ' · net worth ' + Kit.money(nw) : '') + (bank < 0 ? ' · IN DEBT' : '') + ' — tap to open the books');
     }
 
     function inboxCard(state) {
@@ -607,7 +624,7 @@
       if (!state) { c.replace(el, c.card({ body: c.el('p', { text: 'No career loaded.' }), footer: [c.button({ label: 'TITLE', kind: 'primary', onClick: function () { R.go('title'); } })] })); return; }
       var parts = [];
       var head = c.el('header', { class: 'screen-head' }, c.el('h1', { class: 'screen-title', text: state.stage === 'NFL' ? 'PRO' : (state.stage === 'COLLEGE' ? 'COLLEGE' : state.stage) }),
-        c.el('div', { class: 'screen-head-right small txt-grey' }, c.el('span', { class: 'num', text: c.fmt.week(state) + ' · ' + Kit.calYear(state.year) })));
+        c.el('div', { class: 'screen-head-right small txt-grey' }, bankChip(state), c.el('span', { class: 'num', text: c.fmt.week(state) + ' · ' + Kit.calYear(state.year) })));
       parts.push(head);
       parts.push(teamBar(state));
       parts = parts.concat(banners(state));

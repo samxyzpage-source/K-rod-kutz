@@ -34,8 +34,13 @@
       var pl = dec ? dec.payload : (state.flags && state.flags.legacy) || {};
       var hof = null;
       try { hof = RTG.Awards && RTG.Awards.hofScore ? RTG.Awards.hofScore(state) : null; } catch (e) { hof = null; }
+      var fin = pl.finance && typeof pl.finance === 'object' ? pl.finance : null;
+      if (!fin && RTG.Finance && typeof RTG.Finance.summary === 'function' && state.finance) { try { fin = RTG.Finance.summary(state); } catch (e) { fin = null; } }
+      var netWorth = typeof pl.netWorth === 'number' ? pl.netWorth : (fin && typeof fin.netWorth === 'number' ? fin.netWorth : null);
       return {
         pending: !!dec,
+        finance: fin,
+        netWorth: netWorth,
         score: typeof pl.score === 'number' ? pl.score : (hof ? hof.score : 0),
         verdict: pl.verdict || (hof ? hof.verdict : 'NOT_ON_BALLOT'),
         tier: pl.tier || (hof ? hof.tier : ''),
@@ -88,7 +93,7 @@
       return [note, tbl];
     }
 
-    function careerCard(state) {
+    function careerCard(state, rep) {
       var line = null;
       try { line = RTG.Stats.careerLine(state); } catch (e) { line = null; }
       if (!line) return null;
@@ -101,9 +106,30 @@
         ['GAME-WINNERS', Kit.numEl(String(line.gameWinners), 'Game-winning kicks')],
         ['SEASONS', Kit.numEl(line.seasons + ' (' + line.collegeSeasons + ' college · ' + line.nflSeasons + ' pro)', 'Seasons played')],
         ['GAMES', Kit.numEl(String(line.games), 'Games played')],
-        ['EARNINGS', Kit.numEl(c.fmt.money(Kit.num(state.history.earnings)), 'Career earnings')]
-      ]);
+        ['EARNINGS', Kit.numEl(c.fmt.money(Kit.num(state.history.earnings)), 'Career earnings (gross)')],
+        rep && typeof rep.netWorth === 'number' ? ['NET WORTH', Kit.numEl(Kit.money(rep.netWorth), 'Bank + holdings + what the things you own would fetch, at retirement', rep.netWorth < 0 ? 'txt-red' : '')] : null
+      ].filter(Boolean));
       return c.card({ title: 'CAREER LINE', icon: 'stats', body: [c.el('p', { class: 'small txt-gold mb-1', text: line.text }), kv] });
+    }
+
+    /** The money the career left behind: lifestyle, the best and worst investment, what was owned. */
+    function moneyCard(rep) {
+      var fin = rep.finance;
+      if (!fin) return null;
+      var pct = function (x) { return typeof x === 'number' ? (x >= 0 ? '+' : '−') + Math.abs(Math.round(x * 1000) / 10) + '%' : '—'; };
+      var totals = fin.totals || {};
+      var rows = [
+        ['BANK', Kit.numEl(Kit.money(Kit.num(fin.bank)), 'Cash at retirement', Kit.num(fin.bank) < 0 ? 'txt-red' : '')],
+        typeof fin.holdingsValue === 'number' ? ['HOLDINGS', Kit.numEl(Kit.money(fin.holdingsValue), 'Investments still held, at value')] : null,
+        ['LIFESTYLE', String(fin.lifestyle || '—')],
+        ['BEST BET', fin.best ? Kit.numEl(fin.best.name + ' ' + pct(fin.best.pct), 'The investment that returned the most', 'txt-mint') : '—'],
+        ['WORST BET', fin.worst ? Kit.numEl(fin.worst.name + ' ' + pct(fin.worst.pct), 'The investment that lost the most', 'txt-red') : '—'],
+        ['OWNED', fin.owned && fin.owned.length ? fin.owned.join(', ') : 'nothing much'],
+        typeof totals.earned === 'number' ? ['TAKE-HOME', Kit.numEl(Kit.money(totals.earned), 'Career pay after tax and the agent')] : null,
+        typeof totals.spent === 'number' ? ['SPENT', Kit.numEl(Kit.money(totals.spent), 'Lifestyle, upkeep, purchases, services')] : null,
+        typeof totals.invested === 'number' ? ['INVESTED', Kit.numEl(Kit.money(totals.invested) + ' → ' + Kit.money(Kit.num(totals.returned) - Kit.num(totals.lost)), 'Put in → net result (returns minus losses)')] : null
+      ].filter(Boolean);
+      return c.card({ title: 'MONEY', icon: 'money', kind: 'flat', body: c.kv(rows) });
     }
 
     function momentsCard(state) {
@@ -180,7 +206,8 @@
       parts.push(head);
       if (rep.docTitle) parts.push(c.card({ kind: 'flat', class: 'doc-card', body: c.el('div', { class: 'center' }, c.el('span', { class: 'small txt-grey', text: 'THE DOCUMENTARY' }), c.el('p', { class: 'doc-title', text: '“' + rep.docTitle + '”' })) }));
       if (rep.pending) parts.push(c.el('div', { class: 'btn-row' }, c.button({ label: 'TAKE A BOW', kind: 'primary', block: true, icon: 'trophy', action: 'ack', onClick: Kit.safe(function () { ack(state); }) })));
-      parts.push(careerCard(state));
+      parts.push(careerCard(state, rep));
+      parts.push(moneyCard(rep));
       parts.push(momentsCard(state));
       parts.push(c.card({ title: 'HALL OF FAME MATH', kind: 'flat', body: breakdown(rep) }));
       parts.push(recordsCard(state));

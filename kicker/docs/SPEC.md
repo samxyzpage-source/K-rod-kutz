@@ -13,7 +13,7 @@
 
 | Part | Section | Who must read it |
 |---|---|---|
-| A. Game design | §1 pillars & pacing · §2 rules, formulas, tables, catalogs, data | Everyone (E1–E3 in full; E4/E5 skim §2.3, §2.10–2.12) |
+| A. Game design | §1 pillars & pacing · §2 rules, formulas, tables, catalogs, data, money (§2.13), balance targets (§2.14) | Everyone (E1–E3 in full; E4/E5 skim §2.3, §2.10–2.12) |
 | B. Technical | §3 files, namespace, state schema, public APIs, sim/career state machines, save, debug | Everyone, in full |
 | C. UI | §4 screens, palette, pixel approach, input, animation, accessibility | E4, E5, INT |
 | D. Tests | §5 Node engine tests & Playwright flows | Everyone (each owns tests for their modules) |
@@ -64,7 +64,7 @@
 | D16 | Kickoffs | Simulated by default; optional one-tap timing mini-event (`settings.playKickoffs`). Dynamic-kickoff analog (touchback to the 30 NFL / 25 college). | Brief: "simulated or a simplified mini-event". |
 | D17 | Rounds | Kickers go rounds 3–7 or UDFA; 1 % "first-round shock" event at draftValue ≥ 92. | Realism (systems) + fantasy. |
 | D18 | State mutation | In place via API; `Schema.validate` runs after every dispatch when `debug` is on. No per-week deep clones. | Perf + simplicity. |
-| D19 | Progression economy (post-integration spec bump) | POT ~ N(88, 6); `cost = 30 + 2.2·(v−50) + 6.5·(v−70) + 3.0·(v−80)`; game/offseason XP at ≈ 60 % of the §2.1.2 table (training 20 unchanged); tailwind range bonus 0.15 yd/mph; coach threshold +0.20 from 57 yd; camp battle only when the incumbent is within 2 OVR; HOF weights favour dominance and verdict/tier thresholds rescaled (1850 / 1550 / 1250 · 1900 / 1500 / 950 / 450); draft value +12 offset. Measured bands live in `Tuning.career.balance`; full rationale and tables in `docs/BALANCE.md` §5.2. | The §2.13 bands were unattainable under the original constants: every auto career hit its potential by NFL year 1 and retired first-ballot with 12 k XP unspent, leaving the Training screen dead for 15 seasons. |
+| D19 | Progression economy (post-integration spec bump) | POT ~ N(88, 6); `cost = 30 + 2.2·(v−50) + 6.5·(v−70) + 3.0·(v−80)`; game/offseason XP at ≈ 60 % of the §2.1.2 table (training 20 unchanged); tailwind range bonus 0.15 yd/mph; coach threshold +0.20 from 57 yd; camp battle only when the incumbent is within 2 OVR; HOF weights favour dominance and verdict/tier thresholds rescaled (1850 / 1550 / 1250 · 1900 / 1500 / 950 / 450); draft value +12 offset. Measured bands live in `Tuning.career.balance`; full rationale and tables in `docs/BALANCE.md` §5.2. | The §2.14 bands were unattainable under the original constants: every auto career hit its potential by NFL year 1 and retired first-ballot with 12 k XP unspent, leaving the Training screen dead for 15 seasons. |
 | D20 | Kick input (post-launch, at the player's request) | **Aim-then-hold replaces the 3-click meter and becomes the default** for every new career and, once, for players whose settings predate it (`kickInputV2` marker in `rtg.settings`): arrows aim, then hold the confirm key / a finger and release inside the green band; the release sets power AND contact quality, so the accuracy needle is gone. Flick stays available under Settings ▸ Kick input. | The 3-click meter asked for three separate timings and the needle re-aimed the kick after the player had already aimed, which made the arrows feel pointless; one held press reads as a kick's windup and keeps aim and power as two clean, separate decisions. |
 | D21 | Green = guaranteed (post-launch, at the player's request: "make it easier, green should be guaranteed") | A release inside the green band makes the kick outright — no random error, contact slop or block — and the band widened 0.15 → 0.20 (`Tuning.kick.range.greenBand`, also what the scene draws). Gated by `settings.greenAssist` (default on) and verified engine-side by `Kick.inGreen`. Aim-and-hold only; flick is unchanged. | The ask was for an easier game with a promise the bar can actually keep. Keeping it UI-flagged but engine-verified means the assist cannot leak into AI kicks, so the §2.3.6 make-rate table, the sim bands and the career balance targets all stand. Aim still decides every kick that misses the green. |
 | D22 | Real colleges (post-launch, at the player's request) | The 48 fictional schools and the 18 fictional bowls are replaced with real FBS programmes on 2026 alignment and the real bowl slate; conference codes become `SEC BIG XII ACC PAC AAC` (letters only — the id grammar is `[A-Z]{3}` + index) and each conference is ordered to put real rivalries on the `(0,7) (1,6) (2,5) (3,4)` slots. `verifiedFictional` is `false` for colleges and the blocklist lint now guards the NFL side only. **The NFL league stays fictional.** | The player asked for real colleges on their own project. Only 48 of ~134 FBS programmes fit the engine's 6×8 structure, so this is a selection, not the full sport; Notre Dame and the other independents have no conference slot. School nicknames and marks are trademarks — fine for a personal project, worth licensing thought if it is ever published commercially, which is why the pro league remains invented. |
@@ -72,6 +72,7 @@
 | D24 | No cap on the signature attribute (post-launch, at the player's request: "no overall caps for power if that's the archetype you choose") | Each archetype names one attribute (`Tuning.progression.signature`: CANNON → POW, SURGEON → ACC, ICEMAN → CLU, SOCCER → KO) whose potential is the 99 ceiling itself. It is pinned after the POT draws so the creation draw order is unchanged, the star bonus never moves it, and the training screen says "no cap" where the other rows show a POT hint. The other four attributes keep their caps. | Picking the power archetype and then hitting a potential wall on power made the choice feel hollow; the archetype should be the one thing you can take all the way. Leaving the other caps in place keeps the progression economy of D19 intact for the rest of the sheet. |
 | D25 | Stadiums (post-launch, at the player's request: stadiums that look like stadiums, sized differently for high school, college and the NFL) | The kick scene paints a venue into the sky band above the horizon (`KickView.VENUES`, §4.6): a Friday-night high-school field (stars, a tree line and fence, one aluminium bleacher, a HOME/GUEST board on two poles, three light poles), a daylight college bowl whose tiers rise toward the screen edges with an upper deck sized by the home side's prestige (none at 1, 0.34 of the band at 5), a band section, press boxes, light towers and a framed scoreboard, and a night NFL stadium with two full decks, a lit concourse, a navy roof with a floodlight ring and a jumbotron showing the score and the quarter. `Kick.buildContext` stamps every context with `venue` and `prestige` (presentation only — `Kick.model` and `Kick.resolve` never read them). The stands are pre-rendered into three W×yH frames (seated / on their feet / dimmed for the groan) once per mount, resize and arm, and copied with one `drawImage` per frame; the field, uprights, ball, kicker and input geometry are untouched. | One flat crowd strip served every level of the game, so a senior-year Friday night, a Saturday at a blue blood and a pro prime-time game all looked the same. Pre-rendering keeps the §5.2 frame budget (measured p95 0.2 ms at COLLEGE and NFL on desktop; 1.7–3.9 ms to build the frames, paid once per kick) and keeps the kick physics and the §2.3.6 table out of it entirely. |
 | D26 | Camps replace automatic offers (post-launch, at the player's request: "I kicked perfectly in high school and didn't get any 5 star offers. Make it so you do the season and then get invited to camps and if u do well there you get the offer. It should be a bunch of camp invited from a bunch of schools if you do well and then you just choose the ones to go to" — asked whether the tour should let them pick, they chose to attend every invite) | The season no longer hands straight to the offers. `HS.finishSeason` rates the tape (the star curve reshaped so a perfect senior year is 5★: `Tuning.draft.stars` base 1.5 → 1.0, `seasonW` 0.4 → 0.6), builds an itinerary of camp invites (every board school at `WARM` or better plus off-board programmes drawn by star rating — prestige 5 at 5★, 4 at 4★, 3 at 3★ — never zero, capped at 8, small camps first) and sets the new phase `HS.CAMPS`. Each camp is a five-kick `RECRUIT_CAMP` KickSession at that college (`Engine.hsStartCamp`, screens `hscamps` / `hscamp`) judged against a per-prestige bar (3 of 5 at prestige 1–2; 4 of 5 with one from 48+ / 52+ / 55+ at prestige 3 / 4 / 5). The offers are exactly the schools whose bar was met (`Career.generateCollegeOffers` in the new `opts.earned` mode); a prestige ≤ 2 safety school joins only when fewer than two were earned, and the walk-on path runs only for a 2★ season that earned nothing. | Under D23 a perfect season could rate 4★ and the offers were sampled from a prestige band, so the best possible tape never guaranteed a blue-blood offer. Tying each offer to five kicks in front of that staff makes every offer something the player did, keeps the "bunch of invites" they asked for on one screen, and — since they chose to go to all of them — needs no pick-and-choose step: the tour runs the itinerary in order. Building camps as ordinary KickSessions kept the sim, save, autoplay and kick-scene machinery untouched; only the phase enum, a session kind, an `Engine` entry and two screens were added. |
+| D27 | Money (post-launch, at the player's request: "add money spending and making decisions along with investments possibly" — the brief for it: "mostly life style but a little bit of play", and investments carry "Real risk, real loss") | Every dollar the career earns now reaches a **bank** (`state.finance`, $k, `engine/finance.js` → `RTG.Finance`, catalogue `data/finance.js` → `RTG.Data.finance`) as take-home — 85 % of NIL money, 52 % of an NFL salary, bonus or dead money — and the offseason wizard gains a **FINANCES** step ("THE BOOKS", its own `finances` screen) right after the training blocks in both chains: a **lifestyle plan** (FRUGAL / COMFORTABLE / FLASHY / BALLER — a yearly cost that buys morale, fame and fans and, at the top, costs trust), eleven **big buys** that move the soft meters only, three one-season **services** that are the only money that ever touches a kick (a private coach, a physio, a sports psychologist — ordinary one-season Modifiers applied at `Season.start`), and three **investment pitches** a year from a twelve-entry catalogue with a per-entry return model (bust / boom / N(mean, sd)), a "sure thing" that is a scam, and no floor: an overdraft past a small grace charges interest, drops the plan to frugal (no dearer plan can be picked while the bank is red) and, after `Tuning.finance.debt.liquidateAfter` years in the red or once the debt is more than what could be sold, the bank sells what you own — the smallest asset that clears the debt first. Catalogue prices scale ×10 in the NFL; the plan is charged at the price quoted when the books closed and upkeep follows what was paid, so the college → NFL jump never charges a college choice at NFL prices. Autoplay closes the books untouched (the decision's first option is DONE). Save version 1 → 2 with a migration that seeds the bank with half of the career's gross earnings. Design §2.13, state §3.4, API §3.5.21, screen §4.9, the measured tiers `docs/BALANCE.md` §7. | The player wanted something to do with the money the career line only counted. Lifestyle and purchases stay off the kick engine so the §2.3.6 table, the sim bands and the career targets (§2.14) are untouched; the three services ride the existing Modifier machinery and expire with the season like any event mod; and the investments are honest — an all-WILD portfolio loses money in about seven careers out of ten (BALANCE §7) — because "a little bit of play" needs real stakes. |
 
 ---
 
@@ -106,7 +107,7 @@ You are a leg. The most ignored player on the roster until the game is on your f
 | Act | Stage / ages | Emotional question | Meters that matter |
 |---|---|---|---|
 | I — Prove it | HS senior season and camps, college (18–22) | Do I belong? | Job Security, Coach Trust, Morale |
-| II — Get paid | Draft, rookie deal, first extension (22–29) | What am I worth? | Fame, Fans, Trust, money |
+| II — Get paid | Draft, rookie deal, first extension (22–29) | What am I worth? | Fame, Fans, Trust, money (the bank, §2.13) |
 | III — Hold on | 30+ | How does it end? | Job Security, decline, legacy/HOF meter |
 
 ---
@@ -182,7 +183,7 @@ focusMult: 0.75 if `a` is this week's training focus (in-season) else 1.0
 ```
 Examples (age 24): 60→61 = 18 XP; 75→76 = 27; 85→86 = 43; 90→91 = 56. Cannot exceed `POT[a]`.
 
-Expected in-season income ≈ 45 XP/week → ≈ 30 attribute points/year early career (+6 per attribute), slowing to ≈ 8/year at 30+. A recruit at OVR 48 reaches ≈ 66–70 by draft, ≈ 85 by 27 if well played, elite (90+) by 28–30. This is the intended fantasy curve; `test/career_balance.test.js` asserts it (§2.13).
+Expected in-season income ≈ 45 XP/week → ≈ 30 attribute points/year early career (+6 per attribute), slowing to ≈ 8/year at 30+. A recruit at OVR 48 reaches ≈ 66–70 by draft, ≈ 85 by 27 if well played, elite (90+) by 28–30. This is the intended fantasy curve; `test/career_balance.test.js` asserts it (§2.14).
 
 #### 2.1.3 Offseason growth & decline (`Player.ageTick`, applied once per offseason before training)
 
@@ -706,7 +707,7 @@ Accepting sets `team`, `trust`, `js` (60 if `OPEN`, 45 otherwise), enrols in `CO
 
 #### 2.7.3 College season flow
 
-PRE (camp battle if needed, 3 season goals set: team wins target, personal FG% target, fan target) → REG weeks 1–13 → POST (bowl or playoff weeks 14–17; teams without a bowl skip to AWARDS) → AWARDS → OFF (offseason wizard: Body Check → 3 training blocks → declaration/transfer decisions → recruiting rival kicker → next season). Redshirt: offered in year 1 if K2 (`REDSHIRT` flag, does not count toward the 3-season eligibility clock but does count toward the 5-season max).
+PRE (camp battle if needed, 3 season goals set: team wins target, personal FG% target, fan target) → REG weeks 1–13 → POST (bowl or playoff weeks 14–17; teams without a bowl skip to AWARDS) → AWARDS → OFF (offseason wizard: Body Check → 3 training blocks → the books (§2.13) → declaration/transfer decisions → recruiting rival kicker → next season). Redshirt: offered in year 1 if K2 (`REDSHIRT` flag, does not count toward the 3-season eligibility clock but does count toward the 5-season max).
 
 #### 2.7.4 Declaration, transfer portal
 
@@ -768,7 +769,7 @@ guaranteedPct = clamp(0.35 + 0.30·(OVR − 70)/30, 0.10, 0.80) ; signing bonus 
 **Free agency** (`Contracts.generateOffers(state, rng, 'FA')`): 1–4 offers from needy teams (weighted by need, hometown region ×1.5, dome teams add a "dome" tag); each `{teamId, years, aav = AAV·U(0.85, 1.10)·teamCapRoom01, gtdPct, startsK1: bool, note}`. Hometown discount option (−8 % AAV, morale +10, fans +10) if a hometown-region team offers. Waiting one round: each existing offer withdrawn with p 0.35, new offer with p 0.4. No offers → practice-squad/"Pro Springs" branch; two consecutive offseasons without offers → forced retirement.
 **Cuts**: offseason cut if (`seasonFGpct < 0.75` and `OVR < 68`) or `js < 20`; mid-season per §2.2. Cut = FA with `marketMul ×0.8`; guaranteed money still counts as career earnings; a "dead money" headline.
 **Trades**: event #23 (contender wants your leg) and event #20 (trade request) — both resolve via `Career.changeTeam(state, rng, teamId, {trust: 50, js: 55})`.
-**Earnings** accumulate in `history.earnings` (salary paid at season end + bonuses + NIL + endorsements).
+**Earnings** accumulate in `history.earnings` (salary paid at season end + bonuses + NIL + endorsements; $M, gross). Since D27 the **take-home** of every payout also reaches the bank (`Finance.deposit`, `Tuning.finance.takeHome`: college 0.85, NFL 0.52 — tax and the agent) as an `INCOME` ledger row: `Career.offseasonChain` deposits `payoutSeason().total` right after paying it, `Contracts.applyCut` deposits the dead money's take-home, and event money moves the bank at face value (§2.10.1). Spending never reduces `history.earnings` (§2.13).
 
 #### 2.7.8 Retirement (stage `RETIRED`)
 
@@ -790,7 +791,7 @@ Legacy screen: bust portrait, tier, HOF score, career line, timeline, **top-10 m
 
 #### 2.7.10 Agents
 
-`player.agentTier` 0–2: 0 default; 1 at fame ≥ 250 via event #17 (5 % fee); 2 at fame ≥ 600. Tier reveals POT (tier 1: ±5 band; tier 2: exact), narrows draft projection, and widens counter acceptance (§2.7.7).
+`player.agentTier` 0–2: 0 default; 1 at fame ≥ 250 via event #17 (5 % fee); 2 at fame ≥ 600. Tier reveals POT (tier 1: ±5 band; tier 2: exact), narrows draft projection, and widens counter acceptance (§2.7.7). The agent's cut of the take-home is folded into `Tuning.finance.takeHome` (§2.13), not into the tier.
 
 ### 2.8 Awards catalog (`data/awards.js`, computed by `Awards.compute(state, rng)` at AWARDS phase from simulated stats of every kicker in the league)
 
@@ -850,7 +851,7 @@ The records screen shows holder, year, and "yours" in gold. `records.crossSave` 
 Effects = { morale?, trust?, fans?, fame?, js?, xp?, money? ($k), attrs?:{ACC:+2}, mods?:[Modifier], flags?:{k:v}, action?:'TRANSFER'|'TRADE'|'HOLDOUT'|'RETIRE'|'CHANGE_TEAM'|'CAMP_BATTLE'|'SKIP_GAME'|'INJURY', headline?:string }
 Modifier = { id, key:'sigma'|'windDrift'|'pressure'|'block'|'range'|'trainMult'|'moraleTarget'|'injury'|'iceImmune', op:'mul'|'add', value, expires:{type:'week'|'game'|'season'|'never', at?:number}, label }
 ```
-`Events.roll(state, rng)`: at most one event per in-season week (`p = 0.40 + 0.15·(fame ≥ 500)`), two per offseason slot (`p = 1`), drawn by weight among eligible (`cond`, `stage`, `phase`, `once` not used, not in `recentEvents` ring of 12). `Events.apply(state, rng, choiceIdx)` applies effects (clamps 0–100), resolves `branches` with rng, pushes the consequence headline into `headlines` and `timeline`, clears `pending`. Modifiers are appended to `player.mods`; `Player.expireMods(state, {week|game|season})` prunes.
+`Events.roll(state, rng)`: at most one event per in-season week (`p = 0.40 + 0.15·(fame ≥ 500)`), two per offseason slot (`p = 1`), drawn by weight among eligible (`cond`, `stage`, `phase`, `once` not used, not in `recentEvents` ring of 12). `Events.apply(state, rng, choiceIdx)` applies effects (clamps 0–100), resolves `branches` with rng, pushes the consequence headline into `headlines` and `timeline`, clears `pending`. A `money` effect ($k) moves `history.earnings` ($M) as before **and**, since D27, the bank: `money > 0` → `Finance.deposit(state, money, 'EVENT', title)`, `money < 0` → `Finance.charge(…)` — a cost may take the bank below zero (§2.13). Modifiers are appended to `player.mods`; `Player.expireMods(state, {week|game|season})` prunes.
 
 #### 2.10.2 Catalog (39 events incl. 9b)
 
@@ -901,7 +902,7 @@ Every event resolves with a consequence headline next week.
 ### 2.11 Headlines & messages (`data/headlines.js`, `engine/events.js` → `Events.headline(state, rng, tag, ctx)`)
 
 - Templates: `{ id, tags:[...], cond?:fn(ctx), text }`, slots `{name} {last} {team} {opp} {city} {dist} {pct} {coach} {rival} {week} {score}`.
-- Minimum bank: 160 lines across tags `postgame_win`, `postgame_loss`, `game_winner`, `decisive_miss`, `doink`, `blocked`, `shank`, `fifty_plus`, `perfect_day`, `bad_day` (≤ 50 %), `slump`, `hot_streak`, `award`, `contract`, `draft`, `fa`, `cut`, `injury`, `event_consequence`, `weekly_flavor`, `rare` (perfect season, 0-for-3, 60+ in snow, iced-and-made-with-CLU≥90 "Ice does nothing to this man").
+- Minimum bank: 160 lines across tags `postgame_win`, `postgame_loss`, `game_winner`, `decisive_miss`, `doink`, `blocked`, `shank`, `fifty_plus`, `perfect_day`, `bad_day` (≤ 50 %), `slump`, `hot_streak`, `award`, `contract`, `draft`, `fa`, `cut`, `injury`, `event_consequence`, `weekly_flavor`, `rare` (perfect season, 0-for-3, 60+ in snow, iced-and-made-with-CLU≥90 "Ice does nothing to this man"), plus `money` (D27, 12 lines: a bust, a boom or a forced sale — `{name}` is the **holding's** name there, `{money}` the $ moved, `{pct}` a signed string; the lines gate on `vars.event` `'bust'|'boom'|'liquidation'` when the caller passes one, else on the sign of `{pct}` / the fallback text; `Events.headline` falls back to `vars.text` when a pool is missing, so the pool's absence never throws).
 - Tone: mean-but-fun ("LEG OF GOLD OR LEG OF LEAD? Rookie K goes 1-for-4 in the rain").
 - Selection: weighted random among matching tag + cond, excluding `state.recentHeadlineIds` (ring of 40).
 - Inbox messages (`Message = {id, week, year, from, avatar, text, kind:'note'|'event'|'result', read}`) from coach/agent/GM/press/fans; coach notes reflect Form and Job Security thresholds; agent notes reflect contract status; ≥ 60 message templates.
@@ -991,7 +992,209 @@ Major (playoff quarterfinals/semis): Citrus Grove Bowl (Orlando), Cactus Sun Bow
 
 Nicknames (case-insensitive, singular/plural) that may not appear as any team's `nick`: all 32 real NFL nicknames; common NCAA FBS nicknames (Tigers, Bulldogs, Wildcats, Eagles, Bears, Cougars, Huskies, Aggies, Trojans, Bruins, Ducks, Beavers, Sooners, Longhorns, Gators, Seminoles, Hurricanes, Volunteers, Razorbacks, Rebels, Crimson Tide, Buckeyes, Wolverines, Spartans, Hawkeyes, Badgers, Cornhuskers, Cyclones, Jayhawks, Mountaineers, Hokies, Cavaliers, Tar Heels, Blue Devils, Wolfpack, Demon Deacons, Yellow Jackets, Gamecocks, Commodores, Red Raiders, Horned Frogs, Bearcats, Knights, Bulls, Owls, Broncos, Rams, Lobos, Utes, Rainbow Warriors, Aztecs, Falcons, Minutemen, Roadrunners, Bison, Jackrabbits, Coyotes, Lumberjacks, Panthers, Mustangs, Miners, Vaqueros, Rattlers, Racers, Blackhawks, Timberwolves, Lightning, Mariners, Lakers, Clippers, Aces, Kings, Suns, Heat, Thunder, Hornets, Pelicans, Warriors, Magic, Rockets, Ravens, Pistons, Raiders, Chargers, Titans, Texans, Colts, Jaguars, Browns, Bengals, Steelers, Bills, Patriots, Dolphins, Jets, Chiefs, Cowboys, Giants, Commanders, Packers, Vikings, Lions, Saints, Buccaneers, Cardinals, Seahawks, 49ers, Marlins, Brewers, Twins, Cubs, Reds, Yankees, Braves, Astros, Rangers, Angels, Padres, Royals, Blue Jays, Indians, Guardians, Nationals, Orioles, Phillies, Pirates, Mets, Rockies, Diamondbacks, Athletics, Mariners, Dodgers). Also blocked: any team whose `city + nick` equals a real professional or FBS team, and the words "Hoosier", "Buckeye", "Sooner", "Old Dominion", "Delta State", "Boston Common".
 
-### 2.13 Balancing targets (asserted in tests; see §5)
+### 2.13 Money (engine `engine/finance.js` → `RTG.Finance`, catalogue `data/finance.js` → `RTG.Data.finance`, state `state.finance`, constants `Tuning.finance`) — D27
+
+"Mostly lifestyle but a little bit of play." Every dollar the career earns reaches a **bank** as take-home; once a
+year, in the offseason, **the books** open: the year's returns and bills land, and the player picks a lifestyle plan
+for the coming year, buys things, hires a service for the season and puts money into whatever was pitched — with
+real risk and real loss. Nothing here changes a kick except the three services, and those only through the ordinary
+one-season Modifier machinery (§2.10.1), so the §2.3.6 table, the sim bands and the career targets of §2.14 do not
+move. The only things money buys are the soft meters (morale, fame, fans, trust) and the story.
+
+**Units.** Everything in `state.finance` is **$k, integers** (`Util.fmtMoney` takes $M, so the UI prints
+`Kit.money(k)` = `fmtMoney(k / 1000)`). `history.earnings` ($M, the gross career money of §2.7.7) keeps its meaning
+and is never reduced by spending. Money enters or leaves the bank only through `Finance.deposit` / `Finance.charge`,
+each of which writes a **ledger** row `{year, kind, label, delta}` (newest last, capped at `Tuning.finance.ledgerCap`
+= 60) and updates `totals` (`earned` = INCOME + EVENT deposits; `spent` = every charge except INVEST; `invested`;
+`returned` / `lost` = the paper gains and losses booked at each tick's revaluation; `peakNetWorth`). A sale or a
+forced sale is an asset conversion and counts as neither earned nor returned.
+
+| Money in | Amount ($k) | Ledger row |
+|---|---|---|
+| A season's pay (`Career.offseasonChain`, right after `Contracts.payoutSeason`) | `round(total × 1000 × Tuning.finance.takeHome[league])` — **college 0.85** ("NIL money, after tax"), **NFL 0.52** ("Salary and bonus, after tax and agent") | `INCOME` |
+| Dead money on a cut (`Contracts.applyCut`) | the guaranteed remainder × 0.52 | `INCOME` |
+| Event money (§2.10.1 `money` effect, `Events.apply`) | face value, both ways — a cost may take the bank below zero | `EVENT` |
+| A sale (`Finance.apply` sell) / a forced sale (the tick) | the holding's value / the purchase's resale | `SELL` / `LIQUIDATION` |
+| The v1 → v2 migration (`Save.migrations[1]`) | `round(history.earnings × 1000 × Tuning.finance.migrateShare 0.5)` once, "Career to date" | `INCOME` |
+
+**Scale.** Catalogue prices are $k **at scale 1** (college) × `Finance.scale(state)` = `Tuning.finance.scale[league]`
+(**COLLEGE 1, NFL 10**), so the $25k college truck is a $250k car in the NFL and the lake house is $3.5M. The league
+is `player.league`, falling back to the stage (a DRAFT-stage player prices at college scale).
+
+**The offseason step.** `Career.offseasonChain` runs **FINANCES** right after `TRAINING_BLOCKS` in both chains
+(college `BODY_CHECK → TRAINING_BLOCKS → FINANCES → REDSHIRT? → TRANSFER? → EVENT ×2 → DECLARE?`; NFL `BODY_CHECK →
+TRAINING_BLOCKS → FINANCES → CUT_NOTICE? → EXTENSION? → …`). The step (`Finance.decision`, 2 parent draws — two forks)
+first **ticks** the year, then draws this year's pitches, and sets the `FINANCES` decision pending with the whole
+screen in its payload (§3.5.21). Options, in this order: **`DONE` "Close the books"** first, then `SKIP` "Not now"
+(the same thing) — `Engine.settlePending` / `autoPlay*` pick the first option and pass no actions, so an unattended
+offseason spends nothing (verified over auto careers: the bank never dips below zero, nothing is ever owned, the plan
+stays FRUGAL). The human resolves it with `Engine.decide(state, rng, {kind:'FINANCES', optionId:'DONE', extra})`,
+where `extra` is the staged action set (below); the router shows the `finances` screen (§4.9) for that decision.
+
+**The tick** (`Finance.tick`, once per `state.year` — `lastTick` makes it idempotent; exactly 1 parent draw, one fork
+`finance:tick:<year>` that every sample comes from), in this order:
+
+1. **Revalue every live holding** (4 child draws each — bust chance, boom chance, gauss ×2 — always all four so the
+   stream is stable; a holding already at 0 is skipped): with `p = model.bust` it goes to **0 for good** (a `SCAM`
+   always busts on its **first** tick, whatever its model says); else with `p = model.boom` it multiplies by
+   `model.boomX`; else it moves by `N(model.mean, model.sd)`, floored at −100 %. `value = round(value × (1 + pct))`,
+   `pct` pushed onto `holding.log`; a `RETURN` row when the value moved by ≥ $1k; `totals.returned` / `.lost`.
+2. **Charge the lifestyle plan** at the price **quoted when the books last closed** — `finance.planCost`, which
+   `Finance.apply` sets to `tier.cost × scale` at the scale in force then, so the number the tier card showed is the
+   number charged even when the player declared in between (a BALLER plan picked at the last college books costs
+   $110k at the first NFL tick, not $1.1M; the next close re-quotes it at NFL prices); with no quote (fixtures, a
+   migrated save) the tier at today's scale. A `LIFESTYLE` row; nothing for FRUGAL; the quote is cleared. The full
+   cost, always — debt is the consequence, not a cap.
+3. **Charge upkeep** of everything owned: **`paid × purchase.upkeep / purchase.price`** — the scale of the purchase,
+   not of today, so $52k of college toys do not cost $60k a year in the NFL (`UPKEEP` rows; `upkeep × scale` only
+   when `paid` is unknown).
+4. **Apply the yearly meter effects** of the plan and of every owned purchase (morale, fans and trust clamped to
+   `Tuning.soft`; fame to `Tuning.soft.fame.max`).
+5. **Debt**: if the bank is below **the grace floor** (`−Tuning.finance.debt.grace × scale`, $10k in college /
+   $100k in the NFL — a small overdraft from event costs before any income is not a debt year) — interest
+   `Tuning.finance.debt.rate` (0.12) on the whole overdraft (`DEBT` row), `debtYears++`, morale
+   `Tuning.finance.debt.morale` (−6), the plan drops to **FRUGAL** (and `Finance.apply` refuses a dearer plan while
+   the bank is red, so it stays there until the overdraft clears); and when `debtYears ≥
+   Tuning.finance.debt.liquidateAfter` (3) **or the debt exceeds what could be sold** (`Finance.netWorth < 0`, i.e.
+   holdings at value + purchases at resale < the overdraft), the **forced sale**: the **smallest** asset (holding at
+   value, purchase at resale) that clears what is still owed, else the largest, again until the bank is clear or
+   nothing is left — a $7k overdraft sells the $30k fund, not the $900k one (`LIQUIDATION` rows, a `MONEY` timeline
+   row, a headline; a busted holding is never "sold"). A year out of the red (or within the grace) resets `debtYears`.
+   The booked services are never touched here: `Season.start` consumes them before any tick can run.
+6. `totals.peakNetWorth`; `lastTick = year`; at most **one money headline** per tick (forced sale > bust > boom,
+   drawn from the same child fork, so the parent still sees exactly one draw).
+
+The tick returns `{year, returns:[{holdingId, name, kind, pct, delta, value, bust, boom}], lifestyle:{tier, cost},
+upkeep, effects, interest, broke, liquidated:[{what:'HOLDING'|'PURCHASE', id, name, value}], bank, netWorth}` — the
+THIS YEAR card (`broke` = the year closed past the grace floor).
+
+**Lifestyle** (`Tuning.finance.lifestyle.tiers`; the plan is stored when the books close — quoted into
+`finance.planCost` at today's scale — and charged at the **next** tick at that quote, every year, until changed; while
+the bank is red only the current plan or a cheaper one can be picked):
+
+| Tier | Cost / yr (college · NFL) | Every year | The line |
+|---|---|---|---|
+| `FRUGAL` (default) | $0 | — | Roommates, a beater and rice. The leg does not care where you sleep. |
+| `COMFORTABLE` | $12k · $120k | morale +2 | Your own place, a car that starts, a proper bed. Nothing to post about. |
+| `FLASHY` | $40k · $400k | morale +4, fame +15, fans +2 | The good building, the good table, the good watch. People notice. |
+| `BALLER` | $110k · $1.1M | morale +6, fame +40, fans +4, **trust −3** | Private chef, a driver, a jet card. Everyone notices — the coach included. |
+
+**Big buys** (`Data.finance.purchases`, eleven, each owned at most once, none league-gated; price · upkeep are $k at
+scale 1; `effects` land once on purchase, `yearly` at every tick while owned; a purchase at or above
+`Tuning.finance.timeline.minDelta × scale` ($25k · $250k) makes the timeline). They are lifestyle only — no purchase
+touches a kick or training (the kicking barn is deliberately morale/fame, not a `trainMult`).
+
+| id | Name | Price · upkeep | On purchase | Every year | Icon |
+|---|---|---|---|---|---|
+| `USED_TRUCK` | Used Truck | 25 · 2 | morale +3 | morale +1 | gear |
+| `SPORTS_CAR` | Sports Car | 90 · 7 | morale +5, fame +20 | fame +5, trust −1 | bolt |
+| `PARENTS_HOUSE` | Parents' House | 180 · 6 | morale +8, fans +4, trust +2 | morale +2 | home |
+| `DOWNTOWN_CONDO` | Downtown Condo | 120 · 8 | morale +4, fame +10 | morale +1, fame +2 | dome |
+| `LAKE_HOUSE` | Lake House | 350 · 14 | morale +6, fame +15, fans +2 | morale +3 | sun |
+| `BOAT` | Boat | 60 · 5 | morale +4, fame +10 | morale +1, fame +2 | wind |
+| `SERIOUS_WATCH` | Serious Watch | 15 · 1 | morale +2, fame +8 | fame +2 | clock |
+| `FOUNDATION` | Charity Foundation | 50 · 10 | morale +3, fans +6, trust +3 | fame +5, fans +3, trust +1 | heart |
+| `KICKING_BARN` | Kicking Barn | 75 · 4 | morale +5, fame +5 | morale +2 | boot |
+| `GOLF_CART` | Custom Golf Cart | 8 · 1 | morale +3, fans +1 | morale +1 | ball |
+| `SEASON_TICKETS` | Hometown Season Tickets | 4 · 2 (they renew) | morale +4, fans +2 | morale +2, fans +1 | team |
+
+What was paid is remembered (`finance.paid[id]`), and an owned purchase counts for **`paid × Tuning.finance.resale`**
+(0.5) in the net worth and in a forced sale, and pays **`paid × upkeep / price`** a year — so a truck bought in
+college is not worth $125k in the NFL and does not cost $20k a year there either (the decision payload and the review
+screen show the upkeep that is actually charged).
+
+**The three services** (`Data.finance.services`; charged when the books close — a `SERVICE` row — stored in
+`finance.services`, and turned into one-season Modifiers by `Finance.applyServices` where `Season.start` begins the
+season: `{id:'finance:<ID>:<year>', source:'finance', expires:{type:'season', at: year}}`, expired by
+`Season.finishSeason` like any event mod; the list is then cleared. Numbers in `Tuning.finance.services`):
+
+| id | Name | Price (college · NFL) | The mod for the coming season |
+|---|---|---|---|
+| `PRIVATE_COACH` | Private Kicking Coach | $20k · $200k | `trainMult` ×`coachTrainMult` **1.15** (mul) + `coachXp` **40 XP** the day the season opens |
+| `PHYSIO` | Physio On Retainer | $15k · $150k | `injury` ×`physioInjury` **0.6** (mul) |
+| `PSYCH` | Sports Psychologist | $12k · $120k | `pressure` **+`psychPressure` −0.10 (add)** — the kick engine reads pressure mods only additively (`Kick.modValue(mods, 'pressure', 'add')`), so the catalogue's "×0.85" is expressed as an add; the display copy still says ×0.85 |
+
+**Investments** (`Data.finance.investments`, twelve; `Finance.opportunities` pitches **`Tuning.finance.invest.perYear`
+= 3** distinct entries a year, weighted by `weight`, gated by `leagues` and `minFame`, from one fork
+`finance:opps:<year>` — 1 parent draw; amounts `min`–`max` are $k at scale 1 × scale). An opportunity is
+`{oppId, name, kind, risk, pitch, source, min, max, model}`; investing (integer amount clamped to `[min, max]`, never
+below the running bank — you cannot borrow to invest; one stake per pitch per year) charges an `INVEST` row and opens
+a holding `{id:'h<n>', oppId, name, kind, risk, invested, value: amount, year, log: []}`. A holding can be **sold at
+any close of the books** for its value (`SELL`; a busted one is "written off" for $0 and removed); the yearly model
+runs at every tick; nothing has an exit of its own, so a boomed start-up keeps rolling the same dice until it is sold.
+
+| id | Name | Kind · risk | Pitched by · weight | Buy-in ($k) | Gate | Model `mean · sd · bust · boom · boomX` |
+|---|---|---|---|---|---|---|
+| `INDEX_FUND` | Index Fund | INDEX · LOW | BANK · 6 | 5–200 | — | 0.07 · 0.10 · 0 · 0 · 1 |
+| `MUNI_BONDS` | Muni Bonds | INDEX · LOW | BANK · 4 | 5–200 | — | 0.05 · 0.04 · 0 · 0 · 1 |
+| `RENTAL_DUPLEX` | Rental Duplex | PROPERTY · MED | AGENT · 5 | 40–120 | — | 0.08 · 0.18 · 0.01 · 0.02 · 1.8 |
+| `CAR_WASH` | Car Wash Chain | BUSINESS · MED | BOOSTER · 4 | 30–100 | — | 0.09 · 0.22 · 0.03 · 0.02 · 2 |
+| `HOMETOWN_GYM` | Hometown Gym | BUSINESS · MED | TEAMMATE · 4 | 20–80 | — | 0.08 · 0.20 · 0.03 · 0.02 · 2 |
+| `BUYOUT_FUND` | Buyout Fund | BUSINESS · MED | BANK · 4 | 100–500 | NFL, fame ≥ 200 | 0.11 · 0.20 · 0.03 · 0.03 · 2 |
+| `WING_JOINT` | Wing Joint | BUSINESS · HIGH | TEAMMATE · 5 | 20–120 | — | 0.12 · 0.35 · 0.05 · 0.04 · 2.5 |
+| `MEMORABILIA` | Memorabilia Stash | BUSINESS · HIGH | TEAMMATE · 3 | 5–80 | — | 0.10 · 0.40 · 0.04 · 0.05 · 3 |
+| `SMOOTHIE_FRANCHISE` | Smoothie Franchise | BUSINESS · HIGH | AGENT · 3 | 60–200 | — | 0.10 · 0.30 · 0.05 · 0.03 · 2.5 |
+| `PARKING_APP` | Parking App | STARTUP · WILD | BOOSTER · 3 | 10–200 | — | 0.0 · 0.6 · 0.30 · 0.05 · 8 |
+| `ROCKET_COIN` | Rocket Coin | CRYPTO · WILD | DM · 4 | 5–300 | — | 0.0 · 0.8 · 0.20 · 0.06 · 4 |
+| `SURE_THING` | Sure Thing Fund | **SCAM** · WILD | DM · 1 | 10–50 | — | 0 · 0 · **1** · 0 · 1 — busts on its first tick; the pitch (4 % a month, guaranteed, wire by Friday, keep it quiet) has every tell and never says so; the card calls it a FUND |
+
+The tiers are honest by measurement (`docs/BALANCE.md` §7, 10 000 ten-year holds through the real tick): **LOW**
+compounds quietly (ten-year median 1.6–1.9×, a 0–2 % chance of a loss), **MED** usually grows but can be wiped out
+(1.5–2.1× median, 19–37 % losses), **HIGH** is a coin flip with a fat right tail (0.65–0.8× median, 6–10× at the
+90th percentile), **WILD** dies most of the time (median 0, 98–99 % losses at ten years) and — the exploit pass's
+bar — **every WILD model's yearly expected multiplier is below 1 and below every LOW model's** (Parking App 0.95,
+Rocket Coin 0.97 vs Muni Bonds 1.05; `finance.test.js` pins the analytic figure `(1 − bust) · (boom · boomX + (1 −
+boom) · E[1 + max(−1, N(mean, sd))])` and checks it against the real tick), **SCAM** is 0 — and an all-WILD career
+loses money about 9 times in 10 (an all-in gambler who never sells finishes below cash in about two careers out of
+three; one who sells after every boom is still short of a saver more often than not). When a holding's catalogue
+entry is gone (renamed data), `Tuning.finance.invest.models[risk]` stands in. The opportunity card prints the pitcher
+and a display label for the kind — INDEX and **SCAM** both read `FUND` — so the sure thing never announces itself;
+the holding row shows the real kind once it has busted.
+
+**Net worth** = bank + Σ holdings' value + Σ owned purchases at resale (`Finance.netWorth`, pure). `Finance.summary`
+gives the hub and the legacy report `{bank, netWorth, holdingsValue, owned:[names], lifestyle, best, worst, totals,
+debt}` — best / worst by total return over the live holdings **and** the closed ones (`finance.closed`, the last
+`Tuning.finance.closedCap` = 20 sold or liquidated stakes), so selling everything before retiring still leaves a
+story. `Career.retire`'s report gains `finance` (the summary) and `netWorth` ($k); the legacy screen shows NET
+WORTH on the career line and a MONEY card (§4.5).
+
+**Closing the books** (`Finance.apply(state, rng, dec, actions)`, 0 draws; `actions = {lifestyle?, buy?:[id],
+services?:[id], invest?:[{oppId, amount}], sell?:[holdingId]}`): applied in the order **sell → lifestyle → services →
+buy → invest**, re-checking affordability at every step against the running bank; anything unaffordable or invalid is
+**skipped**, never thrown (`receipt.skipped [{what, id, reason}]`; only a decision that is not FINANCES throws).
+The lifestyle choice is the plan for the coming year (stored, charged at the next tick) — a dearer plan than the
+current one is skipped while the bank is red (`'in debt — clear the overdraft first'`; a sale earlier in the same
+close that clears the overdraft makes it fine) — and whatever the plan, every close quotes it into `finance.planCost`
+at today's scale (so closing with nothing staged still prices the standing plan for the next tick); services are
+charged now; a purchase charges the price, applies its one-off effects now and remembers `paid`; an investment
+charges the amount and opens the holding — the pitch is sanitised first (`min ≥ 1`, `max ≥ min`, `kind` / `risk`
+from the enums, else BUSINESS / MED), so a hand-edited payload can never open a negative or invalid holding; a sale
+deposits the value and moves the holding to `closed`. Returns `{applied, skipped, bankAfter, netWorthAfter}`. The
+screen stages everything locally and dispatches once (§4.9).
+
+**Timeline and news.** Timeline kind **`MONEY`** (icon `money`) for a bust (impact 3), a boom (3), a forced sale (3),
+a purchase or a return at or above `Tuning.finance.timeline.minDelta × scale` (1). Headline tag `money` (§2.11), at
+most one per tick.
+
+**Save.** `RTG.SAVE_VERSION` 1 → **2**; `Save.migrations[1]` adds `career.finance` through `Finance.init` and seeds the
+bank with `Tuning.finance.migrateShare` (0.5) of the gross earnings to date as one `INCOME` row "Career to date"
+stamped **year 0** (it is money from before the books, not the year's take-home the FINANCES card sums), and a save
+taken in the middle of an offseason gets `FINANCES` spliced into its persisted step list after `TRAINING_BLOCKS`
+when the chain has not passed that point (§3.7). `Schema.createCareer` calls `Finance.init` (bank 0, FRUGAL);
+`Schema.validate` requires the block from v 2 and validates it whenever present (types, enums, caps,
+`holdings[].value ≥ 0`, `log[] ≥ −1`, unique ids, `services` unique and in `ENUM.serviceIds`, `closed[]` rows shaped,
+`lastTick` and every holding's `year` ≤ `state.year`, totals ≥ 0, `planCost` a nullable integer ≥ 0).
+
+**Debug.** `RTG.debug.money(k)` adds $k through `Finance.deposit(…, 'EVENT', 'debug')` (negative charges) and syncs
+the store; the debug panel's `+$100k` button calls it so QA can fund a purchase.
+
+Engine surface (`RTG.Finance`): `init`, `deposit`, `charge`, `netWorth`, `scale`, `tick`, `opportunities`, `decision`,
+`apply`, `summary`, `applyServices`, and the constants `TIERS`, `HOLDING_KINDS`, `RISKS`, `LEDGER_KINDS`, `SERVICE_IDS`
+(§3.5.21). Draw contract — the parent rng only ever sees forks: `tick` 1 (0 once the year is ticked; child 4 per live
+holding + 1 for the headline), `opportunities` 1, `decision` 2 (1 when already ticked), everything else 0;
+`Career` STEPS.FINANCES 2, HANDLERS.FINANCES 0, the take-home and dead-money deposits and event money 0.
+
+### 2.14 Balancing targets (asserted in tests; see §5) — §2.13 before D27; code comments and test names that say "§2.13" mean this table
 
 | Metric | Target | Test |
 |---|---|---|
@@ -1012,6 +1215,8 @@ Nicknames (case-insensitive, singular/plural) that may not appear as any team's 
 | Full auto career runtime (engine only) | < 4 s on Node (CI) | `career_balance` |
 | Save size after 20 seasons | < 400 KB | `save` |
 | Season sim without UI | < 250 ms | `season` |
+| Investment tiers (10 000 ten-year holds per entry through `Finance.tick`) | LOW ten-year median ≥ 1.5× with ≤ 5 % losses · MED median > 1× · WILD median < 1× · SCAM 0 · an all-WILD career (one stake a year for 12 years) loses money > 50 % of the time | `finance` `[risk]` (200 seeds × 10 ticks: all-WILD loses in > 100 / 200, all-LOW in < 20 / 200 and never to zero); the full tables are measured in `docs/BALANCE.md` §7 |
+| Autoplay and the books | the bank never goes below zero, nothing is owned or held, the plan stays FRUGAL, bank = earned − spent, `Schema.validate` passes after every offseason | `finance` (3 auto careers), `engine_api`, `integration`; a 200-career `career_balance` row is still open |
 
 
 ---
@@ -1049,6 +1254,7 @@ kicker/
   js/data/awards.js                   E3   RTG.Data.awards
   js/data/events.js                   E3   RTG.Data.events
   js/data/headlines.js                E3   RTG.Data.headlines, RTG.Data.messages
+  js/data/finance.js                  E3   RTG.Data.finance (purchases, services, investments — the money catalogue, §2.13)
   js/engine/names.js                  E2   RTG.Names
   js/engine/weather.js                E1   RTG.Weather
   js/engine/player.js                 E1   RTG.Player
@@ -1064,6 +1270,7 @@ kicker/
   js/engine/season.js                 E2   RTG.Season (week loop, league sims, postseason)
   js/engine/career.js                 E3   RTG.Career (stages, offers, decisions, transitions)
   js/engine/hs.js                     E3   RTG.HS (the senior season and the recruiting camps, §2.7.0)
+  js/engine/finance.js                E3   RTG.Finance (the money system, §2.13 — after hs, before save)
   js/engine/save.js                   E3   RTG.Save
   js/engine/api.js                    E3   RTG.Engine (facade; INT reviews)
   js/ui/storage.js                    E5   RTG.UI.Storage (localStorage adapter)
@@ -1100,6 +1307,7 @@ kicker/
   js/ui/screens/contract.js           E5   (extension / FA / tag / UDFA / retire)
   js/ui/screens/campbattle.js         E4   (uses KickView)
   js/ui/screens/timeline.js           E5
+  js/ui/screens/finances.js           E5   (the books: the offseason FINANCES step and the review from the hub, §4.9)
   js/ui/screens/legacy.js             E5
   js/ui/screens/settings.js           E5
   js/ui/screens/saves.js              E5
@@ -1118,14 +1326,14 @@ kicker/
 **`index.html` script order** (exactly this; INT owns the list):
 ```
 00_namespace, engine/tuning, engine/util, engine/rng, engine/schema,
-data/blocklist, data/names, data/colleges, data/nfl, data/records, data/awards, data/events, data/headlines,
+data/blocklist, data/names, data/colleges, data/nfl, data/records, data/awards, data/events, data/headlines, data/finance,
 engine/names, engine/weather, engine/player, engine/kick, engine/schedule, engine/standings, engine/sim,
-engine/stats, engine/awards, engine/events, engine/contracts, engine/draft, engine/season, engine/career, engine/hs,
+engine/stats, engine/awards, engine/events, engine/contracts, engine/draft, engine/season, engine/career, engine/hs, engine/finance,
 engine/save, engine/api,
 ui/storage, ui/store, ui/router, ui/components, ui/sprites, ui/canvas, ui/audio, ui/input, ui/kickview,
 ui/screens/* (any order; each registers itself with Router), ui/app, debug
 ```
-`test/load.js` loads `00_namespace` → `engine/tuning` … → `engine/api` (everything before `ui/`) in the same order via `vm.runInThisContext(fs.readFileSync(...))` with `globalThis.RTG` captured, then exports `RTG`. A test that needs the UI does not exist (UI is tested by Playwright only).
+`test/load.js` loads `00_namespace` → `engine/tuning` … → `engine/api` (everything before `ui/`; its `ORDER` array is the list above — a new engine or data file goes there, in `index.html` and in `test/purity.test.js`'s `CONTRACT`) in the same order via `vm.runInThisContext(fs.readFileSync(...))` with `globalThis.RTG` captured, then exports `RTG`. A test that needs the UI does not exist (UI is tested by Playwright only).
 
 ### 3.3 Namespace & the shim
 
@@ -1135,7 +1343,7 @@ ui/screens/* (any order; each registers itself with Router), ui/app, debug
   'use strict';
   var RTG = root.RTG = root.RTG || {};
   RTG.VERSION = '1.0.0';
-  RTG.SAVE_VERSION = 1;
+  RTG.SAVE_VERSION = 2;   // 2: state.finance — the money system (D27; Save.migrations[1])
   RTG.Data = RTG.Data || {};
   RTG.UI = RTG.UI || {};
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1159,7 +1367,7 @@ The purity test whitelists exactly the string `typeof window !== 'undefined' ? w
 
 ```js
 CareerState = {
-  v: 1,                                  // save schema version (mirrors RTG.SAVE_VERSION)
+  v: 2,                                  // save schema version (mirrors RTG.SAVE_VERSION; 2 since D27 — state.finance)
   seed: uint32,                          // career seed (displayed, shareable)
   rngState: uint32,                      // rng state after the last engine call (store writes it back after every dispatch)
   difficulty: 'rookie'|'pro'|'allpro'|'legend',
@@ -1202,7 +1410,7 @@ CareerState = {
   history: {
     seasons: SeasonLine[],               // one per completed season
     awards: Award[], contracts: ContractRecord[], teams: TeamStint[],
-    timeline: TimelineEntry[],           // {year, week, kind, text, impact 0..3, teamId}
+    timeline: TimelineEntry[],           // {year, week, kind, text, impact 0..3, teamId}; kinds include MONEY (§2.13)
     earnings: number,                    // $M total
     moments: Moment[]                    // top moments (kept ≤ 50, pruned by score)
   },
@@ -1221,7 +1429,8 @@ CareerState = {
   headlines: Headline[],                 // {id, year, week, text, tag} capped 40
   recentHeadlineIds: string[], recentEventIds: string[],
   settings: Settings,                    // per-career copy of relevant settings (autoPat, playKickoffs, simSpeed) — UI-level settings live in rtg.settings
-  flags: {[k]: any}                      // hs (the senior season and the camp tour, §2.7.0), WALKON, UDFA, giveMe60, under55, ultimatum, farewell, ...
+  flags: {[k]: any},                     // hs (the senior season and the camp tour, §2.7.0), WALKON, UDFA, giveMe60, under55, ultimatum, farewell, ...
+  finance: Finance                       // the money system (§2.13; required from save version 2, created by Finance.init)
 }
 
 League = {
@@ -1285,11 +1494,26 @@ KickResult = {
 KickLogRow = {id, year, week, league, gameId, teamId, oppId, type, distance, hash, wind:{speed,dir}, weather, pressure, outcome, made, tags, input:{power, aim, quality}, auto: bool, rngState: uint32, q, clock, scoreFor, scoreAgainst}
 KickerStats = {fga, fgm, pat, patMade, pts, long, buckets:{'0-29':{a,m}, '30-39':{a,m}, '40-49':{a,m}, '50-59':{a,m}, '60+':{a,m}}, clutchA, clutchM, decisiveA, decisiveM, gameWinners, tieForcers, blocked, doinks, doinkIn, wideL, wideR, short, made50plus, consecutive, bestConsecutive, games, gamesStarted, koTouchbacks, koCount, wins, losses}
 SeasonLine = {year, league, teamId, teamName, age, ovr, role, stats: KickerStats, awards: string[], teamRecord: string, champion: bool, playoffResult: string, grade: 'A'..'F', salary}
-Decision = { kind:'OFFERS_COLLEGE'|'REDSHIRT'|'DECLARE'|'TRANSFER'|'COMBINE_PLAN'|'UDFA'|'EXTENSION'|'FREE_AGENCY'|'TAG'|'RETIRE'|'OFFSEASON_PLAN'|'CUT_NOTICE'|'HOF'|'TRAINING_BLOCKS', payload: any, options: {id, label, detail}[] }
+Decision = { kind:'OFFERS_COLLEGE'|'REDSHIRT'|'DECLARE'|'TRANSFER'|'COMBINE_PLAN'|'UDFA'|'EXTENSION'|'FREE_AGENCY'|'TAG'|'RETIRE'|'OFFSEASON_PLAN'|'CUT_NOTICE'|'HOF'|'TRAINING_BLOCKS'|'BODY_CHECK'|'CAMP'|'FINANCES', payload: any, options: {id, label, detail}[] }   // FINANCES: options DONE (first) / SKIP, resolved with extra = the staged actions (§2.13)
 KickSession = { kind:'HS_GAME'|'RECRUIT_CAMP'|'CAMP'|'COMBINE_LADDER'|'COMBINE_ACC'|'COMBINE_KO'|'HALFTIME70'|'PRACTICE', contexts: KickContext[], results: KickResult[], rival?: {name, results: KickResult[]}, idx: int }
 EventInstance = { id, text (rendered), sender, choices: [{label, preview}], rolledWeek, rolledYear }
 Modifier = { id, key, op:'mul'|'add', value, expires:{type:'week'|'game'|'season'|'never', at}, label, source }
 Settings (rtg.settings, UI-owned; mirrored subset in state.settings) = { audio: bool, autoPat: 'off'|'safe'|'all', playKickoffs: bool, simSpeed: 1|2|4, colorblind: bool, highContrast: bool, reducedMotion: bool, fontScale: 1|1.25|1.5, leftFooted: bool, inputMode: 'flick'|'meter', playClockMult: 1|2, tooltips: bool }
+Finance (§2.13; every amount $k, integers) = {
+  bank: int,                             // negative = overdraft (debt)
+  lifestyle: 'FRUGAL'|'COMFORTABLE'|'FLASHY'|'BALLER',   // the plan charged at the next tick
+  planCost: int|null,                    // what it will cost, quoted at the scale in force when the books last closed (null = tier × today's scale)
+  owned: string[],                       // purchase ids (Data.finance.purchases), each at most once
+  paid: {[purchaseId]: int},             // what an owned purchase cost; resale = paid × Tuning.finance.resale; upkeep = paid × upkeep / price
+  services: string[],                    // service ids bought for the coming season; Season.start → Finance.applyServices → cleared
+  holdings: Holding[], closed: ClosedHolding[],           // closed = sold / liquidated stakes, ≤ Tuning.finance.closedCap (20)
+  ledger: LedgerRow[],                   // newest last, ≤ Tuning.finance.ledgerCap (60)
+  totals: {earned, spent, invested, returned, lost, peakNetWorth},
+  debtYears: int, lastTick: int, nextId: int             // consecutive ticks closed in debt · state.year of the last tick · next holding number
+}
+Holding = {id: 'h<n>', oppId, name, kind: 'INDEX'|'PROPERTY'|'BUSINESS'|'CRYPTO'|'STARTUP'|'SCAM', risk: 'LOW'|'MED'|'HIGH'|'WILD', invested: int, value: int (≥ 0; 0 = busted, kept until written off), year, log: number[] (yearly pct, −1 = bust)}
+ClosedHolding = {id, name, kind, risk, invested, value, year, pct}
+LedgerRow = {year, kind: 'INCOME'|'LIFESTYLE'|'PURCHASE'|'UPKEEP'|'SERVICE'|'INVEST'|'RETURN'|'SELL'|'EVENT'|'DEBT'|'LIQUIDATION', label, delta (signed $k)}
 ```
 `KickContext.venue` / `.prestige` (D25) are presentation fields `Kick.buildContext` sets on every context: `venue` is an explicit `situation.venue`, else `'HS'` while `state.stage === 'HS'`, else the league; `prestige` is the home side's college prestige (1–5) only at a `COLLEGE` venue and `null` elsewhere. `Kick.model` and `Kick.resolve` never read them, `validateCtx` is lenient about them, and `KickView.venueOf(ctx)` falls back to the league for contexts saved before they existed (§4.6).
 
@@ -1305,12 +1529,12 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 #### 3.5.2 `RTG.RNG` (E1)
 `create(seed:uint32) → rng`; `rng.next() → [0,1)` (mulberry32, 1 draw), `int(lo, hi)` inclusive (1 draw), `float(lo, hi)` (1), `chance(p)` (1), `gauss(mu=0, sd=1)` (exactly 2 draws, Box–Muller, no caching), `pick(arr)` (1), `weighted(items, weightFn|key)` (1), `shuffle(arr)` in place (n−1 draws), `state() → uint32`, `setState(s)`, `fork(label) → rng` (derives a child seed `fnv1a(state+label)` for isolated sub-simulations such as other teams' games; advances parent by 1 draw). Test vectors in `rng.test.js`.
 
-#### 3.5.3 `RTG.Tuning` (E1) — object tree: `kick`, `sim`, `progression`, `soft`, `contracts`, `draft`, `hof`, `difficulty[d]`, `save`, `events`. Frozen with `Object.freeze` deep. `RTG.debug.tune(path, value)` may replace values at runtime (debug only) by re-creating an unfrozen copy.
+#### 3.5.3 `RTG.Tuning` (E1) — object tree: `kick`, `sim`, `weather`, `names`, `progression`, `soft`, `contracts`, `draft`, `hs`, `hof`, `difficulty[d]`, `save`, `events`, `career`, `finance` (§2.13), `perf`. Frozen with `Object.freeze` deep. `RTG.debug.tune(path, value)` may replace values at runtime (debug only) by re-creating an unfrozen copy.
 
 #### 3.5.4 `RTG.Schema` (E1)
-- `createCareer(opts:{name, archetype, difficulty, seed, hometown, look, foot}, rng) → CareerState` — builds both leagues (`Data.colleges` + generated NFL ratings), AI kickers, legends/records, player (§2.1.1), stage `HS`/phase `SEASON`, `flags.hs` = the senior season (`HS.season`), `pending = null` until the first game is opened. RNG: many draws (documented order: player attrs → college ratings → NFL ratings → kickers → legends).
+- `createCareer(opts:{name, archetype, difficulty, seed, hometown, look, foot}, rng) → CareerState` — builds both leagues (`Data.colleges` + generated NFL ratings), AI kickers, legends/records, player (§2.1.1), stage `HS`/phase `SEASON`, `flags.hs` = the senior season (`HS.season`), `state.finance` = `Finance.init` (bank 0, FRUGAL; 0 draws, §2.13), `pending = null` until the first game is opened. RNG: many draws (documented order: player attrs → college ratings → NFL ratings → kickers → legends).
 - `createTeam(data, rng, league) → Team`; `createGameState(...)`; `createKickLogRow(ctx, result, meta)`; `emptyKickerStats()`.
-- `validate(state) → {ok, errors: string[]}` — checks types/ranges/enums, referential integrity (teamIds exist), caps, no cycles. Cheap enough to run after every dispatch in debug mode (< 5 ms).
+- `validate(state) → {ok, errors: string[]}` — checks types/ranges/enums, referential integrity (teamIds exist), caps, no cycles; `state.finance` (§3.4) is required from `v ≥ 2` and validated whenever present (`paid` / `closed` nullable, holdings' `value ≥ 0` and `log[] ≥ −1`, unique holding ids and purchase ids, ledger rows and caps). Cheap enough to run after every dispatch in debug mode (< 5 ms).
 - `reindex(state)` — rebuilds non-persisted caches (`teamIndex`) after load.
 
 #### 3.5.5 `RTG.Names` (E2)
@@ -1378,7 +1602,7 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 
 #### 3.5.14 `RTG.Events` (E3)
 - `roll(state, rng, slot:'week'|'offseason') → EventInstance|null` — sets `state.pending = {kind:'EVENT', ...}`. RNG: 1 (fire) + 1 (weighted pick).
-- `apply(state, rng, choiceIdx) → EventOutcome {effects, headline, actions[]}` — applies effects, branches (1 draw each), clears pending, returns `actions` for `Career.handleActions`.
+- `apply(state, rng, choiceIdx) → EventOutcome {effects, headline, actions[]}` — applies effects, branches (1 draw each), clears pending, returns `actions` for `Career.handleActions`. A `money` effect also moves the bank (`Finance.deposit` / `charge`, `EVENT` row, 0 draws; guarded — the engine runs without `RTG.Finance`).
 - `force(state, rng, eventId) → EventInstance` (debug).
 - `headline(state, rng, tag, vars) → Headline` — picks a template (1 draw), pushes to `headlines`, ring-buffer update.
 - `message(state, kind, vars) → Message` — inbox note from templates; `markRead(state, id)`.
@@ -1386,7 +1610,7 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 
 #### 3.5.15 `RTG.Contracts` (E3)
 - `marketValue(state) → {aav, gtdPct, years}`; `rookieDeal(round) → Contract`; `tagValue(league) → number`.
-- `teamSatisfaction(state) → number`; `extensionOffer(state, rng) → Decision|null` (2 draws); `generateOffers(state, rng, mode:'FA'|'UDFA'|'MIN') → Decision` (weighted picks ≤ 6 draws); `counter(state, rng, decision) → {accepted, offer|null}` (1 draw); `applyTag(state, rng) → bool` (1 draw); `cutCheck(state, rng) → {cut, reason}|null`; `sign(state, offer)` (sets `player.contract`, `history.contracts`, `Career.changeTeam` if needed); `payoutSeason(state)` (earnings).
+- `teamSatisfaction(state) → number`; `extensionOffer(state, rng) → Decision|null` (2 draws); `generateOffers(state, rng, mode:'FA'|'UDFA'|'MIN') → Decision` (weighted picks ≤ 6 draws); `counter(state, rng, decision) → {accepted, offer|null}` (1 draw); `applyTag(state, rng) → bool` (1 draw); `cutCheck(state, rng) → {cut, reason}|null`; `sign(state, offer)` (sets `player.contract`, `history.contracts`, `Career.changeTeam` if needed); `payoutSeason(state) → {salary, bonus, nil, total}` ($M; into `history.earnings`; idempotent per contract year — `Career.offseasonChain` deposits `total`'s take-home into the bank, §2.13); `applyCut(state, reason)` pays the dead money into earnings **and** its take-home into the bank.
 - `teamsNeedingK(league) → Team[]` (need rule §2.7.6).
 
 #### 3.5.16 `RTG.Draft` (E3)
@@ -1396,7 +1620,7 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 - `tryout(state, rng) → KickSession` (undrafted minicamp).
 
 #### 3.5.17 `RTG.Season` (E2)
-- `start(state, rng)` — builds schedule for the active league, resets `season`, sets `phase='PRE'`, `week=0`, goals (via Awards), camp battle decision if required (via Career).
+- `start(state, rng)` — builds schedule for the active league, resets `season`, sets `phase='PRE'`, `week=0`, turns the services bought in the offseason into one-season mods (`Finance.applyServices`, 0 draws, §2.13), goals (via Awards), camp battle decision if required (via Career).
 - `beginRegular(state, rng)` — `phase='REG'`, `week=1`.
 - `userGameRef(state) → gameRef|null` (bye → null).
 - `simOtherGames(state, rng)` — every other game this week via `Sim.simAiGame` with `rng.fork('wk'+week+':'+gameId)`; writes results/standings/rankings/kicker stats.
@@ -1409,19 +1633,19 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 #### 3.5.18 `RTG.Career` (E3)
 - `starsFor(ovr, rating) → 2..5`; `afterSessionKick(state, rng, sess, idx, result)` — the live-scoreboard hook `sessionKick` calls (senior-season games only).
 - `generateCollegeOffers(state, rng, mode:'RECRUIT'|'TRANSFER', opts?) → Decision` — exactly 1 parent draw (a fork; all sampling on the child). `opts.earned` (the camp tour, §2.7.2) makes the RECRUIT list exactly those schools plus the safety-school rule; `opts.interest` (the senior-season board) tilts the safety pick.
-- `decide(state, rng, decision:{kind, optionId, extra?}) → DecisionOutcome {next: 'PENDING'|'PHASE', headline?, timeline?}` — the single entry point for every `Decision` kind (offers, redshirt, declare/stay, transfer, combine plan, UDFA pick, extension accept/counter/decline, FA pick/wait/hometown, tag reaction, retire choices, offseason plan, training blocks, HOF ack). Delegates to Contracts/Draft/Season.
+- `decide(state, rng, decision:{kind, optionId, extra?}) → DecisionOutcome {next: 'PENDING'|'PHASE', headline?, timeline?}` — the single entry point for every `Decision` kind (offers, redshirt, declare/stay, transfer, combine plan, UDFA pick, extension accept/counter/decline, FA pick/wait/hometown, tag reaction, retire choices, offseason plan, training blocks, finances — `extra` is the staged action set handed to `Finance.apply`, `result` its receipt — HOF ack). Delegates to Contracts/Draft/Season/Finance.
 - `campBattle(state, rng) → KickSession`; `finishSession(state, rng) → SessionOutcome` — resolves any `KickSession` (senior-season game → `HS.finishGame`; recruiting camp → `HS.finishCamp`; camp battle → K1/K2; combine → combineScore; halftime → fame; tryout → contract).
-- `offseasonChain(state, rng)` — orders the offseason decisions: `BODY_CHECK`(info) → `TRAINING_BLOCKS` → college: `REDSHIRT?`/`TRANSFER?`/`DECLARE?`; NFL: `CUT_NOTICE?` → `EXTENSION?`/`TAG?`/`FREE_AGENCY?` → `RETIRE?` → offseason events (2) → `advanceYear`.
+- `offseasonChain(state, rng)` — pays the season first (`Contracts.payoutSeason`, then the take-home into the bank — `Finance.deposit`, 0 draws) and orders the offseason decisions: `BODY_CHECK`(info) → `TRAINING_BLOCKS` → **`FINANCES`** (§2.13; `Finance.decision`, 2 draws) → college: `REDSHIRT?`/`TRANSFER?` → offseason events (2) → `DECLARE?`; NFL: `CUT_NOTICE?` → `EXTENSION?`/`TAG?` → [`REDRAFT`] → `FREE_AGENCY?` → `RETIRE?` → offseason events (2) → `advanceYear`.
 - `changeTeam(state, rng, teamId, {trust, js, reason})` — moves the player, resets meters, records `history.teams`, headline.
 - `handleActions(state, rng, actions[])` — executes event `action`s (TRANSFER, TRADE, HOLDOUT, CAMP_BATTLE, CHANGE_TEAM, SKIP_GAME, INJURY, RETIRE).
 - `enterDraft(state, rng)` (`stage='DRAFT'`, `phase='DECLARE'|'COMBINE'`), `runDraft(state, rng)`, `enterNfl(state, rng, teamId, contract)`.
-- `retire(state, rng) → LegacyReport {tier, hof, line, moments, records, docTitle, timeline}`; sets `stage='RETIRED'`, `phase='LEGACY'`.
+- `retire(state, rng) → LegacyReport {tier, hof, line, moments, records, docTitle, timeline, finance, netWorth}` (`finance` = `Finance.summary(state)`, `netWorth` $k — §2.13); sets `stage='RETIRED'`, `phase='LEGACY'`.
 - `stageInfo(state) → {act, label}`.
 
 #### 3.5.19 `RTG.Save` (E3)
 - `serialize(state, rng, now) → SaveBlob` `{v, app: RTG.VERSION, savedAt: now, seed, rngState, playtimeSec, checksum: fnv1a(JSON(career)), career: state}` (prunes non-persisted caches).
 - `deserialize(blob) → {state, rngState, migrated: bool, warnings[]}` — verifies checksum (mismatch → `{error:'CHECKSUM'}`), runs `migrate`, `Schema.reindex`, `Schema.validate` (errors → `{error:'INVALID', errors}`).
-- `migrate(blob) → blob` — applies `Save.migrations[v]` sequentially up to `RTG.SAVE_VERSION`; `blob.v > SAVE_VERSION` → `{error:'NEWER'}`.
+- `migrate(blob) → blob` — applies `Save.migrations[v]` sequentially up to `RTG.SAVE_VERSION`; `blob.v > SAVE_VERSION` → `{error:'NEWER'}`. `migrations[1]` (v1 → v2, D27): `Finance.init` on the packed career, then the bank seeded with `Tuning.finance.migrateShare` (0.5) of `history.earnings` as one `INCOME` row "Career to date" stamped year 0, and `FINANCES` spliced after `TRAINING_BLOCKS` into a mid-offseason chain's persisted `steps` when its `idx` has not passed that point; a no-op without `RTG.Finance` (partial loads) or, for the block, when it already exists.
 - `exportString(blob) → base64`, `importString(str) → blob`.
 - `slotSummary(blob) → {name, team, year, stage, ovr, savedAt}`.
 - Storage adapter contract (UI): `{ getItem(key) → string|null, setItem(key, string), removeItem(key), keys() → string[] }`; keys `rtg.save.1|2|3`, `rtg.save.auto`, `rtg.settings`, `rtg.records`.
@@ -1444,7 +1668,8 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 | `endWeek(state, rng)` | `WeekReport` | requires game done or bye; requires no pending |
 | `chooseEvent(state, rng, idx)` | `EventOutcome` | |
 | `sessionKick(state, rng, input)` | `{result, done, outcome?}` | for `pending.kind==='KICKS'`; when the last kick is played, calls `Career.finishSession` |
-| `decide(state, rng, {kind, optionId, extra})` | `DecisionOutcome` | |
+| `decide(state, rng, {kind, optionId, extra})` | `DecisionOutcome` | `FINANCES`: `extra = {lifestyle?, buy?, services?, invest?, sell?}`, `result` = the receipt `{applied, skipped, bankAfter, netWorthAfter}` (§2.13) |
+| `settlePending(state, rng, opts)` | what was resolved, in order | the default policy — events → choice 0, sessions → AI kicks, decisions → `Engine.autoOption` (a kind's policy, else the first option: `FINANCES` → `DONE`, nothing spent); `opts.max` steps one pending at a time |
 | `nextPhase(state, rng)` | `{phase, stage}` | drives PRE→REG, AWARDS→OFF, OFF→next year, DRAFT sub-phases; idempotent when a `pending` exists (returns current) |
 | `autoPlayGame(state, rng)` | `GameSummary` | start (if needed) + auto kicks + finish |
 | `autoPlayWeek(state, rng, {autoChoices: true})` | `WeekReport` | train (auto focus), play, endWeek, auto-resolve event (choice 0) |
@@ -1452,6 +1677,24 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 | `autoPlayOffseason(state, rng, opts)` | `{decisions[]}` | default choices (accept best offer, stay in college until senior unless projected round ≤ 4, retire when forced) |
 | `autoPlayCareer(state, rng, {untilStage, maxYears})` | `state` | used by tests and `RTG.debug` |
 | `save(state, rng, now)` / `load(blob)` | blob / `{state, rng}` | wraps `Save` |
+
+#### 3.5.21 `RTG.Finance` (E3) — the money system (§2.13; `engine/finance.js`, after `hs`, before `save`)
+
+| Function | Returns | RNG | Side effects |
+|---|---|---|---|
+| `init(state)` | `state.finance` | 0 | creates the block (bank 0, FRUGAL, nothing owned); idempotent — an existing block is returned as is |
+| `deposit(state, k, kind, label)` / `charge(state, k, kind, label)` | the ledger row `{year, kind, label, delta}` | 0 | `bank ± round(|k|)` (the sign of `k` is ignored; a charge may take the bank below zero), `totals`, the ledger (cap 60); a state without a block is `init`ed on first touch |
+| `scale(state)` | `Tuning.finance.scale[league]` (COLLEGE 1, NFL 10) | 0 | pure |
+| `netWorth(state)` | $k = bank + Σ holdings' value + Σ owned purchases at `paid × Tuning.finance.resale` | 0 | pure |
+| `tick(state, rng)` | the year's report (§2.13) or `null` once `lastTick === state.year` | **1** — one fork `finance:tick:<year>`; the child takes 4 per live holding + 1 for the headline | revalues holdings, charges the plan and upkeep, applies yearly meter effects, the debt step and the forced sale, `lastTick`, `peakNetWorth`, timeline `MONEY` rows, at most one `money` headline |
+| `opportunities(state, rng)` | `Opportunity[]` (`perYear` = 3) | **1** — one fork `finance:opps:<year>` | none (pure given the fork) |
+| `decision(state, rng)` | `{kind:'FINANCES', payload, options:[DONE, SKIP]}` | 2 (`tick` + `opportunities`; 1 when the year is already ticked) | those of `tick` |
+| `apply(state, rng, dec, actions)` | the receipt `{applied, skipped, bankAfter, netWorthAfter}` | 0 (`rng` unused, kept for the handler signature) | sell → lifestyle → services → buy → invest, each re-checked against the running bank; skips, never throws for a user-level problem; throws only when `dec.kind !== 'FINANCES'` |
+| `summary(state)` | `{bank, netWorth, holdingsValue, owned, lifestyle, best, worst, totals, debt}` | 0 | pure |
+| `applyServices(state)` | `{applied, mods, xp}` | 0 | one-season mods on `player.mods` (`finance:<ID>:<year>`, source `finance`), the coach's XP, `finance.services = []` |
+| `TIERS`, `HOLDING_KINDS`, `RISKS`, `LEDGER_KINDS`, `SERVICE_IDS` | constants (copies) | — | for chips and tests |
+
+The decision payload (all $k, at this scale): `{bank, netWorth, scale, league, income (this year's INCOME rows), report | null, lifestyle:{current, tiers:[{id, label, cost, effects, text}]}, purchases:[{id, name, price, upkeep, effects, yearly, text, icon, owned, affordable, resale}], services:[{id, name, price, text, effect, active, affordable}], opportunities:[{oppId, name, kind, risk, pitch, source, min, max, model}], holdings:[{id, oppId, name, kind, risk, invested, value, year, lastPct, log, dead}], ledger (last 12), debtYears, totals}`. Purchases carrying `leagues` are hidden from the payload and skipped on buy outside their league (none in the catalogue today).
 
 ### 3.6 Career flow / state machine (screens are UI names; see §4)
 
@@ -1474,7 +1717,8 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 | .REG last week | — | (endWeek) | — | `.POST` or `.AWARDS` |
 | .POST | none / game | `hub` (bracket card) → `game` … | same as REG per postseason game | `.AWARDS` |
 | .AWARDS | none | `awards` | Continue → `nextPhase` | `.OFF` |
-| .OFF | DECISION chain | `offseason` wizard (body check, blocks, decisions), `contract`, `draft` decisions | `decide` per step; `nextPhase` at the end | COLLEGE: next `.PRE` or `DRAFT.DECLARE`→…; NFL: next `.PRE`, or `RETIRED.LEGACY` |
+| .OFF | DECISION chain | `offseason` wizard (body check, blocks, the books, decisions), `finances`, `contract`, `draft` decisions | `decide` per step; `nextPhase` at the end | COLLEGE: next `.PRE` or `DRAFT.DECLARE`→…; NFL: next `.PRE`, or `RETIRED.LEGACY` |
+| .OFF | DECISION(FINANCES) | `finances` (§4.9; the wizard's own card is a door — OPEN THE BOOKS) | stage the plan, buys, services, stakes and sales locally → CLOSE THE BOOKS → `decide({kind:'FINANCES', optionId:'DONE', extra})` | the next chain step |
 | DRAFT.DECLARE | DECISION(DECLARE) | `offseason` (declare card) | Declare/Stay → `decide` | Stay → `COLLEGE.PRE`; Declare → `DRAFT.COMBINE` |
 | DRAFT.COMBINE | DECISION(COMBINE_PLAN) → KICKS ×3 | `combine` | `decide`, `sessionKick` | `DRAFT.DRAFT` |
 | DRAFT.DRAFT | none → DECISION(UDFA)? | `draft` | Continue → `Career.runDraft` (via `nextPhase`); UDFA pick → `decide` | `NFL.PRE` |
@@ -1486,11 +1730,12 @@ Invariant: **the UI only ever calls `Engine.*`**, and after any call it re-rende
 ### 3.7 Save format, versioning, migration
 
 ```json
-{ "v": 1, "app": "1.0.0", "savedAt": 1757000000000, "seed": 123456789, "rngState": 987654321,
+{ "v": 2, "app": "1.0.0", "savedAt": 1757000000000, "seed": 123456789, "rngState": 987654321,
   "playtimeSec": 5400, "checksum": "a1b2c3d4", "career": { …CareerState… } }
 ```
 - `v` = save schema version = `RTG.SAVE_VERSION`. Bump when `CareerState` changes incompatibly; add `Save.migrations[oldV] = blob => blob` (with a fixture `test/fixtures/save_v<oldV>.json`). A save newer than the app → refuse with "This save is from a newer version".
 - `checksum` = `fnv1a(JSON.stringify(career))`; mismatch → refuse to load (offers export for support).
+- Versions so far: **1** the launch schema; **2** (D27) adds `career.finance` — `Save.migrations[1]` builds it with `Finance.init` and seeds the bank with half of the career's gross earnings (`Tuning.finance.migrateShare`) as one `INCOME` row "Career to date" (year 0 — not the year's take-home), so an old career does not start broke, and splices `FINANCES` into a mid-offseason chain that has not passed `TRAINING_BLOCKS`; it runs on the packed career before `Schema.validate` (which requires the block from v 2). `fixtures/save_v0.json` exercises the whole chain (v0 → v1 → v2).
 - Keys: `rtg.save.1|2|3`, `rtg.save.auto`, `rtg.settings`, `rtg.records`. Autosave after every `finishUserGame`, `endWeek`, `chooseEvent`, `decide`, `nextPhase`, `hsStartGame`, `hsStartCamp`, every `autoPlay*` / `settlePending`, and the last kick of a KickSession (`sessionKick` returning `done`); manual save any time (not mid-kick).
 - Size: `stats.kicks` capped at 600 rows (older rows are aggregated; season/career totals are always exact), `driveLog` ≤ 80 rows and only for the in-progress game, `season.schedule[].log` only for user games of the current season, `inbox` ≤ 60, `headlines` ≤ 40, `history.moments` ≤ 50. Target < 400 KB per slot.
 - Export/Import: base64 of the blob JSON via the Saves screen (textarea copy/paste), because file:// cannot download.
@@ -1505,7 +1750,7 @@ RTG.debug.jumpTo({stage, phase?, year?, week?})         // fast-forwards with En
 RTG.debug.forceKick({outcome}|{power, aim, quality})    // applies to the current pending kick (game or session) and returns KickResult
 RTG.debug.autoKick(bool)                                // UI resolves all user kicks via autoKick without input
 RTG.debug.simGame() → GameSummary   simWeek() → WeekReport   simSeason() → SeasonLine   simCareer({untilStage:'RETIRED'|…, maxYears}) → state
-RTG.debug.setAttrs({POW:90,…})  setSoft({trust:90, js:80, fame:600})  addXp(n)  addMod(mod)
+RTG.debug.setAttrs({POW:90,…})  setSoft({trust:90, js:80, fame:600})  addXp(n)  addMod(mod)  money(k) → bank   // $k in (or out, negative) through Finance.deposit / charge, ledger EVENT 'debug' (D27)
 RTG.debug.triggerEvent(id) → EventInstance   choose(idx)   decide({kind, optionId})
 RTG.debug.screen() → current screen id   go(screenId, params)   pending() → state.pending
 RTG.debug.montecarlo({attrs, distance, n, ctxOverrides}) → {pct, model: Kick.model(...)}
@@ -1590,7 +1835,7 @@ Each entry: layout · components · engine calls.
 | **hscamps** | The camp itinerary between camps: star-rating chip, CAMP TOUR card (offers earned, camps left, senior-year record, field goals; played/total), ITINERARY list — one row per invite with crest, school, prestige stars, "They want: make 4 of 5, one from 55+" and an OFFER EARNED / NO OFFER chip plus the verdict line once played, NEXT on the next one; SETTINGS | GO TO <SCHOOL> CAMP → `Engine.hsStartCamp` → `Router.sync`; reads `HS.camps`, `HS.nextCamp`, `HS.askOf` |
 | **hscamp** | KickView full-screen (chromeless) with a small header — the school and its stars, the ask, the running tally ("3/5 · long ✓" via `HS.judgeCamp`) — and a slot strip of the five distances, the long one starred; a toast and an `aria-live` line carry the verdict when the camp closes | `Engine.sessionKick`; on done → `Router.sync` |
 | **offers** | Card carousel (swipe/arrows): crest, prestige ★, depth pill (OPEN/VET/STAR), coach line, NIL, climate icon, "near home" tag; COMPARE toggle → 2-column table. After the camps the list is exactly the schools earned there (§2.7.2) — the decision option label carries "· earned at camp" / "· safety school" (the card itself does not mark it yet), and the walk-on banner shows on the walk-on path | `Engine.decide({kind:'OFFERS_COLLEGE', optionId})` |
-| **hub** | Top: team bar (crest, record, rank/seed). Week Card: opponent crest, venue, forecast (icon + °F + wind mph/dir), spread text, 2 storylines (headlines), meters row (Trust, Fans, Morale, Job Security as 5-block bars; Fame tier chip). Inbox preview (3 newest). Buttons: TRAIN (if not done), PLAY GAME / SIM GAME, SIM TO END OF SEASON (confirm). Bye week: "Rest or Grind" card. PRE: goals card + camp-battle button. POST: bracket card. | `Season.userGameRef` (read), `Engine.train`, `Engine.startUserGame`, `Engine.autoPlayGame`, `Engine.endWeek`, `Engine.autoPlaySeason` |
+| **hub** | Top: team bar (crest, record, rank/seed). Week Card: opponent crest, venue, forecast (icon + °F + wind mph/dir), spread text, 2 storylines (headlines), meters row (Trust, Fans, Morale, Job Security as 5-block bars; Fame tier chip). Inbox preview (3 newest). Buttons: TRAIN (if not done), PLAY GAME / SIM GAME, SIM TO END OF SEASON (confirm). Bye week: "Rest or Grind" card. PRE: goals card + camp-battle button. POST: bracket card. Head: a **bank chip** (`button.hub-bank`, gold — red in debt — tooltip with the net worth; tap → `finances`); the METERS card's footer is a nav row with a **FINANCES** button (`[data-action="finances"]`, §4.9); the earnings chip is labelled gross. | `Season.userGameRef` (read), `Finance.netWorth` (read), `Engine.train`, `Engine.startUserGame`, `Engine.autoPlayGame`, `Engine.endWeek`, `Engine.autoPlaySeason` |
 | **inbox** | Chat-bubble list with sender avatars (coach/agent/GM/press/fan/family); events open as a modal with 2–3 big buttons; effect preview per difficulty (numbers / icons / hidden); consequence toast | `Engine.chooseEvent(idx)`, `Events.markRead` |
 | **training** | 6 focus tiles (POW/ACC/CON/CLU/KO/REST) with projected XP and the 25 % discount tag; attribute panel: 5 rows with bars, current/POT hint (agent tier), cost, "+" button, XP balance, AUTO button; traits list; "Practice" button (M4) | `Engine.train(focus)`, `Engine.spendXp(attr)`, `Player.costToRaise` (read) |
 | **game** | Scoreboard (DOM "LED": crests, score, Q, clock, possession dot); drive log (monospace lines coloured by side, auto-scroll, `aria-live=polite`); speed pills ×1/×2/×4; buttons NEXT KICK ▶ (default) / WATCH / SIM REST; kick history chip strip (this game). On `USER_KICK` → `Router.go('kick')`; on `USER_KICKOFF` → KO timing bar inline; on `ICE_TIMEOUT` → "ICED!" toast then kick; on `END_GAME` → `finishUserGame` → postgame | `Engine.simToKick`, `Engine.simStep` (watch mode timer 400 ms/drive ÷ speed; uses `setTimeout`, cancelled in `destroy`), `Engine.autoKick` (auto-PAT rule), `Engine.applyUserKickoff`, `Engine.finishUserGame` |
@@ -1602,17 +1847,18 @@ Each entry: layout · components · engine calls.
 | **stats** | Tabs: Season / Career / Splits (distance buckets table, by weather, by hash, by pressure) / Kick log (rows: wk, D, wind, result, tags; replay ▶ re-simulates deterministically from `rngState` + input in KickView, M4) | read `state.stats`; `Stats.rebuildSplits` |
 | **records** | Two tabs (College/NFL): record, holder, year; yours in gold; "3 more 50+ makes for the season record" chase lines; milestones list | read `state.records` |
 | **awards** | Envelope-open animation per award (600 ms), trophy sprite, XP/fame chips; season goals results; CONTINUE | `Engine.nextPhase` |
-| **offseason** | Stepper: Body Check (age deltas) → Training Blocks (3 drag-to-slot or tap) → Decisions (declare/stay with projection; redshirt; transfer offers; extension/tag/FA → contract screen; retire) → Preview next season (rival kicker card, schedule teaser) | `Engine.decide(...)` per step; `Engine.nextPhase` |
+| **offseason** | Stepper: Body Check (age deltas) → Training Blocks (3 drag-to-slot or tap) → **MONEY** ("THE BOOKS": the router opens the `finances` screen for the `FINANCES` decision; the wizard's own card for it is a door — OPEN THE BOOKS → `Router.go('finances')`) → Decisions (declare/stay with projection; redshirt; transfer offers; extension/tag/FA → contract screen; retire) → Preview next season (rival kicker card, schedule teaser) | `Engine.decide(...)` per step; `Engine.nextPhase` |
 | **combine** | Three KickView sessions with a plan choice card first; results summary with combineScore and projection update | `Engine.decide({kind:'COMBINE_PLAN'})`, `Engine.sessionKick` |
 | **draft** | Picks ticker (auto-scroll 250 ms/pick, ×4 speed button); your card pulses when reached; agent phone texts; "YOU'RE GOING TO {CITY}" stinger; UDFA invite cards fallback | `Engine.nextPhase` (runs the draft), `Engine.decide({kind:'UDFA'})` |
 | **contract** | Offer cards (AAV, years, gtd %, team quality stars, climate/dome tag, starter guarantee, market); agent advice text; buttons ACCEPT · COUNTER (once) · DECLINE/WAIT; team-mood face (5 states) | `Engine.decide({kind:'EXTENSION'|'FREE_AGENCY'|'TAG'|'CUT_NOTICE', optionId, extra})` |
 | **campbattle** | KickView with a live 2-line scoreboard (you vs rival), 6 slots each; rival kicks shown as quick results | `Engine.sessionKick` |
-| **timeline** | Vertical strip per season: crest, record, FG%, awards icons, contract chips; moments with impact stars | read `history` |
-| **legacy** | Bust portrait (look), tier, HOF score meter with tick marks, verdict text, career line, top-10 moments carousel, records held, documentary title, seed code (tap to copy), NEW CAREER | `Engine.decide({kind:'HOF'})`; writes `rtg.records` |
+| **timeline** | Vertical strip per season: crest, record, FG%, awards icons, contract chips; moments with impact stars; kind `MONEY` (busts, booms, forced sales, big buys) draws the `money` icon | read `history` |
+| **finances** | THE BOOKS (§4.9): header card (BANK, NET WORTH, this year's take-home, lifestyle chip, red debt banner) → THIS YEAR (the tick report, or this year's ledger in review) → LIFESTYLE (four tier cards) → GAME PLAN (the three services; decision mode only) → BIG BUYS (purchase grid) → INVEST (this year's pitches with a stepper and MAX, then HOLDINGS with SELL) → LEDGER (last 12); decision mode stages everything as a local draft under a sticky footer (BANK AFTER · RESET DRAFT · CLOSE THE BOOKS), review mode (from the hub) has only BACK | `Engine.decide({kind:'FINANCES', optionId:'DONE', extra: draft})` then `Router.sync()`; reads the decision payload, else `state.finance` + `Data.finance` + `Tuning.finance` (+ `Finance.netWorth` / `scale`) |
+| **legacy** | Bust portrait (look), tier, HOF score meter with tick marks, verdict text, career line (EARNINGS gross and, since D27, **NET WORTH** in $k — red when negative), a **MONEY** card (bank, holdings at value, lifestyle, best and worst bet with their %, what was owned, take-home / spent / invested → net result) from `report.finance` / `Finance.summary`, top-10 moments carousel, records held, documentary title, seed code (tap to copy), NEW CAREER | `Engine.decide({kind:'HOF'})`; writes `rtg.records` |
 | **settings** | Audio, auto-PAT (off/safe/all), play kickoffs, sim speed, input mode (flick/meter), play clock ×2, colorblind, high contrast, reduced motion, font scale, left-footed mirror, tooltips, key remap (Space/Enter/arrows) | `Storage.setItem('rtg.settings')`; `Store.settings` |
 | **saves** | 3 slots + autosave cards (name, team, year, OVR, saved at); SAVE / LOAD / DELETE; EXPORT (textarea + copy) / IMPORT (paste) | `Store.save(slot)`, `Save.deserialize`, `Store.replace` |
 | **practice** (M4) | Distance/hash/wind/weather pickers; unlimited kicks, no XP; 30-kick heat map | `Kick.buildContext(..., {forSession:true})`, `Kick.resolve` via a throwaway rng |
-| **debug panel** (`?debug=1`) | Buttons for the §3.8 API; state JSON dump | `RTG.debug.*` |
+| **debug panel** (`?debug=1`) | Buttons for the §3.8 API (incl. `+$100k` → `RTG.debug.money(100)`, so QA can fund a purchase); state JSON dump | `RTG.debug.*` |
 
 ### 4.6 The kick scene (`RTG.UI.KickView`, E4)
 
@@ -1664,6 +1910,80 @@ WebAudio only, no files: `click` (bar ticks), `thunk` (contact; pitch 180–320 
 - QoL: sim-to-next-kick default, auto-PAT, auto-kickoff, sim rest of game/season, speed ×1/2/4, kick history, "why did I miss?" feedback, "What's my range?" overlay, seed copy, export/import, undo last XP spend until leaving the Training screen, no undo for kicks.
 
 
+### 4.9 The finances screen (`ui/screens/finances.js` → screen id `finances`, E5) — D27
+
+**Two modes decided from state**: **DECISION** when `state.pending` is a `FINANCES` decision (the wizard's MONEY step —
+`Router.resolve` maps that decision to `finances` ahead of the `offseason` fallback), **REVIEW** otherwise (opened
+from the hub's bank chip or its FINANCES button; `finances` is a hub-family `FREE` screen, so it stays put while the
+state routes to `hub`). One view-model serves both: DECISION reads the decision payload (§3.5.21) and falls back to
+state for anything missing; REVIEW builds the same shape from `state.finance` + `Data.finance` + `Tuning.finance`
+(+ `Finance.netWorth` / `Finance.scale` when present). A career without books (no `state.finance`, no payload) shows
+a "no books yet" card with BACK. Everything guards a missing `RTG.Finance` / `Data.finance`.
+
+**Layout, top to bottom, phone-first** (`.scr-finances`; 390 px with 16 px gutters and no horizontal scroll; desktop
+widens the grids):
+
+1. **THE BOOKS · Y<year>** (`.fin-head`, gold — red in debt): BANK (`.fin-bank`), NET WORTH (`.fin-networth`),
+   TAKE-HOME Y<year> (this year's `INCOME` rows), the lifestyle chip, a `PRO PRICES ×10` chip in the NFL, the
+   holdings count; **a red debt banner** (`.fin-debt`, `role=alert`) when the bank is below zero — the debt, the years
+   in the red, and what happens next, worded from `Tuning.finance.debt` (the grace, `liquidateAfter` spelled out,
+   the insolvency rule "once the debt is more than what you own"), never a hardcoded number.
+2. **THIS YEAR** (`.fin-return` rows): every holding's move as a `deltaChip` with its % and the $ change, the lifestyle
+   cost, upkeep, interest, the forced sales, and what the year did to the meters; a "THE BANK CALLED" banner when
+   the year closed in the red. REVIEW mode shows this year's ledger rows instead.
+3. **LIFESTYLE** (`.fin-tiers` → `.fin-tier`, 2 × 2 on a phone, 1 × 4 on desktop): the four tiers with cost per year at
+   this scale, their yearly effects as chips and their line; `NOW` marks this year's plan (`.current`), the planned
+   tier is `.selected` (`aria-pressed`). DECISION mode makes them buttons; the plan is stored, not charged. While the
+   bank is red every tier dearer than the current one is disabled and dimmed ("not while in debt") — the engine
+   refuses it too.
+4. **GAME PLAN** (DECISION only; `.fin-service`): the three services — name, effect chip, price, ADD / REMOVE
+   (`data-service`), `BOOKED` when already bought.
+5. **BIG BUYS** (`.fin-buys` → `.fin-buy`, 2 columns on a phone, 3–4 on desktop): icon, name, price, `+upkeep/yr`,
+   the one-off and yearly effect chips, the line; `OWNED` chip (with the resale value in its tooltip), or BUY / UNDO
+   (`data-buy`); unaffordable cards dim and disable.
+6. **INVEST** (`.fin-opps` → `.fin-opp`): each pitch with the source's avatar and name and a display label for the
+   kind ("A TEAMMATE · BUSINESS"; INDEX and SCAM both print `FUND`, so the sure thing never gives itself away), the
+   risk chip — LOW mint · MED gold · HIGH `warn` (sunset) · WILD red — the pitch in quotes, the buy-in range and what
+   can be spared, an amount stepper (`.fin-stepper`: `−` / `+` in steps of the 1 / 2 / 5 × 10ⁿ value at or above a
+   tenth of the range, MAX = min(max, the staged bank); the top of the range is always reachable) and INVEST / UNDO
+   (`data-invest`); then **HOLDINGS** (`.fin-holding`): name, risk, kind, `invested → value` (mint / red), last
+   year's % as a `deltaChip` (or `NEW`), `BUST` for a holding at zero (`.dead`), SELL / UNDO (`data-sell`). Every
+   BUY / ADD / INVEST / SELL / stepper button carries an accessible name with the item ("Buy Used Truck, $25k",
+   "More for Parking App"), so a screen reader never hears eleven identical BUYs.
+7. **LEDGER** (`.fin-ledger-row`): the last 12 rows, newest first, icon by kind, signed amounts.
+8. DECISION mode: a **sticky footer** (`.fin-footer`, above the tab bar and the safe area) with BANK AFTER
+   (`.fin-after`), the number of staged changes, RESET DRAFT (ghost, `data-action="reset-draft"`) and **CLOSE THE
+   BOOKS** (primary, `data-action="close-books"`); its button row also carries `.card-footer`, the house convention
+   for a step's default action. REVIEW mode: a BACK button (`data-action="back"`) and no other action.
+
+**The draft.** Nothing is dispatched until CLOSE THE BOOKS. The staged set `{lifestyle, buy[], services[],
+invest[{oppId, amount}], sell[]}` is recomputed by `staged(model, draft)` in the engine's apply order — sell →
+lifestyle → services → buy → invest — with the same per-step affordability check as `Finance.apply` (including the
+in-debt refusal of a dearer plan), so BANK AFTER is exact. **The floor is $0**, or the opening bank when the year
+opens in debt: a button whose action would breach it disables (a SELL that pays for something staged cannot be undone
+either), and CLOSE THE BOOKS disables only when the draft is over the floor — under it, or carrying items the bank
+can no longer pay because the bank moved while the decision was pending (`RTG.debug.money`; the footer turns red,
+`.fin-footer.over`, and names how many to undo) — so a player already in the red can always close with nothing
+staged, keep or cheapen the plan, or sell to shrink the debt. **The draft lives in a module-level cache keyed by
+career + year** (`DRAFTS[createdAt:year]`), so leaving the books mid-draft — the HUB tab, the desktop rail, Escape,
+the wizard's door card — and coming back finds everything still staged; the cache entry is dropped when the books
+close, and any other career / year's entry when a new one opens. `lifestyle` is sent only when it differs from the
+current tier. Closing dispatches `store.dispatch('decide', {kind:'FINANCES', optionId:'DONE', extra})` once (a
+re-entrancy guard and the disabled button make a second click a no-op — it never reaches `Engine.decide`), toasts the
+receipt (skipped items by reason, or "Books closed · bank $X" and the headline), announces it, calls `Router.sync()`
+and leaves explicitly if the sync kept the screen (an EVENT pending resolves to `hub` + modal; the screen also leaves
+on its own when the decision disappears under it, e.g. an autoplay from the open books). Focus is restored on the
+same `data-*` control after every re-render, or — when that control just disabled itself (a stepper at its cap) — on
+the nearest enabled button of the same card, never on `<body>`. An EVENT modal that opens right after CLOSE THE
+BOOKS takes the focus on the dialog itself, not on its first choice, so the Enter / Space that closed the books can
+never answer the event unread (`C.modal`, non-closable modals).
+
+**Test hooks**: `data-tier="<id>"`, `data-buy="<id>"`, `data-service="<id>"`, `data-invest="<oppId>"`,
+`data-sell="<holdingId>"`, `data-step="<oppId>:-1|+1"`, `data-max="<oppId>"`, `data-opp`, `data-holding`,
+`data-action="close-books" | "reset-draft" | "back"`; classes `.fin-bank .fin-networth .fin-after .fin-debt .fin-footer
+(.over when under the floor)`. Autoplay and the AI paths never open the screen: the router shows `finances` only for the
+human's pending decision, and `Engine.settlePending` resolves it engine-side with DONE.
+
 ---
 
 ## 5. Test plan
@@ -1676,28 +1996,29 @@ Runner: `node kicker/test/run.js` (plain `node:assert` + `node:test`, no npm dep
 |---|---|---|
 | `purity.test.js` | E1 | Every file under `js/engine` and `js/data` contains none of `document`, `localStorage`, `Math.random`, `Date`, `setTimeout`, `setInterval`, `requestAnimationFrame`, `performance`, `navigator`, `alert`; `window` appears only in the shim string; loading via `load.js` throws nothing; `typeof RTG.Kick.resolve === 'function'` etc. for every module in §3.2. |
 | `rng.test.js` | E1 | mulberry32 vectors (seed 1 → first 5 draws match known constants); same seed → identical 10 000-draw sequence; `state()/setState()` resumes exactly; `gauss` mean/sd within 0.02/0.03 over 100k; `gauss` consumes exactly 2 draws; `fork` is deterministic and does not perturb the parent beyond 1 draw; `shuffle` is a permutation. |
-| `util.test.js` | E1 | `erf`/`phi` accuracy (|err| < 1e-6 vs table), `fnv1a` vectors, `template`, `indexBy`, `clamp`. |
-| `schema.test.js` | E1 | `createCareer` produces a state that `validate`s; `JSON.parse(JSON.stringify(state))` deep-equals `state` (after `reindex`); no object identity shared between leagues; all 48 + 32 team ids unique; fixtures for every phase validate. |
-| `data_lint.test.js` | E2 | 48 colleges (6×8), 32 NFL (2×4×4); nicknames not in `blockedNicknames` and no `city+nick` collision with the blocklist pairs; unique abbreviations/names; hex colours valid and primary/secondary contrast ratio ≥ 2.5; names lists sizes (≥ 200 first, ≥ 300 last); no blocked kicker surnames; ≥ 30 events with ≥ 1 choice each; ≥ 160 headline templates; every event `cond` is a function; every effect key exists in the `Effects` schema. |
+| `util.test.js` | E1 | `erf`/`phi` accuracy (\|err\| < 1e-6 vs table), `fnv1a` vectors, `template`, `indexBy`, `clamp`. |
+| `schema.test.js` | E1 | `createCareer` produces a state that `validate`s; `JSON.parse(JSON.stringify(state))` deep-equals `state` (after `reindex`); no object identity shared between leagues; all 48 + 32 team ids unique; fixtures for every phase validate; `state.finance` is created by `createCareer` and validates (bank int, tier enum, holdings' value ≥ 0, ledger cap; a v ≥ 2 state without it fails). |
+| `data_lint.test.js` | E2 | 48 colleges (6×8), 32 NFL (2×4×4); nicknames not in `blockedNicknames` and no `city+nick` collision with the blocklist pairs; unique abbreviations/names; hex colours valid and primary/secondary contrast ratio ≥ 2.5; names lists sizes (≥ 200 first, ≥ 300 last); no blocked kicker surnames; ≥ 30 events with ≥ 1 choice each; ≥ 160 headline templates; every event `cond` is a function; every effect key exists in the `Effects` schema. (The `Data.finance` catalogue lint lives in `finance.test.js`.) |
 | `weather.test.js` | E1 | dome → wind 0 & weather 'dome'; wind ≤ cap; snow only when temp < 34; distributions (10k games): cold-December snow share 25–45 %; Rayleigh mean ≈ 6.3 mph. |
 | `player.test.js` | E1 | `ovr` formula; `costToRaise` table values (60→61 @24 = 18; 85→86 = 43); POT cap; `ageTick` decline lines by age; injury probabilities (100k rolls within ±10 %); JS update rule fixtures (bench at < 25, cut after 3 weeks < 10, floor = trust/5); modifier expiry by week/game/season. |
 | `kick.test.js` | E1 | `maxFG` values at POW 40/62/82/99 (49.4/56.2/62.4/67.7 ±0.05); `carryMax`, `Rneed`, `h(D)` closed forms; σ at the four profiles (3.07/2.80/2.09/1.84 ±0.01 before multipliers); shank rate by CON; deterministic `resolve` for a fixed seed (golden JSON of 20 results); **rng draw order** asserted by counting draws per outcome branch; doink bands (x = ±3.05 → DOINK, ±3.30 → WIDE); crossbar band; wind drift sign (+dir pushes right) and magnitude (15 mph @ 45 yd = 1.77 yd ±0.01); hash `targetDeg` (college R hash @ 30 yd = −12.53°); overswing penalty (σ ×1.375 at 1.15) and bias sign by foot; block probability bounds (0.2 %–15 %) and `allOut` bump; PAT distance by league; `pMakeAt` monotone decreasing in D and increasing in ACC; kickoff touchback rate at KO 50 vs 90 (≈ 35 % vs ≈ 75 %); `feedbackFor` labels. |
 | `kick_model.test.js` | E1 | `Kick.model().pMake` vs 50k-kick Monte Carlo within ±2 pts at 25/35/45/52/58 yd for rookie and elite; `windowDeg` asymmetry from hashes; `pClear` = 0.5 exactly at pNeed where carry = Rneed. |
 | `kick_calibration.test.js` `[balance]` | E1 | The §2.3.6 table, 30k kicks/cell, ±4 (56–60: ±6); human-vs-AI: quality 0.95/aim sd 0.3 beats AI profile by 2–5 pts at 40–49; quality 0.5 loses 5–12; difficulty σ multipliers ordering. Prints the table (also `test/balance_report.js`). |
-| `sim.test.js` `[balance]` | E2 | 2 000 NFL games (random teams 58–88, kickers 62–92) → points/team 21–27, FGA/team 1.9–2.4, PAT/team 2.4–3.0, distance buckets per §2.13, regulation ties 3–7 %, decisive attempts/game 0.10–0.25, ice timeouts ≤ 0.6 × decisive; college 1 000 games → 24–32 pts, FGA 1.5–2.2, PAT 2.8–4.2; clock never negative, drives/team 10–14; OT rules (NFL both-possess, playoff continues, college alternating from 25, 2-pt from period 2, 3+ alternating tries) by scripted fixtures; `step` after `END` throws; a scripted `applyKick` sequence reproduces an exact final score; **determinism**: same seed → identical `driveLog` and score; `simToNextUserKick` returns only user-kick or end events; blocked PAT return-for-2 occurs. |
+| `sim.test.js` `[balance]` | E2 | 2 000 NFL games (random teams 58–88, kickers 62–92) → points/team 21–27, FGA/team 1.9–2.4, PAT/team 2.4–3.0, distance buckets per §2.14, regulation ties 3–7 %, decisive attempts/game 0.10–0.25, ice timeouts ≤ 0.6 × decisive; college 1 000 games → 24–32 pts, FGA 1.5–2.2, PAT 2.8–4.2; clock never negative, drives/team 10–14; OT rules (NFL both-possess, playoff continues, college alternating from 25, 2-pt from period 2, 3+ alternating tries) by scripted fixtures; `step` after `END` throws; a scripted `applyKick` sequence reproduces an exact final score; **determinism**: same seed → identical `driveLog` and score; `simToNextUserKick` returns only user-kick or end events; blocked PAT return-for-2 occurs. |
 | `schedule.test.js` | E2 | College: every team 12 games, 7 conference (each conference opponent once), 5 non-conference vs 5 distinct other conferences, week 12 = rival, no team plays twice in a week, no self-games, home/away 6/6 ±1; NFL: 17 games, 6 divisional, 4+4 rotating divisions, 2+1 place-based, 8/9 home split alternating by year, one bye in weeks 5–14, 18 weeks, ≤ 16 games per week, generation < 50 ms, deterministic by seed, 100 consecutive years all valid. |
 | `standings.test.js` | E2 | Tiebreak fixtures (H2H, division record, common games, conference record, point diff, coin) for NFL divisions and wild cards; college ranking formula & stickiness; 5-champs + 7-at-large selection with the 6th champion as at-large; seeds 1–4 byes; bracket advancement; bowl pairing never same-conference; draft order (worst first, playoff exits). |
-| `season.test.js` | E2 | A full college season via `Engine.autoPlaySeason` on a fixture: 13 REG weeks, CCG, bowls/playoff produce a champion, `phase` sequence PRE→REG→POST→AWARDS→OFF, `season.kickerStats` populated for all 48 teams, awards non-empty, user stats consistent with kick log, runtime < 250 ms; NFL season likewise (18 weeks + 4 playoff weeks, Championship Bowl winner); `endWeek` refuses with a pending event; injuries tick; mods expire. |
+| `season.test.js` | E2 | A full college season via `Engine.autoPlaySeason` on a fixture: 13 REG weeks, CCG, bowls/playoff produce a champion, `phase` sequence PRE→REG→POST→AWARDS→OFF, `season.kickerStats` populated for all 48 teams, awards non-empty, user stats consistent with kick log, runtime < 250 ms; NFL season likewise (18 weeks + 4 playoff weeks, Championship Bowl winner); `endWeek` refuses with a pending event; injuries tick; mods expire; `Season.start` turns the services booked in the offseason into one-season mods (`trainMult` / `injury` / `pressure`, source `finance`) that are still on through the season and gone at its close, and a save/load in between keeps them (D27). |
 | `stats.test.js` | E3 | bucket assignment, streaks, long, 50+ counts, clutch/decisive counters, kick-log cap & aggregation preserving totals, splits rebuild, `grade` table, `topMoments` ordering, `checkRecords` beats legends and flags `isUser`, milestones fire once. |
 | `awards.test.js` | E3 | Golden Boot/Leg goes to the max `kickerScore` with min FGA; All-League 1st/2nd distinct; STPOY threshold rule; weekly award; season goals generation/checking; `hofScore` worked examples (877 → FIRST_BALLOT; ≈ 200 → Solid Starter) and monotonicity in each input. |
-| `events.test.js` | E3 | Every event: `cond` evaluates on fixtures for its stages without throwing; each choice applies and clamps soft stats 0–100 / fame 0–1000; branches respect probabilities (10k trials ±3 %); `once` respected; recent-ring exclusion; actions returned for TRANSFER/TRADE/CAMP_BATTLE; headline ring buffer never repeats within 40; template slots all resolve (no `{` left). |
-| `contracts.test.js` | E3 | AAV worked values (OVR 75 → 3.0, 85 → 5.1, 92 → 6.8, cap 8.0 ±0.05), age/fame/market multipliers, rookie scale by round, guaranteed %, tag value growth and second-tag ×1.2, max two tags, extension eligibility rule, counter acceptance bounds, FA offer counts 1–4 and withdrawal odds, cut rules, earnings accumulate, `teamsNeedingK` rule. |
+| `events.test.js` | E3 | Every event: `cond` evaluates on fixtures for its stages without throwing; each choice applies and clamps soft stats 0–100 / fame 0–1000; branches respect probabilities (10k trials ±3 %); `once` respected; recent-ring exclusion; actions returned for TRANSFER/TRADE/CAMP_BATTLE; headline ring buffer never repeats within 40; template slots all resolve (no `{` left); a `money` effect moves the bank both ways (`EVENT` ledger row; a cost may leave it negative). |
+| `contracts.test.js` | E3 | AAV worked values (OVR 75 → 3.0, 85 → 5.1, 92 → 6.8, cap 8.0 ±0.05), age/fame/market multipliers, rookie scale by round, guaranteed %, tag value growth and second-tag ×1.2, max two tags, extension eligibility rule, counter acceptance bounds, FA offer counts 1–4 and withdrawal odds, cut rules, earnings accumulate, `teamsNeedingK` rule; a cut deposits the dead money's take-home (× `Tuning.finance.takeHome.NFL`) into the bank as an `INCOME` row (D27). |
 | `draft.test.js` | E3 | `draftValue` → round table boundaries; shock event 1 % (100k trials ±0.2 %); team selection prefers needy teams; ticker length; UDFA invites 2–3; tryout branch; combine score clamp ±8. |
 | `hs.test.js` | E3 | §3.5 API present; `HS.season` builds a school, five dated games (rivalry index 3, playoff index 4) and a ten-school board, costs the parent rng one draw and is deterministic per seed; `startGame` one fork, a context per chance, refuses a second pending and a sixth game; the scoreboard runs live and the next context sees the real score; the rivalry/playoff games end on a decisive field goal; the board moves up on makes and wins, down on misses, each school at its own pace; `tierOf` bands; `ratingOf` maxes at 6 on a perfect season, floors at 0, extra points alone are not enough; `starsFor` — a perfect senior year is 5★ at a recruit's OVR (44–56), a blank one the walk-on line, monotone in the rating; **the fifth game closes into the camps** (stars applied, `summary`, phase `CAMPS`, nothing pending, `flags.WALKON` unset, `nextPhase` throws "camps first", `HS_SEASON` on the timeline); **invites** — a perfect season earns 6–8 invites with ≥ 2 prestige-5 camps, real colleges, five strictly increasing distances each, bars per prestige, the long one at or past the bar, sorted small to big, no school twice, every WARM+ board school on the list when under the cap, and a 0-rated season still gets 1–2 prestige ≤ 2 camps; **startCamp** one fork, five FG contexts at that school (`game.teamId = oppId`), wind ≤ 8, labelled with the distance, the last one under more pressure, refuses with a pending; **judgeCamp** makes vs the bar and the long one when asked; **finishCamp** marks the invite, adds an `HS_CAMP` timeline row, opens the next camp with nothing pending; a mid-camp save/load round trip; **the offers are exactly the earned schools** (`earned: true`, scholarships, a prestige-5 among them after a perfect tour, `HS_CAMPS` on the timeline, `decide` enrols in COLLEGE); **safety school** only when fewer than 2 were earned, and alone when a 3★+ season earned nothing; **walk-on** only for 2★ + nothing earned (flag, −5 morale, 1 walk-on offer) while a 2★ who wins the small camp gets that scholarship; `generateCollegeOffers` with `opts.earned` costs one parent draw and ignores the prestige band ("earned at camp" on every label); a mid-season save/load round trip; a pre-D26 `HS.OFFERS` save without `camps` still validates and routes; `settlePending {max: 1}` plays one camp per step and `autoPlayCareer` walks season and tour to COLLEGE. |
-| `career.test.js` | E3 | Stars formula (`starsFor` against `Tuning.draft.stars`); offers count by stars (walk-on 1); camp battle scoring & tie to incumbent; declare eligibility (3 seasons, redshirt excluded, senior auto); transfer resets; `decide` rejects unknown kinds; `offseasonChain` order; `changeTeam` bookkeeping; retirement rules (forced after 2 offer-less offseasons, age 42); HOF verdict thresholds; legacy report fields. |
-| `career_balance.test.js` `[balance]` | E3 (E1 assists) | 200 seeded careers via `Engine.autoPlayCareer` at Pro: no exceptions/NaN; stage progression valid; §2.13 career targets (rookie FG%, year-4, elite peaks, longest FG distribution, benching/cut rate, career length, HOF distribution); each career saves/loads round-trip every season; runtime < 4 s per career. |
-| `save.test.js` | E3 | round-trip equality (ignoring caches); checksum mismatch rejected; `v > SAVE_VERSION` rejected; migration from `fixtures/save_v0.json` (a deliberately older shape) runs and validates; export/import base64 round trip; size after a 20-season auto career < 400 KB; slot summary fields. |
-| `engine_api.test.js` | E3 | Each `Engine.*` function exists; `endWeek` before the game is played throws; `applyUserKick` without a pending kick throws; `autoPlayWeek/Season/Career` reach the expected phases; `nextPhase` is idempotent with a pending decision. |
+| `career.test.js` | E3 | Stars formula (`starsFor` against `Tuning.draft.stars`); offers count by stars (walk-on 1); camp battle scoring & tie to incumbent; declare eligibility (3 seasons, redshirt excluded, senior auto); transfer resets; `decide` rejects unknown kinds; `offseasonChain` order (college `BODY_CHECK, TRAINING_BLOCKS, FINANCES, REDSHIRT, TRANSFER, EVENT, EVENT, DECLARE`; NFL `BODY_CHECK, TRAINING_BLOCKS, FINANCES, CUT_NOTICE, EXTENSION, [REDRAFT], FREE_AGENCY, RETIRE, EVENT, EVENT` — the pinned step literals carry `FINANCES` after `TRAINING_BLOCKS` since D27); `changeTeam` bookkeeping; retirement rules (forced after 2 offer-less offseasons, age 42); HOF verdict thresholds; legacy report fields. |
+| `career_balance.test.js` `[balance]` | E3 (E1 assists) | 200 seeded careers via `Engine.autoPlayCareer` at Pro: no exceptions/NaN; stage progression valid; §2.14 career targets (rookie FG%, year-4, elite peaks, longest FG distribution, benching/cut rate, career length, HOF distribution); each career saves/loads round-trip every season; runtime < 4 s per career. |
+| `save.test.js` | E3 | round-trip equality (ignoring caches); checksum mismatch rejected; `v > SAVE_VERSION` rejected; migration from `fixtures/save_v0.json` (a deliberately older shape) runs through every step to `SAVE_VERSION` 2 and validates; the v1 → v2 step adds `finance` and seeds the bank with half the earnings to date as one `INCOME` row "Career to date" (asserted on the v0 fixture's chain and in `finance.test.js`; there is no separate v1 fixture); export/import base64 round trip; size after a 20-season auto career < 400 KB; slot summary fields. |
+| `engine_api.test.js` | E3 | Each `Engine.*` function exists; `endWeek` before the game is played throws; `applyUserKick` without a pending kick throws; `autoPlayWeek/Season/Career` reach the expected phases; `nextPhase` is idempotent with a pending decision; the FINANCES step — `autoOption` picks `DONE` (the first option), `settlePending` closes the books with no actions (bank unchanged), `decide` with `extra` hands the staged actions to `Finance.apply` (`result.applied`, `bankAfter`), and a whole auto career leaves nothing owned or held with the take-home on the ledger (D27). |
+| `finance.test.js` (D27; fixtures `fixtures/finance.js`: `fund`, `booksOpen`, `financesPending`, `closeBooks`, `holding`, `withModels`, `childFor`) | E3 | Public API, `Tuning.finance`, the schema enums and the exported lists; the `Data.finance` lint (≈ 10 purchases, the three services, ≥ 12 investments with sane return models, one scam, an NFL-only pitch); `init` fresh / idempotent / created by `createCareer` / validates; `deposit` / `charge` integers, sign ignored, ledger rows newest last, `totals`, the ledger cap; `netWorth` = bank + holdings + `paid × resale` (catalogue price × scale when `paid` is unknown); `scale` by league, the draft on the stage; **`tick` exactly 1 parent draw whatever the portfolio, `null` (0 draws) once ticked**, the report shape, the plan and its effects, upkeep and each purchase's yearly effects, ONE fork for every holding (bust → 0 with RETURN row / `totals.lost` / MONEY timeline / money headline; boom × boomX), the scam busts on its first tick, a big return makes the timeline and a small one does not, peak net worth; the plan charged at the price quoted when the books closed (`planCost`: a college BALLER costs its college price at the first NFL tick, re-quoted at NFL scale by the next close; no quote → the tier at today's scale), upkeep off what was paid (a college truck keeps its college upkeep in the NFL, the payload shows it); the debt step (interest, `debtYears`, morale, plan → FRUGAL, a year in the black resets; an overdraft within `Tuning.finance.debt.grace × scale` is not a debt year, one dollar past it is) and the forced sale after `liquidateAfter` years or once the debt exceeds what could be sold — not before (assets ≥ debt is a warning year) — selling the smallest asset that clears what is owed, else the largest, again until clear; a busted holding is never sold; nothing left → still broke; `apply` in debt refuses a dearer plan (a sale that clears the overdraft first makes it fine) and sanitises a tampered pitch (negative / zero / inverted min-max, unknown kind / risk); `applyServices` never stacks a duplicate id; `opportunities` — `perYear` distinct pitches, scaled amounts, 1 parent draw, pure given the fork, deterministic per seed, the league / `minFame` gates and the weights over many seeds; `decision` — DONE first then SKIP, 2 draws (1 once ticked), payload shapes, the `affordable` / `owned` / `active` flags; `apply` — sell → lifestyle → services → buy → invest, 0 draws, the plan stored not charged, services charged now, purchases charge / own / `paid` / lift the meters / make the timeline, invest opens a holding; every skip reason and only a non-FINANCES decision throws; the bank never below zero, integers clamped to [min, max]; a sale at value into `closed[]`, a dead one written off; `summary`; `applyServices` (the three one-season mods with allowed keys, source `finance`, the coach's XP, cleared); the career chain (FINANCES after TRAINING_BLOCKS in both chains, 2 draws, DONE closes unspent); the take-home deposit (`payoutSeason × takeHome`, earnings stay gross); event money both ways; a cut's dead money; the legacy report's money line; the v1 → v2 migration (the seed row at year 0, never this year's income; `FINANCES` spliced into a mid-offseason chain that has not passed the blocks, a chain past them left alone); `Schema.validate` on the block (plus duplicate / unknown services, malformed `closed[]` rows, a tick or holding from the future, a negative total, a bad `planCost`); `autoPlayCareer` to RETIRED on 3 seeds (validates every season, every offseason closed unspent, totals add up, deterministic per seed); `[risk]` over ten ticks an all-WILD portfolio loses money in more than 100 of 200 seeds, an all-LOW one in fewer than 20 and never goes to zero; `[risk]` every WILD model's analytic yearly E[×] is below 1 and below every LOW model's, and matches the real tick within Monte-Carlo noise. |
 
 ### 5.2 Playwright flows (`test/e2e/*.spec.js`, Chromium desktop + WebKit "iPhone 12" emulation; each spec runs against **both** `file://…/kicker/index.html` and `http://localhost:8080/kicker/`)
 
@@ -1705,7 +2026,7 @@ Runner: `node kicker/test/run.js` (plain `node:assert` + `node:test`, no npm dep
 |---|---|
 | `boot.spec` | Page loads with zero console errors on file:// and http; title renders; with `**/fonts.googleapis.com/**` and gstatic blocked the page still renders and a kick can be played (fallback font). `RTG.VERSION` defined; `RTG.debug` present. |
 | `newcareer.spec` | New career → name/archetype/difficulty/seed → the `hsseason` screen with five schedule rows and a recruiting board; `getState().stage === 'HS'`, `phase === 'SEASON'`, `pending === null`; seed shown equals the entered seed. |
-| `camps.spec` | `newCareer({seed: 7})` → five games via PLAY WEEK + `forceKick({outcome:'GOOD'})` → `waitForScreen('hscamps')`: the itinerary lists `getState().flags.hs.camps.invites.length` rows (≤ 8), small camps first, the first marked NEXT, `phase === 'CAMPS'`, `pending === null`; GO TO CAMP → `hscamp` with five slots and the long one starred; five forced kicks → back on `hscamps` with an OFFER EARNED chip and the verdict line; miss the long one at a prestige-5 camp → NO OFFER; `jumpTo({stage:'HS', phase:'CAMPS'})` lands on `hscamps`; a save mid-camp reloads onto `hscamp`; after the last camp `waitForScreen('offers')` shows exactly the earned schools with "earned at camp" on the option labels and COMMIT reaches `COLLEGE.PRE`. Phone width: no horizontal scroll; `app.errors` empty throughout. (Not yet written — `full_career.spec` / `season_and_career.spec` / `qa_shots.js` must also play the camps after the fifth game instead of waiting for `offers`.) |
+| `camps.spec` | `newCareer({seed: 7})` → five games via PLAY WEEK + `forceKick({outcome:'GOOD'})` → `waitForScreen('hscamps')`: the itinerary lists `getState().flags.hs.camps.invites.length` rows (≤ 8), small camps first, the first marked NEXT, `phase === 'CAMPS'`, `pending === null`; GO TO CAMP → `hscamp` with five slots and the long one starred; five forced kicks → back on `hscamps` with an OFFER EARNED chip and the verdict line; miss the long one at a prestige-5 camp → NO OFFER; `jumpTo({stage:'HS', phase:'CAMPS'})` lands on `hscamps`; a save mid-camp reloads onto `hscamp`; after the last camp `waitForScreen('offers')` shows exactly the earned schools with "earned at camp" on the option labels and COMMIT reaches `COLLEGE.PRE`. Phone width: no horizontal scroll; `app.errors` empty throughout. (Written; `full_career.spec` / `season_and_career.spec` / `qa_shots.js` play the camps after the fifth game too.) |
 | `kick_mouse.spec` | In a senior-season game: `page.mouse` press on the ball, drag down 120 px over 300 ms, flick up 60 px in 80 ms, release → result banner visible; `getState().pending.session.results.length === 1`, `input.power` within 0.5–1.15, `auto === false`. Overswing: drag 200 px → `feedback.power === 'OVERSWING'`. |
 | `kick_touch.spec` | Same via `page.touchscreen`/pointer emulation on iPhone 12 portrait and landscape (844×390); canvas fits the viewport; `document.documentElement.scrollWidth <= innerWidth`. |
 | `kick_keyboard.spec` | Aim-then-hold: ArrowLeft ×4 → aim −2°, then hold the confirm key until the bar is mid-green and release → result with `input.aim = −2` and a high quality. |
@@ -1717,6 +2038,8 @@ Runner: `node kicker/test/run.js` (plain `node:assert` + `node:test`, no npm dep
 | `responsive.spec` | Viewports 390×844, 844×390, 768×1024, 1280×800: hub, game, kick, stats screens have no horizontal scroll; bottom tab bar visible on phone; right rail visible at 1280. |
 | `perf.spec` | `simGame()` ×300 then open a kick: `RTG.debug.perf().frameP95Ms < 20` on desktop CI; heap (`performance.memory` when available, else CDP `Performance.getMetrics` JSHeapUsedSize) growth < 20 MB; `perf().listeners` equal before/after 500 `go('stats')/go('hub')` cycles; `rafActive === false` on DOM screens. |
 | `a11y.spec` | Tab reaches every hub button; focus ring visible; `prefers-reduced-motion` emulation → flight completes in < 100 ms; `aria-live` region text updates after a kick; colorblind mode adds `.cb` and result banner still contains text. |
+| `full_career.spec` | The whole career through the real screens (senior season, camps, college seasons, the offseason wizard card by card, declare, combine, draft, contract, NFL seasons, retirement, legacy) with `Schema.validate` after every dispatch; the offseason walker clicks each decision's real control — since D27 the `FINANCES` step lands on the `finances` screen, where its generic path clicks `.card-footer .btn-primary`, i.e. CLOSE THE BOOKS with nothing staged (`[data-action="close-books"]`; the footer's button row carries `.card-footer` for exactly that) — and the state must show the wizard moved on. Screenshots under `test/e2e/shots`. |
+| `finances.spec` (not yet written — D27) | `jumpTo` to a college offseason, settle `BODY_CHECK` and `TRAINING_BLOCKS` one at a time → `waitForScreen('finances')`: every section renders, `.fin-bank` equals `getState().finance.bank`, no horizontal scroll at 390 px, the sticky footer is on screen; `[data-tier="COMFORTABLE"]` stages a plan without changing BANK AFTER; `[data-service="PRIVATE_COACH"]` and `[data-buy="USED_TRUCK"]` lower BANK AFTER by their prices; an unaffordable buy is disabled; `[data-step]` / `[data-max]` move the amount within `[min, max]`; `[data-invest]` stages a stake; RESET DRAFT clears everything; CLOSE THE BOOKS → the engine's `finance.bank` equals the footer's BANK AFTER, `owned` / `services` / `holdings` carry the staged ids, the wizard shows the next step; REVIEW mode from the hub's bank chip shows OWNED / NOW and only BACK; `RTG.debug.money(-40)` → the red banner, buys and services disabled, CLOSE still enabled and closing spends nothing; `+$100k` in the debug panel funds a purchase. Phone and desktop, file:// and http. |
 
 ### 5.3 Definition of done (per module)
 
@@ -1781,5 +2104,6 @@ Contracts consumed: `Engine.*` (E3), `Save` (E3), `Schema.validate`, `Stats` rea
 - [ ] All numbers displayed by the UI come from `state` or `Kick.model` (never re-derived).
 - [ ] `Tuning` is the only home for constants; tests read from it.
 - [ ] Saves produced at M2 load at M3/M4 (migrations added if the schema changes; `SAVE_VERSION` bumped).
+- [ ] A v1 save (pre-D27) loads at v2: `Save.migrations[1]` builds `career.finance` and the hub shows the seeded bank.
 
 *End of specification.*

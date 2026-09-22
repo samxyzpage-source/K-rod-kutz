@@ -341,6 +341,8 @@
     state.game = null;
     state.phase = 'PRE';
     state.week = 0;
+    // the services bought in the offseason become one-season modifiers here (RTG.Finance.applyServices, 0 draws)
+    if (RTG.Finance && isFn(RTG.Finance.applyServices)) RTG.Finance.applyServices(state);
     refreshTables(state, rng);                                                                   // fork 1
     if (kind === 'COLLEGE') season.rankingsPrev = clone(season.rankings);
 

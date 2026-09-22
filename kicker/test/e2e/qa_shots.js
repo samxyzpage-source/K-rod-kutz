@@ -290,6 +290,9 @@ async function run(size) {
     await H.waitForScreen(page, 'offseason'); await shot(page, 'offseason_body', size);
     await walk(page, b2 => b2.dec === 'TRAINING_BLOCKS');
     await H.waitForScreen(page, 'offseason'); await shot(page, 'offseason_blocks', size);
+    // the MONEY step: the books on their own screen (funded so the buys and pitches are live in the shot)
+    await walk(page, b2 => b2.dec === 'FINANCES');
+    await H.waitForScreen(page, 'finances'); await H.debug(page, 'money', 300); await page.waitForTimeout(120); await shot(page, 'finances', size);
     await walk(page, b2 => b2.dec === 'DECLARE' || b2.dec === 'TRANSFER' || b2.dec === 'REDSHIRT');
     await H.waitForScreen(page, 'offseason'); await shot(page, 'offseason_decision', size);
     // to the declare card (more seasons on auto). A strong leg from here on, so the draft / pro screens are reachable

@@ -31,7 +31,7 @@
   /** Hub-family screens: browsing screens that remain valid while the state routes to 'hub'. */
   var FREE = {
     hub: 1, team: 1, training: 1, stats: 1, schedule: 1, standings: 1, records: 1, timeline: 1, inbox: 1,
-    saves: 1, settings: 1, practice: 1, postgame: 1
+    saves: 1, settings: 1, practice: 1, postgame: 1, finances: 1
   };
   /** Screens rendered without the shell chrome. */
   var CHROMELESS = { title: 1, newcareer: 1, kick: 1, hsgame: 1, hscamp: 1, campbattle: 1, combine: 1 };
@@ -170,6 +170,7 @@
         if (CONTRACT_KINDS[dk]) return { id: 'contract', params: { kind: dk } };
         if (dk === 'HOF') return { id: 'legacy', params: {} };
         if (dk === 'COMBINE_PLAN') return { id: 'combine', params: {} };
+        if (dk === 'FINANCES') return { id: 'finances', params: {} };   // the offseason MONEY step: the books (human only — autoplay settles it engine-side)
         return { id: 'offseason', params: { kind: dk } };
       }
     }
