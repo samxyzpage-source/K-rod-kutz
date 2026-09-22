@@ -18,11 +18,6 @@
     SOCCER: 'Kickoff specialist with a live leg. Raw technique.'
   };
   var DIFF_TEXT = { rookie: 'Forgiving. Full previews.', pro: 'The intended game.', allpro: 'Sharper misses, meaner GMs.', legend: 'No green zone. Gusts. Good luck.' };
-  /** §2.14: the two jobs. The road is the same; the kick at the middle of it is not. */
-  var POS = [
-    { id: 'K', label: 'KICKER', text: 'Field goals, extra points and kickoffs. Three points at a time, and the game on your foot.' },
-    { id: 'P', label: 'PUNTER', text: 'Punts. Distance and hang time fight each other, and pinning them at the 5 is the whole job.' }
-  ];
 
   function factory(store) {
     var C = RTG.UI.C, Router = RTG.UI.Router;
@@ -48,7 +43,6 @@
     var d0 = rollDefaults(rng);
     var form = {
       name: d0.name,
-      position: 'K',
       archetype: 'SURGEON',
       look: d0.look,
       foot: 'R',
@@ -65,34 +59,12 @@
     var dice = C.button({ kind: 'secondary', icon: 'dice', label: 'DICE', ariaLabel: 'Random name', onClick: function () { form.name = RTG.Names.player(rng).full; nameInput.value = form.name; touched.name = true; } });
     el.appendChild(C.el('div', { class: 'field' }, C.el('label', { class: 'field-label', 'for': 'nc-name', text: 'NAME' }), C.el('div', { class: 'input-row' }, nameInput, dice)));
 
-    // ── position (§2.14)
-    var posGrid = C.el('div', { class: 'grid-2 pos-grid', role: 'radiogroup', 'aria-label': 'Position' });
-    var posCards = {};
-    POS.forEach(function (o) {
-      var card = C.el('button', { type: 'button', class: 'card card-selectable pos-card', role: 'radio', 'data-pos': o.id, onClick: function () { selectPos(o.id); } },
-        C.el('div', { class: 'card-title', text: o.label }),
-        C.el('p', { class: 'small txt-grey', text: o.text }));
-      posCards[o.id] = card;
-      posGrid.appendChild(card);
-    });
-    function selectPos(id) {
-      form.position = id;
-      for (var k in posCards) { posCards[k].classList.toggle('card-selected', k === id); posCards[k].setAttribute('aria-checked', k === id ? 'true' : 'false'); }
-      syncArchLabels();
-    }
-    el.appendChild(C.el('div', { class: 'field' }, C.el('span', { class: 'field-label', text: 'POSITION' }), posGrid));
-
     // ── archetypes
     var archGrid = C.el('div', { class: 'grid-2 arch-grid', role: 'radiogroup', 'aria-label': 'Archetype' });
     var archCards = {};
     Object.keys(ARCH).forEach(function (id) {
       var bars = C.el('div', { class: 'stack', style: 'gap:2px' });
-      RTG.Schema.ATTRS.forEach(function (a) {
-        var bar = C.bar({ label: a, value: ARCH[id][a][0], noValue: true });
-        var lab = bar.querySelector('.bar-label');
-        if (lab) lab.setAttribute('data-attr', a);
-        bars.appendChild(bar);
-      });
+      RTG.Schema.ATTRS.forEach(function (a) { bars.appendChild(C.bar({ label: a, value: ARCH[id][a][0], noValue: true })); });
       var card = C.el('button', { type: 'button', class: 'card card-selectable arch-card', role: 'radio', 'data-arch': id, onClick: function () { selectArch(id); } },
         C.el('div', { class: 'card-title', text: id === 'SOCCER' ? 'SOCCER CONVERT' : id }),
         bars,
@@ -104,17 +76,7 @@
       form.archetype = id;
       for (var k in archCards) { archCards[k].classList.toggle('card-selected', k === id); archCards[k].setAttribute('aria-checked', k === id ? 'true' : 'false'); }
     }
-    /** The same five attributes mean different things to a punter (§2.14), so the bars say so. */
-    function syncArchLabels() {
-      var labels = RTG.Player && RTG.Player.attrLabels ? RTG.Player.attrLabels(form.position) : null;
-      var bars = archGrid.querySelectorAll('.bar-label');
-      for (var i = 0; i < bars.length; i++) {
-        var code = bars[i].getAttribute('data-attr') || bars[i].textContent;
-        if (labels && labels[code]) bars[i].textContent = labels[code];
-      }
-    }
     selectArch(form.archetype);
-    selectPos(form.position);
     el.appendChild(C.el('div', { class: 'field' }, C.el('span', { class: 'field-label', text: 'ARCHETYPE' }), archGrid));
 
     // ── look
@@ -201,7 +163,7 @@
     function start() {
       var name = (form.name || '').trim() || RTG.Names.player(rng).full;
       var opts = {
-        name: name, archetype: form.archetype, position: form.position, look: { skin: form.look.skin, hair: form.look.hair, boot: form.look.boot }, foot: form.foot,
+        name: name, archetype: form.archetype, look: { skin: form.look.skin, hair: form.look.hair, boot: form.look.boot }, foot: form.foot,
         hometown: form.hometownIdx >= 0 ? hometowns[form.hometownIdx] : undefined,
         difficulty: form.difficulty
       };

@@ -235,8 +235,7 @@
       gross: 0, net: 0, hang: 0, landing: 0, lateral: 0, oppStart: 0,
       touchback: false, outOfBounds: false, fairCatch: false, downed: false,
       returnYds: 0, inside20: false, blocked: false, blockReturnTd: false, returnTd: false,
-      grade: 'OK', outcome: 'OK', made: true,
-      auto: !!auto, assisted: false, forced: false, tags: auto ? ['auto'] : []
+      grade: 'OK', auto: !!auto, assisted: false, forced: false, tags: auto ? ['auto'] : []
     };
   }
 
@@ -256,7 +255,7 @@
       res.gross = rd(FIELD_YARDS - res.losYard);
       res.grade = 'TOUCHBACK';
       res.net = rd((FIELD_YARDS - T.field.touchbackYard) - res.losYard);
-      return seal(res);
+      return res;
     }
     res.landing = rd(landing);
     var halfWidth = T.field.halfWidthYd;
@@ -266,7 +265,7 @@
       res.oppStart = spotOf(landing);
       res.inside20 = landing >= FIELD_YARDS - T.field.insideYards;
       res.grade = gradeOf(res, m);
-      return seal(res);
+      return res;
     }
     // in play: a high ball is fair-caught or downed, a low one is returned
     var pinned = clamp(Math.abs(res.lateral) / halfWidth, 0, 1);            // angled at the sideline
@@ -288,7 +287,7 @@
     }
     res.inside20 = !res.touchback && landing >= FIELD_YARDS - T.field.insideYards;
     res.grade = gradeOf(res, m);
-    return seal(res);
+    return res;
   }
 
   function gradeOf(res, m) {
@@ -301,13 +300,6 @@
     if (res.net >= m.maxDist * G.goodPct) return 'GOOD';
     if (res.net >= m.maxDist * G.okPct) return 'OK';
     return 'POOR';
-  }
-
-  /** `outcome` mirrors the grade and `made` is "not a disaster" — what the log, the banner and the HUD read. */
-  function seal(res) {
-    res.outcome = res.grade;
-    res.made = !res.blocked && !res.touchback && res.grade !== 'SHANK';
-    return res;
   }
 
   /**
@@ -342,7 +334,7 @@
       res.gross = 0; res.net = 0; res.hang = 0;
       res.landing = res.losYard;
       res.oppStart = res.blockReturnTd ? FIELD_YARDS : clamp(FIELD_YARDS - res.losYard + T.block.spotGain, 1, FIELD_YARDS - 1);
-      return seal(res);
+      return res;
     }
     var aimRad = aim * DEG;
     var straight = distanceFor(power, m.maxDist) * Math.cos(aimRad);
@@ -377,7 +369,7 @@
       res.oppStart = spotOf(landing);
       res.inside20 = true;
       res.grade = 'COFFIN';
-      return seal(res);
+      return res;
     }
     res.lateral = rd(num(ctx.ballX, 0) + gross * Math.tan(aim * DEG));
     if (landing >= FIELD_YARDS) {                    // a booming assisted punt can still reach the end zone
@@ -387,7 +379,7 @@
       res.oppStart = T.field.touchbackYard;
       res.net = rd((FIELD_YARDS - T.field.touchbackYard) - res.losYard);
       res.grade = 'TOUCHBACK';
-      return seal(res);
+      return res;
     }
     res.landing = rd(landing);
     res.fairCatch = true;                            // the hang the assist guarantees is not returnable
@@ -395,7 +387,7 @@
     res.oppStart = spotOf(landing);
     res.inside20 = landing >= FIELD_YARDS - T.field.insideYards;
     res.grade = gradeOf(res, m);
-    return seal(res);
+    return res;
   }
 
   /** RTG.debug.forcePunt: the named grade, without spending a draw. */
@@ -409,16 +401,15 @@
       case 'BLOCKED':
         res.blocked = true; res.hang = 0; res.gross = 0; res.net = 0; res.landing = los;
         res.oppStart = clamp(FIELD_YARDS - los + T.block.spotGain, 1, FIELD_YARDS - 1);
-        return seal(res);
+        return res;
       case 'TOUCHBACK':
         res.touchback = true; res.gross = rd(room); res.landing = FIELD_YARDS; res.hang = G.hang;
         res.oppStart = T.field.touchbackYard; res.net = rd((FIELD_YARDS - T.field.touchbackYard) - los);
-        return seal(res);
+        return res;
       case 'SHANK':
         res.gross = rd(Math.min(G.shank, room - 1)); res.hang = G.shankHang; break;
       case 'COFFIN':
-        // as close to their goal line as this leg can actually get
-        res.gross = rd(clamp(room - G.coffinYard, 1, m.maxDist)); res.hang = G.hang; res.outOfBounds = true; break;
+        res.gross = rd(Math.max(1, room - G.coffinYard)); res.hang = G.hang; res.outOfBounds = true; break;
       case 'BOOMING':
         res.gross = rd(Math.min(m.maxDist, room - 1)); res.hang = G.hang; res.fairCatch = true; break;
       default:
@@ -429,9 +420,7 @@
     res.oppStart = spotOf(res.landing);
     res.inside20 = res.landing >= FIELD_YARDS - T.field.insideYards;
     if (!res.outOfBounds && !res.fairCatch) res.fairCatch = true;
-    // a forced grade this leg could not actually reach (a coffin corner from 80 yards out) tells the truth
-    if (res.grade === 'COFFIN' && !res.inside20) res.grade = gradeOf(res, m);
-    return seal(res);
+    return res;
   }
 
   // ═══════════════════════════════ feedback ═══════════════════════════════

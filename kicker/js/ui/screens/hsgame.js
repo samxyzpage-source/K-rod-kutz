@@ -34,15 +34,6 @@
     return wrap;
   }
 
-  /** What a resolved chance shows in its slot: a kick is made or missed, a punt says where it died. */
-  function puntMark(ch, r) {
-    if (ch.type !== 'PUNT') return r.made ? '✓' : '✗';
-    if (r.blocked) return '✗';
-    if (r.touchback) return 'TB';
-    if (r.inside20) return '★';
-    return Math.round(r.net) + '';
-  }
-
   function update(headerEl, state, sess) {
     var c = C();
     if (!sess) return;
@@ -58,13 +49,11 @@
     c.clear(strip);
     for (var i = 0; i < sess.chances.length; i++) {
       var k = sess.chances[i], r = sess.results[i];
-      var label = k.type === 'PUNT' ? 'OWN ' + k.losYard
-        : k.type === 'PAT' ? 'XP'
-          : (sess.contexts[i] ? sess.contexts[i].distance : k.distance) + ' YD';
+      var label = k.type === 'PAT' ? 'XP' : (sess.contexts[i] ? sess.contexts[i].distance : k.distance) + ' YD';
       var cls = 'slot' + (r ? (r.made ? ' made' : ' miss') : (i === next ? ' current' : ''));
       strip.appendChild(c.el('span', { class: cls, role: 'listitem', 'aria-label': label + ' ' + (r ? (r.made ? 'made' : 'missed') : 'to come') },
         c.el('span', { class: 'slot-d', text: label }),
-        c.el('span', { class: 'slot-r', text: r ? puntMark(k, r) : ((k.trail || k.lead) ? '★' : '·') })));
+        c.el('span', { class: 'slot-r', text: r ? (r.made ? '✓' : '✗') : (k.trail ? '★' : '·') })));
     }
   }
 

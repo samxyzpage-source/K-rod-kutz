@@ -37,7 +37,7 @@
   var TIMING = {
     snapMs: 400, approachFrameMs: 60, plantMs: 60, swingFrameMs: 60, swingFrames: 5, contactFlashFrames: 4,
     rushFrames: 6, resultMs: 1200, resultReducedMs: 400, bannerFadeMs: 300, doinkFreezeMs: 500, xbarFreezeMs: 300,
-    skipAfterMs: 300, blockedFlightMs: 380, flightScale: 0.75, patFlightScale: 0.77, puntFlightScale: 0.45, reducedFlightMs: 80,
+    skipAfterMs: 300, blockedFlightMs: 380, flightScale: 0.75, patFlightScale: 0.77, reducedFlightMs: 80,
     preReducedMs: 120, subBannerMs: 1400, crowdIdleMs: 700, crowdCheerMs: 180, doinkDropMs: 320
   };
   KickView.TIMING = TIMING;
@@ -131,9 +131,8 @@
     var parts = [];
     if (ctx.type === 'PAT') parts.push('PAT · ' + ctx.distance + ' YDS');
     else if (ctx.type === 'KO') parts.push('KICKOFF');
-    else if (ctx.type === 'PUNT') parts.push('PUNT · OWN ' + num(ctx.losYard, 30));
     else parts.push(ctx.distance + ' YDS');
-    if (ctx.type === 'FG' || ctx.type === 'PUNT') parts.push(ctx.hash === -1 ? 'L HASH' : ctx.hash === 1 ? 'R HASH' : 'MIDDLE');
+    if (ctx.type === 'FG') parts.push(ctx.hash === -1 ? 'L HASH' : ctx.hash === 1 ? 'R HASH' : 'MIDDLE');
     parts.push(windText(ctx, row));
     var w = WEATHER_LABEL[ctx.weather];
     if (w && w !== 'DOME') parts.push(w);
@@ -164,10 +163,7 @@
     var K = RTG.Kick;
     var G = T().kick.geometry;
 
-    var ctx = opts.ctx;
-    var isPunt = ctx && ctx.type === 'PUNT';                                        // §2.14
-    var Pu = RTG.Punt;
-    var model = opts.model || (isPunt && Pu ? Pu.model(ctx, null) : (K ? K.model(ctx, null) : null));
+    var ctx = opts.ctx, model = opts.model || (K ? K.model(ctx, null) : null);
     var sessionInfo = opts.sessionInfo || null;
     var mode = opts.mode || 'game';
     var reduced = reducedMotion(settings);
@@ -431,14 +427,6 @@
     }
     function setAria(text) { if (text !== lastAria) { lastAria = text; canvas.setAttribute('aria-label', text); } }
     function showFeedback(res) {
-      if (isPunt) {
-        var pf = Pu ? Pu.feedbackFor(res, ctx, model) : { detail: '', coach: '' };
-        feedback.textContent = '';
-        feedback.appendChild(el('div', { class: 'kv-feedback-line', text: pf.detail }));
-        if (pf.coach) feedback.appendChild(el('div', { class: 'kv-feedback-coach small', text: pf.coach }));
-        feedback.hidden = false;
-        return;
-      }
       var fb = res.feedback || {};
       var parts = [];
       if (fb.missBy && fb.missBy.text) parts.push(fb.missBy.text);
@@ -464,12 +452,7 @@
           leftFooted: function () { return mirror; },
           active: inputActive,
           keys: function () { return liveSettings().keys; },
-          greenZone: function () {
-            if (!model) return null;
-            var band = num(model.greenBand, T().kick.range.greenBand);
-            var top = num(model.powerMax, T().kick.range.powerMax);
-            return { lo: model.pNeed, hi: Math.min(top, model.pNeed + band) };
-          },
+          greenZone: function () { return model ? { lo: model.pNeed, hi: Math.min(T().kick.range.powerMax, model.pNeed + T().kick.range.greenBand) } : null; },
           assist: function () { return liveSettings().greenAssist !== false; },
           onAim: function (a) { aimDeg = a; },
           onPowerStart: function () { setPhase('POWER'); setHint('RELEASE IN THE GREEN'); Audio().click(); },
@@ -528,20 +511,13 @@
       teardownInput();
       hideBanner(); feedback.hidden = true; subBanner.hidden = true; setHint('');
       skipHint.hidden = true;
-      blockedKick = isPunt ? !!res.blocked : res.outcome === 'BLOCKED';
-      doinkKind = isPunt ? null
-        : ((res.outcome === 'DOINK_IN' || res.outcome === 'DOINK_OUT') ? 'post' : ((res.outcome === 'XBAR_IN' || res.outcome === 'XBAR_OUT') ? 'xbar' : null));
-      if (isPunt) {
-        carryYd = Math.max(1, num(res.gross, 35));
-        ballLand = blockedKick ? 0.2 : clamp(carryYd / L.D, 0.1, 1);
-      } else {
-        var peff = K && K.peff ? K.peff(kickInput.power, kickInput.quality) : kickInput.power;
-        carryYd = model ? Math.max(1, model.carryMax * peff) : L.D * 1.3;
-        ballLand = blockedKick ? 0.35 : clamp(carryYd / L.D, 0.2, 1);
-      }
-      var ft = isPunt ? num(res.hang, 4.3) : num(res.flightTime, model ? model.flightTime : 1.0 + 0.026 * L.D);
-      var scale = isPunt ? TIMING.puntFlightScale : TIMING.flightScale * (ctx.type === 'PAT' ? TIMING.patFlightScale : 1);
-      flightMs = reduced ? TIMING.reducedFlightMs : Math.round(ft * scale * 1000);
+      blockedKick = res.outcome === 'BLOCKED';
+      doinkKind = (res.outcome === 'DOINK_IN' || res.outcome === 'DOINK_OUT') ? 'post' : ((res.outcome === 'XBAR_IN' || res.outcome === 'XBAR_OUT') ? 'xbar' : null);
+      var peff = K && K.peff ? K.peff(kickInput.power, kickInput.quality) : kickInput.power;
+      carryYd = model ? Math.max(1, model.carryMax * peff) : L.D * 1.3;
+      ballLand = blockedKick ? 0.35 : clamp(carryYd / L.D, 0.2, 1);
+      var ft = num(res.flightTime, model ? model.flightTime : 1.0 + 0.026 * L.D);
+      flightMs = reduced ? TIMING.reducedFlightMs : Math.round(ft * TIMING.flightScale * (ctx.type === 'PAT' ? TIMING.patFlightScale : 1) * 1000);
       if (blockedKick) flightMs = reduced ? TIMING.reducedFlightMs : TIMING.blockedFlightMs;
       aimDeg = kickInput.aim;
       if (blockedKick) { elRoot.classList.add('kv-rush'); rushS = 0; } else rushS = -1;
@@ -653,10 +629,9 @@
       squash = false;
       var made = !!result.made;
       var kind = made ? 'good' : 'bad';
-      var text = isPunt ? ((Pu && Pu.GRADE_TEXT[result.grade]) || result.grade) : (OUTCOME_TEXT[result.outcome] || result.outcome);
+      var text = OUTCOME_TEXT[result.outcome] || result.outcome;
       if (doinkKind === 'post') kind = 'doink';
-      if (result.outcome === 'BLOCKED' || (isPunt && result.blocked)) kind = 'blocked';
-      if (isPunt && result.grade === 'COFFIN') kind = 'good';
+      if (result.outcome === 'BLOCKED') kind = 'blocked';
       showBanner(text, kind);
       flashAlpha = reduced ? 0 : 0.55; flashColor = made ? pal('gold') : pal('red');
       refPose = made ? 'up' : 'wave';
@@ -665,9 +640,7 @@
       else { Audio().stingerBad(); Audio().crowd(0.08); }
       Audio().heartbeatStop();
       showFeedback(result);
-      var ariaText = isPunt
-        ? text + '. ' + Math.round(num(result.gross, 0)) + ' yards, ' + Math.round(num(result.oppStart, 20)) + ' yard line.'
-        : text + (result.feedback && result.feedback.missBy && result.feedback.missBy.text ? '. ' + result.feedback.missBy.text : '') + '. ' + ctx.distance + ' yards.';
+      var ariaText = text + (result.feedback && result.feedback.missBy && result.feedback.missBy.text ? '. ' + result.feedback.missBy.text : '') + '. ' + ctx.distance + ' yards.';
       setAria(ariaText);
       announce(ariaText);
       if (opts.onResult) { try { opts.onResult(result); } catch (e) { if (root.console) root.console.error('onResult failed', e); } }
@@ -798,30 +771,8 @@
       g.fillRect(0, L.yH, W, 1);
     }
     function drawUprights() {
-      if (isPunt) { drawPuntField(); return; }
       var up = L.uprights;
       g.drawImage(up, Math.round(L.xPost - up.width / 2), L.yPostTop);
-    }
-    /**
-     * A punt has no target to go through, so the field carries the marks that matter instead: the strip
-     * inside the opponent's 20 where the ball is meant to die, and a tick at what the coach wants (§2.14).
-     */
-    function drawPuntField() {
-      var room = num(ctx.toGoal, L.D);
-      var inFrom = Math.max(0, room - num(T().punt.field.insideYards, 20));
-      var y1 = Math.round(yAt(Math.min(room, L.D))), y2 = Math.round(yAt(inFrom));
-      g.globalAlpha = 0.35;
-      g.fillStyle = pal('gold');
-      g.fillRect(0, y1, L.W, Math.max(1, y2 - y1));
-      g.globalAlpha = 1;
-      g.fillStyle = pal('gold');
-      g.fillRect(0, y2, L.W, 1);
-      if (model && typeof model.want === 'number' && model.want > 0 && model.want < L.D) {
-        var yw = Math.round(yAt(model.want));
-        g.fillStyle = pal('mint');
-        var half = Math.round(pxPerYdAt(model.want) * 4);
-        g.fillRect(Math.round(centreXAt(model.want) - half), yw - 1, half * 2, 2);
-      }
     }
     function drawPeople() {
       // snapper (far), holder, kicker

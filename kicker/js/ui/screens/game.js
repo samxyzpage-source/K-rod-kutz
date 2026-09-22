@@ -165,10 +165,6 @@
           addLine('YOUR KICK: ' + ev.text, 'drivelog-line user');
           Router().go('kick', { mode: 'game' });
           return 'stop';
-        case 'USER_PUNT':
-          addLine('YOUR PUNT: ' + ev.text, 'drivelog-line user');
-          Router().go('kick', { mode: 'game' });
-          return 'stop';
         case 'USER_KICKOFF':
           if (store.settings.playKickoffs && !store.autoKickAll && mode !== 'rest') { showKickoff(ev, mode); return 'stop'; }
           dispatch('applyUserKickoff', null);
@@ -242,7 +238,7 @@
         if (g.pending) { dispatch('autoKick'); continue; }
         var ev = dispatch('simToKick');
         if (!ev) break;
-        if (ev.type === 'USER_KICK' || ev.type === 'USER_KICKOFF' || ev.type === 'USER_PUNT') { dispatch('autoKick'); continue; }
+        if (ev.type === 'USER_KICK' || ev.type === 'USER_KICKOFF') { dispatch('autoKick'); continue; }
         if (ev.type === 'END_GAME' || ev.type === 'END') { refresh(); finishGame(); break; }
       }
       busy = false;
