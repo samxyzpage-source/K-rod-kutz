@@ -69,6 +69,7 @@
 | D21 | Green = guaranteed (post-launch, at the player's request: "make it easier, green should be guaranteed") | A release inside the green band makes the kick outright — no random error, contact slop or block — and the band widened 0.15 → 0.20 (`Tuning.kick.range.greenBand`, also what the scene draws). Gated by `settings.greenAssist` (default on) and verified engine-side by `Kick.inGreen`. Aim-and-hold only; flick is unchanged. | The ask was for an easier game with a promise the bar can actually keep. Keeping it UI-flagged but engine-verified means the assist cannot leak into AI kicks, so the §2.3.6 make-rate table, the sim bands and the career balance targets all stand. Aim still decides every kick that misses the green. |
 | D22 | Real colleges (post-launch, at the player's request) | The 48 fictional schools and the 18 fictional bowls are replaced with real FBS programmes on 2026 alignment and the real bowl slate; conference codes become `SEC BIG XII ACC PAC AAC` (letters only — the id grammar is `[A-Z]{3}` + index) and each conference is ordered to put real rivalries on the `(0,7) (1,6) (2,5) (3,4)` slots. `verifiedFictional` is `false` for colleges and the blocklist lint now guards the NFL side only. **The NFL league stays fictional.** | The player asked for real colleges on their own project. Only 48 of ~134 FBS programmes fit the engine's 6×8 structure, so this is a selection, not the full sport; Notre Dame and the other independents have no conference slot. School nicknames and marks are trademarks — fine for a personal project, worth licensing thought if it is ever published commercially, which is why the pro league remains invented. |
 | D23 | The senior season replaces the showcase (post-launch, at the player's request: "instead of the college showcase can you play the last 5 games of high school to do offers for college") | The six-kick showcase is gone. A career opens at `HS.SEASON` on the last five games of the senior year (`engine/hs.js` → `RTG.HS`, session kind `HS_GAME`, screens `hsseason` / `hsgame`): every kick is a scoring chance inside a real game with a live scoreboard, the rivalry and playoff weeks end on the kicker, and a ten-school recruiting board moves after each game. The star formula keeps its shape but reads a 0–6 rating earned over the whole stretch (`HS.ratingOf`) instead of showcase makes, and the schools that reached the offer line join the offers list — capped at half of it. | Six kicks in an empty stadium had no stakes and nothing to follow; five games give the opening hour a scoreboard, a record and a recruitment to watch move. Building it as ordinary KickSessions kept the sim, save, autoplay and kick-scene machinery untouched — only the phase enum (`SHOWCASE` → `SEASON`), the session kind and the screens changed. |
+| D24 | A punter career path (post-launch, at the player's request: "a separate option in the game for being a punter") | A career picks `K` or `P` at creation. The punter runs the same road — senior season, offers, college, draft, pros, Hall — on the same aim-then-hold input, but the kick is a different problem: distance rises with power while hang time peaks lower, so the green band is the power that maximises NET yards from this spot, and aim trades downfield yards for a ball nobody returns (§2.14). Punting stats, awards, records and Hall scoring are parallel rows selected by `position`. | The kicking game already had everything a punter needs — contexts, sessions, the scene, the career — and nothing it had measured applied. Building the punt as its own module over the shared machinery keeps the field-goal balance untouched while giving the second position a genuinely different decision to make, rather than a reskin of the same kick. |
 
 ---
 
@@ -890,6 +891,81 @@ Major (playoff quarterfinals/semis): Citrus Grove Bowl (Orlando), Cactus Sun Bow
 #### 2.12.5 Trademark blocklist (`data/blocklist.js` → `RTG.Data.blockedNicknames`, used by `test/data_lint.test.js`)
 
 Nicknames (case-insensitive, singular/plural) that may not appear as any team's `nick`: all 32 real NFL nicknames; common NCAA FBS nicknames (Tigers, Bulldogs, Wildcats, Eagles, Bears, Cougars, Huskies, Aggies, Trojans, Bruins, Ducks, Beavers, Sooners, Longhorns, Gators, Seminoles, Hurricanes, Volunteers, Razorbacks, Rebels, Crimson Tide, Buckeyes, Wolverines, Spartans, Hawkeyes, Badgers, Cornhuskers, Cyclones, Jayhawks, Mountaineers, Hokies, Cavaliers, Tar Heels, Blue Devils, Wolfpack, Demon Deacons, Yellow Jackets, Gamecocks, Commodores, Red Raiders, Horned Frogs, Bearcats, Knights, Bulls, Owls, Broncos, Rams, Lobos, Utes, Rainbow Warriors, Aztecs, Falcons, Minutemen, Roadrunners, Bison, Jackrabbits, Coyotes, Lumberjacks, Panthers, Mustangs, Miners, Vaqueros, Rattlers, Racers, Blackhawks, Timberwolves, Lightning, Mariners, Lakers, Clippers, Aces, Kings, Suns, Heat, Thunder, Hornets, Pelicans, Warriors, Magic, Rockets, Ravens, Pistons, Raiders, Chargers, Titans, Texans, Colts, Jaguars, Browns, Bengals, Steelers, Bills, Patriots, Dolphins, Jets, Chiefs, Cowboys, Giants, Commanders, Packers, Vikings, Lions, Saints, Buccaneers, Cardinals, Seahawks, 49ers, Marlins, Brewers, Twins, Cubs, Reds, Yankees, Braves, Astros, Rangers, Angels, Padres, Royals, Blue Jays, Indians, Guardians, Nationals, Orioles, Phillies, Pirates, Mets, Rockies, Diamondbacks, Athletics, Mariners, Dodgers). Also blocked: any team whose `city + nick` equals a real professional or FBS team, and the words "Hoosier", "Buckeye", "Sooner", "Old Dominion", "Delta State", "Boston Common".
+
+### 2.14 The punter path (engine: `engine/punt.js` → `RTG.Punt`) — D24
+
+A career picks a position at creation: **`K`** (field goals, extra points, kickoffs — everything §2.3 describes)
+or **`P`** (punts). The road is the same one — the senior season, the offers, college, the draft, the pros, the
+Hall — but the kick at the centre of it is a different problem, and so are the numbers it is judged on.
+
+#### 2.14.1 What a punt asks
+
+A field goal asks one question: is it through? A punt asks two at once, and they fight:
+
+- **distance** rises with power, all the way to the leg's limit, then falls off past 1.0 as the ball comes off
+  the foot badly;
+- **hang time** peaks at a *lower* power (`Tuning.punt.curve.hangPeak`) and falls away either side of it.
+
+A ball that outruns its coverage comes back. So the green band on the power bar is not "the power that gets
+there" — it is **the power that maximises net yards from this spot**, found by scanning both curves against the
+expected return, and, once the end zone is in range, the best net that still lands short of it. The band sits
+with the target near its top (`field.bandLead`), so over-hitting is the mistake the bar actually punishes.
+
+That makes field position the whole game. From your own 12 there is nothing to pin and the band sits high: hit
+it. From the opponent's 45 the band drops — a boomed one is a touchback that hands back 20 yards.
+
+**Aim** is the other half. The punter stands on a hash (`ctx.ballX`), so one sideline is the short way out.
+Pointing at it costs `cos(aim)` of the downfield distance and buys a ball nobody returns:
+`lateral = ballX + gross·tan(aim) + N(0, σ)`, and past `field.halfWidthYd` (26.65) the ball is out of bounds and
+dead where it crossed. Wide aim also widens σ, and a worse ACC widens it further.
+
+#### 2.14.2 Resolving a punt (`Punt.resolve`, draw order binding)
+
+`1 block · 2,3 distance gauss · 4,5 hang gauss · 6,7 lateral gauss`, then the settle rolls
+(`8 fair catch · 9,10 return gauss · 11 return TD`). A blocked punt spends one more draw for whether the
+defence scores. `opts.forced` (a `Punt.GRADES` name) spends none.
+
+| Landing | What happens |
+|---|---|
+| in the end zone | touchback; the receiving side starts at their 20 |
+| outside `halfWidthYd` | out of bounds, dead there, no return |
+| in play, high hang | fair catch or downed — `pFair = fairBase + fairPerHang·(hang − 4.3)` |
+| in play, low hang | returned `N(base − perHang·(hang − 4.3) − perOppST·(ST − 70), sd)`, capped at the goal line |
+
+`inside20` is any ball dead at or past the opponent's 20 that is not a touchback. Grades — `BLOCKED`, `SHANK`,
+`TOUCHBACK`, `POOR`, `OK`, `GOOD`, `BOOMING`, `COFFIN` — read off net yards against the punter's own ceiling,
+so "booming" means booming *for them*.
+
+**The green assist (D21) applies to punts too**: a release the engine agrees was inside the band
+(`Punt.inGreen`) returns the punt the situation asked for, with no draws spent — a coffin corner when the spot
+is in pinning range, otherwise a fair-caught ball with real hang on it. It is never blocked and never returned.
+
+#### 2.14.3 What the career measures
+
+Punting stats (`Schema.STAT_KEYS`): `punts`, `puntYds` (gross), `puntNet`, `in20`, `tbs`, `puntLong`,
+`puntBlocked`, `fairCatch`, `retYds`, `hangSum`. The line the game shows is **net average** and **inside-20
+rate**, because those are what a punter is actually paid for.
+
+- **The senior season** (§2.7.0) gives a punter punts instead of field goals: the offence's drives stall and you
+  flip the field. The recruiting board reads net average, punts pinned inside the 20 and the ones that mattered.
+- **Games**: the sim hands the user every punt their team takes (both punt sites in `engine/sim.js`), with a real
+  line of scrimmage; field goals on their team are taken by the AI kicker. Kickoffs stay with the kicker, so a
+  punter's KO attribute is **hang time** instead.
+- **Awards, records and the Hall** have punter rows (`position: 'K'|'P'|'BOTH'` on the data rows), scored on net
+  average, inside-20 and the games flipped rather than on points.
+- **Contracts** run through the same OVR machinery with `Tuning.punt.career.marketMult`.
+
+#### 2.14.4 Balance targets
+
+| Metric | Target | Test |
+|---|---|---|
+| Gross average, good leg (70 OVR profile) | 44–48 yd | `punt` |
+| Net average, good leg | 37–43 yd | `punt` |
+| Touchback rate | < 6 % | `punt` |
+| Gap from a poor leg (40) to a good one (70) | ≥ 7 yd gross | `punt` |
+| Punts blocked | < 1 % | `punt` |
+
+---
 
 ### 2.13 Balancing targets (asserted in tests; see §5)
 
