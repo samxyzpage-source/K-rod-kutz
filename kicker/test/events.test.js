@@ -525,7 +525,7 @@ test('headline bank: ≥ 160 templates, every §2.11 tag present, unique ids, co
 });
 
 test('every headline & message template renders with no unresolved "{" on college and NFL fixtures', () => {
-  for (const s of [efx.collegeReg(RTG), efx.nflReg(RTG), sfx.hsShowcase(RTG)]) {
+  for (const s of [efx.collegeReg(RTG), efx.nflReg(RTG), sfx.hsSeason(RTG)]) {
     for (const h of Data.headlines) {
       const t = Events.renderText(h.text, s, RICH_VARS);
       assert.ok(!/\{/.test(t), h.id + ' → ' + t);

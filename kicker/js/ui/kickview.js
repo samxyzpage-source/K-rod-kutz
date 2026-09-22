@@ -21,7 +21,7 @@
  *   KickView.shouldAutoPat(ctx, settings, store)      the §4.6 auto-PAT rule (+ RTG.debug.autoKick)
  *   KickView.hudParts(ctx, difficultyRow)             ['47 YDS', 'R HASH', 'WIND ← 12', 'RAIN', 'ICED!']
  *   KickView.kickoffBar(parent, {KO, onLock(timing), reduced}) → {el, destroy()}   one-tap timing bar (§2.3.10)
- *   KickView.sessionScreen(store, opts)               the shared showcase / camp / combine / session-kick screen
+ *   KickView.sessionScreen(store, opts)               the shared senior-season / camp / combine / session-kick screen
  *   KickView.escapeToSettings(ev) → boolean           §4.8: Escape opens Settings from a chromeless kick screen
  *   KickView.current()                                the live view (RTG.debug / tests)
  *   KickView.TIMING                                   every duration used by the scene (ms)
@@ -1130,13 +1130,13 @@
 
   // ═══════════════════════════════ shared session screen ═══════════════════════════════
   /**
-   * The screen shared by showcase / camp battle / combine / halftime-70 / tryout sessions: plays
+   * The screen shared by senior-season games / camp battle / combine / halftime-70 / tryout sessions: plays
    * state.pending.session one context at a time through store.dispatch('sessionKick', input).
    * opts: {
    *   className, title,
    *   header(state, session) → el            built once (slots strip / scoreboard / ladder)
    *   update(headerEl, state, session, info) called after every kick (info = sessionKick return) and at start (info null)
-   *   tutorial: boolean                      showcase tutorial overlays (dismissed by the first kick)
+   *   tutorial: boolean                      first-kick tutorial overlays (dismissed by the first kick)
    *   onComplete(outcome, session, state)    default: Router.sync()
    *   nextDelayMs                            pause after the result beat before the next kick (default 700)
    * }

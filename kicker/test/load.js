@@ -32,7 +32,7 @@ const ORDER = [
   'engine/names', 'engine/weather', 'engine/player', 'engine/kick',
   'engine/schedule', 'engine/standings', 'engine/sim',
   'engine/stats', 'engine/awards', 'engine/events', 'engine/contracts', 'engine/draft',
-  'engine/season', 'engine/career',
+  'engine/season', 'engine/career', 'engine/hs',
   'engine/save', 'engine/api',
 ];
 

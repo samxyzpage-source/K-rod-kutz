@@ -11,7 +11,7 @@ const assert = H.assert;
 
 after(async () => { await H.closeBrowser(); });
 
-/** Force an outcome on the armed showcase kick and wait for the ruling banner. */
+/** Force an outcome on the armed senior-season kick and wait for the ruling banner. */
 async function force(page, outcome) {
   const res = await H.debug(page, 'forceKick', { outcome: outcome });
   await K.waitPhase(page, 'RESULT', 12000);
@@ -24,7 +24,7 @@ H.matrix(({ mode, vp }) => {
     const app = await H.openApp({ mode, viewport: vp });
     const { page } = app;
     try {
-      await K.openShowcase(page, 314);
+      await K.openHsGame(page, 314);
       // 1. DOINK_IN → freeze on the post then "DOINK"
       const doinkP = page.waitForFunction(() => RTG.UI.KickView.current().phase() === 'FREEZE', null, { timeout: 12000 });
       const r1 = await H.debug(page, 'forceKick', { outcome: 'DOINK_IN' });
@@ -40,7 +40,7 @@ H.matrix(({ mode, vp }) => {
       assert.equal(await page.evaluate(() => document.querySelector('.kv-banner').classList.contains('kv-banner-doink')), true);
       if (mode === 'http') await H.shot(page, 'force_doink_' + vp);
       // 2. BLOCKED → rush overlay class before/through the ruling
-      await K.waitSetup(page, 1, 12000);
+      await K.hsArm(page, 12000);
       const rushSeen = page.waitForFunction(() => document.querySelector('.kickview').classList.contains('kv-rush'), null, { timeout: 8000 });
       const r2 = await H.debug(page, 'forceKick', { outcome: 'BLOCKED' });
       assert.equal(r2.outcome, 'BLOCKED');
@@ -51,18 +51,22 @@ H.matrix(({ mode, vp }) => {
       assert.match((await page.locator('.kv-banner').textContent()).trim(), /BLOCKED/);
       if (mode === 'http') await H.shot(page, 'force_blocked_' + vp);
       // 3. GOOD and a WIDE_R for the stats
-      await K.waitSetup(page, 2, 12000);
+      await K.hsArm(page, 12000);
       await force(page, 'GOOD');
       assert.match((await page.locator('.kv-banner').textContent()).trim(), /GOOD/);
-      await K.waitSetup(page, 3, 12000);
+      await K.hsArm(page, 12000);
       await force(page, 'WIDE_R');
       assert.match((await page.locator('.kv-banner').textContent()).trim(), /WIDE RIGHT/);
       assert.match(await page.locator('.kv-feedback').textContent(), /Wide right by/);
+      // the four kicks are on the senior-season record, wherever the games split them
       const st = await H.debug(page, 'getState');
-      const res = st.pending.session.results;
-      assert.equal(res.length, 4);
-      assert.deepEqual(res.map(r => r.outcome), ['DOINK_IN', 'BLOCKED', 'GOOD', 'WIDE_R']);
-      assert.ok(res.every(r => r.forced === true), 'forced flag');
+      const played = [];
+      st.flags.hs.games.forEach(g => { (g.kicks || []).forEach(k => played.push(k)); });
+      const open = st.pending && st.pending.kind === 'KICKS' ? st.pending.session : null;
+      const outcomes = (open ? open.results : []).map(r => r.outcome);
+      assert.equal(played.length + outcomes.length, 4, 'four kicks in all (' + played.length + ' logged + ' + outcomes.length + ' open)');
+      assert.ok(played.every(k => typeof k.made === 'boolean'), 'each logged kick has a ruling');
+      if (open) assert.ok(open.results.every(r => r.forced === true), 'forced flag');
       assert.deepEqual(app.errors, [], 'console errors');
     } finally { await app.close(); }
   });
@@ -73,17 +77,33 @@ test('force_kick file desktop: in-game forced kicks increment career stats (doin
   const { page } = app;
   try {
     await H.debug(page, 'jumpTo', { stage: 'COLLEGE', phase: 'REG', week: 1, seed: 4242 });
+    assert.equal(await H.ensureStarter(page), 'K1', 'the fixture kicks (K1)');
     await page.evaluate(() => RTG.UI.store.dispatch('startUserGame'));
     await H.waitForScreen(page, 'game');
     const before = await H.debug(page, 'getState');
     const outcomes = ['DOINK_IN', 'BLOCKED', 'GOOD'];
     let i = 0, guard = 0;
-    while (i < outcomes.length && guard++ < 40) {
+    // a single game may hand the kicker no field goals at all, so keep playing weeks until all three are forced
+    while (i < outcomes.length && guard++ < 120) {
       const cur = await page.evaluate(() => RTG.UI.Router.current());
       if (cur === 'game') {
         if (await page.evaluate(() => !RTG.UI.store.state.game)) break;
         await page.locator('button[data-action="next-kick"]').click();
         await page.waitForTimeout(100);
+      } else if (cur !== 'kick') {
+        // the game ended: finish the week and open the next one
+        await page.evaluate(() => { const s = RTG.UI.store.state; if (s.game) RTG.UI.store.dispatch('autoPlayGame'); });
+        await H.debug(page, 'simWeek');
+        await H.debug(page, 'settle');
+        if (await H.ensureStarter(page) !== 'K1') break;
+        const started = await page.evaluate(() => {
+          const s = RTG.UI.store.state;
+          if (s.game || s.pending || !RTG.Season.userGameRef(s) || s.season.weekGameDone) return false;
+          RTG.UI.store.dispatch('startUserGame');
+          return true;
+        });
+        if (!started) break;
+        await H.waitForScreen(page, 'game', 10000);
       } else if (cur === 'kick') {
         await K.waitPhase(page, 'SETUP', 6000);
         const ctx = await page.evaluate(() => RTG.UI.store.state.game.pending.ctx);
@@ -95,7 +115,7 @@ test('force_kick file desktop: in-game forced kicks increment career stats (doin
         assert.match((await page.locator('.kv-banner').textContent()).trim(), oc === 'DOINK_IN' ? /DOINK/ : oc === 'BLOCKED' ? /BLOCKED/ : /GOOD/);
         if (oc === 'BLOCKED') assert.equal(await page.evaluate(() => document.querySelector('.kickview').classList.contains('kv-rush')), true);
         await page.waitForFunction(() => RTG.UI.Router.current() !== 'kick', null, { timeout: 15000 });
-      } else break;
+      }
     }
     const after = await H.debug(page, 'getState');
     assert.ok(i >= 2, 'at least two FG attempts were forced (' + i + ')');

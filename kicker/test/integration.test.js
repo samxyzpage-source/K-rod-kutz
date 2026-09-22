@@ -66,7 +66,7 @@ function step(track, name, draws, fn) {
   track.calls++;
   validate(state, name + ' (call ' + track.calls + ')');
   assert.equal(state.rngState, rng.state(), name + ': state.rngState mirrors the rng');
-  if (draws) assert.notEqual(rng.state(), before, name + ': the rng advanced');
+  if (draws) assert.notEqual(rng.state(), before, name + ': the rng advanced' + (out && out.type ? ' [' + out.type + ']' : ''));
   if (draws) track.drawing++;
   return out;
 }
@@ -97,8 +97,10 @@ function playGame(track, onPending) {
   const { state, rng } = track;
   let kicks = 0, guard = 400, ev = null, afterIce = false;
   while (guard-- > 0) {
-    // the call right after an ICE_TIMEOUT just hands back the queued USER_KICK, so it draws nothing
-    ev = step(track, 'simToKick', !afterIce, () => Engine.simToKick(state, rng));
+    // a queued event (gs.announce: the USER_KICK after an ICE_TIMEOUT, or a period event applyKick reached —
+    // END_HALF / OT_START / END_GAME) is handed straight back, so that call draws nothing
+    const queued = !!(state.game && state.game.announce);
+    ev = step(track, 'simToKick', !afterIce && !queued, () => Engine.simToKick(state, rng));
     afterIce = false;
     if (ev.type === 'END_GAME' || ev.type === 'END') break;
     if (ev.type === 'ICE_TIMEOUT') { afterIce = true; continue; }   // the queued USER_KICK arrives next
@@ -124,20 +126,26 @@ function playGame(track, onPending) {
 
 // ═══════════════════════════════ (a) hand-driven career start ═══════════════════════════════
 
-test('(a) newCareer → showcase → offers → COLLEGE.PRE → week 1 game → endWeek, validating after every Engine call', () => {
+test('(a) newCareer → senior season → offers → COLLEGE.PRE → week 1 game → endWeek, validating after every Engine call', () => {
   const created = Engine.newCareer({ name: 'Sam Page', archetype: 'CANNON', difficulty: 'pro', seed: 42 }, NOW);
   const track = { state: created.state, rng: created.rng, calls: 0, drawing: 0 };
   const { state, rng } = track;
   validate(state, 'newCareer');
   assert.equal(state.seed, 42); assert.equal(state.rngState, rng.state());
-  assert.equal(state.stage, 'HS'); assert.equal(state.phase, 'SHOWCASE');
-  assert.equal(state.pending && state.pending.kind, 'KICKS');
-  assert.equal(state.pending.session.kind, 'SHOWCASE');
-  assert.equal(state.pending.session.contexts.length, 6, 'six showcase kicks');
+  assert.equal(state.stage, 'HS'); assert.equal(state.phase, 'SEASON');
+  assert.equal(state.pending, null, 'the senior season pauses between games');
+  assert.equal(state.flags.hs.games.length, RTG.Tuning.hs.games, 'five senior-season games');
 
-  // showcase → stars + college offers
-  const show = playSession(track);
-  assert.equal(show.outcome.kind, 'SHOWCASE');
+  // the senior season → stars + college offers
+  let show = null;
+  for (let g = 0; g < RTG.Tuning.hs.games; g++) {
+    const sess = step(track, 'hsStartGame(' + g + ')', true, () => Engine.hsStartGame(state, rng));
+    assert.equal(sess.kind, 'HS_GAME'); assert.equal(sess.gameIdx, g);
+    show = playSession(track);
+    assert.equal(show.outcome.kind, 'HS_GAME');
+    assert.equal(state.flags.hs.idx, g + 1);
+  }
+  assert.ok(show.outcome.seasonDone && show.outcome.season, 'the fifth game closes the season');
   assert.ok(state.player.stars >= 2 && state.player.stars <= 5, 'stars ' + state.player.stars);
   assert.equal(state.stage, 'HS'); assert.equal(state.phase, 'OFFERS');
   assert.equal(state.pending && state.pending.kind, 'DECISION');

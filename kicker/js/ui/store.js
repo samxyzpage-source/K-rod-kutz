@@ -37,7 +37,8 @@
   /** Functions after which the store autosaves (SPEC §3.7 + the autoPlay* helpers). sessionKick autosaves when done. */
   var AUTOSAVE = {
     finishUserGame: 1, endWeek: 1, chooseEvent: 1, decide: 1, nextPhase: 1,
-    autoPlayGame: 1, autoPlayWeek: 1, autoPlaySeason: 1, autoPlayOffseason: 1, autoPlayCareer: 1, settlePending: 1
+    autoPlayGame: 1, autoPlayWeek: 1, autoPlaySeason: 1, autoPlayOffseason: 1, autoPlayCareer: 1, settlePending: 1,
+    hsStartGame: 1
   };
 
   /**

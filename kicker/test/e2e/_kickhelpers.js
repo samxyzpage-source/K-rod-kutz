@@ -1,10 +1,10 @@
 /**
- * Shared helpers for the kick-scene specs (U2): open the showcase, read the scene geometry, drive a flick with the
- * mouse or with CDP touch events, wait for a scene phase, and loop a game with forced kicks.
+ * Shared helpers for the kick-scene specs (U2): open the first senior-season game, read the scene geometry, drive
+ * a flick with the mouse or with CDP touch events, wait for a scene phase, and loop a game with forced kicks.
  *
  *   const K = require('./_kickhelpers');
  *   await K.useFlick(page)                           → pin the flick mechanic (aim-then-hold is the default, D20)
- *   await K.openShowcase(page, seed)                 → new career via RTG.debug, waits for the KickView in SETUP
+ *   await K.openHsGame(page, seed)                   → new career via RTG.debug, week-6 game open, KickView in SETUP
  *   await K.geometry(page)                           → {scale, w, h, landscape, cssHeight, rect, ball:{x,y}}
  *   await K.mouseFlick(page, {drag, dragMs, flick, flickMs, dx})
  *   await K.touchFlick(page, {drag, dragMs, flick, flickMs})   CDP Input.dispatchTouchEvent (real touch pointers)
@@ -15,15 +15,16 @@
 
 /**
  * Pin flick as the kick input for a spec that tests it. Aim-then-hold (`inputMode: 'meter'`) is the default
- * since SPEC D20, and the scene reads the mode when it mounts — so this must run before `openShowcase`.
+ * since SPEC D20, and the scene reads the mode when it mounts — so this must run before `openHsGame`.
  */
 async function useFlick(page) {
   await page.evaluate(() => RTG.UI.store.setSetting('inputMode', 'flick'));
 }
 
-async function openShowcase(page, seed) {
-  await page.evaluate(s => RTG.debug.newCareer({ seed: s, name: 'E2E Kicker' }), seed || 4242);
-  await page.waitForFunction(() => RTG.UI.Router.current() === 'showcase' && RTG.UI.KickView && RTG.UI.KickView.current() && RTG.UI.KickView.current().phase() === 'SETUP', null, { timeout: 10000 });
+/** A fresh career with week 6 of the senior season open and the kick scene armed (§2.7.0). */
+async function openHsGame(page, seed) {
+  await page.evaluate(s => { RTG.debug.newCareer({ seed: s, name: 'E2E Kicker' }); RTG.UI.store.dispatch('hsStartGame'); RTG.UI.Router.sync(); }, seed || 4242);
+  await page.waitForFunction(() => RTG.UI.Router.current() === 'hsgame' && RTG.UI.KickView && RTG.UI.KickView.current() && RTG.UI.KickView.current().phase() === 'SETUP', null, { timeout: 10000 });
   await page.waitForTimeout(250);
 }
 
@@ -88,4 +89,26 @@ function waitSetup(page, n, timeout) {
   }, n, { timeout: timeout || 10000 });
 }
 
-module.exports = { useFlick, openShowcase, geometry, mouseFlick, touchFlick, waitPhase, waitSetup };
+/**
+ * Wait until a senior-season kick is armed, opening the next game when the current one has run out of chances
+ * (a game has 3-5, so a spec that needs more kicks than that crosses into the following week).
+ */
+async function hsArm(page, timeout) {
+  const ms = timeout || 12000;
+  await page.waitForFunction(() => {
+    const s = RTG.UI.store.state, v = RTG.UI.KickView.current();
+    const open = !!(s.pending && s.pending.kind === 'KICKS');
+    return open ? (!!v && v.phase() === 'SETUP') : RTG.UI.Router.current() === 'hsseason';
+  }, null, { timeout: ms });
+  const open = await page.evaluate(() => { const s = RTG.UI.store.state; return !!(s.pending && s.pending.kind === 'KICKS'); });
+  if (!open) {
+    await page.evaluate(() => { RTG.UI.store.dispatch('hsStartGame'); RTG.UI.Router.sync(); });
+    await page.waitForFunction(() => {
+      const v = RTG.UI.KickView.current();
+      return RTG.UI.Router.current() === 'hsgame' && !!v && v.phase() === 'SETUP';
+    }, null, { timeout: ms });
+  }
+  return page.evaluate(() => RTG.UI.store.state.pending.session.results.length);
+}
+
+module.exports = { useFlick, openHsGame, geometry, mouseFlick, touchFlick, waitPhase, waitSetup, hsArm };

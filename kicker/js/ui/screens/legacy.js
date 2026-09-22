@@ -185,7 +185,7 @@
       parts.push(c.card({ title: 'HALL OF FAME MATH', kind: 'flat', body: breakdown(rep) }));
       parts.push(recordsCard(state));
       var seedBtn = c.el('button', { type: 'button', class: 'btn btn-secondary seed-btn', 'data-seed': String(state.seed), 'aria-label': 'Copy seed ' + state.seed, onClick: function () { copySeed(state.seed); } }, c.icon('save', 12), c.el('span', { class: 'btn-label num', text: 'SEED ' + state.seed }));
-      parts.push(c.card({ title: 'REPLAY THIS CAREER', kind: 'flat', body: [c.el('p', { class: 'small txt-grey mb-1', text: 'Same seed, same showcase, same offers — different choices. Tap to copy.' }), seedBtn] }));
+      parts.push(c.card({ title: 'REPLAY THIS CAREER', kind: 'flat', body: [c.el('p', { class: 'small txt-grey mb-1', text: 'Same seed, same senior season, same offers — different choices. Tap to copy.' }), seedBtn] }));
       parts.push(c.el('div', { class: 'btn-row legacy-actions' },
         c.button({ label: 'TIMELINE', kind: 'ghost', icon: 'clock', onClick: function () { R.go('timeline'); } }),
         c.button({ label: 'NEW CAREER', kind: rep.pending ? 'secondary' : 'primary', icon: 'boot', action: 'new-career', onClick: function () {

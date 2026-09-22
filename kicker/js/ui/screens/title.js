@@ -14,7 +14,7 @@
 
   var STAGE_NAME = { HS: 'High school', COLLEGE: 'College', DRAFT: 'Draft', NFL: 'Pro', RETIRED: 'Retired' };
   var PHASE_NAME = {
-    SHOWCASE: 'Showcase', OFFERS: 'Offers',
+    SEASON: 'Senior year', OFFERS: 'Offers',
     PRE: 'Preseason', REG: 'Season', POST: 'Playoffs', AWARDS: 'Awards', OFF: 'Offseason',
     DECLARE: 'Declare', COMBINE: 'Combine', DRAFT: 'Draft day', UDFA: 'Undrafted',
     LEGACY: ''

@@ -216,7 +216,7 @@
     h('cm1', 'commit', 'COMMITTED: {last} picks {team}; {city} "gains a leg, keeps its expectations low"'),
     h('cm2', 'commit', '{last} signs with {team}; {coach} "excited to have a kicker who kicks"'),
     h('cm3', 'commit', 'Walk-on {last} joins {team}; no scholarship, "just a bag and a leg"', { cond: function (c) { return !!c.walkon; } }),
-    h('cm4', 'commit', 'SIGNED: {last} commits to {team} after the showcase; scholarship "mostly for the leg"', { cond: function (c) { return !c.walkon; } }),
+    h('cm4', 'commit', 'SIGNED: {last} commits to {team} after a senior year on tape; scholarship "mostly for the leg"', { cond: function (c) { return !c.walkon; } }),
     h('cm5', 'commit', '{team} land kicker {last}; recruiting site rates the pickup "fine"'),
     h('cm6', 'commit', 'Recruit {last} is heading to {city}; the punter "already nervous"'),
 

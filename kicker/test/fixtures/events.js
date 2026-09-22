@@ -112,7 +112,7 @@ function nflOff(RTG, opts) { var s = schemaFx.nflOff(RTG, opts); s.pending = nul
 /** Every stage base keyed by name. */
 function stages(RTG, opts) {
   return {
-    hs: schemaFx.hsShowcase(RTG, opts),
+    hs: schemaFx.hsSeason(RTG, opts),
     collegePre: collegePre(RTG, opts), collegeReg: collegeReg(RTG, opts), collegeOff: collegeOff(RTG, opts),
     nflPre: nflPre(RTG, opts), nflReg: nflReg(RTG, opts), nflPost: nflPost(RTG, opts), nflOff: nflOff(RTG, opts),
     retired: schemaFx.retiredLegacy(RTG, opts)

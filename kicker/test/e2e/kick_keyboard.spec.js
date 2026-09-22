@@ -46,7 +46,7 @@ H.matrix(({ mode, vp }) => {
     const { page } = app;
     try {
       await setMeter(page);
-      await K.openShowcase(page, 99);
+      await K.openHsGame(page, 99);
       assert.equal(await page.evaluate(() => document.querySelector('.kickview').classList.contains('kv-mode-meter')), true, 'meter mode scene');
       for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowLeft');
       assert.equal(await page.evaluate(() => RTG.UI.KickView.current().phase()), 'SETUP');
@@ -75,7 +75,7 @@ test('kick_keyboard file desktop: Enter holds like Space; Space skips the flight
   const { page } = app;
   try {
     await setMeter(page);
-    await K.openShowcase(page, 100);
+    await K.openHsGame(page, 100);
     const g = await green(page);
     await holdFor(page, 'Enter', (g.lo + g.hi) / 2);
     await K.waitPhase(page, 'FLIGHT', 8000);
@@ -93,7 +93,7 @@ test('kick_keyboard file phone: left-footed mirror flips the arrow nudge', async
   const { page } = app;
   try {
     await page.evaluate(() => { RTG.UI.store.setSetting('inputMode', 'meter'); RTG.UI.store.setSetting('leftFooted', true); });
-    await K.openShowcase(page, 101);
+    await K.openHsGame(page, 101);
     for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowLeft');
     const g = await green(page);
     await holdFor(page, 'Space', (g.lo + g.hi) / 2);
@@ -113,7 +113,7 @@ test('kick_keyboard file desktop: remapped keys drive the hold and the defaults 
       RTG.UI.store.setSetting('inputMode', 'meter');
       RTG.UI.store.setSetting('keys', { confirm: 'k', left: 'j', right: 'l' });
     });
-    await K.openShowcase(page, 102);
+    await K.openHsGame(page, 102);
     for (let i = 0; i < 2; i++) await page.keyboard.press('j');      // −1° through the remapped aim key
     await page.keyboard.press('ArrowLeft');                          // the old binding must no longer aim
     const g = await green(page);
@@ -126,14 +126,14 @@ test('kick_keyboard file desktop: remapped keys drive the hold and the defaults 
   } finally { await app.close(); }
 });
 
-// §4.8: the flick needs a pointer, so a keyboard-only player was stuck on the first showcase kick (chromeless
+// §4.8: the flick needs a pointer, so a keyboard-only player was stuck on the first senior-season kick (chromeless
 // screen, nothing to tab to, the play clock never starts). Confirm now swaps this scene to aim-and-hold.
 test('kick_keyboard file desktop: Space in FLICK mode starts the hold and completes the kick', async () => {
   const app = await H.openApp({ mode: 'file', viewport: 'desktop' });
   const { page } = app;
   try {
     await page.evaluate(() => RTG.UI.store.setSetting('inputMode', 'flick'));   // aim-and-hold is the default now
-    await K.openShowcase(page, 103);
+    await K.openHsGame(page, 103);
     assert.equal(await page.evaluate(() => document.querySelector('.kickview').classList.contains('kv-mode-flick')), true, 'starts in flick mode');
     await page.keyboard.down('Space');
     await page.waitForFunction(() => RTG.UI.KickView.current().phase() === 'POWER', null, { timeout: 4000 });
@@ -157,14 +157,14 @@ test('kick_keyboard file desktop: Escape on a chromeless kick screen opens Setti
   const app = await H.openApp({ mode: 'file', viewport: 'desktop' });
   const { page } = app;
   try {
-    await K.openShowcase(page, 104);
-    assert.equal(await page.evaluate(() => document.getElementById('app').classList.contains('chromeless')), true, 'the showcase is chromeless');
+    await K.openHsGame(page, 104);
+    assert.equal(await page.evaluate(() => document.getElementById('app').classList.contains('chromeless')), true, 'the senior-season game is chromeless');
     await page.keyboard.press('Escape');
     await H.waitForScreen(page, 'settings');
     // the player switches to METERS while they are there, then goes back
     await page.evaluate(() => RTG.UI.store.setSetting('inputMode', 'meter'));
     await page.evaluate(() => RTG.UI.Router.back());
-    await H.waitForScreen(page, 'showcase');
+    await H.waitForScreen(page, 'hsgame');
     await K.waitPhase(page, 'SETUP', 8000);
     const st = await H.debug(page, 'getState');
     assert.equal(st.pending.kind, 'KICKS', 'the kick session is still pending');

@@ -15,7 +15,7 @@
   function C() { return RTG.UI.C; }
   function K() { return RTG.UI.Kit; }
 
-  var KIND_ICON = { AWARD: 'trophy', RECORD: 'star', MILESTONE: 'star', EVENT: 'envelope', TEAM: 'team', CAMP: 'bolt', BENCHED: 'flag', SEASON: 'clock', TRAINING: 'train', CONTRACT: 'money', DRAFTED: 'star', UNDRAFTED: 'x', CUT: 'x', TAG: 'flag', FA: 'money', RETIRED: 'heart', SHOWCASE: 'boot', RETIRE: 'clock', INJURY: 'heart' };
+  var KIND_ICON = { AWARD: 'trophy', RECORD: 'star', MILESTONE: 'star', EVENT: 'envelope', TEAM: 'team', CAMP: 'bolt', BENCHED: 'flag', SEASON: 'clock', TRAINING: 'train', CONTRACT: 'money', DRAFTED: 'star', UNDRAFTED: 'x', CUT: 'x', TAG: 'flag', FA: 'money', RETIRED: 'heart', HS_GAME: 'ball', HS_SEASON: 'boot', RETIRE: 'clock', INJURY: 'heart' };
   var RESULT_TEXT = { BOWL_W: 'Bowl win', BOWL_L: 'Bowl loss', CHAMP: 'CHAMPIONS', NONE: '' };
 
   function factory(store) {
@@ -115,7 +115,7 @@
       if (now) ul.appendChild(node(state, now, { now: true, open: true }));
       var seasons = (state.history.seasons || []).slice().reverse();
       seasons.forEach(function (l, i) { ul.appendChild(node(state, l, { open: i < 2 })); });
-      var pre = (state.history.timeline || []).filter(function (t) { return t.year < 1 || (t.year === 1 && t.week === 0 && (t.kind === 'SHOWCASE' || t.kind === 'TEAM')); });
+      var pre = (state.history.timeline || []).filter(function (t) { return t.year < 1 || (t.year === 1 && t.week === 0 && (t.kind === 'HS_GAME' || t.kind === 'HS_SEASON' || t.kind === 'TEAM')); });
       if (!seasons.length && !now) ul.appendChild(c.el('li', { class: 'list-empty', text: 'The story starts with the first kick.' }));
       parts.push(c.el('div', { class: 'row row-wrap small txt-grey mb-1' }, c.el('span', { text: (state.history.seasons || []).length + ' season' + ((state.history.seasons || []).length === 1 ? '' : 's') + ' · ' + (state.history.timeline || []).length + ' moments · ' + c.fmt.money(Kit.num(state.history.earnings)) + ' earned' })));
       parts.push(ul);

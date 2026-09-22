@@ -596,7 +596,7 @@
 
     function elsewhereCard(state) {
       var where = R.resolve(state);
-      var msg = state.stage === 'HS' ? 'The showcase and the college offers come first.' : (state.stage === 'DRAFT' ? 'The draft process is under way.' : state.stage === 'RETIRED' ? 'Career over — the legacy report is waiting.' : state.phase === 'AWARDS' ? 'The awards ceremony is on.' : state.phase === 'OFF' ? 'The offseason wizard is open.' : (state.pending ? 'Something needs your answer first.' : ''));
+      var msg = state.stage === 'HS' ? 'The senior season and the college offers come first.' : (state.stage === 'DRAFT' ? 'The draft process is under way.' : state.stage === 'RETIRED' ? 'Career over — the legacy report is waiting.' : state.phase === 'AWARDS' ? 'The awards ceremony is on.' : state.phase === 'OFF' ? 'The offseason wizard is open.' : (state.pending ? 'Something needs your answer first.' : ''));
       return c.card({ title: 'ELSEWHERE', kind: 'sky', body: c.el('p', { class: 'small', text: msg || 'Nothing to do here right now.' }), footer: [c.button({ label: 'GO THERE', kind: 'primary', icon: 'arrow-r', onClick: function () { R.sync({ force: true }); } })] });
     }
 

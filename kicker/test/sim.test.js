@@ -677,7 +677,7 @@ test('QA1-05: a college game (ids differ from abbreviations) logs abbreviations 
   if (!hasData) { t.skip('team data not loaded'); return; }
   const r = RTG.Engine.newCareer({ name: 'Log Tester', seed: 777 }, 0);
   const { state, rng } = r;
-  while (state.pending) RTG.Engine.settlePending(state, rng, { max: 1 });
+  RTG.Engine.settlePending(state, rng);                  // the senior season, then the college offer
   RTG.Engine.nextPhase(state, rng);
   if (state.phase !== 'REG') RTG.Engine.nextPhase(state, rng);
   while (state.pending) RTG.Engine.settlePending(state, rng, { max: 1 });

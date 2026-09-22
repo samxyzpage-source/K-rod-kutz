@@ -407,10 +407,39 @@
         retirement: { offerFromAge: 33, forcedAge: 42, ringChaseTopN: 5 }
       },
 
+      // ───────────────────────────── §2.7.0 HIGH SCHOOL SENIOR SEASON (D23) ─────────────────────────────
+      // The career opens on the last five games of the senior year. Every kick is a real scoring chance in a
+      // real game, and the recruiting board moves after each one (RTG.HS).
+      hs: {
+        games: 5,
+        firstWeek: 6,                                       // weeks 6-10; the last two carry the season
+        rivalryIdx: 3,                                      // week 9 is the rivalry game
+        playoffIdx: 4,                                      // week 10 opens the state playoffs
+        chances: [3, 5],                                    // scoring chances the offence hands the kicker
+        patShare: 0.45,                                     // share of those chances that are extra points
+        fgRange: [23, 51],
+        longFrom: 45,                                       // what the board counts as a long make
+        // the opponent scores in touchdowns and field goals, to a total scaled off what your offence set up:
+        // below 1.0 you are favoured, above it you are the underdog
+        opp: { ratio: [0.5, 1.3], tdShare: 0.55 },
+        finish: { fromIdx: 3, trail: [1, 2] },              // rivalry / playoff: the last chance comes with the game on it
+        ot: { win: 0.5, pts: 6 },                           // a tie goes to overtime, settled by a walk-off touchdown
+        clock: { q: [1, 2, 3, 4], lastSec: 4 },
+        interest: {
+          board: 10,                                        // schools that follow the senior tape
+          start: { base: 34, perPrestige: -4, jitter: 9 },
+          pull: [0.7, 1.35],                                // each school reads the tape a little differently
+          make: 5, miss: -4, pat: 1, patMiss: -3, long: 4, gw: 12, gwMiss: -8, win: 3, loss: -2,
+          prestigeResist: 0.16,                             // a blue blood moves less per game than a MAC school
+          offerAt: 70, highAt: 45, warmAt: 25, min: 0, max: 100
+        },
+        // the 0-6 rating the star formula reads, from the whole five-game stretch
+        rating: { fgW: 0.55, patW: 0.20, gwW: 0.25, scale: 6, longAdd: 0.35, longMax: 1 }
+      },
+
       // ───────────────────────────── §2.7.1 / §2.7.5 / §2.7.6 DRAFT ─────────────────────────────
       draft: {
-        stars: { base: 1.5, perOvr: 0.03, ovrAnchor: 40, showcaseW: 0.4, showcaseKicks: 6, min: 2, max: 5, walkon: 2 },
-        showcase: { distances: [30, 38, 44, 50, 55, 42], pressureLast: 0.6 },
+        stars: { base: 1.5, perOvr: 0.03, ovrAnchor: 40, seasonW: 0.4, min: 2, max: 5, walkon: 2 },
         offers: { min: 3, max: 6, walkon: 1, safetyPrestigeMax: 2, weightOffset: 0.5,
                   depth: { VET: { ovr: [66, 78], years: [1, 1] }, STAR: { ovr: [74, 84], years: [2, 3] } },
                   prestigeBumpPer: 2, prestigeAnchor: 3 },
@@ -616,7 +645,8 @@
           vetMargin: 5,                                   // margin used to classify an unshaped roster (VET when the incumbent is within it)
           nilFameDiv: 60,                                 // NIL $k = lerp(band lo, hi, 0.5·u + 0.5·min(1, fame / nilFameDiv))
           transferCount: [2, 3], transferBand: 1,         // §2.7.4 portal: 2–3 offers within ±1 prestige of the OVR-implied tier
-          ovrTier: { base: 3, perOvr: 0.1, anchor: 60 }   // OVR-implied prestige tier = clamp(round(3 + 0.1·(OVR − 60)), 1, 5)
+          ovrTier: { base: 3, perOvr: 0.1, anchor: 60 },  // OVR-implied prestige tier = clamp(round(3 + 0.1·(OVR − 60)), 1, 5)
+          interestPull: 1.5                               // §2.7.0: how hard the senior-season board tilts the recruit pool
         },
         redshirt: { afterSeason: 1 },                     // §2.7.3 redshirt offered after this college season when it ended as K2
         camp: { incumbentSeniority: 1, winnerJs: 60 },    // §2.2 camp battle: incumbent's seniority head start (years) · winner's Job Security floor

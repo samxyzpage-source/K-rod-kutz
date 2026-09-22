@@ -157,7 +157,7 @@ test('every file parses on its own (syntax) and the engine loads without throwin
 
 /** §3.5 namespaces and their binding functions, checked only for delivered files. */
 const CONTRACT = {
-  'engine/tuning': { ns: 'Tuning', keys: ['kick', 'sim', 'progression', 'soft', 'contracts', 'draft', 'hof', 'difficulty', 'save', 'events'] },
+  'engine/tuning': { ns: 'Tuning', keys: ['kick', 'sim', 'progression', 'soft', 'contracts', 'draft', 'hs', 'hof', 'difficulty', 'save', 'events'] },
   'engine/util': { ns: 'Util', fns: ['clamp', 'lerp', 'round1', 'sum', 'mean', 'indexBy', 'deepClone', 'fnv1a', 'erf', 'phi', 'fmtMoney', 'fmtPct', 'fmtClock', 'ordinal', 'template', 'pad', 'assert'] },
   'engine/rng': { ns: 'RNG', fns: ['create'] },
   'engine/schema': { ns: 'Schema', fns: ['createCareer', 'createTeam', 'createGameState', 'createKickLogRow', 'emptyKickerStats', 'validate', 'reindex'] },
@@ -182,9 +182,10 @@ const CONTRACT = {
   'engine/contracts': { ns: 'Contracts', fns: ['marketValue', 'rookieDeal', 'tagValue', 'teamSatisfaction', 'extensionOffer', 'generateOffers', 'counter', 'applyTag', 'cutCheck', 'sign', 'payoutSeason', 'teamsNeedingK'] },
   'engine/draft': { ns: 'Draft', fns: ['combineSession', 'scoreCombine', 'draftValue', 'projection', 'run', 'tryout'] },
   'engine/season': { ns: 'Season', fns: ['start', 'beginRegular', 'userGameRef', 'simOtherGames', 'endWeek', 'startPostseason', 'postseasonWeek', 'finishSeason', 'offseason', 'advanceYear'] },
-  'engine/career': { ns: 'Career', fns: ['showcaseSession', 'finishShowcase', 'generateCollegeOffers', 'decide', 'campBattle', 'finishSession', 'offseasonChain', 'changeTeam', 'handleActions', 'enterDraft', 'runDraft', 'enterNfl', 'retire', 'stageInfo'] },
+  'engine/career': { ns: 'Career', fns: ['starsFor', 'afterSessionKick', 'generateCollegeOffers', 'decide', 'campBattle', 'finishSession', 'offseasonChain', 'changeTeam', 'handleActions', 'enterDraft', 'runDraft', 'enterNfl', 'retire', 'stageInfo'] },
+  'engine/hs': { ns: 'HS', fns: ['season', 'startGame', 'afterKick', 'finishGame', 'finishSeason', 'ratingOf', 'tierOf', 'inSeason', 'current'] },
   'engine/save': { ns: 'Save', fns: ['serialize', 'deserialize', 'migrate', 'exportString', 'importString', 'slotSummary'] },
-  'engine/api': { ns: 'Engine', fns: ['newCareer', 'train', 'spendXp', 'startUserGame', 'simStep', 'simToKick', 'applyUserKick', 'autoKick', 'applyUserKickoff', 'finishUserGame', 'endWeek', 'chooseEvent', 'sessionKick', 'decide', 'nextPhase', 'autoPlayGame', 'autoPlayWeek', 'autoPlaySeason', 'autoPlayOffseason', 'autoPlayCareer', 'save', 'load', 'settlePending', 'markRead'] }
+  'engine/api': { ns: 'Engine', fns: ['newCareer', 'train', 'spendXp', 'startUserGame', 'simStep', 'simToKick', 'applyUserKick', 'autoKick', 'applyUserKickoff', 'finishUserGame', 'endWeek', 'chooseEvent', 'sessionKick', 'decide', 'nextPhase', 'autoPlayGame', 'autoPlayWeek', 'autoPlaySeason', 'autoPlayOffseason', 'autoPlayCareer', 'save', 'load', 'settlePending', 'markRead', 'hsStartGame'] }
 };
 
 const RTG = load();

@@ -123,7 +123,7 @@ test('game_flow file desktop: play clock expiry kicks with the current values (n
   const app = await H.openApp({ mode: 'file', viewport: 'desktop' });
   const { page } = app;
   try {
-    await K.openShowcase(page, 555);
+    await K.openHsGame(page, 555);
     const g = await K.geometry(page);
     await page.mouse.move(g.ball.x, g.ball.y);
     await page.mouse.down();

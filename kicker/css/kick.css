@@ -25,14 +25,14 @@
    uprights, the ball, the power bar or the feedback line. (The old 22 % landed on the posts: the uprights reach
    into the sky band, so "the sky" is not free space.) Not on the combine: its plan card is a DOM card whose
    options live where the sky would be. */
-#app.chromeless[data-screen="kick"] ~ .toast-host, #app.chromeless[data-screen="showcase"] ~ .toast-host,
+#app.chromeless[data-screen="kick"] ~ .toast-host, #app.chromeless[data-screen="hsgame"] ~ .toast-host,
 #app.chromeless[data-screen="campbattle"] ~ .toast-host { top: 40%; bottom: auto; }
 @media (min-width: 900px) {   /* desktop centres a taller scene: the crossbar sits lower */
-  #app.chromeless[data-screen="kick"] ~ .toast-host, #app.chromeless[data-screen="showcase"] ~ .toast-host,
+  #app.chromeless[data-screen="kick"] ~ .toast-host, #app.chromeless[data-screen="hsgame"] ~ .toast-host,
   #app.chromeless[data-screen="campbattle"] ~ .toast-host { top: 43%; }
 }
 @media (orientation: landscape) and (max-height: 520px) {   /* short scene: above the result banner */
-  #app.chromeless[data-screen="kick"] ~ .toast-host, #app.chromeless[data-screen="showcase"] ~ .toast-host,
+  #app.chromeless[data-screen="kick"] ~ .toast-host, #app.chromeless[data-screen="hsgame"] ~ .toast-host,
   #app.chromeless[data-screen="campbattle"] ~ .toast-host { top: 24%; }
 }
 
@@ -163,7 +163,7 @@ body.hc .kv-banner-blocked, html.hc .kv-banner-blocked { background: var(--red, 
 .ko-verdict { margin-top: 6px; font-size: 10px; letter-spacing: 1px; }
 .ko-result { margin-top: 6px; font-size: 9px; color: var(--cream, #f4e9d0); }
 
-/* ───────────────────────────── session screens (showcase / camp / combine) ───────────────────────────── */
+/* ──────────────────── session screens (senior-season game / camp / combine) ──────────────────── */
 .session-title { font-size: max(10px, 0.95em); color: var(--gold, #f6c445); letter-spacing: 1px; margin: 0 0 4px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
 .slot-strip { display: flex; gap: 4px; flex-wrap: wrap; }
 .slot {
@@ -177,6 +177,14 @@ body.hc .kv-banner-blocked, html.hc .kv-banner-blocked { background: var(--red, 
 .slot.miss { border-color: var(--red, #d8433a); color: var(--red, #d8433a); }
 .slot.skipped { opacity: 0.4; }
 .slot.rival.made { background: var(--ink, #101226); }
+/* the senior-season scoreboard (§2.7.0): one line with the week and the clock, so the scene keeps its height */
+.hs-header .session-title { gap: 8px; }
+.hs-header .hs-week { white-space: nowrap; }
+.hs-board { display: inline-flex; align-items: baseline; gap: 4px; margin: 0 auto; }
+.hs-board .hs-team { font-size: max(8px, 0.8em); color: var(--cream, #f4e9d0); letter-spacing: 1px; }
+.hs-board .hs-team.you { color: var(--gold, #f6c445); }
+.hs-board .hs-score { font-size: max(11px, 1.05em); color: var(--cream, #f4e9d0); font-variant-numeric: tabular-nums; min-width: 14px; text-align: center; }
+.hs-board .hs-sep { color: var(--grey, #8a8f9e); }
 .camp-board { display: flex; flex-direction: column; gap: 3px; }
 .camp-row { display: flex; align-items: center; gap: 6px; }
 .camp-row .camp-name { width: 64px; font-size: max(8px, 0.8em); color: var(--cream, #f4e9d0); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -192,7 +200,7 @@ body.hc .kv-banner-blocked, html.hc .kv-banner-blocked { background: var(--red, 
 .plan-option .plan-detail { font-size: max(9px, 0.85em); line-height: 1.5; }
 .session-outcome { padding: 8px; font-size: 10px; text-align: center; color: var(--gold, #f6c445); }
 
-/* tutorial overlays (showcase) */
+/* tutorial overlays (the first kick of a career) */
 .tut-overlay { position: absolute; inset: 0; z-index: 5; pointer-events: none; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; background: rgba(16,18,38,0.35); }
 .tut-step { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--ink, #101226); border: 2px solid var(--gold, #f6c445); color: var(--cream, #f4e9d0); font-size: max(9px, 0.85em); white-space: pre-line; box-shadow: 3px 3px 0 #000; }
 .tut-num { display: inline-flex; width: 14px; height: 14px; align-items: center; justify-content: center; background: var(--gold, #f6c445); color: var(--ink, #101226); font-size: 9px; }

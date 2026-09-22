@@ -60,13 +60,14 @@ test('§3.5.20 every Engine function exists', () => {
   for (const f of fns) assert.equal(typeof Engine[f], 'function', 'Engine.' + f);
 });
 
-test('newCareer: default seed fnv1a32(String(now)); explicit numeric / string seeds; {state, rng} at HS.SHOWCASE with the showcase pending', () => {
+test('newCareer: default seed fnv1a32(String(now)); explicit numeric / string seeds; {state, rng} at HS.SEASON with the senior season built', () => {
   const now = 1757000000000;
   const a = Engine.newCareer({ name: 'Ada Kickwell', archetype: 'ICEMAN', difficulty: 'allpro' }, now);
   assert.equal(a.state.seed, Util.fnv1a32(String(now)));
   assert.equal(a.state.createdAt, now); assert.equal(a.state.difficulty, 'allpro'); assert.equal(a.state.player.archetype, 'ICEMAN');
-  assert.equal(a.state.stage, 'HS'); assert.equal(a.state.phase, 'SHOWCASE');
-  assert.equal(a.state.pending.kind, 'KICKS'); assert.equal(a.state.pending.session.kind, 'SHOWCASE'); assert.equal(a.state.pending.session.contexts.length, 6);
+  assert.equal(a.state.stage, 'HS'); assert.equal(a.state.phase, 'SEASON');
+  assert.equal(a.state.pending, null, 'nothing is pending until a game is opened');
+  assert.equal(a.state.flags.hs.games.length, RTG.Tuning.hs.games); assert.equal(a.state.flags.hs.idx, 0);
   assert.equal(a.state.rngState, a.rng.state());
   ok(a.state, 'new career');
   const b = Engine.newCareer({ seed: 4242 }, now), c = Engine.newCareer({ seed: '4242' }, now), d = Engine.newCareer({ seed: 'road to glory' }, now);
@@ -108,10 +109,13 @@ test('preconditions throw descriptive Errors: endWeek before the game is played 
   assert.throws(() => Engine.decide(off.state, off.rng, { kind: 'NOPE' }), /unknown decision kind/);
   assert.throws(() => Engine.chooseEvent(off.state, off.rng, 0), /no pending event/);
   assert.throws(() => Engine.sessionKick(off.state, off.rng, null), /no pending kick session/);
-  const hs = kfx.newCareer(RTG).state;
-  assert.equal(Engine.nextPhase(hs, RTG.RNG.create(1)).pending, 'KICKS', 'idempotent while the showcase is pending');
-  hs.pending = null;
-  assert.throws(() => Engine.nextPhase(hs, RTG.RNG.create(1)), /play the showcase first/);
+  const hsr = kfx.hsGame(RTG);
+  assert.equal(Engine.nextPhase(hsr.state, hsr.rng).pending, 'KICKS', 'idempotent while a senior-season game is open');
+  assert.throws(() => Engine.hsStartGame(hsr.state, hsr.rng), /already pending/, 'one game at a time');
+  hsr.state.pending = null;
+  assert.throws(() => Engine.nextPhase(hsr.state, hsr.rng), /play the senior season first/);
+  hsr.state.flags.hs.idx = hsr.state.flags.hs.games.length;
+  assert.throws(() => Engine.hsStartGame(hsr.state, hsr.rng), /senior season is over/);
 });
 
 // ═══════════════════════════════ the game loop ═══════════════════════════════
@@ -176,20 +180,33 @@ test('applyUserKick with a pending kickoff throws (and vice versa); autoKick res
 
 // ═══════════════════════════════ sessions, events, decisions ═══════════════════════════════
 
-test('sessionKick: six showcase kicks (AI input when null) → done with the SHOWCASE outcome and the OFFERS_COLLEGE decision; a complete session throws', () => {
-  const { state, rng } = kfx.newCareer(RTG, { seed: 8 });
-  const results = [];
-  for (let i = 0; i < 6; i++) {
+test('sessionKick: a senior-season game (AI input when null) → the HS_GAME outcome, then the next game; the fifth ends at OFFERS_COLLEGE', () => {
+  const { state, rng, session } = kfx.hsGame(RTG, { seed: 8 });
+  const n = session.contexts.length;
+  assert.ok(n >= RTG.Tuning.hs.chances[0] && n <= RTG.Tuning.hs.chances[1], 'chances in range (' + n + ')');
+  for (let i = 0; i < n; i++) {
     const r = Engine.sessionKick(state, rng, i === 0 ? { power: 1.0, aim: 0, quality: 0.95 } : null);
-    results.push(r);
-    assert.equal(r.idx, i); assert.equal(r.done, i === 5); assert.equal(r.remaining, 5 - i);
+    assert.equal(r.idx, i); assert.equal(r.done, i === n - 1); assert.equal(r.remaining, n - 1 - i);
     assert.ok(r.result && typeof r.result.made === 'boolean');
     if (i === 0) assert.equal(r.result.auto, false); else assert.equal(r.result.auto, true);
+    if (i < n - 1) assert.equal(r.outcome, null);
+    else {
+      assert.equal(r.outcome.kind, 'HS_GAME');
+      assert.equal(r.outcome.us, state.flags.hs.games[0].us);
+      assert.equal(r.outcome.seasonDone, false, 'four games to go');
+    }
   }
-  assert.equal(results[5].outcome.kind, 'SHOWCASE');
-  assert.equal(state.phase, 'OFFERS'); assert.equal(state.pending.decision.kind, 'OFFERS_COLLEGE');
+  assert.equal(state.flags.hs.idx, 1);
+  assert.equal(state.pending, null, 'the senior season pauses between games');
   assert.throws(() => Engine.sessionKick(state, rng, null), /no pending kick session/);
-  ok(state, 'after the showcase');
+  ok(state, 'after senior-season game 1');
+  // the rest of the season, then the offers
+  let guard = 20;
+  while (state.phase === 'SEASON' && guard-- > 0) Engine.settlePending(state, rng, { max: 1 });
+  assert.equal(state.flags.hs.idx, RTG.Tuning.hs.games);
+  assert.equal(state.phase, 'OFFERS'); assert.equal(state.pending.decision.kind, 'OFFERS_COLLEGE');
+  assert.ok(state.flags.hs.summary.stars >= 2 && state.flags.hs.summary.stars <= 5, JSON.stringify(state.flags.hs.summary));
+  ok(state, 'after the senior season');
 });
 
 test('chooseEvent applies the choice, runs the actions and resumes the offseason chain', () => {
@@ -314,12 +331,17 @@ test('save / load round trip (Engine.save → Engine.load) restores the state an
 
 test('applyUserKick / sessionKick accept opts.forced (debug): requested outcome, no input needed, zero rng draws, state stays valid', () => {
   const { state, rng } = Engine.newCareer({ name: 'Forced Kicker', archetype: 'CANNON', difficulty: 'pro', seed: 4242 }, 1757000000000);
+  Engine.hsStartGame(state, rng);
   assert.equal(state.pending.kind, 'KICKS');
   const before = rng.state();
   const r = Engine.sessionKick(state, rng, null, { forced: { outcome: 'DOINK_IN' } });
   assert.equal(r.result.outcome, 'DOINK_IN'); assert.equal(r.result.made, true); assert.equal(r.result.forced, true);
   assert.equal(rng.state(), before, 'a forced session kick consumes no rng draws');
-  while (state.pending && state.pending.kind === 'KICKS') Engine.sessionKick(state, rng, null, { forced: { outcome: 'GOOD' } });
+  let guard = 60;
+  while (state.phase === 'SEASON' && guard-- > 0) {
+    if (!state.pending) Engine.hsStartGame(state, rng);
+    while (state.pending && state.pending.kind === 'KICKS') Engine.sessionKick(state, rng, null, { forced: { outcome: 'GOOD' } });
+  }
   assert.equal(state.stage, 'HS'); assert.equal(state.phase, 'OFFERS');
   Engine.autoPlayCareer(state, rng, { untilStage: 'COLLEGE' });
   Engine.nextPhase(state, rng);

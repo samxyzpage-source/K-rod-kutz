@@ -22,7 +22,7 @@
   function Router() { return RTG.UI.Router; }
   function num(v, d) { return typeof v === 'number' && v === v ? v : d; }
 
-  var SESSION_TITLES = { HALFTIME70: 'HALFTIME 70', TRYOUT: 'MINICAMP TRYOUT', PRACTICE: 'PRACTICE', SHOWCASE: 'SHOWCASE', CAMP: 'CAMP BATTLE' };
+  var SESSION_TITLES = { HALFTIME70: 'HALFTIME 70', TRYOUT: 'MINICAMP TRYOUT', PRACTICE: 'PRACTICE', HS_GAME: 'SENIOR YEAR', CAMP: 'CAMP BATTLE' };
 
   /** Mini LED row: AWAY abbr score · Q clock · HOME abbr score (user side in gold). */
   function scoreRow(store) {

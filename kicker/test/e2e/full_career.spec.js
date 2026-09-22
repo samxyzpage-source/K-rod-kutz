@@ -1,7 +1,7 @@
 /**
  * full_career.spec (integrator): one whole career through the REAL screens.
  *
- *   title → NEW CAREER form → showcase (six real mouse flicks) → offers (COMMIT) → college hub (TRAIN, XP "+")
+ *   title → NEW CAREER form → the senior season (five games, real mouse flicks) → offers (COMMIT) → college hub (TRAIN, XP "+")
  *   → PLAY GAME → NEXT KICK ▶ / kick screen (a real flick, then RTG.debug.forceKick) → postgame → CONTINUE → event
  *   modals → the first week, one bye and the last REG week played for real (RTG.debug.simWeek for the rest) →
  *   postseason → awards CONTINUE → the offseason wizard (every card through its real button) → simSeason until the
@@ -89,7 +89,7 @@ async function settleEvents(page) {
   }
 }
 
-/** A real flick on the armed kick scene (showcase or the game's kick screen). */
+/** A real flick on the armed kick scene (a senior-season game or the game's kick screen). */
 async function realFlick(page) {
   await K.waitPhase(page, 'SETUP', 10000);
   await page.waitForTimeout(120);
@@ -157,7 +157,7 @@ async function playWeekForReal(page, vp, app, o) {
     await page.locator('.scr-training .focus-tile[data-focus="ACC"]').click();
     await page.waitForFunction(() => RTG.UI.store.state.season.trainingDone, null, { timeout: 5000 });
     assert.ok(await page.locator('.scr-training .focus-tile[data-focus="ACC"].active').count() === 1, 'the trained focus tile lights up');
-    // spend XP with the "+" button (top up through the debug API when the showcase left nothing to spend)
+    // spend XP with the "+" button (top up through the debug API when the senior season left nothing to spend)
     let plus = page.locator('.scr-training [data-action^="spend-"]:not([disabled])');
     if (!(await plus.count())) { await H.debug(page, 'addXp', 400); plus = page.locator('.scr-training [data-action^="spend-"]:not([disabled])'); }
     await plus.first().waitFor({ state: 'visible', timeout: 5000 });
@@ -340,7 +340,7 @@ async function finishSeasonForReal(page, vp, app, shots, o) {
 H.matrix(({ mode, vp }) => {
   const fast = (mode === 'file' && vp === 'desktop') || (mode === 'http' && vp === 'phone');
   const shots = mode === 'http';
-  test(`full_career ${mode} ${vp}: title → showcase → college → draft → NFL → legacy → title through the real screens${fast ? '' : ' (full motion for the NFL game)'}`, async () => {
+  test(`full_career ${mode} ${vp}: title → senior season → college → draft → NFL → legacy → title through the real screens${fast ? '' : ' (full motion for the NFL game)'}`, async () => {
     const app = await H.openApp({ mode, viewport: vp });
     const { page } = app;
     try {
@@ -355,27 +355,43 @@ H.matrix(({ mode, vp }) => {
       await page.click('[data-diff="pro"]');
       await page.fill('#nc-seed', SEED);
       await H.clickButton(page, 'START CAREER');
-      await H.waitForScreen(page, 'showcase');
+      await H.waitForScreen(page, 'hsseason');
       let b = await brief(page);
-      assert.equal(b.stage + '.' + b.phase, 'HS.SHOWCASE');
+      assert.equal(b.stage + '.' + b.phase, 'HS.SEASON');
       assert.equal((await H.debug(page, 'getState')).seed, Number(SEED));
+      assert.equal(await page.locator('.hs-sched .hs-grow').count(), 5, 'the five-game senior schedule');
+      await shotIf(page, shots, 'full_hsseason_' + vp);
       await checkpoint(page, app, 'new career');
 
-      // ── showcase: six real mouse flicks
-      for (let i = 0; i < 6; i++) {
-        await K.waitSetup(page, i, 15000);
-        await realFlick(page);
-        const s = await H.debug(page, 'getState');
-        if (s.pending && s.pending.session) {
-          assert.equal(s.pending.session.results.length, i + 1, 'kick ' + (i + 1) + ' recorded');
-          assert.equal(s.pending.session.results[i].auto, false, 'a real input, not an auto kick');
+      // ── the senior season: five games, every kick a real mouse flick
+      let flicks = 0;
+      for (let g = 0; g < 5; g++) {
+        await H.waitForScreen(page, 'hsseason', 20000);
+        await page.locator('button[data-action="play-hs-game"]').click();
+        await H.waitForScreen(page, 'hsgame', 15000);
+        const n = await page.evaluate(() => RTG.UI.store.state.pending.session.contexts.length);
+        for (let i = 0; i < n; i++) {
+          await K.waitSetup(page, i, 20000);
+          await realFlick(page);
+          flicks++;
+          const s = await H.debug(page, 'getState');
+          if (s.pending && s.pending.session && s.pending.session.kind === 'HS_GAME') {
+            assert.equal(s.pending.session.results.length, i + 1, 'game ' + g + ' kick ' + (i + 1) + ' recorded');
+            assert.equal(s.pending.session.results[i].auto, false, 'a real input, not an auto kick');
+          }
         }
-        if (i === 1) await shotIf(page, shots, 'full_showcase_' + vp);
+        if (g === 0) await shotIf(page, shots, 'full_hsgame_' + vp);
+        const hs = (await H.debug(page, 'getState')).flags.hs;
+        assert.equal(hs.idx, g + 1, 'game ' + g + ' closed');
+        assert.equal(hs.games[g].played, true);
       }
-      await H.waitForScreen(page, 'offers', 15000);
+      assert.ok(flicks >= 15, 'a senior season is 15-25 real kicks (' + flicks + ')');
+      await H.waitForScreen(page, 'offers', 20000);
       b = await brief(page);
       assert.equal(b.stage + '.' + b.phase, 'HS.OFFERS');
-      await checkpoint(page, app, 'showcase done');
+      const hs = (await H.debug(page, 'getState')).flags.hs;
+      assert.equal(hs.summary.stars, (await H.debug(page, 'getState')).player.stars, 'the stars came from the season');
+      await checkpoint(page, app, 'senior season done');
 
       // ── offers: browse, compare, commit
       assert.ok(await page.locator('.scr-offers .offer-card').count() >= 1, 'offer cards');

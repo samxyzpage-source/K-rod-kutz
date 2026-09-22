@@ -1,5 +1,5 @@
 /**
- * kick_mouse.spec (SPEC §5.2): on the showcase, page.mouse presses on the ball, drags down 120 px over 300 ms,
+ * kick_mouse.spec (SPEC §5.2): in a senior-season game, page.mouse presses on the ball, drags down 120 px over 300 ms,
  * flicks up 60 px in 80 ms and releases → the result banner is visible; getState().pending.session.results.length
  * === 1 with input.power within 0.5–1.15 and auto === false. Overswing: a drag to the bottom of the viewport (past
  * D_full) → power > 1 and feedback.power === 'OVERSWING'. Runs on file:// and http at the phone and desktop viewports.
@@ -17,7 +17,7 @@ H.matrix(({ mode, vp }) => {
     const app = await H.openApp({ mode, viewport: vp });
     const { page } = app;
     try {
-      await K.useFlick(page); await K.openShowcase(page, 4242);
+      await K.useFlick(page); await K.openHsGame(page, 4242);
       const g = await K.geometry(page);
       assert.ok(g.scale >= 2 ? Number.isInteger(g.scale) : (g.scale === 1 || g.scale >= 1.35), 'integer scale, or the fractional phone fit ≥ 1.35 (' + g.scale + ')');
       if (vp === 'desktop') assert.ok(Number.isInteger(g.scale) && g.scale >= 2, 'desktop integer-scales (' + g.scale + ')');
@@ -54,7 +54,7 @@ H.matrix(({ mode, vp }) => {
     const app = await H.openApp({ mode, viewport: vp });
     const { page } = app;
     try {
-      await K.useFlick(page); await K.openShowcase(page, 4243);
+      await K.useFlick(page); await K.openHsGame(page, 4243);
       const g = await K.geometry(page);
       // D_full = 0.32 × css height (portrait) / 0.45 (landscape), capped at the room below the ball minus 12 px (a
       // finger cannot leave the screen). Pulling to 4 px above the viewport's bottom edge is therefore always past
@@ -79,7 +79,7 @@ test('kick_mouse file desktop: no forward flick → mishit (power 0.5, quality 0
   const app = await H.openApp({ mode: 'file', viewport: 'desktop' });
   const { page } = app;
   try {
-    await K.useFlick(page); await K.openShowcase(page, 4244);
+    await K.useFlick(page); await K.openHsGame(page, 4244);
     const g = await K.geometry(page);
     await page.mouse.move(g.ball.x, g.ball.y);
     await page.mouse.down();
@@ -116,7 +116,7 @@ test('kick_mouse file phone: every result banner stays legible in high contrast 
         RTG.UI.store.setSetting('colorblind', t === 'cb');
       }, theme);
       for (const outcome of ['BLOCKED', 'GOOD', 'WIDE_L']) {
-        await K.useFlick(page); await K.openShowcase(page, 4245);
+        await K.useFlick(page); await K.openHsGame(page, 4245);
         await page.evaluate(o => RTG.debug.forceKick({ outcome: o }), outcome);
         await K.waitPhase(page, 'RESULT', 9000);
         const c = await page.evaluate(() => {
@@ -137,7 +137,7 @@ test('kick_mouse file phone: a toast on the kick scene clears the uprights, the 
   const app = await H.openApp({ mode: 'file', viewport: 'phone' });
   const { page } = app;
   try {
-    await K.useFlick(page); await K.openShowcase(page, 4246);
+    await K.useFlick(page); await K.openHsGame(page, 4246);
     await page.evaluate(() => RTG.UI.C.toast('ICED! Timeout called', 'gold'));
     await page.waitForTimeout(150);
     const g = await page.evaluate(() => {
@@ -162,7 +162,7 @@ test('kick_mouse file desktop: the kick canvas shows the standard 3-px focus out
   const app = await H.openApp({ mode: 'file', viewport: 'desktop' });
   const { page } = app;
   try {
-    await K.useFlick(page); await K.openShowcase(page, 4247);
+    await K.useFlick(page); await K.openHsGame(page, 4247);
     const ring = await page.evaluate(() => {
       const c = RTG.UI.KickView.current().canvas;
       c.focus();

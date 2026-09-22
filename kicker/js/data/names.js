@@ -12,6 +12,7 @@
  *   allowCommon: common surnames that some kickers share but are allowed
  *   regions:     ['NE','SE','MW','SW','W'], regionNames: {[id]: label}
  *   coachTitles: flavour prefixes for AI head coaches
+ *   hsQualifiers / hsMascots / hsTowns: high-school name parts (§2.7.0)
  * }
  *
  * Compact source syntax for first names: 'Name' (w 1), 'Name+' (w 2),
@@ -175,6 +176,23 @@
 
   var coachTitles = ['Coach', 'Coach', 'Coach', 'Head Coach'];
 
+  /** High-school flavour (§2.7.0): a school is `<town><qualifier?> <mascot>` — e.g. "Brookfield North Ravens". */
+  var hsQualifiers = ['', '', '', '', 'North', 'South', 'East', 'West', 'Central', 'Heights', 'Valley', 'Township'];
+  var hsMascots = (
+    'Ravens Bulldogs Panthers Wildcats Vikings Eagles Hornets Cougars Lancers Mustangs Chargers Spartans ' +
+    'Titans Warriors Knights Comets Falcons Pioneers Rockets Cardinals Bears Colts Dragons Gators Huskies ' +
+    'Jaguars Lions Marauders Owls Patriots Rams Raiders Saints Scots Stallions Thunder Trojans Wolves ' +
+    'Bobcats Broncos Crusaders Foresters Generals Grizzlies Hawks Ironmen Mariners Miners Otters Railers ' +
+    'Redhawks Sentinels Silverbacks Steamers Storm Timberwolves Tornadoes Wranglers Yellowjackets'
+  ).split(' ');
+  /** Towns for opponent schools: near enough to the hometown to sound like a conference. */
+  var hsTowns = (
+    'Brookfield Clearwater Fairview Glenmont Harlow Ironton Kestrel Lakeview Maplewood Northbrook Oakridge ' +
+    'Pinecrest Quarry Ridgewood Stonebridge Thornton Union Vandalia Westbrook Yarrow Ashland Bellmont ' +
+    'Cedarville Dunmore Eastvale Foxglove Granger Hillsdale Inverness Jamestown Kingsport Larkspur ' +
+    'Millbrook Norwood Overton Parkdale Rosedale Springvale Tanglewood Whitfield'
+  ).split(' ');
+
   RTG.Data.names = {
     first: first,
     last: last,
@@ -187,6 +205,9 @@
     regions: regions,
     regionNames: regionNames,
     coachTitles: coachTitles,
+    hsQualifiers: hsQualifiers,
+    hsMascots: hsMascots,
+    hsTowns: hsTowns,
     eras: ['modern', 'classic', 'any']
   };
 })(typeof window !== 'undefined' ? window : globalThis);

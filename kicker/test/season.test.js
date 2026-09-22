@@ -45,7 +45,7 @@ function ok(state, where) {
 function enrol(R, kind, opts) {
   opts = opts || {};
   const seed = opts.seed === undefined ? 7 : opts.seed;
-  const state = schemaFx.hsShowcase(R, { seed });
+  const state = schemaFx.hsSeason(R, { seed });
   state.pending = null;
   const lg = kind === 'NFL' ? state.leagues.nfl : state.leagues.college;
   const team = lg.teams[opts.teamIdx || 0];
@@ -706,7 +706,7 @@ test('QA1-02: stats.season survives finishSeason / advanceYear and is zeroed onl
 
 test('QA1-03: college AI kickers are 18–22 at creation (NFL 22–36) and leave at Tuning.league.aiKicker.college.leaveAge for a freshman', () => {
   const K = Tuning.league.aiKicker;
-  const state = schemaFx.hsShowcase(RTG, { seed: 21 });
+  const state = schemaFx.hsSeason(RTG, { seed: 21 });
   const ages = (lg) => lg.teams.filter((t) => t.kicker).map((t) => t.kicker.age).concat(lg.teams.filter((t) => t.kicker2).map((t) => t.kicker2.age));
   const col = ages(state.leagues.college), nfl = ages(state.leagues.nfl);
   assert.ok(col.every((a) => a >= K.college.age[0] && a <= K.college.age[1]), 'college ages ' + Math.min.apply(null, col) + '–' + Math.max.apply(null, col));

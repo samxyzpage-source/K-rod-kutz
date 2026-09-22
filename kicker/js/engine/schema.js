@@ -31,7 +31,7 @@
    * @property {number} createdAt         ms, supplied by the UI
    * @property {number} playtimeSec
    * @property {'HS'|'COLLEGE'|'DRAFT'|'NFL'|'RETIRED'} stage
-   * @property {string} phase             HS: SHOWCASE|OFFERS · COLLEGE/NFL: PRE|REG|POST|AWARDS|OFF · DRAFT: DECLARE|COMBINE|DRAFT|UDFA · RETIRED: LEGACY
+   * @property {string} phase             HS: SEASON|OFFERS · COLLEGE/NFL: PRE|REG|POST|AWARDS|OFF · DRAFT: DECLARE|COMBINE|DRAFT|UDFA · RETIRED: LEGACY
    * @property {number} year              1 = first college season; calendar = 2026 + year − 1
    * @property {number} week              1-based; PRE = 0; POST continues numbering
    * @property {Player} player
@@ -229,7 +229,7 @@
   /** @typedef {{id:string, week:number, year:number, from:string, avatar:string, text:string, kind:'note'|'event'|'result', read:boolean}} Message */
   /** @typedef {{id:string, year:number, week:number, text:string, tag:string}} Headline */
   /** @typedef {{kind:string, payload:*, options:{id:string, label:string, detail:string}[]}} Decision */
-  /** @typedef {{kind:'SHOWCASE'|'CAMP'|'COMBINE_LADDER'|'COMBINE_ACC'|'COMBINE_KO'|'HALFTIME70'|'PRACTICE'|'TRYOUT', contexts:KickContext[], results:KickResult[], rival?:{name:string, results:KickResult[]}, idx:number}} KickSession */
+  /** @typedef {{kind:'HS_GAME'|'CAMP'|'COMBINE_LADDER'|'COMBINE_ACC'|'COMBINE_KO'|'HALFTIME70'|'PRACTICE'|'TRYOUT', contexts:KickContext[], results:KickResult[], rival?:{name:string, results:KickResult[]}, idx:number}} KickSession */
   /** @typedef {{id:string, text:string, sender:string, choices:{label:string, preview:string}[], rolledWeek:number, rolledYear:number}} EventInstance */
   /** @typedef {{id:string, key:string, op:'mul'|'add', value:number, expires:{type:'week'|'game'|'season'|'never', at:number}, label:string, source:string}} Modifier */
   /** @typedef {{autoPat:'off'|'safe'|'all', playKickoffs:boolean, simSpeed:1|2|4}} Settings  (per-career mirror of the UI settings) */
@@ -239,7 +239,7 @@
   var ENUM = {
     stages: ['HS', 'COLLEGE', 'DRAFT', 'NFL', 'RETIRED'],
     phases: {
-      HS: ['SHOWCASE', 'OFFERS'],
+      HS: ['SEASON', 'OFFERS'],
       COLLEGE: ['PRE', 'REG', 'POST', 'AWARDS', 'OFF'],
       NFL: ['PRE', 'REG', 'POST', 'AWARDS', 'OFF'],
       DRAFT: ['DECLARE', 'COMBINE', 'DRAFT', 'UDFA'],
@@ -259,7 +259,7 @@
     subs: ['', 'DEAD_CENTER', 'SNEAKS', 'LINE_DRIVE'],
     pendingKinds: ['EVENT', 'DECISION', 'KICKS'],
     gamePendingTypes: ['USER_KICK', 'USER_KICKOFF'],
-    sessionKinds: ['SHOWCASE', 'CAMP', 'COMBINE_LADDER', 'COMBINE_ACC', 'COMBINE_KO', 'HALFTIME70', 'PRACTICE', 'TRYOUT'],
+    sessionKinds: ['HS_GAME', 'CAMP', 'COMBINE_LADDER', 'COMBINE_ACC', 'COMBINE_KO', 'HALFTIME70', 'PRACTICE', 'TRYOUT'],
     decisionKinds: ['OFFERS_COLLEGE', 'REDSHIRT', 'DECLARE', 'TRANSFER', 'COMBINE_PLAN', 'UDFA', 'EXTENSION', 'FREE_AGENCY', 'TAG',
                     'RETIRE', 'OFFSEASON_PLAN', 'CUT_NOTICE', 'HOF', 'TRAINING_BLOCKS', 'BODY_CHECK', 'CAMP'],
     focus: ['POW', 'ACC', 'CON', 'CLU', 'KO', 'REST'],
@@ -599,10 +599,10 @@
   // ═══════════════════════════════ CAREER ═══════════════════════════════
 
   /**
-   * Create a brand-new CareerState at HS.SHOWCASE (§3.5.4).
+   * Create a brand-new CareerState at HS.SEASON (§3.5.4).
    * RNG draw order (fixed): player (Player.create) → college teams (Data.colleges order)
    * → NFL teams (Data.nfl order) → records/legends (college then NFL, key order)
-   * → showcase session (Career.showcaseSession when present, else Kick.buildContext ×6, else pending null).
+   * → the senior season (HS.season: 1 fork; no pending until the first game is opened).
    * @param {{name?:string|Object, archetype?:string, difficulty?:string, seed?:number, hometown?:Object, look?:Object, foot?:'R'|'L',
    *          createdAt?:number, settings?:Object, data?:{colleges?:Object[], nfl?:Object[], records?:Object}}} opts
    * @param {RNG} rng
@@ -634,7 +634,7 @@
       difficulty: difficulty,
       createdAt: typeof opts.createdAt === 'number' ? opts.createdAt : 0,
       playtimeSec: 0,
-      stage: 'HS', phase: 'SHOWCASE',
+      stage: 'HS', phase: 'SEASON',
       year: 1, week: 0,
       player: player,
       leagues: { college: college, nfl: nfl },
@@ -650,36 +650,21 @@
     };
     // 4. records & legends
     state.records = Schema.createRecords(rng, state.leagues, data.records);
-    // 5. showcase
-    state.pending = Schema.showcasePending(state, rng);
+    // 5. the senior season (§2.7.0): the schedule and the recruiting board; HS.startGame opens game 1
+    Schema.startHighSchool(state, rng);
     state.rngState = rng.state();
     return state;
   };
 
   /**
-   * Build the HS showcase pending payload: Career.showcaseSession if present, else a
-   * KickSession from Kick.buildContext, else null (reported by tests).
-   * @param {CareerState} state @param {RNG} rng @returns {Object|null}
+   * Build the high-school senior season on a fresh career (RTG.HS.season, 1 draw). Without RTG.HS the career
+   * still validates — it simply has no senior season, which the tests report.
+   * @param {CareerState} state @param {RNG} rng @returns {Object|null} state.flags.hs
    */
-  Schema.showcasePending = function (state, rng) {
-    if (RTG.Career && typeof RTG.Career.showcaseSession === 'function') {
-      var session = RTG.Career.showcaseSession(state, rng);
-      if (state.pending && state.pending.kind === 'KICKS') return state.pending;
-      return session ? { kind: 'KICKS', session: session } : null;
-    }
-    if (RTG.Kick && typeof RTG.Kick.buildContext === 'function') {
-      var S = Tuning.draft.showcase;
-      var contexts = [];
-      for (var i = 0; i < S.distances.length; i++) {
-        var last = i === S.distances.length - 1;
-        contexts.push(RTG.Kick.buildContext(state, null, {
-          type: 'FG', distance: S.distances[i], hash: 0, isUser: true, forSession: true,
-          pressure: last ? S.pressureLast : 0, calm: true
-        }));
-      }
-      return { kind: 'KICKS', session: { kind: 'SHOWCASE', contexts: contexts, results: [], idx: 0 } };
-    }
-    return null;
+  Schema.startHighSchool = function (state, rng) {
+    state.pending = null;
+    if (!RTG.HS || typeof RTG.HS.season !== 'function') return null;
+    return RTG.HS.season(state, rng);
   };
 
   // ═══════════════════════════════ GAME STATE / KICK LOG ═══════════════════════════════

@@ -1,5 +1,5 @@
 /**
- * newcareer.spec (SPEC §5.2): New career → name / archetype / difficulty / seed → the showcase screen;
+ * newcareer.spec (SPEC §5.2): New career → name / archetype / difficulty / seed → the senior-season screen;
  * getState().stage === 'HS'; the seed shown equals the entered seed. Also screenshots the newcareer form and the
  * hub (rendered by the _fallback until hub.js lands) at both viewports and asserts the chrome/responsive rules.
  */
@@ -11,7 +11,7 @@ const assert = H.assert;
 after(async () => { await H.closeBrowser(); });
 
 H.matrix(({ mode, vp }) => {
-  test(`newcareer ${mode} ${vp}: form → showcase, seed shown`, async () => {
+  test(`newcareer ${mode} ${vp}: form → senior season, seed shown`, async () => {
     const app = await H.openApp({ mode, viewport: vp });
     const { page } = app;
     try {
@@ -26,25 +26,29 @@ H.matrix(({ mode, vp }) => {
       if (mode === 'http') await H.shot(page, 'newcareer_' + vp);
       await H.noHorizontalScroll(page, 'newcareer');
       await H.clickButton(page, 'START CAREER');
-      await H.waitForScreen(page, 'showcase');
+      await H.waitForScreen(page, 'hsseason');
       const st = await H.debug(page, 'getState');
       assert.equal(st.stage, 'HS');
-      assert.equal(st.phase, 'SHOWCASE');
+      assert.equal(st.phase, 'SEASON');
       assert.equal(st.seed, 12345, 'seed equals the entered seed');
       assert.equal(st.player.name.full, 'Test Kicker');
       assert.equal(st.player.archetype, 'ICEMAN');
       assert.equal(st.difficulty, 'rookie');
-      assert.equal(st.pending.kind, 'KICKS');
-      assert.equal(st.pending.session.kind, 'SHOWCASE');
-      assert.equal(st.pending.session.contexts.length, 6);
+      assert.equal(st.pending, null, 'the senior season carries no pending between games');
+      assert.equal(st.flags.hs.games.length, 5, 'five senior-season games');
+      assert.equal(st.flags.hs.idx, 0);
       const resolved = await page.evaluate(() => RTG.UI.Router.resolve(RTG.UI.store.state).id);
-      assert.equal(resolved, 'showcase');
+      assert.equal(resolved, 'hsseason');
+      // the five-game schedule and the recruiting board are on screen
+      assert.equal(await page.locator('.hs-sched .hs-grow').count(), 5, 'five schedule rows');
+      assert.ok(await page.locator('.hs-board-list .hs-brow').count() >= 5, 'a recruiting board');
+      assert.ok(await page.locator('button[data-action="play-hs-game"]').isVisible(), 'PLAY WEEK button');
       const shownSeed = await page.evaluate(() => {
         const el = document.querySelector('[data-seed]');
         return el ? el.getAttribute('data-seed') : null;
       });
       if (shownSeed !== null) assert.equal(shownSeed, '12345', 'seed shown on the screen');
-      else console.log('  (showcase screen shows no [data-seed] element — seed checked through getState only)');
+      else console.log('  (the senior-season screen shows no [data-seed] element — seed checked through getState only)');
       // autosave written
       const auto = await page.evaluate(() => JSON.parse(RTG.UI.Storage.getItem('rtg.save.auto')));
       assert.equal(auto.seed, 12345);
@@ -137,7 +141,7 @@ for (const mode of H.MODES) {
       assert.equal(await page.inputValue('#nc-name'), 'Enter Tester!', 'plain typing still reaches the field');
       await page.keyboard.press('Backspace');
       await page.keyboard.press('Enter');
-      await H.waitForScreen(page, 'showcase', 5000);
+      await H.waitForScreen(page, 'hsseason', 5000);
       const st = await H.debug(page, 'getState');
       assert.equal(st.player.name.full, 'Enter Tester', 'Enter submitted the form');
       assert.deepEqual(app.errors, [], 'console errors');

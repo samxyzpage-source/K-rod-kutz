@@ -67,7 +67,7 @@ function scriptedRng(o) {
 function aiState(RTG, opts) {
   opts = opts || {};
   const league = opts.league === 'NFL' ? 'NFL' : 'COLLEGE';
-  const state = schemaFx.hsShowcase(RTG, { seed: opts.seed === undefined ? 3 : opts.seed });
+  const state = schemaFx.hsSeason(RTG, { seed: opts.seed === undefined ? 3 : opts.seed });
   state.pending = null;
   state.player.teamId = null; state.player.league = league; state.player.role = 'NONE';
   state.stage = league; state.phase = 'REG'; state.week = opts.week || 1;

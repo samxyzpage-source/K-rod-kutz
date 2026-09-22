@@ -210,7 +210,7 @@
   /**
    * Apply (or re-apply) the star rating bonus relative to the player's current
    * stars: attrs +4·Δstars, POT bonus per §2.1.1, fame start per §2.2.
-   * Intended to be called once after the showcase (Career.finishShowcase).
+   * Intended to be called once at the end of the senior season (HS.finishSeason).
    * @param {object} player @param {number} stars 2..5
    * @returns {object} player
    */

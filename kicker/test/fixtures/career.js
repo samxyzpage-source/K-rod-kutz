@@ -3,6 +3,7 @@
  * points the Career / Engine modules operate on, plus small helpers to drive sessions and chains deterministically.
  *
  *   const kfx = require('./fixtures/career');
+ *   const { state, rng } = kfx.hsGame(RTG);            // HS.SEASON with senior-season game 1 open
  *   const { state, rng } = kfx.hsOffers(RTG);          // HS.OFFERS with the OFFERS_COLLEGE decision pending
  *   const c = kfx.collegePre(RTG);                     // COLLEGE.PRE right after committing (camp session may be pending)
  *   const b = kfx.campBattle(RTG);                     // COLLEGE.PRE with a pending CAMP session vs a strong rival
@@ -48,10 +49,37 @@ function fillSession(session, pattern, hang) {
   return contractFx.fillResults(session, pattern, hang);
 }
 
-/** HS.OFFERS — showcase played with AI kicks, OFFERS_COLLEGE decision pending. @returns {{state, rng}} */
+/**
+ * Play the whole senior season with a fixed make pattern: `made` is a boolean (every kick) or fn(ctx, i, gameIdx).
+ * Leaves the career at HS.OFFERS with the OFFERS_COLLEGE decision pending.
+ * @returns {Object} the HS_SEASON outcome
+ */
+function playHsSeason(RTG, state, rng, made) {
+  var pick = typeof made === 'function' ? made : function () { return !!made; };
+  var out = null, guard = 20;
+  while (state.phase === 'SEASON' && guard-- > 0) {
+    var sess = RTG.Engine.hsStartGame(state, rng);
+    var idx = sess.gameIdx;
+    for (var i = 0; i < sess.contexts.length; i++) {
+      var r = RTG.Engine.sessionKick(state, rng, null, { forced: { outcome: pick(sess.contexts[i], i, idx) ? 'GOOD' : 'WIDE_L' } });
+      if (r.outcome) out = r.outcome.season || r.outcome;
+    }
+  }
+  return out;
+}
+
+/** HS.SEASON with game 1 open (pending KICKS session, kind HS_GAME). @returns {{state, rng, session}} */
+function hsGame(RTG, opts) {
+  var r = newCareer(RTG, opts);
+  r.session = RTG.Engine.hsStartGame(r.state, r.rng);
+  return r;
+}
+
+/** HS.OFFERS — the five senior-season games played with AI kicks, OFFERS_COLLEGE decision pending. @returns {{state, rng}} */
 function hsOffers(RTG, opts) {
   var r = newCareer(RTG, opts);
-  playSession(RTG, r.state, r.rng);
+  var guard = 20;
+  while (r.state.phase === 'SEASON' && guard-- > 0) RTG.Engine.settlePending(r.state, r.rng, { max: 1 });
   return r;
 }
 
@@ -185,6 +213,8 @@ module.exports = {
   newCareer: newCareer,
   playSession: playSession,
   fillSession: fillSession,
+  hsGame: hsGame,
+  playHsSeason: playHsSeason,
   hsOffers: hsOffers,
   bestOfferId: bestOfferId,
   collegePre: collegePre,

@@ -5,7 +5,7 @@
  *
  *   const fx = require('./fixtures/schema');
  *   const state = fx.collegeRegWeek5(RTG);        // deterministic (seed 7)
- *   const all   = fx.all(RTG);                     // {hsShowcase, collegeRegWeek5, nflRegWeek9InGame, nflOff, retiredLegacy}
+ *   const all   = fx.all(RTG);                     // {hsSeason, hsGame, collegeRegWeek5, nflRegWeek9InGame, nflOff, retiredLegacy}
  *
  * Every builder returns a fresh object; `Schema.validate` passes on each.
  * When RTG.Schedule exists it is used for schedules; otherwise a circle-method
@@ -144,11 +144,11 @@ function addKicks(RTG, state, n, league, teamId, oppId, week) {
 }
 
 /**
- * HS.SHOWCASE — a freshly created career (pending KICKS showcase session).
+ * HS.SEASON — a freshly created career, standing on the senior-season schedule with nothing pending (§2.7.0).
  * @param {object} RTG @param {{seed?:number, archetype?:string, difficulty?:string, name?:string}} [opts]
  * @returns {object} CareerState
  */
-function hsShowcase(RTG, opts) {
+function hsSeason(RTG, opts) {
   opts = opts || {};
   var rng = rngFor(RTG, opts.seed);
   var state = RTG.Schema.createCareer({
@@ -156,19 +156,16 @@ function hsShowcase(RTG, opts) {
     seed: opts.seed === undefined ? DEFAULT_SEED : opts.seed, createdAt: 1757000000000,
     hometown: { city: 'Springfield', state: 'IL', region: 'MW' }, look: { skin: 1, hair: 2, boot: 0 }, foot: 'R'
   }, rng);
-  if (!state.pending) {
-    var S = RTG.Tuning.draft.showcase;
-    state.pending = {
-      kind: 'KICKS',
-      session: {
-        kind: 'SHOWCASE',
-        contexts: S.distances.map(function (d, i) {
-          return kickContext(RTG, { league: 'COLLEGE', distance: d, pressure: i === S.distances.length - 1 ? S.pressureLast : 0.05, attrs: state.player.attrs, week: 0 });
-        }),
-        results: [], idx: 0
-      }
-    };
-  }
+  state.rngState = rng.state();
+  return state;
+}
+
+/** HS.SEASON with game 1 open (pending KICKS session, kind HS_GAME). */
+function hsGame(RTG, opts) {
+  opts = opts || {};
+  var state = hsSeason(RTG, opts);
+  var rng = rngFor(RTG, (opts.seed === undefined ? DEFAULT_SEED : opts.seed) + 7);
+  if (RTG.HS && !state.pending) RTG.HS.startGame(state, rng);
   state.rngState = rng.state();
   return state;
 }
@@ -179,7 +176,7 @@ function hsShowcase(RTG, opts) {
  */
 function collegeRegWeek5(RTG, opts) {
   opts = opts || {};
-  var state = hsShowcase(RTG, opts);
+  var state = hsSeason(RTG, opts);
   var rng = rngFor(RTG, (opts.seed === undefined ? DEFAULT_SEED : opts.seed) + 101);
   var Schema = RTG.Schema, T = RTG.Tuning;
   var league = state.leagues.college;
@@ -229,7 +226,7 @@ function collegeRegWeek5(RTG, opts) {
  */
 function nflRegWeek9InGame(RTG, opts) {
   opts = opts || {};
-  var state = hsShowcase(RTG, opts);
+  var state = hsSeason(RTG, opts);
   var rng = rngFor(RTG, (opts.seed === undefined ? DEFAULT_SEED : opts.seed) + 202);
   var Schema = RTG.Schema, T = RTG.Tuning;
   var league = state.leagues.nfl;
@@ -443,7 +440,8 @@ function twentySeasons(RTG, opts) {
  */
 function all(RTG, opts) {
   return {
-    hsShowcase: hsShowcase(RTG, opts),
+    hsSeason: hsSeason(RTG, opts),
+    hsGame: hsGame(RTG, opts),
     collegeRegWeek5: collegeRegWeek5(RTG, opts),
     nflRegWeek9InGame: nflRegWeek9InGame(RTG, opts),
     nflOff: nflOff(RTG, opts),
@@ -457,7 +455,8 @@ module.exports = {
   kickContext: kickContext,
   kickResult: kickResult,
   syntheticSchedule: syntheticSchedule,
-  hsShowcase: hsShowcase,
+  hsSeason: hsSeason,
+  hsGame: hsGame,
   collegeRegWeek5: collegeRegWeek5,
   nflRegWeek9InGame: nflRegWeek9InGame,
   nflOff: nflOff,

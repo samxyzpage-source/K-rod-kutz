@@ -159,7 +159,7 @@ test('saveload http phone: CONTINUE on the title resumes the autosave', async ()
     const summary = await page.locator('.title-summary').textContent();
     assert.match(summary, /Auto Saver/, 'title shows the autosave summary');
     // QA1-08: human copy, never the raw enum ('Y1 COLLEGE.PRE')
-    assert.doesNotMatch(summary, /COLLEGE|RETIRED|SHOWCASE|LEGACY|\bREG\b|\bPRE\b/, 'no raw stage/phase enum: ' + summary);
+    assert.doesNotMatch(summary, /COLLEGE|RETIRED|LEGACY|\bREG\b|\bPRE\b/, 'no raw stage/phase enum: ' + summary);
     assert.match(summary, /College · Preseason/, 'stage and phase in human copy: ' + summary);
     await H.clickButton(page, 'CONTINUE');
     await page.waitForFunction(() => RTG.UI.store.state !== null);

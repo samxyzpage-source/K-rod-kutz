@@ -68,6 +68,7 @@
 | D20 | Kick input (post-launch, at the player's request) | **Aim-then-hold replaces the 3-click meter and becomes the default** for every new career and, once, for players whose settings predate it (`kickInputV2` marker in `rtg.settings`): arrows aim, then hold the confirm key / a finger and release inside the green band; the release sets power AND contact quality, so the accuracy needle is gone. Flick stays available under Settings ▸ Kick input. | The 3-click meter asked for three separate timings and the needle re-aimed the kick after the player had already aimed, which made the arrows feel pointless; one held press reads as a kick's windup and keeps aim and power as two clean, separate decisions. |
 | D21 | Green = guaranteed (post-launch, at the player's request: "make it easier, green should be guaranteed") | A release inside the green band makes the kick outright — no random error, contact slop or block — and the band widened 0.15 → 0.20 (`Tuning.kick.range.greenBand`, also what the scene draws). Gated by `settings.greenAssist` (default on) and verified engine-side by `Kick.inGreen`. Aim-and-hold only; flick is unchanged. | The ask was for an easier game with a promise the bar can actually keep. Keeping it UI-flagged but engine-verified means the assist cannot leak into AI kicks, so the §2.3.6 make-rate table, the sim bands and the career balance targets all stand. Aim still decides every kick that misses the green. |
 | D22 | Real colleges (post-launch, at the player's request) | The 48 fictional schools and the 18 fictional bowls are replaced with real FBS programmes on 2026 alignment and the real bowl slate; conference codes become `SEC BIG XII ACC PAC AAC` (letters only — the id grammar is `[A-Z]{3}` + index) and each conference is ordered to put real rivalries on the `(0,7) (1,6) (2,5) (3,4)` slots. `verifiedFictional` is `false` for colleges and the blocklist lint now guards the NFL side only. **The NFL league stays fictional.** | The player asked for real colleges on their own project. Only 48 of ~134 FBS programmes fit the engine's 6×8 structure, so this is a selection, not the full sport; Notre Dame and the other independents have no conference slot. School nicknames and marks are trademarks — fine for a personal project, worth licensing thought if it is ever published commercially, which is why the pro league remains invented. |
+| D23 | The senior season replaces the showcase (post-launch, at the player's request: "instead of the college showcase can you play the last 5 games of high school to do offers for college") | The six-kick showcase is gone. A career opens at `HS.SEASON` on the last five games of the senior year (`engine/hs.js` → `RTG.HS`, session kind `HS_GAME`, screens `hsseason` / `hsgame`): every kick is a scoring chance inside a real game with a live scoreboard, the rivalry and playoff weeks end on the kicker, and a ten-school recruiting board moves after each game. The star formula keeps its shape but reads a 0–6 rating earned over the whole stretch (`HS.ratingOf`) instead of showcase makes, and the schools that reached the offer line join the offers list — capped at half of it. | Six kicks in an empty stadium had no stakes and nothing to follow; five games give the opening hour a scoreboard, a record and a recruitment to watch move. Building it as ordinary KickSessions kept the sim, save, autoplay and kick-scene machinery untouched — only the phase enum (`SHOWCASE` → `SEASON`), the session kind and the screens changed. |
 
 ---
 
@@ -101,7 +102,7 @@ You are a leg. The most ignored player on the roster until the game is on your f
 
 | Act | Stage / ages | Emotional question | Meters that matter |
 |---|---|---|---|
-| I — Prove it | HS showcase, college (18–22) | Do I belong? | Job Security, Coach Trust, Morale |
+| I — Prove it | HS senior season, college (18–22) | Do I belong? | Job Security, Coach Trust, Morale |
 | II — Get paid | Draft, rookie deal, first extension (22–29) | What am I worth? | Fame, Fans, Trust, money |
 | III — Hold on | 30+ | How does it end? | Job Security, decline, legacy/HOF meter |
 
@@ -541,19 +542,56 @@ function step(gs, state, rng):
 - **Playoffs**: 7 per conference (4 division winners seeded 1–4 by record, 3 wild cards 5–7). Seed 1 bye. Wild Card (2v7, 3v6, 4v5) → Divisional (1 vs lowest remaining; other two) → Conference Championship → **The Championship Bowl** (neutral, week 22, fireworks). Weeks 19–22.
 - **Draft order**: non-playoff teams by record (worst first; ties by point differential then coin), then playoff teams by exit round.
 
-### 2.7 Career systems (engine: `engine/career.js`, `contracts.js`, `draft.js`)
+### 2.7 Career systems (engine: `engine/hs.js`, `career.js`, `contracts.js`, `draft.js`)
 
-#### 2.7.1 HS Showcase & star rating (stage `HS`)
+#### 2.7.0 High-school senior season (stage `HS`, phase `SEASON`, engine `engine/hs.js` → `RTG.HS`) — D23
 
-Six kicks with tutorial overlays: 30, 38, 44, 50, 55 yd, then a 42-yd "pressure" kick (pressure 0.6, fake crowd). Calm, middle hash, clear.
+A career opens on **the last five games of the senior year**, not a six-kick showcase. Each game is a KickSession
+of kind `HS_GAME` with a live scoreboard: 3–5 scoring chances (extra points and field goals 23–51 yd) in quarter
+order, the opponent answering between them, and the whole night on tape. `state.flags.hs` holds the season:
+
+| Field | What it is |
+|---|---|
+| `school` | `<hometown><qualifier?> <mascot>`, its abbreviation and the climate its weather is drawn from |
+| `games[5]` | weeks 6–10: opponent, home/away, the rivalry (index 3) and the state-playoff opener (index 4), then the result and the kicking line once played |
+| `board[10]` | the recruiting board: real colleges following the tape, `interest` 0–100, the move from the last game, and the per-school `pull` that decides how hard each one reacts |
+| `totals` | `fgm/fga`, `xpm/xpa`, 45+ makes, game-winners, W–L |
+| `rating`, `summary` | filled when the fifth game ends |
+
+- **Game scripts** (`HS.startGame`, 1 forked draw) build every chance up front so the generic session machinery
+  sees the full length; `HS.afterKick` folds each result into the scoreboard and rebuilds the *next* context from
+  the real score, so pressure and the "to win it" flag are never a projection.
+- **The opponent** scores in touchdowns and field goals to a total of `ratio ∈ [0.5, 1.3]` × what your offence set
+  up, dropped into the gaps between your chances. Below 1.0 you are favoured; above it you are not.
+- **The rivalry and playoff weeks end on the kicker**: the last chance is a field goal, the opponent's answering
+  score puts you 1–2 points down with the clock gone, and nothing follows it. A bad night can still leave them
+  further ahead than the trail — the scoreboard says so rather than pretending.
+- **A tie goes to overtime**, settled by a walk-off touchdown (pre-rolled in the script, so closing a game still
+  costs exactly one headline draw).
+- **The board moves after every game** (`HS.finishGame`): makes, long makes and game-winners lift it, misses and
+  losses drop it, scaled by the school's own `pull` and by `1 − 0.16·(prestige − 1)` — a blue blood takes more
+  convincing than a MAC school. Bands: `OFFER` ≥ 70, `HIGH` ≥ 45, `WARM` ≥ 25, else `COLD`.
+
+The five-game stretch produces one 0–6 rating (`HS.ratingOf`), which is what the star formula reads:
+
 ```
-stars = clamp(round(1.5 + 0.03·(OVR − 40) + 0.4·showcaseMakes/6 + (archetype bonus 0)), 2, 5)
+rating = clamp(6·(0.55·fgPct + 0.20·patPct + 0.25·gwRate) + min(0.35·longMakes, 1), 0, 6)
+stars  = clamp(round(1.5 + 0.03·(OVR − 40) + 0.4·rating), 2, 5)
 ```
+
 2★ = walk-on path (one prestige 1–2 offer, no scholarship, morale −5, `WALKON` flag → HOF ×1.15 legacy bonus). Fame start by stars: 2★ 0, 3★ 20, 4★ 40, 5★ 60.
+
+#### 2.7.1 Screens and flow
+
+`HS.SEASON` with nothing pending is the **`hsseason`** screen — school, season line, the five-game schedule with
+what the leg did in each, and the recruiting board. PLAY WEEK n → `Engine.hsStartGame` → the **`hsgame`** screen
+(`KickView.sessionScreen`, chromeless, scoreboard header). The fifth game closes the season
+(`HS.finishSeason`) and routes to the offers. The auto players need no help: `Engine.settlePending`,
+`autoPlayCareer` and `RTG.debug.jumpTo` open the next game themselves when HS.SEASON has nothing pending.
 
 #### 2.7.2 Offers (`Career.generateCollegeOffers`)
 
-3–6 offers (walk-on: 1). Candidate schools: prestige within `stars − 1 .. stars` (5★: 4–5; 3★: 2–3), sampled by weight `1/(1 + |prestige − (stars − 0.5)|)`, plus one "safety" school of prestige ≤ 2. Each `Offer`:
+3–6 offers (walk-on: 1). Candidate schools: prestige within `stars − 1 .. stars` (5★: 4–5; 3★: 2–3), sampled by weight `1/(1 + |prestige − (stars − 0.5)|)`, plus one "safety" school of prestige ≤ 2. Every school that reached the `OFFER` band on the senior-season board is a candidate too — highest prestige first — but the board fills **at most half** the list, so the prestige band the star rating earned always gets a say; the rest of the board tilts that band's weights by `1 + 1.5·interest/100`. Each `Offer`:
 
 | Field | Values | Effect |
 |---|---|---|
@@ -925,6 +963,7 @@ kicker/
   js/engine/draft.js                  E3   RTG.Draft (combine + draft)
   js/engine/season.js                 E2   RTG.Season (week loop, league sims, postseason)
   js/engine/career.js                 E3   RTG.Career (stages, offers, decisions, transitions)
+  js/engine/hs.js                     E3   RTG.HS (the high-school senior season, §2.7.0)
   js/engine/save.js                   E3   RTG.Save
   js/engine/api.js                    E3   RTG.Engine (facade; INT reviews)
   js/ui/storage.js                    E5   RTG.UI.Storage (localStorage adapter)
@@ -938,7 +977,8 @@ kicker/
   js/ui/kickview.js                   E4   RTG.UI.KickView (kick scene state machine)
   js/ui/screens/title.js              E5
   js/ui/screens/newcareer.js          E5
-  js/ui/screens/showcase.js           E4   (uses KickView)
+  js/ui/screens/hsseason.js           E4
+  js/ui/screens/hsgame.js             E4   (uses KickView)
   js/ui/screens/offers.js             E5
   js/ui/screens/hub.js                E5
   js/ui/screens/inbox.js              E5
@@ -978,7 +1018,7 @@ kicker/
 00_namespace, engine/tuning, engine/util, engine/rng, engine/schema,
 data/blocklist, data/names, data/colleges, data/nfl, data/records, data/awards, data/events, data/headlines,
 engine/names, engine/weather, engine/player, engine/kick, engine/schedule, engine/standings, engine/sim,
-engine/stats, engine/awards, engine/events, engine/contracts, engine/draft, engine/season, engine/career,
+engine/stats, engine/awards, engine/events, engine/contracts, engine/draft, engine/season, engine/career, engine/hs,
 engine/save, engine/api,
 ui/storage, ui/store, ui/router, ui/components, ui/sprites, ui/canvas, ui/audio, ui/input, ui/kickview,
 ui/screens/* (any order; each registers itself with Router), ui/app, debug
@@ -1024,7 +1064,7 @@ CareerState = {
   createdAt: number,                     // ms, supplied by UI
   playtimeSec: number,
   stage: 'HS'|'COLLEGE'|'DRAFT'|'NFL'|'RETIRED',
-  phase: 'SHOWCASE'|'OFFERS'            // HS
+  phase: 'SEASON'|'OFFERS'              // HS
        | 'PRE'|'REG'|'POST'|'AWARDS'|'OFF'   // COLLEGE, NFL
        | 'DECLARE'|'COMBINE'|'DRAFT'|'UDFA'  // DRAFT
        | 'LEGACY',                            // RETIRED
@@ -1056,7 +1096,7 @@ CareerState = {
   pending: null
          | {kind:'EVENT', event: EventInstance}
          | {kind:'DECISION', decision: Decision}
-         | {kind:'KICKS', session: KickSession},   // showcase / camp battle / combine / halftime-70 (a list of contexts the UI must play)
+         | {kind:'KICKS', session: KickSession},   // senior-season game / camp battle / combine / halftime-70 (a list of contexts the UI must play)
   history: {
     seasons: SeasonLine[],               // one per completed season
     awards: Award[], contracts: ContractRecord[], teams: TeamStint[],
@@ -1143,7 +1183,7 @@ KickLogRow = {id, year, week, league, gameId, teamId, oppId, type, distance, has
 KickerStats = {fga, fgm, pat, patMade, pts, long, buckets:{'0-29':{a,m}, '30-39':{a,m}, '40-49':{a,m}, '50-59':{a,m}, '60+':{a,m}}, clutchA, clutchM, decisiveA, decisiveM, gameWinners, tieForcers, blocked, doinks, doinkIn, wideL, wideR, short, made50plus, consecutive, bestConsecutive, games, gamesStarted, koTouchbacks, koCount, wins, losses}
 SeasonLine = {year, league, teamId, teamName, age, ovr, role, stats: KickerStats, awards: string[], teamRecord: string, champion: bool, playoffResult: string, grade: 'A'..'F', salary}
 Decision = { kind:'OFFERS_COLLEGE'|'REDSHIRT'|'DECLARE'|'TRANSFER'|'COMBINE_PLAN'|'UDFA'|'EXTENSION'|'FREE_AGENCY'|'TAG'|'RETIRE'|'OFFSEASON_PLAN'|'CUT_NOTICE'|'HOF'|'TRAINING_BLOCKS', payload: any, options: {id, label, detail}[] }
-KickSession = { kind:'SHOWCASE'|'CAMP'|'COMBINE_LADDER'|'COMBINE_ACC'|'COMBINE_KO'|'HALFTIME70'|'PRACTICE', contexts: KickContext[], results: KickResult[], rival?: {name, results: KickResult[]}, idx: int }
+KickSession = { kind:'HS_GAME'|'CAMP'|'COMBINE_LADDER'|'COMBINE_ACC'|'COMBINE_KO'|'HALFTIME70'|'PRACTICE', contexts: KickContext[], results: KickResult[], rival?: {name, results: KickResult[]}, idx: int }
 EventInstance = { id, text (rendered), sender, choices: [{label, preview}], rolledWeek, rolledYear }
 Modifier = { id, key, op:'mul'|'add', value, expires:{type:'week'|'game'|'season'|'never', at}, label, source }
 Settings (rtg.settings, UI-owned; mirrored subset in state.settings) = { audio: bool, autoPat: 'off'|'safe'|'all', playKickoffs: bool, simSpeed: 1|2|4, colorblind: bool, highContrast: bool, reducedMotion: bool, fontScale: 1|1.25|1.5, leftFooted: bool, inputMode: 'flick'|'meter', playClockMult: 1|2, tooltips: bool }
@@ -1163,7 +1203,7 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 #### 3.5.3 `RTG.Tuning` (E1) — object tree: `kick`, `sim`, `progression`, `soft`, `contracts`, `draft`, `hof`, `difficulty[d]`, `save`, `events`. Frozen with `Object.freeze` deep. `RTG.debug.tune(path, value)` may replace values at runtime (debug only) by re-creating an unfrozen copy.
 
 #### 3.5.4 `RTG.Schema` (E1)
-- `createCareer(opts:{name, archetype, difficulty, seed, hometown, look, foot}, rng) → CareerState` — builds both leagues (`Data.colleges` + generated NFL ratings), AI kickers, legends/records, player (§2.1.1), stage `HS`/phase `SHOWCASE`, `pending = {kind:'KICKS', session: showcase}`. RNG: many draws (documented order: player attrs → college ratings → NFL ratings → kickers → legends).
+- `createCareer(opts:{name, archetype, difficulty, seed, hometown, look, foot}, rng) → CareerState` — builds both leagues (`Data.colleges` + generated NFL ratings), AI kickers, legends/records, player (§2.1.1), stage `HS`/phase `SEASON`, `flags.hs` = the senior season (`HS.season`), `pending = null` until the first game is opened. RNG: many draws (documented order: player attrs → college ratings → NFL ratings → kickers → legends).
 - `createTeam(data, rng, league) → Team`; `createGameState(...)`; `createKickLogRow(ctx, result, meta)`; `emptyKickerStats()`.
 - `validate(state) → {ok, errors: string[]}` — checks types/ranges/enums, referential integrity (teamIds exist), caps, no cycles. Cheap enough to run after every dispatch in debug mode (< 5 ms).
 - `reindex(state)` — rebuilds non-persisted caches (`teamIndex`) after load.
@@ -1262,10 +1302,10 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 - `advanceYear(state, rng)` — age +1, `Player.ageTick`, team rating drift, AI kicker aging/retirements/rookies, contracts tick, cap growth, `year++`, then `start`.
 
 #### 3.5.18 `RTG.Career` (E3)
-- `showcaseSession(state, rng) → KickSession`; `finishShowcase(state, rng)` → stars, offers decision (`generateCollegeOffers`).
+- `starsFor(ovr, rating) → 2..5`; `afterSessionKick(state, rng, sess, idx, result)` — the live-scoreboard hook `sessionKick` calls (senior-season games only).
 - `generateCollegeOffers(state, rng, mode:'RECRUIT'|'TRANSFER') → Decision` (≤ 8 draws).
 - `decide(state, rng, decision:{kind, optionId, extra?}) → DecisionOutcome {next: 'PENDING'|'PHASE', headline?, timeline?}` — the single entry point for every `Decision` kind (offers, redshirt, declare/stay, transfer, combine plan, UDFA pick, extension accept/counter/decline, FA pick/wait/hometown, tag reaction, retire choices, offseason plan, training blocks, HOF ack). Delegates to Contracts/Draft/Season.
-- `campBattle(state, rng) → KickSession`; `finishSession(state, rng) → SessionOutcome` — resolves any `KickSession` (showcase → stars; camp → K1/K2; combine → combineScore; halftime → fame; tryout → contract).
+- `campBattle(state, rng) → KickSession`; `finishSession(state, rng) → SessionOutcome` — resolves any `KickSession` (senior-season game → `HS.finishGame`; camp → K1/K2; combine → combineScore; halftime → fame; tryout → contract).
 - `offseasonChain(state, rng)` — orders the offseason decisions: `BODY_CHECK`(info) → `TRAINING_BLOCKS` → college: `REDSHIRT?`/`TRANSFER?`/`DECLARE?`; NFL: `CUT_NOTICE?` → `EXTENSION?`/`TAG?`/`FREE_AGENCY?` → `RETIRE?` → offseason events (2) → `advanceYear`.
 - `changeTeam(state, rng, teamId, {trust, js, reason})` — moves the player, resets meters, records `history.teams`, headline.
 - `handleActions(state, rng, actions[])` — executes event `action`s (TRANSFER, TRADE, HOLDOUT, CAMP_BATTLE, CHANGE_TEAM, SKIP_GAME, INJURY, RETIRE).
@@ -1311,8 +1351,9 @@ Conventions: `state` = `CareerState`; `rng` = RNG instance; all functions are sy
 | Stage.Phase | `pending` | Screen | User actions → engine call | Next |
 |---|---|---|---|---|
 | (none) | — | `title` | New / Continue / Load / Settings | `newcareer` / load |
-| (none) | — | `newcareer` | name, archetype, look, difficulty, seed → `Engine.newCareer` | `HS.SHOWCASE` |
-| HS.SHOWCASE | KICKS(showcase) | `showcase` | 6 kicks → `sessionKick` ×6 | `HS.OFFERS` (pending DECISION OFFERS_COLLEGE) |
+| (none) | — | `newcareer` | name, archetype, look, difficulty, seed → `Engine.newCareer` | `HS.SEASON` |
+| HS.SEASON | — | `hsseason` | PLAY WEEK n → `Engine.hsStartGame` | `HS.SEASON` (pending KICKS `HS_GAME`) |
+| HS.SEASON | KICKS(HS_GAME) | `hsgame` | 3–5 kicks → `sessionKick` | `HS.SEASON` (games 1–4) · `HS.OFFERS` after the fifth |
 | HS.OFFERS | DECISION | `offers` | pick → `decide` | `COLLEGE.PRE` |
 | COLLEGE/NFL.PRE | DECISION(CAMP)? / KICKS(camp) | `hub` (pre card) → `campbattle` | `sessionKick`, then `nextPhase` | `.REG` week 1 |
 | .REG (week w) | none | `hub` | `train`, `spendXp`, view screens; Play → `startUserGame` | `game` |
@@ -1411,7 +1452,7 @@ Colorblind variant (`body.cb`) swaps `--red → #e26100`, `--mint → #00b386`, 
 
 - `RTG.UI.Canvas.create(container, {w:192, h:320})`: virtual resolution `192×320` (portrait) or `320×192` (landscape; chosen on resize by aspect). The backing canvas is `virtual × scale × dpr` where `scale = floor(min(containerW / w, containerH / h))` (min 1) and `dpr = min(devicePixelRatio, 2)`; CSS size = `virtual × scale`. Context: `imageSmoothingEnabled = false`, `image-rendering: pixelated`. All drawing is in virtual pixels via `ctx.setTransform(scale·dpr, 0, 0, scale·dpr, 0, 0)`.
 - `RTG.UI.Sprites`: pixel strings (`'..XX..'` rows with a per-sprite palette map) → offscreen canvases at boot. Required sprites: kicker (idle, lean ×3 by pull depth, approach ×3, plant, swing, follow-through), holder, snapper, ball (3 sizes + squash frame), uprights (3 scales), crowd row (2 frames × 2 tints), ref (arms up / arms crossed / wave-off), wind sock (4 frames), rain/snow particle, banner frame, crest shapes, boot icon, trophy, envelope, pennant.
-- Only the kick scene, the showcase/camp/combine wrappers, and the title screen goalposts are canvas. Everything else is DOM (fast, accessible, scrollable).
+- Only the kick scene, the senior-season/camp/combine wrappers, and the title screen goalposts are canvas. Everything else is DOM (fast, accessible, scrollable).
 
 ### 4.3 Layout & responsive rules
 
@@ -1435,7 +1476,8 @@ Each entry: layout · components · engine calls.
 |---|---|---|
 | **title** | Canvas strip (goalposts at dusk, ball wobble via uiRng); logo; buttons NEW CAREER · CONTINUE (last autosave summary) · LOAD · SETTINGS; ticker of `rtg.records` best careers; version/seed in the corner | `Storage.getItem('rtg.save.auto')` summary via `Save.slotSummary` |
 | **newcareer** | Name input + "Generate" dice (`Names.player(uiRng)`), archetype cards ×4 (attr preview bars), look swatches (skin 4 × hair 6 × boot 4), foot, hometown dropdown (60), difficulty pills ×4, seed field (editable, "Random") | `Engine.newCareer(opts, Date.now())` → `Store.replace` |
-| **showcase** | KickView full-screen with a 6-slot strip at top; tutorial overlays step 1–3 ("PULL to power", "FLICK to aim", "Wind sock") dismissed by the first kick | `Engine.sessionKick` ×6; on done → `Router.sync` |
+| **hsseason** | The senior season between games: school header, season line, the five-game schedule with each night's kicking line, and the recruiting board (interest bar, tier, last move) | PLAY WEEK n → `Engine.hsStartGame` |
+| **hsgame** | KickView full-screen with a live scoreboard (your school, the opponent, quarter, running score) and a slot strip of the night's chances; the tutorial overlay runs on the first game only | `Engine.sessionKick`; on done → `Router.sync` |
 | **offers** | Card carousel (swipe/arrows): crest, prestige ★, depth pill (OPEN/VET/STAR), coach line, NIL, climate icon, "near home" tag; COMPARE toggle → 2-column table | `Engine.decide({kind:'OFFERS_COLLEGE', optionId})` |
 | **hub** | Top: team bar (crest, record, rank/seed). Week Card: opponent crest, venue, forecast (icon + °F + wind mph/dir), spread text, 2 storylines (headlines), meters row (Trust, Fans, Morale, Job Security as 5-block bars; Fame tier chip). Inbox preview (3 newest). Buttons: TRAIN (if not done), PLAY GAME / SIM GAME, SIM TO END OF SEASON (confirm). Bye week: "Rest or Grind" card. PRE: goals card + camp-battle button. POST: bracket card. | `Season.userGameRef` (read), `Engine.train`, `Engine.startUserGame`, `Engine.autoPlayGame`, `Engine.endWeek`, `Engine.autoPlaySeason` |
 | **inbox** | Chat-bubble list with sender avatars (coach/agent/GM/press/fan/family); events open as a modal with 2–3 big buttons; effect preview per difficulty (numbers / icons / hidden); consequence toast | `Engine.chooseEvent(idx)`, `Events.markRead` |
@@ -1543,8 +1585,8 @@ Runner: `node kicker/test/run.js` (plain `node:assert` + `node:test`, no npm dep
 | Spec | Steps & assertions |
 |---|---|
 | `boot.spec` | Page loads with zero console errors on file:// and http; title renders; with `**/fonts.googleapis.com/**` and gstatic blocked the page still renders and a kick can be played (fallback font). `RTG.VERSION` defined; `RTG.debug` present. |
-| `newcareer.spec` | New career → name/archetype/difficulty/seed → showcase screen; `getState().stage === 'HS'`; seed shown equals the entered seed. |
-| `kick_mouse.spec` | On the showcase: `page.mouse` press on the ball, drag down 120 px over 300 ms, flick up 60 px in 80 ms, release → result banner visible; `getState().pending.session.results.length === 1`, `input.power` within 0.5–1.15, `auto === false`. Overswing: drag 200 px → `feedback.power === 'OVERSWING'`. |
+| `newcareer.spec` | New career → name/archetype/difficulty/seed → the `hsseason` screen with five schedule rows and a recruiting board; `getState().stage === 'HS'`, `phase === 'SEASON'`, `pending === null`; seed shown equals the entered seed. |
+| `kick_mouse.spec` | In a senior-season game: `page.mouse` press on the ball, drag down 120 px over 300 ms, flick up 60 px in 80 ms, release → result banner visible; `getState().pending.session.results.length === 1`, `input.power` within 0.5–1.15, `auto === false`. Overswing: drag 200 px → `feedback.power === 'OVERSWING'`. |
 | `kick_touch.spec` | Same via `page.touchscreen`/pointer emulation on iPhone 12 portrait and landscape (844×390); canvas fits the viewport; `document.documentElement.scrollWidth <= innerWidth`. |
 | `kick_keyboard.spec` | Aim-then-hold: ArrowLeft ×4 → aim −2°, then hold the confirm key until the bar is mid-green and release → result with `input.aim = −2` and a high quality. |
 | `force_kick.spec` | `RTG.debug.forceKick({outcome:'DOINK_IN'})` → banner contains "DOINK"; `{outcome:'BLOCKED'}` → rush overlay class present; stats increment (`stats.career.doinks`). |
@@ -1581,13 +1623,13 @@ Deliverables: (1) data files + lint (day 1–2); (2) `Schedule` + `Standings` (d
 Contracts consumed: `Kick.model/resolve/aiInput/buildContext`, `Weather.forGame`, `Player.*` meters, `Stats.recordAiKick/recordGame` (E3, stubbed early), `Awards.compute/weekly/seasonGoals` (E3), `Events.roll/headline/message` (E3), `Career.campBattle/offseasonChain` (E3).
 
 #### WP3 — Career & Story (E3)
-Files: `data/awards`, `data/events`, `data/headlines`, `engine/stats`, `engine/awards`, `engine/events`, `engine/contracts`, `engine/draft`, `engine/career`, `engine/save`, `engine/api`, tests `stats, awards, events, contracts, draft, career, career_balance, save, engine_api`, `fixtures/{career,contract,events,save_v0.json}`.
+Files: `data/awards`, `data/events`, `data/headlines`, `engine/stats`, `engine/awards`, `engine/events`, `engine/contracts`, `engine/draft`, `engine/career`, `engine/hs`, `engine/save`, `engine/api`, tests `stats, awards, events, contracts, draft, career, hs, career_balance, save, engine_api`, `fixtures/{career,contract,events,save_v0.json}`.
 Deliverables: (1) `Stats` + `Save` (day 1–4; `Save` needs only `Schema`); (2) events data + `Events` (day 2–6); (3) `Contracts`, `Draft` (day 4–8); (4) `Career.decide/offseasonChain/sessions` + `Awards` (day 6–11); (5) `Engine` facade incl. `autoPlay*` (day 8–12; `autoPlayCareer` is the integration test everyone runs).
 Contracts consumed: `Season.*` (E2), `Sim.*` (E2), `Kick.*`, `Player.*`, `Schema`, `Names`.
 
 #### WP4 — Kick Scene & Canvas (E4)
-Files: `ui/sprites`, `ui/canvas`, `ui/audio`, `ui/input`, `ui/kickview`, `ui/screens/{showcase,game,kick,combine,campbattle,practice}`.
-Deliverables: (1) `Canvas` scaling + `Sprites` atlas + a kick scene running on `fixtures/kick.js` with `Kick.resolve` directly (day 1–5) — the **flick prototype on a real phone by day 5** is the project's riskiest item; (2) `Input` flick + meters emitting the triple, with the DPR-normalised thresholds of §4.6 (day 4–7); (3) result beats, doink/block/clutch presentation, audio (day 6–10); (4) `game` screen on `Sim.simToNextUserKick` (day 7–11); (5) session wrappers (showcase/camp/combine) over `pending.kind==='KICKS'`.
+Files: `ui/sprites`, `ui/canvas`, `ui/audio`, `ui/input`, `ui/kickview`, `ui/screens/{hsseason,hsgame,game,kick,combine,campbattle,practice}`.
+Deliverables: (1) `Canvas` scaling + `Sprites` atlas + a kick scene running on `fixtures/kick.js` with `Kick.resolve` directly (day 1–5) — the **flick prototype on a real phone by day 5** is the project's riskiest item; (2) `Input` flick + meters emitting the triple, with the DPR-normalised thresholds of §4.6 (day 4–7); (3) result beats, doink/block/clutch presentation, audio (day 6–10); (4) `game` screen on `Sim.simToNextUserKick` (day 7–11); (5) session wrappers (senior-season game/camp/combine) over `pending.kind==='KICKS'`.
 Contracts consumed: `Kick.model/resolve` (for practice mode and range overlay), `Engine.applyUserKick/autoKick/simToKick/simStep/sessionKick/finishUserGame`, `Store`/`Router`/`C` (E5), `Settings`.
 
 #### WP5 — App Shell & Screens (E5)

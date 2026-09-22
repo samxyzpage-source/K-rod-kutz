@@ -126,7 +126,7 @@ async function closeBrowser() {
 }
 
 /** Files owned by the kick-scene engineer (U2): their errors are collected separately (app.foreignErrors). */
-const FOREIGN_RE = /(?:ui\/(?:sprites|canvas|audio|input|kickview)\.js|screens\/(?:showcase|game|kick|combine|campbattle|practice)\.js)|screen factory failed \((?:showcase|game|kick|combine|campbattle|practice)\)/;
+const FOREIGN_RE = /(?:ui\/(?:sprites|canvas|audio|input|kickview)\.js|screens\/(?:hsgame|hsseason|game|kick|combine|campbattle|practice)\.js)|screen factory failed \((?:hsgame|hsseason|game|kick|combine|campbattle|practice)\)/;
 
 /**
  * Open the app. Returns {page, context, errors, foreignErrors, url, close()}. `errors` collects console errors and
@@ -200,7 +200,7 @@ function waitForScreen(page, id, timeout) {
   }, id, { timeout: timeout || 10000 });
 }
 
-/** The id the live screen stands for ('showcase' even when the _fallback renders it). */
+/** The id the live screen stands for ('hsgame' even when the _fallback renders it). */
 function screenId(page) {
   return page.evaluate(() => {
     const R = RTG.UI.Router;
@@ -244,9 +244,26 @@ function stripVolatile(state) {
   return s;
 }
 
+/**
+ * Make sure the career's kicker actually kicks: a user kick only happens while the player is K1 (sim.js
+ * userKicks), and whether a given fixture wins its camp battle depends on the team data of the day. A spec that
+ * needs a kick promotes the player rather than pinning itself to a seed that happened to win its job.
+ */
+async function ensureStarter(page) {
+  const role = await page.evaluate(() => RTG.UI.store.state.player.role);
+  if (role === 'K1') return role;
+  await page.evaluate(() => {
+    const s = RTG.debug.getState();
+    s.player.role = 'K1';
+    if (s.player.flags) delete s.player.flags.benched;
+    RTG.debug.setState(s);
+  });
+  return page.evaluate(() => RTG.UI.store.state.player.role);
+}
+
 module.exports = {
   KICKER, ROOT, SHOTS, MODES, VIEWPORTS,
   get PORT() { return PORT; },
   startServer, ensureServer, urlFor, missingScripts, getBrowser, closeBrowser,
-  openApp, debug, waitForScreen, screenId, shot, noHorizontalScroll, clickButton, matrix, stripVolatile, assert
+  openApp, debug, waitForScreen, screenId, shot, noHorizontalScroll, clickButton, matrix, stripVolatile, ensureStarter, assert
 };

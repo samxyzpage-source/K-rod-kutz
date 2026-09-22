@@ -29,7 +29,7 @@ function collectObjects(v, set) {
   return set;
 }
 
-test('createCareer produces a state that validates and starts at HS.SHOWCASE', (t) => {
+test('createCareer produces a state that validates and starts at HS.SEASON', (t) => {
   if (!hasData) { t.skip(dataNote); return; }
   const rng = RTG.RNG.create(4242);
   const state = Schema.createCareer({ name: 'Ada Kickwell', archetype: 'ICEMAN', difficulty: 'allpro', seed: 4242, createdAt: 123 }, rng);
@@ -37,7 +37,7 @@ test('createCareer produces a state that validates and starts at HS.SHOWCASE', (
   deq(v.errors, []);
   assert.equal(v.ok, true);
   assert.equal(state.stage, 'HS');
-  assert.equal(state.phase, 'SHOWCASE');
+  assert.equal(state.phase, 'SEASON');
   assert.equal(state.seed, 4242);
   assert.equal(state.difficulty, 'allpro');
   assert.equal(state.v, RTG.SAVE_VERSION);
@@ -50,12 +50,15 @@ test('createCareer produces a state that validates and starts at HS.SHOWCASE', (
   assert.equal(state.leagues.nfl.cap, Tuning.contracts.capStart);
   assert.ok(Object.keys(state.records.nfl).length >= 10);
   assert.ok(Object.keys(state.records.college).length >= 10);
-  if (state.pending === null) {
-    t.diagnostic('pending is null: neither Career.showcaseSession (E3) nor Kick.buildContext (E1 kick.js) is loaded yet');
+  assert.equal(state.pending, null, 'the senior season opens with nothing pending');
+  const hs = state.flags.hs;
+  if (!hs) {
+    t.diagnostic('flags.hs is missing: RTG.HS (E3 hs.js) is not loaded yet');
   } else {
-    assert.equal(state.pending.kind, 'KICKS');
-    assert.equal(state.pending.session.kind, 'SHOWCASE');
-    assert.equal(state.pending.session.contexts.length, 6);
+    assert.equal(hs.games.length, Tuning.hs.games);
+    assert.equal(hs.idx, 0);
+    assert.ok(hs.school.full.length > 3, 'the player has a high school (' + hs.school.full + ')');
+    assert.equal(hs.board.length, Math.min(Tuning.hs.interest.board, state.leagues.college.teams.length));
   }
 });
 
@@ -90,7 +93,7 @@ test('JSON round trip deep-equals the state after reindex; caches are non-enumer
 
 test('no object identity is shared between the two leagues; all 80 team ids unique', (t) => {
   if (!hasData) { t.skip(dataNote); return; }
-  const state = fx.hsShowcase(RTG);
+  const state = fx.hsSeason(RTG);
   const a = collectObjects(state.leagues.college, new Set());
   const b = collectObjects(state.leagues.nfl, new Set());
   for (const o of a) assert.ok(!b.has(o), 'shared object between leagues');
@@ -143,7 +146,7 @@ test('fixtures for every stage/phase validate and survive a JSON round trip', (t
   if (!hasData) { t.skip(dataNote); return; }
   const all = fx.all(RTG);
   const expected = {
-    hsShowcase: ['HS', 'SHOWCASE'], collegeRegWeek5: ['COLLEGE', 'REG'], nflRegWeek9InGame: ['NFL', 'REG'],
+    hsSeason: ['HS', 'SEASON'], hsGame: ['HS', 'SEASON'], collegeRegWeek5: ['COLLEGE', 'REG'], nflRegWeek9InGame: ['NFL', 'REG'],
     nflOff: ['NFL', 'OFF'], retiredLegacy: ['RETIRED', 'LEGACY']
   };
   for (const name of Object.keys(expected)) {
@@ -160,7 +163,9 @@ test('fixtures for every stage/phase validate and survive a JSON round trip', (t
   assert.equal(all.nflRegWeek9InGame.game.pending.ctx.distance, 44);
   assert.equal(all.nflOff.pending.kind, 'DECISION');
   assert.equal(all.retiredLegacy.pending.decision.kind, 'HOF');
-  assert.equal(all.hsShowcase.pending.kind, 'KICKS');
+  assert.equal(all.hsSeason.pending, null, 'the senior season carries no pending between games');
+  assert.equal(all.hsGame.pending.kind, 'KICKS');
+  assert.equal(all.hsGame.pending.session.kind, 'HS_GAME');
   // fixtures are fresh objects each call
   assert.notEqual(fx.collegeRegWeek5(RTG), fx.collegeRegWeek5(RTG));
   const big = fx.twentySeasons(RTG);
@@ -303,7 +308,7 @@ test('createGameState defaults and createKickLogRow shape', () => {
 
 test('createRecords uses data base values and legend holders; records are per league', (t) => {
   if (!hasData) { t.skip(dataNote); return; }
-  const state = fx.hsShowcase(RTG);
+  const state = fx.hsSeason(RTG);
   const base = RTG.Data.records.base;
   for (const lg of ['college', 'nfl']) {
     for (const key of Object.keys(base[lg])) {

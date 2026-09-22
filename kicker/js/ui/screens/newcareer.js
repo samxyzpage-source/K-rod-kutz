@@ -4,7 +4,7 @@
  * Name + dice (Names.player with store.uiRng), 4 archetype cards with attribute previews from
  * Tuning.progression.archetypes, look swatches (skin / hair / boot) with a pixel avatar preview, foot, hometown
  * dropdown (Data.names.hometowns), difficulty pills with descriptions from Tuning.difficulty, seed field + RANDOM.
- * START → store.newCareer(opts) → the store routes to the showcase.
+ * START → store.newCareer(opts) → the store routes to the senior season.
  */
 (function (root) {
   'use strict';
@@ -171,7 +171,7 @@
       startBtn.disabled = true;
       try {
         store.newCareer(opts);
-        C.announce('Career started. Welcome to the showcase, ' + name + '.');
+        C.announce('Career started. Senior year begins, ' + name + '.');
       } catch (e) {
         startBtn.disabled = false;
         C.toast('Could not start: ' + (e.message || e), 'bad', 5000);

@@ -34,7 +34,7 @@
     saves: 1, settings: 1, practice: 1, postgame: 1
   };
   /** Screens rendered without the shell chrome. */
-  var CHROMELESS = { title: 1, newcareer: 1, kick: 1, showcase: 1, campbattle: 1, combine: 1 };
+  var CHROMELESS = { title: 1, newcareer: 1, kick: 1, hsgame: 1, campbattle: 1, combine: 1 };
 
   var Router = {};
   Router.FREE = FREE;
@@ -157,7 +157,7 @@
     if (pd) {
       if (pd.kind === 'KICKS') {
         var sk = pd.session && pd.session.kind || '';
-        if (sk === 'SHOWCASE') return { id: 'showcase', params: {} };
+        if (sk === 'HS_GAME') return { id: 'hsgame', params: {} };
         if (sk === 'CAMP') return { id: 'campbattle', params: {} };
         if (sk.indexOf('COMBINE') === 0) return { id: 'combine', params: {} };
         return { id: 'kick', params: { mode: 'session', session: sk } };
@@ -177,6 +177,7 @@
       if (state.phase === 'COMBINE') return { id: 'combine', params: {} };
       return { id: 'offseason', params: { kind: state.phase } };
     }
+    if (state.stage === 'HS') return { id: state.phase === 'OFFERS' ? 'offers' : 'hsseason', params: {} };
     if (state.stage === 'RETIRED') return { id: 'legacy', params: {} };
     if (state.phase === 'AWARDS') return { id: 'awards', params: {} };
     if (state.phase === 'OFF') return { id: 'offseason', params: {} };   // the wizard's preview card (CONTINUE → nextPhase) once the chain is done

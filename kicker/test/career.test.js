@@ -55,62 +55,35 @@ function runChain(state, rng, stopAt) {
 // ═══════════════════════════════ API ═══════════════════════════════
 
 test('§3.5.18 public API', () => {
-  for (const f of ['showcaseSession', 'finishShowcase', 'generateCollegeOffers', 'decide', 'campBattle', 'finishSession', 'offseasonChain',
+  for (const f of ['generateCollegeOffers', 'decide', 'campBattle', 'finishSession', 'offseasonChain', 'afterSessionKick',
     'changeTeam', 'handleActions', 'enterDraft', 'runDraft', 'enterNfl', 'retire', 'stageInfo', 'resume', 'afterWeek', 'eligibility', 'forcedRetirement', 'starsFor']) {
     assert.equal(typeof Career[f], 'function', 'Career.' + f);
   }
   assert.ok(Tuning.career && Tuning.career.offers && Tuning.career.autoplay && Tuning.career.balance, 'Tuning.career block');
 });
 
-// ═══════════════════════════════ §2.7.1 showcase & stars ═══════════════════════════════
+// ═══════════════════════════════ §2.7.1 stars ═══════════════════════════════
 
-test('showcaseSession: six calm middle-hash kicks (30/38/44/50/55, then 42 at pressure 0.6); createCareer wraps it as the pending KICKS', () => {
-  const { state } = kfx.newCareer(RTG, { seed: 3 });
-  assert.equal(state.stage, 'HS'); assert.equal(state.phase, 'SHOWCASE');
-  assert.equal(state.pending.kind, 'KICKS');
-  const s = state.pending.session;
-  assert.equal(s.kind, 'SHOWCASE');
-  assert.deepEqual(J(s.contexts.map((c) => c.distance)), J(Tuning.draft.showcase.distances));
-  assert.ok(s.contexts.every((c) => c.hash === 0 && c.wind.speed === 0 && c.isUser === true && c.type === 'FG'));
-  assert.equal(s.contexts[5].pressure, Tuning.draft.showcase.pressureLast);
-  assert.equal(s.contexts[0].pressure, 0);
-  assert.equal(s.results.length, 0); assert.equal(s.idx, 0);
-  const rng = counting(1);
-  Career.showcaseSession(state, rng);
-  assert.equal(rng.draws, 0, 'showcase contexts are draw-free');
-});
-
-test('stars formula: round(1.5 + 0.03·(OVR − 40) + 0.4·makes) clamped 2–5 (per-make weight; the literal /6 makes every recruit a walk-on)', () => {
+test('stars formula: round(1.5 + 0.03·(OVR − 40) + 0.4·rating) clamped 2–5 (per-point weight; the literal /6 makes every recruit a walk-on)', () => {
   const S = Tuning.draft.stars;
-  const f = (ovr, makes) => Math.max(S.min, Math.min(S.max, Math.round(S.base + S.perOvr * (ovr - S.ovrAnchor) + S.showcaseW * makes)));
-  for (const ovr of [40, 47, 52, 60, 70]) for (let m = 0; m <= 6; m++) assert.equal(Career.starsFor(ovr, m), f(ovr, m), 'ovr ' + ovr + ' makes ' + m);
-  assert.equal(Career.starsFor(47, 0), 2, 'no makes → walk-on');
+  const f = (ovr, r) => Math.max(S.min, Math.min(S.max, Math.round(S.base + S.perOvr * (ovr - S.ovrAnchor) + S.seasonW * r)));
+  for (const ovr of [40, 47, 52, 60, 70]) for (let m = 0; m <= 6; m++) assert.equal(Career.starsFor(ovr, m), f(ovr, m), 'ovr ' + ovr + ' rating ' + m);
+  assert.equal(Career.starsFor(47, 0), 2, 'a season with nothing on tape → walk-on');
   assert.equal(Career.starsFor(47, 4), 3);
   assert.equal(Career.starsFor(47, 6), 4);
-  assert.equal(Career.starsFor(62, 6), 5, 'a 62-OVR recruit who makes all six is a 5-star');
+  assert.equal(Career.starsFor(62, 6), 5, 'a 62-OVR recruit with a perfect senior year is a 5-star');
   assert.equal(Career.starsFor(99, 6), 5, 'clamped at 5');
 });
 
-test('finishShowcase: stars → Player.applyStars (+4 attrs per star above 3, fame start), walk-on path (flag, morale −5), OFFERS pending', () => {
-  for (const pattern of [[true, true, true, true, true, true], [false, false, false, false, false, false]]) {
-    const { state, rng } = kfx.newCareer(RTG, { seed: 11 });
-    const before = J(state.player.attrs), ovr = Player.ovr(state.player.attrs), morale = state.player.morale;
-    kfx.fillSession(state.pending.session, pattern);
-    const out = Career.finishSession(state, rng);
-    const makes = pattern.filter(Boolean).length;
-    const stars = Career.starsFor(ovr, makes);
-    assert.equal(out.kind, 'SHOWCASE'); assert.equal(out.makes, makes); assert.equal(out.stars, stars);
-    assert.equal(state.player.stars, stars);
-    for (const a of Player.ATTRS) assert.equal(state.player.attrs[a], Math.max(1, Math.min(99, before[a] + Tuning.progression.creation.starPer * (stars - 3))), a);
-    assert.equal(state.player.fame, Tuning.soft.start.fameByStars[stars]);
-    assert.equal(state.stage, 'HS'); assert.equal(state.phase, 'OFFERS');
-    assert.equal(state.pending.kind, 'DECISION'); assert.equal(state.pending.decision.kind, 'OFFERS_COLLEGE');
-    assert.equal(out.walkon, stars === 2);
-    assert.equal(!!state.flags.WALKON, stars === 2);
-    if (stars === 2) assert.equal(state.player.morale, morale + Tuning.soft.start.walkonMorale);
-    assert.deepEqual(J(state.flags.showcase.results.map((r) => r.made)), pattern);
-    ok(state, 'after showcase');
-  }
+test('finishSession routes a senior-season game to RTG.HS and leaves the season between games', () => {
+  const { state, rng, session } = kfx.hsGame(RTG, { seed: 11 });
+  kfx.fillSession(session, session.contexts.map(() => true));
+  const out = Career.finishSession(state, rng);
+  assert.equal(out.kind, 'HS_GAME');
+  assert.equal(out.seasonDone, false);
+  assert.equal(state.pending, null);
+  assert.equal(state.flags.hs.idx, 1);
+  ok(state, 'after a senior-season game');
 });
 
 // ═══════════════════════════════ §2.7.2 offers ═══════════════════════════════
@@ -802,8 +775,7 @@ test('QA1-01 / QA1-04: a college commitment is a \'commit\' headline without mon
   assert.ok(!r.state.inbox.some((m) => /the opponent/.test(m.text)), 'no coach_pregame fallback text in PRE');
   // a walk-on gets the walk-on flavour (cond walkon) and still no money
   const w = kfx.newCareer(RTG, { seed: 777, archetype: 'CANNON' });
-  kfx.fillSession(w.state.pending.session, [false, false, false, false, false, false]);
-  Career.finishSession(w.state, w.rng);
+  kfx.playHsSeason(RTG, w.state, w.rng, false);
   assert.equal(w.state.flags.WALKON, true);
   Engine.decide(w.state, w.rng, { kind: 'OFFERS_COLLEGE', optionId: w.state.pending.decision.options[0].id });
   const wh = w.state.headlines.filter((h) => h.tag === 'commit')[0];

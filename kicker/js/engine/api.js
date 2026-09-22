@@ -157,6 +157,17 @@
   // ═══════════════════════════════ games ═══════════════════════════════
 
   /**
+   * Open the next game of the high-school senior season (§2.7.0): builds the KickSession and sets state.pending.
+   * Throws once the five games are done (the offers decision is pending then). Draws: 1 (fork).
+   * @param {Object} state @param {RNG} rng @returns {Object} KickSession (kind HS_GAME)
+   */
+  Engine.hsStartGame = function (state, rng) {
+    checkState(state, 'hsStartGame'); checkRng(rng, 'hsStartGame');
+    var H = need(RTG.HS, 'HS', 'hsStartGame');
+    return sync(state, rng, H.startGame(state, rng));
+  };
+
+  /**
    * Start the user's game of the week (Sim.startGame). Errors: pending, out of season, game in progress, bye, already played.
    * @returns {Object} GameState
    */
@@ -319,7 +330,7 @@
   }
 
   /**
-   * Play one kick of the pending KickSession (showcase / camp / combine / halftime-70 / tryout / practice). `input`
+   * Play one kick of the pending KickSession (senior-season game / camp / combine / halftime-70 / tryout / practice). `input`
    * = a kick triple ({timing} for a kickoff), or null for the AI rule. The last kick calls Career.finishSession.
    * @returns {{result:Object, idx:number, done:boolean, outcome:Object|null, remaining:number}}
    */
@@ -338,6 +349,7 @@
     else result = K.resolve(rng, ctx, null, input || K.aiInput(rng, ctx, null), input ? {} : { auto: true });
     sess.results[idx] = result;
     sess.idx = sess.results.length;
+    if (isFn(C.afterSessionKick)) C.afterSessionKick(state, rng, sess, idx, result);   // live scoreboards (§2.7.0)
     var done = nextSessionIdx(sess) < 0;
     var outcome = null;
     if (done) {
@@ -359,7 +371,7 @@
    * Drive the career flow (§3.6): PRE → REG (Season.beginRegular); AWARDS → OFF (Season.offseason → chain);
    * OFF → chain → next year (Season.advanceYear) or the draft; DRAFT.COMBINE (done) → DRAFT.DRAFT → Career.runDraft;
    * RETIRED stays. Idempotent while something is pending (returns the current position). Throws in REG / POST
-   * (play the week and call endWeek) and before the showcase / combine are played.
+   * (play the week and call endWeek) and before the senior season / combine are played.
    * @returns {{stage:string, phase:string, year:number, week:number, pending:string|null}}
    */
   Engine.nextPhase = function (state, rng) {
@@ -367,7 +379,7 @@
     if (state.pending) return cur(state);
     var Se = need(Season(), 'Season', 'nextPhase'), C = need(Career(), 'Career', 'nextPhase');
     var stage = state.stage, phase = state.phase;
-    if (stage === 'HS') fail('nextPhase', phase === 'SHOWCASE' ? 'play the showcase first' : 'pick a college offer first');
+    if (stage === 'HS') fail('nextPhase', phase === 'SEASON' ? 'play the senior season first' : 'pick a college offer first');
     if (stage === 'RETIRED') return sync(state, rng, cur(state));
     if (stage === 'DRAFT') {
       if (phase === 'DECLARE') { C.enterDraft(state, rng); return sync(state, rng, cur(state)); }
@@ -522,12 +534,24 @@
     return { kind: 'DECISION', decision: dec.kind, optionId: optionId, next: out.next, result: out.result };
   }
 
+  /**
+   * The senior season carries no pending between its five games (§2.7.0) — open the next one so the auto
+   * players keep moving instead of stalling on an empty HS.SEASON.
+   */
+  function hsOpenNext(state, rng) {
+    var H = RTG.HS;
+    if (state.pending || state.stage !== 'HS' || state.phase !== 'SEASON') return false;
+    if (!H || !isFn(H.inSeason) || !H.inSeason(state)) return false;
+    H.startGame(state, rng);
+    return true;
+  }
+
   /** Resolve every pending thing in turn (at most opts.max when given, else until nothing is pending). @returns {Object[]} */
   function settle(state, rng, opts, log) {
     opts = opts || {};
     var limited = num(opts.max, 0) > 0;
     var max = limited ? Math.min(opts.max, MAX_SETTLE) : MAX_SETTLE;
-    for (var i = 0; i < max && state.pending; i++) {
+    for (var i = 0; i < max && (state.pending || hsOpenNext(state, rng)); i++) {
       var r = settleOne(state, rng, opts);
       if (log) log.push(r);
     }
@@ -626,7 +650,7 @@
   };
 
   /**
-   * A whole career on auto (HS showcase → college → draft → NFL → retirement).
+   * A whole career on auto (the HS senior season → college → draft → NFL → retirement).
    * @param {Object} state @param {Object} rng @param {{untilStage?:string, maxYears?:number, eventChoice?:number|Function, decide?:Function, onSeason?:Function}} [opts]
    *   untilStage stops as soon as the stage is reached (default 'RETIRED'); maxYears caps the career years played (default Tuning.career.balance.maxYears);
    *   onSeason(state, line) runs after every completed season (tests use it for save/load round trips).

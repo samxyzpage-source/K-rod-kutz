@@ -65,38 +65,41 @@ async function walk(page, stop) {
 
 async function kickScene(page, size) {
   await H.debug(page, 'newCareer', { seed: SEED, name: 'QA Kicker', archetype: 'CANNON' });
-  await H.waitForScreen(page, 'showcase');
+  await H.waitForScreen(page, 'hsseason');
+  await shot(page, 'hsseason', size);
+  await page.evaluate(() => { RTG.UI.store.dispatch('hsStartGame'); RTG.UI.Router.sync(); });
+  await H.waitForScreen(page, 'hsgame');
   await K.waitPhase(page, 'SETUP', 10000);
   await page.waitForTimeout(400);
-  await shot(page, 'showcase', size);
+  await shot(page, 'hsgame', size);
   const g = await K.geometry(page);
-  console.log('  showcase canvas: scale ' + g.scale + ' · ' + g.rect.w + '×' + g.rect.h + ' css px in ' + g.innerWidth + '×' + g.innerHeight);
+  console.log('  senior-season canvas: scale ' + g.scale + ' · ' + g.rect.w + '×' + g.rect.h + ' css px in ' + g.innerWidth + '×' + g.innerHeight);
   // mid-pull
   await page.mouse.move(g.ball.x, g.ball.y);
   await page.mouse.down();
   await page.mouse.move(g.ball.x, g.ball.y + 90, { steps: 8 });
-  await shot(page, 'showcase_pull', size);
+  await shot(page, 'hsgame_pull', size);
   await page.mouse.move(g.ball.x, g.ball.y + 30, { steps: 6 });
   await page.mouse.up();
   await K.waitPhase(page, 'FLIGHT', 8000).catch(() => {});
-  await shot(page, 'showcase_flight', size);
+  await shot(page, 'hsgame_flight', size);
   await K.waitPhase(page, 'RESULT', 12000);
-  await shot(page, 'showcase_result', size);
+  await shot(page, 'hsgame_result', size);
   // the range overlay
   await K.waitSetup(page, 1, 15000);
   await page.locator('.kv-range-btn').click();
-  await shot(page, 'showcase_range', size);
+  await shot(page, 'hsgame_range', size);
   await page.locator('.kv-range-btn').click();
   // keyboard meter mode
   await page.evaluate(() => RTG.UI.store.setSetting('inputMode', 'meter'));
-  await page.evaluate(() => RTG.UI.Router.go('showcase', {}, { replace: true }));
+  await page.evaluate(() => RTG.UI.Router.go('hsgame', {}, { replace: true }));
   await K.waitPhase(page, 'SETUP', 10000);
   await page.keyboard.press('Space');
   await page.waitForTimeout(350);
-  await shot(page, 'showcase_meter', size);
+  await shot(page, 'hsgame_meter', size);
   await page.keyboard.press('Space');
   await page.waitForTimeout(150);
-  await shot(page, 'showcase_needle', size);
+  await shot(page, 'hsgame_needle', size);
   await page.keyboard.press('Space');
   await K.waitPhase(page, 'RESULT', 12000);
   await page.evaluate(() => RTG.UI.store.setSetting('inputMode', 'flick'));
@@ -127,15 +130,22 @@ async function run(size) {
     await shot(page, 'newcareer', size);
     await kickScene(page, size);
     // offers
-    // the rest of the showcase (kickScene played two kicks for real): force alternating makes / misses until the session ends
-    for (let i = 0; i < 8; i++) {
-      const left = await page.evaluate(() => { const p = RTG.UI.store.state.pending; return p && p.kind === 'KICKS' ? p.session.contexts.length - p.session.results.length : 0; });
-      if (!left) break;
-      await K.waitSetup(page, 6 - left, 15000).catch(() => {});
-      await H.debug(page, 'forceKick', { outcome: i % 2 ? 'WIDE_R' : 'GOOD' });
-      await page.waitForTimeout(150);
+    // the rest of the senior season (kickScene played two kicks for real): force alternating makes / misses,
+    // opening each remaining game, until the offers are on the table
+    for (let i = 0; i < 60; i++) {
+      const st = await page.evaluate(() => {
+        const s = RTG.UI.store.state;
+        return { phase: s.phase, open: !!(s.pending && s.pending.kind === 'KICKS'),
+                 left: s.pending && s.pending.kind === 'KICKS' ? s.pending.session.contexts.length - s.pending.session.results.length : 0 };
+      });
+      if (st.phase !== 'SEASON') break;
+      if (!st.open) { await page.evaluate(() => { RTG.UI.store.dispatch('hsStartGame'); RTG.UI.Router.sync(); }); await page.waitForTimeout(200); continue; }
+      if (!st.left) { await page.waitForTimeout(300); continue; }
+      await K.waitPhase(page, 'SETUP', 15000).catch(() => {});
+      await H.debug(page, 'forceKick', { outcome: i % 3 === 2 ? 'WIDE_R' : 'GOOD' });
+      await page.waitForTimeout(200);
     }
-    await page.waitForFunction(() => !(RTG.UI.store.state.pending && RTG.UI.store.state.pending.kind === 'KICKS'), null, { timeout: 15000 });
+    await page.waitForFunction(() => RTG.UI.store.state.phase === 'OFFERS', null, { timeout: 20000 });
     await page.evaluate(() => RTG.UI.Router.sync());
     await H.waitForScreen(page, 'offers');
     await page.waitForTimeout(200);

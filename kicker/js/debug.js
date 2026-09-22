@@ -183,6 +183,8 @@
       if (st.stage === 'RETIRED' && target.stage !== 'RETIRED') throw new Error('debug.jumpTo: career already over');
       if (st.game) { E.autoPlayGame(st, rng); continue; }
       if (st.pending) { E.settlePending(st, rng, { max: 1 }); continue; }   // one pending per step: DRAFT.COMBINE (plan pending) is a reachable stop
+      // the senior season pauses between its five games with nothing pending (§2.7.0)
+      if (st.stage === 'HS' && st.phase === 'SEASON' && RTG.HS && RTG.HS.inSeason(st)) { E.settlePending(st, rng, { max: 1 }); continue; }
       if (st.phase === 'REG' || st.phase === 'POST') { E.autoPlayWeek(st, rng); continue; }
       if (st.stage === 'RETIRED') break;
       E.nextPhase(st, rng);
