@@ -37,7 +37,16 @@ H.matrix(({ mode, vp }) => {
     const { page } = app;
     try {
       await H.debug(page, 'newCareer', { seed: SEED, name: 'Career Tester', archetype: 'SURGEON' });
-      for (let i = 0; i < 6; i++) await H.debug(page, 'forceKick', { outcome: 'GOOD' });
+      // the senior season: five games of forced makes, opening each one in turn (§2.7.0)
+      for (let g = 0; g < 40; g++) {
+        const st = await page.evaluate(() => {
+          const s = RTG.UI.store.state;
+          return { phase: s.phase, open: !!(s.pending && s.pending.kind === 'KICKS') };
+        });
+        if (st.phase !== 'SEASON') break;
+        if (!st.open) { await page.evaluate(() => RTG.UI.store.dispatch('hsStartGame')); continue; }
+        await H.debug(page, 'forceKick', { outcome: 'GOOD' });
+      }
       await page.evaluate(() => RTG.UI.Router.sync());
       await H.waitForScreen(page, 'offers');
       assert.ok(await page.locator('.scr-offers .offer-card').count() >= 1, 'offer cards rendered');
