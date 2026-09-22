@@ -47,7 +47,7 @@
    * finishUserGame (the game screen routes to 'postgame' itself), the hub-local training calls and markRead.
    */
   var NO_SYNC = {
-    simStep: 1, simToKick: 1, applyUserKick: 1, autoKick: 1, applyUserKickoff: 1,
+    simStep: 1, simToKick: 1, applyUserKick: 1, applyUserPunt: 1, autoKick: 1, applyUserKickoff: 1,
     sessionKick: 1, finishUserGame: 1, train: 1, spendXp: 1, autoSpend: 1, autoOption: 1, markRead: 1
   };
 

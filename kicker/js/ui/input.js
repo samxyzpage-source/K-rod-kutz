@@ -355,6 +355,10 @@
   Input.meter = function (opts) {
     opts = opts || {};
     var M = CONST.meter;
+    // the aim range is the scene's to set: a punt aims wider than a field goal (Tuning.punt.aimMax), and the
+    // nudge and sweep scale with it so the far edge takes the same time to reach
+    function aimMax() { var v = typeof opts.aimMax === 'function' ? opts.aimMax() : opts.aimMax; return typeof v === 'number' && v > 0 ? v : CONST.aimMax; }
+    function aimScale() { return aimMax() / CONST.aimMax; }
     var state = 'AIM';                 // AIM → POWER → DONE
     var aim = 0, P = 0, tPower = 0;
     var heldDir = 0, heldSince = 0, lastUpdate = 0;
@@ -405,7 +409,7 @@
     }
     function finish(qualityOverride, kind) {
       out.power = clamp(P, 0, CONST.powerMax);
-      out.aim = clamp(aim, -CONST.aimMax, CONST.aimMax);
+      out.aim = clamp(aim, -aimMax(), aimMax());
       out.quality = qualityOverride !== undefined ? qualityOverride : qualityFor(out.power);
       out.holdMs = 0;
       // §4.6 assist: a release in the green is a guaranteed make unless the player turned it off
@@ -442,7 +446,7 @@
     function nudge(dir) {
       if (destroyed || !isActive() || state === 'DONE') return;
       if (call(opts.leftFooted)) dir = -dir;
-      aim = clamp(aim + dir * M.nudgeDeg, -CONST.aimMax, CONST.aimMax);
+      aim = clamp(aim + dir * M.nudgeDeg * aimScale(), -aimMax(), aimMax());
       call(opts.onAim, aim);
     }
     function keys() { return Input.resolveKeys(call(opts.keys)); }
@@ -515,7 +519,7 @@
         lastUpdate = t;
         if (heldDir && (t - heldSince) > M.sweepAfterMs) {
           var d = heldDir * (call(opts.leftFooted) ? -1 : 1);
-          aim = clamp(aim + d * M.sweepDegPerSec * dt / 1000, -CONST.aimMax, CONST.aimMax);
+          aim = clamp(aim + d * M.sweepDegPerSec * aimScale() * dt / 1000, -aimMax(), aimMax());
           call(opts.onAim, aim);
         }
         if (state === 'POWER') { P = powerAt(t - tPower); call(opts.onPower, P); }

@@ -316,7 +316,7 @@
     function yAt(d) { return L.yT - (L.yT - L.yG) * persp(clamp(d / L.D, -0.3, 1)); }
     function pxPerYdAt(d) { return lerp(L.pxPerYdNear, L.pxPerYd, persp(clamp(d / L.D, 0, 1))); }
     function centreXAt(d) { return lerp(L.xBall - num(ctx.ballX, 0) * L.pxPerYdNear, L.xPost, persp(clamp(d / L.D, 0, 1))); }
-    function aimToX(deg) { return L.xPost + L.D * Math.tan(deg * Math.PI / 180) * L.pxPerYd; }
+    function aimToX(deg) { return clamp(L.xPost + L.D * Math.tan(deg * Math.PI / 180) * L.pxPerYd, 6, L.W - 6); }   // a 30° punt aim would leave the canvas
     function buildVignette() {
       if (reduced || !clutch) { vignette = null; return; }
       var c = doc.createElement('canvas'); c.width = L.W; c.height = L.H;
@@ -464,6 +464,7 @@
           leftFooted: function () { return mirror; },
           active: inputActive,
           keys: function () { return liveSettings().keys; },
+          aimMax: function () { return isPunt ? T().punt.aimMax : Inp.CONST.aimMax; },   // §2.14: a punt aims wider
           greenZone: function () {
             if (!model) return null;
             var band = num(model.greenBand, T().kick.range.greenBand);
@@ -725,7 +726,7 @@
     function onStore(info) {
       if (destroyed || !info || !info.forced) return;
       if (!inputActive()) return;
-      if (info.fnName !== 'applyUserKick' && info.fnName !== 'sessionKick') return;
+      if (info.fnName !== 'applyUserKick' && info.fnName !== 'applyUserPunt' && info.fnName !== 'sessionKick') return;
       var res = info.fnName === 'sessionKick' ? (info.result && info.result.result) : info.result;
       if (opts.onForced) {
         try { var r2 = opts.onForced(info); if (r2 && typeof r2.outcome === 'string') res = r2; } catch (e) { if (root.console) root.console.error('onForced failed', e); }

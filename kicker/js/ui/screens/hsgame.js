@@ -81,8 +81,10 @@
       className: 'session-hsgame', header: header, update: update, tutorial: first,
       onComplete: function (outcome) {
         if (outcome && outcome.kind === 'HS_GAME') {
-          var line = (outcome.won ? 'W ' : 'L ') + outcome.us + '–' + outcome.them + (outcome.ot ? ' OT' : '')
-            + ' · ' + outcome.fgm + '/' + outcome.fga + ' FG' + (outcome.gw ? ' · game-winner' : '');
+          var tail = outcome.position === 'P'
+            ? outcome.punts + ' punts · ' + outcome.net + ' net' + (outcome.in20 ? ' · ' + outcome.in20 + ' inside the 20' : '') + (outcome.gw ? ' · pinned it' : '')
+            : outcome.fgm + '/' + outcome.fga + ' FG' + (outcome.gw ? ' · game-winner' : '');
+          var line = (outcome.won ? 'W ' : 'L ') + outcome.us + '–' + outcome.them + (outcome.ot ? ' OT' : '') + ' · ' + tail;
           c.toast(line, outcome.won ? 'good' : 'bad', 3200);
         }
         RTG.UI.Router.sync();
