@@ -1,7 +1,130 @@
-/* ==========================================================================
-   Road to Glory: QB — screens.css (owner: the SHELL agent — the DOM screens: title (archetype cards,
-   TEAM / VENUE pickers), the drive interstitial between moments, summary (the drive's line, the passer
-   rating, the best throw), the settings modal). Scoped per screen (.scr-*). Reuses the style.css
-   vocabulary; phone-first (390 px), desktop tweaks at ≥ 900 px. Motion is zeroed globally by
-   style.css under prefers-reduced-motion / body.reduced-motion.
-   ========================================================================== */
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Road to Glory: QB — screens.css (owner: the SHELL agent — the DOM screens: the title, the moment screen's
+   wrapper and the DRIVE interstitial, the box-score summary, the settings modal, the 'engine not loaded' card).
+   Depends on css/style.css tokens; the scene itself lives in css/play.css. Pixel idiom: 8-px grid, 2-px
+   borders, hard shadows, no gradients. Phone-first (390 px, 16-px gutters, no horizontal scroll; 320 px must
+   still work), desktop at ≥ 900 px, landscape 844×390.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ───────────────────────────── the demo has no chrome: the host is the page ───────────────────────────── */
+#app.chromeless { grid-template-rows: 1fr; grid-template-areas: "main"; }
+.screen-host { min-height: 100vh; min-height: 100dvh; }
+
+/* ───────────────────────────── title ───────────────────────────── */
+.qb-title { min-height: 100vh; min-height: 100dvh; padding-bottom: var(--safe-b); }
+.qb-title .title-hero { max-width: 640px; }
+.qb-title .title-logo { top: 3%; }
+.qb-title .title-logo-1 { font-size: 1.2em; }
+.qb-title .title-logo-2 { font-size: 3.6em; margin-top: 4px; }
+.qb-title .title-logo-3 { display: block; font-size: 0.85em; color: var(--gold); letter-spacing: 0.3em; margin-top: 6px; }
+@media (min-width: 600px) { .qb-title .title-logo-1 { font-size: 1.8em; } .qb-title .title-logo-2 { font-size: 4.8em; } .qb-title .title-logo-3 { font-size: 1.05em; } }
+.qb-title .title-col { width: 100%; max-width: 560px; margin: 0 auto; padding: 16px 16px 8px; }
+.qb-title .title-blurb { line-height: 1.7; color: var(--cream); margin-bottom: 16px; text-align: center; }
+.qb-title .arch-grid { gap: 8px; }
+.qb-title .arch-card { text-align: left; width: 100%; padding: 8px; margin: 0; font: inherit; color: inherit; cursor: pointer; display: flex; flex-direction: column; min-width: 0; }
+.qb-title .arch-card .card-title { margin-bottom: 4px; font-size: 0.8em; line-height: 1.3; }
+.qb-title .arch-card .arch-bars { gap: 2px; }
+.qb-title .arch-card .arch-bars > * + * { margin-top: 2px; }
+.qb-title .arch-card .bar { min-height: 16px; gap: 4px; }
+.qb-title .arch-card .bar-label { flex-basis: 2.6em; font-size: 0.75em; }
+.qb-title .arch-card .bar-value { min-width: 1.8em; font-size: 0.8em; }
+.qb-title .arch-card .bar .chip { font-size: 0.6em; padding: 0 3px; line-height: 1.4; }
+.qb-title .arch-card .arch-text { line-height: 1.5; margin-top: 6px; }
+.qb-title .arch-card[aria-checked="true"] { border-color: var(--gold); outline: 2px solid var(--gold); }
+.qb-title .pick-desc { line-height: 1.6; }
+.qb-title .pills .pill { min-height: 36px; }
+.qb-title .qb-menu { max-width: none; margin: 8px 0 0; padding: 0; gap: 8px; }
+.qb-title .title-foot { max-width: 592px; margin: 0 auto; width: 100%; }
+@media (max-width: 359px) {
+  .qb-title .arch-grid { grid-template-columns: 1fr; }
+  .qb-title .title-col { padding: 12px 12px 8px; }
+}
+@media (max-width: 419px) {
+  .qb-title .arch-card .bar .chip { display: none; }   /* the NO CAP chip has no room next to the bar on a narrow phone */
+  .qb-title .arch-card .card-title { font-size: 0.7em; }
+}
+@media (min-width: 900px) {
+  .qb-title .title-col { max-width: 720px; }
+  .qb-title .arch-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* ───────────────────────────── moment: the chromeless scene wrapper + the DRIVE interstitial ───────────────────────────── */
+.screen-moment {
+  display: flex; flex-direction: column; box-sizing: border-box;
+  height: 100vh; height: 100dvh; min-height: 0; width: 100%; max-width: none; margin: 0;
+  background: var(--navy); color: var(--cream);
+  padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+  overflow: hidden;
+}
+.screen-moment[data-stage="story"] { overflow-y: auto; height: auto; min-height: 100vh; min-height: 100dvh; }
+.moment-host { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.moment-host .playview { flex: 1 1 auto; min-height: 0; }
+.drive-card-wrap { width: 100%; max-width: 480px; margin: auto; padding: 16px; }
+.drive-card { margin: 0; }
+.drive-card .card-title-right { color: var(--cream); }
+.drive-banner { margin-bottom: 8px; }
+.drive-sub { margin-bottom: 6px; line-height: 1.6; }
+.drive-coach { line-height: 1.7; color: var(--cream); opacity: 0.9; margin-bottom: 8px; }
+.drive-story { line-height: 1.8; color: var(--gold); margin: 8px 0 12px; }
+.drive-line { justify-content: center; margin-bottom: 4px; }
+.drive-line .chip { font-size: 0.75em; }
+.drive-next { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; padding: 8px 10px; background: var(--navy); border: var(--border) solid var(--ink); border-left: 4px solid var(--gold); }
+.drive-next-title { margin: 0; font-size: 0.8em; }
+.drive-next-line { color: var(--cream); font-size: 0.9em; }
+.drive-actions { margin-top: 12px; }
+.drive-hint { margin-top: 8px; }
+html.is-landscape .drive-card-wrap { max-width: 640px; padding: 8px 16px; }
+html.is-landscape .drive-story { margin: 4px 0 8px; }
+
+/* ───────────────────────────── summary: the box score ───────────────────────────── */
+.summary-screen { max-width: 560px; padding: 8px 16px calc(16px + var(--safe-b)); }
+.summary-head { flex-wrap: wrap; }
+.summary-head .screen-head-right { flex-wrap: wrap; gap: 4px; }
+.summary-head .chip { font-size: 0.7em; }
+.sum-rating { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0 12px; text-align: center; }
+.sum-rating-num { color: var(--gold); font-size: 2.6em; line-height: 1.2; text-shadow: 3px 3px 0 var(--ink); }
+.sum-rating-label { color: var(--grey); letter-spacing: 0.1em; }
+.sum-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.sum-stat { display: flex; flex-direction: column; gap: 2px; align-items: center; min-width: 0; padding: 8px 4px; background: var(--navy); border: var(--border) solid var(--ink); text-align: center; }
+.sum-stat b { font-size: 1.1em; line-height: 1.4; overflow-wrap: anywhere; }
+.sum-stat-mint b { color: var(--mint); }
+.sum-stat-red b { color: var(--red); }
+.sum-best-text { line-height: 1.7; font-size: 1.05em; }
+.sum-verdict-text { line-height: 1.8; }
+.sum-moments { display: flex; flex-direction: column; gap: 4px; }
+.sum-row { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "kind res" "sit res" "play res"; gap: 1px 8px; align-items: center; padding: 6px 8px; background: var(--navy); border-left: 4px solid var(--grey); }
+.sum-row-kind { grid-area: kind; color: var(--cream); }
+.sum-row-sit { grid-area: sit; }
+.sum-row-play { grid-area: play; color: var(--grey); overflow-wrap: anywhere; }
+.sum-row-res { grid-area: res; text-align: right; white-space: nowrap; font-size: 0.85em; }
+.sum-row-gold { border-left-color: var(--gold); } .sum-row-gold .sum-row-res { color: var(--gold); }
+.sum-row-mint { border-left-color: var(--mint); } .sum-row-mint .sum-row-res { color: var(--mint); }
+.sum-row-red { border-left-color: var(--red); } .sum-row-red .sum-row-res { color: var(--red); }
+.sum-row-grey .sum-row-res { color: var(--grey); }
+.sum-actions { margin: 4px 0 8px; }
+@media (max-width: 359px) { .sum-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sum-rating-num { font-size: 2em; } }
+@media (min-width: 900px) {
+  .summary-screen { max-width: 720px; }
+  .sum-stats { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .sum-actions { display: flex; gap: 8px; }
+  .sum-actions > * + * { margin-top: 0; }
+  .sum-actions > .btn { flex: 1 1 auto; }
+}
+
+/* ───────────────────────────── settings modal ───────────────────────────── */
+.settings-modal .card { margin-bottom: 8px; padding: 8px 10px; }
+.settings-modal .card-title { margin-bottom: 2px; }
+.settings-modal .toggle { padding: 6px 0; min-height: 40px; }
+.settings-modal .toggle-label { line-height: 1.5; }
+.settings-modal .toggle-hint { line-height: 1.4; }
+.settings-modal .pills .pill { min-height: 32px; }
+
+/* ───────────────────────────── the engine guard ───────────────────────────── */
+.screen[data-error] { padding: 16px; }
+.engine-missing { max-width: 480px; margin: 24px auto; }
+.engine-missing p { line-height: 1.7; }
+
+/* ───────────────────────────── 44-px touch targets (SPEC §4.3) ───────────────────────────── */
+@media (pointer: coarse) and (min-height: 500px) {
+  .qb-title .pills .pill, .settings-modal .pills .pill { min-height: var(--touch); }
+}

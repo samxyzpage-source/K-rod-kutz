@@ -80,11 +80,18 @@ body.hc .pv-banner-blocked, html.hc .pv-banner-blocked { background: var(--red, 
 }
 .pv-sub-clutch { border-color: var(--red, #d8433a); color: var(--red, #d8433a); }
 .pv-sub-good { border-color: var(--mint, #4dbb63); color: var(--mint, #4dbb63); }
-.pv-toast { position: absolute; bottom: 14%; left: 50%; transform: translateX(-50%); font-size: max(9px, 0.85em); color: var(--gold, #f6c445); letter-spacing: 1px; white-space: nowrap; background: rgba(16,18,38,0.75); padding: 3px 8px; border: 2px solid var(--gold, #f6c445); }
+/* the stray-tap hint sits over the deep field under the sub line, never over the backfield (the QB and the RB the beginner is told to tap) */
+.pv-toast { position: absolute; top: 30%; left: 50%; transform: translateX(-50%); font-size: max(9px, 0.85em); color: var(--gold, #f6c445); letter-spacing: 1px; white-space: nowrap; background: rgba(16,18,38,0.75); padding: 3px 8px; border: 2px solid var(--gold, #f6c445); }
 .pv-skip { position: absolute; bottom: 6px; right: 6px; font-size: 8px; color: var(--grey, #8a8f9e); letter-spacing: 1px; }
 
 /* ───────────────────────────── the panel under the stage ───────────────────────────── */
 .pv-panel { flex: 0 0 auto; min-height: 136px; padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)); background: var(--navy2, #262b4d); border-top: 2px solid var(--ink, #101226); display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+
+/* the look line (READ): what the defence shows, the pocket warning, the coach's tell — the read is more than the chip */
+.pv-look { display: flex; flex-direction: column; gap: 2px; text-align: center; line-height: 1.5; }
+.pv-look-head { font-size: max(8px, 0.8em); color: var(--sky, #7fc7ff); letter-spacing: 0.5px; }
+.pv-look-head.hot { color: var(--red, #d8433a); }
+.pv-look-tell { font-size: 7px; color: var(--cream, #f4e9d0); opacity: 0.8; }
 
 /* play cards (READ): a name, a route diagram, the advice chip, the tags — 2 or 3 in a row */
 .pv-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; }
@@ -107,6 +114,9 @@ body.hc .pv-banner-blocked, html.hc .pv-banner-blocked { background: var(--red, 
 .pv-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
 .pv-advice { font-size: 8px; padding: 1px 4px; line-height: 1.5; }
 .pv-advice.chip-grey { background: var(--grey, #8a8f9e); color: var(--ink, #101226); }
+/* an unsure chip (the advice reads the shown look and this play rates differently against what it can hide): dimmed, with a '?' badge */
+.pv-advice.unsure { opacity: 0.55; }
+.pv-unsure { font-size: 9px; color: var(--gold, #f6c445); }
 .pv-tag { font-size: 7px; color: var(--grey, #8a8f9e); letter-spacing: 0.5px; }
 body.hc .pv-card, html.hc .pv-card { border-color: #fff; }
 
@@ -182,6 +192,11 @@ body.hc .pv-card, html.hc .pv-card { border-color: #fff; }
   .pv-card-name { font-size: 7px; padding-left: 10px; }
   .pv-routes { height: 30px; }
   .pv-panel { min-height: 124px; }
+  .pv-look-tell { display: none; }
+  /* the play chip would wrap the HUD to a third line at the snap, shrinking the stage under a canvas already fitted
+     to it (the loop re-fits within 32 frames — down to 1× — and the bottom of the field is clipped meanwhile);
+     at 320 px the play name lives on the card just tapped and on the DRIVE card */
+  .pv-hud .pv-play { display: none !important; }
 }
 
 /* the card's one-liner (the coach's voice): room for it beside the stage only */

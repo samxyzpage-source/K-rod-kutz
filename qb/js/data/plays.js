@@ -40,12 +40,12 @@
 
   var routes = {
     // deep
-    GO:       route('GO', 'Go', 'DEEP', 20, [w(0, 0, 0), w(1.0, 0, 6), w(2.0, 0, 14), w(3.0, 0, 22), w(4.0, 0, 30)], 0.7, 0.7, 2.5, 3.5),
-    POST:     route('POST', 'Post', 'DEEP', 12, [w(0, 0, 0), w(1.6, 0, 12), w(2.6, -6, 20), w(4.0, -12, 30)], 0.6, 0.55, 2.3, 3.3),
-    CORNER:   route('CORNER', 'Corner', 'DEEP', 12, [w(0, 0, 0), w(1.6, 0, 12), w(2.6, 6, 19), w(4.0, 12, 28)], 0.6, 0.7, 2.3, 3.2),
-    SEAM:     route('SEAM', 'Seam', 'DEEP', 15, [w(0, 0, 0), w(1.2, -1, 8), w(2.2, -2, 16), w(3.2, -2, 24), w(4.0, -2, 30)], 0.6, 0.5, 2.0, 3.0),
-    WHEEL:    route('WHEEL', 'Wheel', 'DEEP', 5, [w(0, 0, 0), w(0.8, 6, 2), w(1.6, 9, 8), w(2.6, 9, 16), w(4.0, 9, 28)], 0.7, 0.75, 2.5, 3.5),
-    FADE:     route('FADE', 'Fade', 'DEEP', 8, [w(0, 0, 0), w(1.0, 3, 7), w(2.0, 5, 15), w(3.0, 5, 23), w(4.0, 5, 30)], 0.3, 0.9, 1.6, 2.6),
+    GO:       route('GO', 'Go', 'DEEP', 20, [w(0, 0, 0), w(1.0, 0, 6), w(2.0, 0, 14.5), w(3.0, 0, 23.5), w(4.0, 0, 32.5)], 0.7, 0.7, 3.3, 4.0),      // full stride by the third second (≈ 9 yd/s); the window is the deep third, 26–32 yd out
+    POST:     route('POST', 'Post', 'DEEP', 12, [w(0, 0, 0), w(1.6, 0, 12), w(2.6, -6, 21), w(4.0, -12, 32)], 0.6, 0.55, 3.0, 3.9),
+    CORNER:   route('CORNER', 'Corner', 'DEEP', 12, [w(0, 0, 0), w(1.6, 0, 12), w(2.6, 6, 20), w(4.0, 12, 30)], 0.6, 0.7, 2.9, 3.8),
+    SEAM:     route('SEAM', 'Seam', 'DEEP', 15, [w(0, 0, 0), w(1.2, -1, 8), w(2.2, -2, 16.5), w(3.2, -2, 25), w(4.0, -2, 32)], 0.6, 0.5, 2.9, 3.85),
+    WHEEL:    route('WHEEL', 'Wheel', 'DEEP', 5, [w(0, 0, 0), w(0.8, 6, 2), w(1.6, 9, 8), w(2.6, 9, 17), w(4.0, 9, 30)], 0.7, 0.75, 3.1, 3.9),
+    FADE:     route('FADE', 'Fade', 'DEEP', 8, [w(0, 0, 0), w(1.0, 3, 7), w(2.0, 5, 15), w(3.0, 5, 23), w(4.0, 5, 30)], 0.3, 0.9, 1.7, 2.8),          // the back-shoulder ball: the one vertical route that is there early
     // intermediate
     OUT:      route('OUT', 'Out', 'MID', 10, [w(0, 0, 0), w(1.4, 0, 10), w(2.1, 6, 11), w(3.0, 12, 11), w(4.0, 16, 11)], 0.4, 0.15, 1.6, 2.5),
     IN:       route('IN', 'Dig', 'MID', 12, [w(0, 0, 0), w(1.6, 0, 12), w(2.4, -6, 13), w(3.4, -14, 13), w(4.0, -18, 13)], 0.5, 0.2, 2.0, 3.0),
@@ -153,15 +153,15 @@
   var coverages = {
     COVER2:  coverage('COVER2', 'COVER 2', 2, true, 7, false, ['COVER4', 'MAN'], 1.0, 0.60, 0.40, 0.35,
       'Two high, corners pressed, seven in the box.', 'The corners are squatting on the flats. The hole is behind them.'),
-    COVER3:  coverage('COVER3', 'COVER 3', 1, false, 8, false, ['MAN', 'BLITZ'], 1.0, 0.35, 0.50, 0.65,
+    COVER3:  coverage('COVER3', 'COVER 3', 1, false, 8, false, ['MAN', 'BLITZ'], 1.0, 0.35, 0.50, 0.50,   // deep 0.50: one high safety cannot cover two seams — the last play is winnable against it
       'One high, corners off, eight in the box.', 'Three deep and soft underneath. Take the curls all day.'),
-    COVER4:  coverage('COVER4', 'COVER 4', 2, false, 6, false, ['COVER2'], 0.9, 0.30, 0.50, 0.75,
+    COVER4:  coverage('COVER4', 'COVER 4', 2, false, 6, false, ['COVER2'], 0.9, 0.30, 0.50, 0.70,        // deep 0.70: quarters takes the deep ball away, not the game
       'Two high and deep, corners off, six in the box.', 'Four deep. Nothing over the top — everything under it.'),
     MAN:     coverage('MAN', 'MAN', 1, true, 7, false, ['COVER3', 'BLITZ'], 1.1, 0.55, 0.55, 0.50,
       'One high, everybody pressed, seven in the box.', 'They are in their faces. Your best guy against their guy.'),
     BLITZ:   coverage('BLITZ', 'BLITZ', 1, true, 8, true, ['COVER3', 'MAN'], 1.6, 0.30, 0.45, 0.55,
       'One high, pressed, eight in the box and the nickel is creeping.', 'They are bringing the house. Hot read, now.'),
-    PREVENT: coverage('PREVENT', 'PREVENT', 2, false, 5, false, ['COVER4'], 0.7, 0.15, 0.40, 0.90,
+    PREVENT: coverage('PREVENT', 'PREVENT', 2, false, 5, false, ['COVER4'], 0.7, 0.15, 0.40, 0.80,       // deep 0.80: they will not give you thirty — a gunslinger still takes it 1 time in 10
       'Two high and backing up, corners way off, five in the box.', 'They will give you ten yards all day. They will not give you thirty.')
   };
 

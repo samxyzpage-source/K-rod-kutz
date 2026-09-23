@@ -36,9 +36,11 @@
  * A press with NO target on empty grass is a swipe candidate: a downward swipe of swipeCss within swipeMs is SCRAMBLE
  * (when the scene allows it); a plain release is onStray (the scene shows the hint).
  * Keys: 1–5 pick a receiver in slot order (WR1 WR2 SLOT TE RB); ←/→/↑/↓ cycle the target before the hold and set
- * lead/loft during it (nudge per tap, sweep when held); Tab / Shift+Tab cycle while the canvas or the page body has
- * the focus (never when a button has it); the confirm key held = the climb (auto-repeat ignored), released = the
- * throw; X = throw away, Z = scramble. A / D and W / S alias the arrows while the arrows are unremapped.
+ * lead/loft during it (nudge per tap, sweep when held); Tab / Shift+Tab step the target while the canvas or the page
+ * body has the focus and a target is chosen, but never wrap: past the last (or before the first) receiver Tab is
+ * left native, so the focus reaches THROW AWAY / SCRAMBLE and the page beyond (a screen-reader / switch user needs
+ * them); the confirm key held = the climb (auto-repeat ignored), released = the throw; X = throw away, Z = scramble.
+ * A / D and W / S alias the arrows while the arrows are unremapped.
  */
 (function (root) {
   'use strict';
@@ -55,7 +57,10 @@
     loftStart: 0.5,
     nudge: 0.1, sweepPerSec: 1.2, sweepAfterMs: 220,  // arrows: one nudge per tap, a sweep after 220 ms held
     swipeCss: 48, swipeMs: 500,                       // swipe DOWN on empty grass without a target = SCRAMBLE
-    quality: { center: 1.0, edge: 0.88, missSlope: 2.2, min: 0.3, halfFallback: 0.075 }
+    // the release quality against the band: 1.0 at its centre, edge at the rim, then edge − missSlope × the miss,
+    // floored at min. missSlope 3.0 / min 0.15: a release 0.10 past the rim is 0.58, a bar parked in the red is 0.15
+    // (the meter is a skill, not a formality; the band centre itself is unchanged)
+    quality: { center: 1.0, edge: 0.88, missSlope: 3.0, min: 0.15, halfFallback: 0.075 }
   };
   PlayInput.CONST = CONST;
 
@@ -280,7 +285,11 @@
       }
       if (key === 'Tab' && !onButton(e)) {
         var ae = root.document && root.document.activeElement;
-        if (!ae || ae === root.document.body || ae === canvasEl) { e.preventDefault(); if (state !== 'HOLD' && !e.repeat) cycle(e.shiftKey ? -1 : 1); }
+        if (!ae || ae === root.document.body || ae === canvasEl) {
+          // step the target without wrapping; at either end (or with no target) Tab stays native and leaves the canvas
+          var dir = e.shiftKey ? -1 : 1, ci = slots.indexOf(target), ni = ci + dir;
+          if (state !== 'HOLD' && !e.repeat && ci >= 0 && ni >= 0 && ni < slots.length) { e.preventDefault(); cycle(dir); }
+        }
         return;
       }
       var lr = keyLR(e), ud = keyUD(e);

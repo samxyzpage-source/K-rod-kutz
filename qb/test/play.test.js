@@ -130,13 +130,13 @@ test('draw counts: buildContext / snap / throw / driveScript each cost the paren
   assert.equal(r.draws, 4, 'rating draws nothing');
 });
 
-test('draw counts: the child draws are fixed — ctx 8 + 2·cards, pass snap 28, SNEAK 3, DRAW 4, drive 25', () => {
+test('draw counts: the child draws are fixed — ctx 8 + 3·cards (pick, shuffle, clarity roll), pass snap 28, SNEAK 3, DRAW 4, drive 25', () => {
   for (const seed of [1, 2, 3, 4, 5, 6]) {
     const r = forkCounting(seed);
     const ctx = Play.buildContext(sit(), r);
     const nPass = ctx.options.filter((o) => !o.run).length;
     assert.equal(r.children[0].label, 'play:ctx');
-    assert.equal(r.children[0].draws, 8 + 2 * nPass, 'ctx child, seed ' + seed);
+    assert.equal(r.children[0].draws, 8 + 3 * nPass, 'ctx child, seed ' + seed);
     Play.snap(ctx, ctx.options.filter((o) => !o.run)[0].id, r);
     assert.equal(r.children[1].label, 'play:snap');
     assert.equal(r.children[1].draws, 28, 'snap child, seed ' + seed);
@@ -476,7 +476,7 @@ test('throw: a late throw into a closed window is picked far more often (about 2
   assert.ok(lateRate > onRate * 8, 'far more often than on time (' + onRate.toFixed(3) + ')');
 });
 
-test('throw: completion rises with ACC, with quality and with the window (GOOD > OK > BAD); the 55-ACC and SURGEON on-time targets hold', () => {
+test('throw: completion rises with ACC, with quality and with the window (GOOD > OK > BAD); the on-time targets after the balance pass hold (ACC 55 ≈ 84 %, SURGEON ≈ 86 %)', () => {
   const meanP = (rating, attrs, quality) => {
     let s = 0, n = 0, caught = 0;
     for (let i = 0; i < 1200; i++) {
@@ -495,8 +495,8 @@ test('throw: completion rises with ACC, with quality and with the window (GOOD >
   assert.ok(q3.p < q6.p && q6.p < acc55.p, 'quality: ' + [q3.p, q6.p, acc55.p].map((v) => v.toFixed(3)));
   const ok = meanP('OK', {}, 1), bad = meanP('BAD', {}, 1);
   assert.ok(bad.p < ok.p && ok.p < acc55.p, 'window: ' + [bad.p, ok.p, acc55.p].map((v) => v.toFixed(3)));
-  near(acc55.cmp, 0.66, 0.05, 'on time, GOOD play, ACC 55 (target 62–70 %)');
-  near(acc72.cmp, 0.785, 0.05, 'SURGEON (target 75–82 %)');
+  near(acc55.cmp, 0.84, 0.05, 'on time, GOOD play, ACC 55, an expert release (target 80–88 %)');
+  near(acc72.cmp, 0.86, 0.05, 'SURGEON (target 82–90 %)');
 });
 
 test('throw: pressure and weather cost accuracy; power outside the band costs the fit; a throw beyond the arm dies', () => {
@@ -554,12 +554,13 @@ test('throw: result shape and bookkeeping — yards = air + yac on a catch, clam
   assert.ok(drops > 0, 'drops happen');
 });
 
-test('throw: SCRAMBLE yields about sim.scrambleYards, fumbles only at low MOB, and escapes a sack more often with MOB', () => {
-  const run = (mob, n, pastClock) => {
+test('throw: SCRAMBLE yields about sim.scrambleYards once the pocket is used (a tuck at the snap is worth useMin of it), fumbles more at low MOB and never under the floor, and escapes a sack more often with MOB', () => {
+  const SC = T.throw.scramble;
+  const run = (mob, n, pastClock, t) => {
     const c = { n: 0, y: 0, fumble: 0, sack: 0 };
     for (let i = 0; i < n; i++) {
       const s = snapFor(10000 + i, null, withAttrs({ MOB: mob })), sim = s.sim;
-      const res = Play.throw(sim, { kind: 'SCRAMBLE', t: pastClock ? sim.sackAt + 0.1 : 1.0 }, s.rng);
+      const res = Play.throw(sim, { kind: 'SCRAMBLE', t: pastClock ? sim.sackAt + 0.1 : (t === undefined ? SC.useT : t) }, s.rng);
       c.n++;
       if (res.outcome === 'SACK') { c.sack++; continue; }
       assert.equal(res.outcome, 'SCRAMBLE');
@@ -570,8 +571,14 @@ test('throw: SCRAMBLE yields about sim.scrambleYards, fumbles only at low MOB, a
     return c;
   };
   const low = run(20, 600, false), high = run(90, 600, false);
-  near(low.y / low.n, 0, 0.6, 'mean scramble tracks sim.scrambleYards');
-  assert.ok(low.fumble > 5 && high.fumble === 0, 'fumbles ' + low.fumble + ' / ' + high.fumble);
+  near(low.y / low.n, 0, 0.6, 'mean scramble tracks sim.scrambleYards at t = useT');
+  assert.ok(low.fumble > 5, 'fumbles at MOB 20: ' + low.fumble);
+  near(high.fumble / high.n, SC.fumbleMin, 0.015, 'the fumble floor at MOB 90 (' + high.fumble + ')');
+  assert.ok(low.fumble > high.fumble, 'more fumbles at low MOB: ' + low.fumble + ' vs ' + high.fumble);
+  // a tuck at the snap is worth useMin of the yards: the tuck-and-run is a bail-out, not a play
+  const early = run(72, 600, false, 0.35), late = run(72, 600, false, SC.useT);
+  const meanY = (c, fallback) => c.y / c.n;   // mean of (yards − sim.scrambleYards)
+  assert.ok(meanY(early) < meanY(late) - 1.5, 'the snap tuck gains less: ' + meanY(early).toFixed(2) + ' vs ' + meanY(late).toFixed(2));
   const lowLate = run(20, 400, true), highLate = run(95, 400, true);
   assert.ok(lowLate.sack / lowLate.n > highLate.sack / highLate.n + 0.3, 'escape by MOB: ' + lowLate.sack + ' vs ' + highLate.sack);
 });

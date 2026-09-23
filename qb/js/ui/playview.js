@@ -28,6 +28,21 @@
  * its yard lines, hashes, numbers and the end zone is pre-rendered per layout + yard line. Per frame: two drawImages of
  * those layers, then ≤ 40 sprites / rects. No per-frame text on the canvas (the HUD is DOM), no allocations in the loop.
  *
+ * The engine's shapes (RTG.Play): ctx.look is the SHOWN look (ctx.shown the coverage id; ctx.real is never drawn),
+ * ctx.receivers the READ picture (shotgun), sim.receivers[].path is absolute (x from the ball, y from the line, t
+ * scaled by speed; extrapolated along the last segment and capped at capY exactly like Play.pathAt), open[] is the
+ * openness over the ARRIVAL time (Play.openAt reads it, the ring colours come from Tuning.qb.open.ring), rushers
+ * {lane −1|0|1, arriveAt}, sim.hot / checkdown slots, ctx.hash offsets the field. A run option's sim IS the result
+ * (outcome 'RUN', no onThrow). The green band follows Play.need every frame of the hold (the arrival at full power and
+ * the route's ideal loft, needFor, greenBand — computed here without allocating), so the band the player releases in
+ * is the band the engine verifies for input.green. A scratch fixture with RELATIVE paths (x, y from the alignment,
+ * no capY / family) still works: it is offset by x0 / y0 and the scene's own needFor stands in.
+ *
+ * Extra phases: SACK (the rusher arrives; ≈ 0.4 s) and RUN (a scramble / SNEAK / DRAW beat) sit between THROW and
+ * RESULT. At the pick the offence slides from the READ picture into the play's formation over TIMING.alignMs (0 with
+ * reduced motion) before t starts; a back / slot released from the backfield joins the engine's line-of-scrimmage
+ * path over TIMING.releaseS.
+ *
  * Also exported: PlayView.TIMING, PlayView.FIELD, PlayView.VENUES, PlayView.OUTCOME_TEXT, PlayView.hudParts(ctx),
  * PlayView.needFor(distYd, ARM), PlayView.greenBandFor(ACC), PlayView.current(), PlayView.escapeToSettings(ev).
  */
@@ -44,7 +59,9 @@
     flightScale: 0.75, reducedFlightMs: 80, minFlightMs: 260, throwPoseMs: 250,
     catchHoldMs: 250, yacBaseMs: 140, yacPerYdMs: 55, yacMaxMs: 900, intReturnMs: 320, bounceMs: 220,
     sackMs: 380, runMs: 720, resultMs: 1200, resultReducedMs: 400, skipAfterMs: 300, bannerFadeMs: 300, subBannerMs: 1400,
-    crowdIdleMs: 700, crowdCheerMs: 180, runFrameMs: 110, hintMs: 1600
+    crowdIdleMs: 700, crowdCheerMs: 180, runFrameMs: 110, hintMs: 1600,
+    armMs: 200,                          // a phase ignores a confirm key / a field tap this long after it mounts (a double tap on NEXT, three quick Enters)
+    pausePollMs: 100                     // a beat's timer re-arms in these steps while a modal is open (the play clock freezes under Settings)
   };
   PlayView.TIMING = TIMING;
 
@@ -111,6 +128,8 @@
     return e;
   }
   function announce(text) { var c = C(); if (c && c.announce) c.announce(text); }
+  /** A kit modal (Settings) is open: the scene freezes its clocks and takes no input. */
+  function paused() { var c = C(); return !!(c && typeof c.modalOpen === 'function' && c.modalOpen()); }
   function icon(name, size) { var c = C(); return c && c.icon ? c.icon(name, size) : doc.createTextNode(''); }
   function coarsePointerNow() {
     try { return !!(root.matchMedia && root.matchMedia('(pointer: coarse)').matches); } catch (e) { return false; }
@@ -219,12 +238,13 @@
     var skipHint = el('div', { class: 'pv-skip', text: 'TAP TO SKIP', hidden: true });
     var situationCard = el('div', { class: 'pv-situation', role: 'group', 'aria-label': 'The situation' });
     var panel = el('div', { class: 'pv-panel' });
+    var lookLine = el('div', { class: 'pv-look', role: 'status', hidden: true });
     var cards = el('div', { class: 'pv-cards', role: 'group', 'aria-label': 'Pick a play', hidden: true });
     var throwBox = el('div', { class: 'pv-throwbox', hidden: true });
     var feedback = el('div', { class: 'pv-feedback', hidden: true });
     overlay.appendChild(subBanner); overlay.appendChild(banner); overlay.appendChild(toastLine); overlay.appendChild(skipHint);
     stage.appendChild(overlay); stage.appendChild(situationCard);
-    panel.appendChild(cards); panel.appendChild(throwBox); panel.appendChild(feedback);
+    panel.appendChild(lookLine); panel.appendChild(cards); panel.appendChild(throwBox); panel.appendChild(feedback);
     elRoot.appendChild(hud); elRoot.appendChild(stage); elRoot.appendChild(panel);
     container.appendChild(elRoot);
 
@@ -255,7 +275,14 @@
     var rusherSpr = [Sp.get('rusher', { tint: oppTint }), Sp.get('defender_run1', { tint: oppTint })];
     var olSpr = Sp.get('lineman_block', { tint: teamTint });
     var balls = { 2: Sp.get('ball_2'), 3: Sp.get('ball_3'), 5: Sp.get('ball_5'), 8: Sp.get('ball_8'), 11: Sp.get('ball_11') };
-    var rings = { open: Sp.get('ring_open', { tint: [pal('mint'), pal('mint')] }), closing: Sp.get('ring_closing', { tint: [pal('gold'), pal('gold')] }), closed: Sp.get('ring_closed', { tint: [pal('red'), pal('red')] }), pick: Sp.get('ring_closing', { tint: [pal('chalk'), pal('chalk')] }) };
+    var rings = {};
+    /** The palette-tinted tiles (re-read on every arm and on a settings change, so a palette toggled mid-moment shows at once). */
+    function loadRings() {
+      rings.open = Sp.get('ring_open', { tint: [pal('mint'), pal('mint')] }); rings.closing = Sp.get('ring_closing', { tint: [pal('gold'), pal('gold')] });
+      rings.closed = Sp.get('ring_closed', { tint: [pal('red'), pal('red')] }); rings.pick = Sp.get('ring_closing', { tint: [pal('chalk'), pal('chalk')] });
+      rings.range = Sp.get('ring_closed', { tint: [pal('grey'), pal('grey')] });   // beyond the arm: grey (the closed shape, so cb / hc read it as "no")
+    }
+    loadRings();
     var pickSpr = Sp.get('target_pick'), hotSpr = Sp.get('hot_flag'), leadAhead = Sp.get('lead_ahead'), leadBehind = Sp.get('lead_behind');
     var rainSpr = Sp.get('rain'), snowSpr = Sp.get('snow');
 
@@ -282,7 +309,7 @@
     var lastAria = '';
     var hudPressureFill = null, hudPressureVal = -1, velFill = null, velGreen = null, velRed = null, velLabel = null, aimLead = null, aimLoft = null, hintEl = null, btnAway = null, btnScr = null, playChip = null;
     var lastLeadTxt = '', lastLoftTxt = '';
-    var runYards = 0, runFrom = 0, runActor = -1, runX = 0;
+    var runYards = 0, runFrom = 0, runActor = -1, runX = 0, runT0 = 0;
     var hotSlot = -1, rotateMs = TIMING.rotateMs;
     var gun = false, alignMs = 0, alignU = 1, qbFromY = 0, zoneLive = { lo: 0, hi: 0, dist: 0 }, zoneStatic = false, lastZoneLo = -1;
 
@@ -291,6 +318,11 @@
     var aX = new Float64Array(NACT), aY = new Float64Array(NACT), aSX = new Float64Array(NACT), aSY = new Float64Array(NACT), aS = new Float64Array(NACT);
     var aFrame = new Int8Array(NACT), aShow = new Int8Array(NACT), order = new Int16Array(NACT);
     var recOpen = new Float64Array(NREC), recRing = new Int8Array(NREC), recVX = new Float64Array(NREC), recVY = new Float64Array(NREC);
+    // recOpen is the openness a ball RELEASED NOW would find (Play.openIfThrown: the arrival at full power and the
+    // route's ideal loft) — what the rings show and what the INT gate judges; recOpenNow is the openness at this
+    // instant (the shadow's cushion); recDist the arrival distance (yd), recLoft the route's ideal loft.
+    var recOpenNow = new Float64Array(NREC), recDist = new Float64Array(NREC), recLoft = new Float64Array(NREC);
+    var arrDist = 0, maxDistYd = Infinity, rushFirst = -1, clockChip = null, clockShown = -1, unsubSettings = null;
     var recX0 = new Float64Array(NREC), recY0 = new Float64Array(NREC), recReveal = new Float64Array(NREC), recSlot = [], recPathFn = [], recPathArr = [], recOpenFn = [], recOpenArr = [], recOpenDt = new Float64Array(NREC), recSpeed = new Float64Array(NREC), recLastX = new Float64Array(NREC), recLastY = new Float64Array(NREC);
     var recAbs = new Int8Array(NREC), recCap = new Float64Array(NREC), recFromX = new Float64Array(NREC), recFromY = new Float64Array(NREC), recRoute = [], recObj = [];
     var defPreX = new Float64Array(NDEF), defPreY = new Float64Array(NDEF), defRole = new Int8Array(NDEF), defArg = new Int16Array(NDEF), defZX = new Float64Array(NDEF), defZY = new Float64Array(NDEF), defArrive = new Float64Array(NDEF), defLaneX = new Float64Array(NDEF), defRush = new Int8Array(NDEF);
@@ -300,7 +332,16 @@
     var pt = { x: 0, y: 0, s: 1 }, pt2 = { x: 0, y: 0 };
     var converge = -1, convergeX = 0, convergeY = 0, intMan = -1, dropMan = -1, tThrowPlay = 0;
 
-    function setTimer(fn, ms) { var id = root.setTimeout(function () { if (!destroyed) fn(); }, ms); timers.push(id); return id; }
+    /** A beat's timer; while a modal is open it re-arms in pausePollMs steps instead of firing (the beat waits for the player). */
+    function setTimer(fn, ms) {
+      var id = root.setTimeout(function () {
+        if (destroyed) return;
+        if (paused()) { setTimer(fn, TIMING.pausePollMs); return; }
+        fn();
+      }, ms);
+      timers.push(id);
+      return id;
+    }
     function clearTimers() { for (var i = 0; i < timers.length; i++) root.clearTimeout(timers[i]); timers.length = 0; }
     function setPhase(p) { phase = p; tPhase = now(); elRoot.setAttribute('data-phase', p); }
     function elapsed() { return now() - tPhase; }
@@ -727,6 +768,26 @@
       return 0.5;
     }
     function ringKind(open) { var R = (TQ().open || {}).ring || {}; return open >= num(R.open, 0.45) ? 0 : (open >= num(R.closing, 0.25) ? 1 : 2); }
+    /**
+     * The flight (s) of a ball released NOW (play time t) at full power and the route's ideal loft to receiver i,
+     * solved exactly like Play.arrival (fixed-point rounds until it settles: Play.ARRIVAL, mirrored here so the
+     * band and the rings agree with the engine to the same tolerance) without allocating; arrDist holds the
+     * distance (yd) of the arrival spot. Without the engine: a flat 0.7 s.
+     */
+    function arrivalFlight(i, t) {
+      var Pl = RTG.Play;
+      if (!Pl || typeof Pl.flightTime !== 'function') { pathAt(i, t + 0.7, pt2, true); var dx = pt2.x - qbX, dy = pt2.y - qbY; arrDist = Math.sqrt(dx * dx + dy * dy); return 0.7; }
+      var A = Pl.ARRIVAL || {}, eps = num(A.eps, 1e-4), rounds = num(A.maxRounds, 24);
+      var drop = num((TQ().route || {}).qbDrop, 7), flight = 0, loft = recLoft[i];
+      for (var k = 0; k < rounds; k++) {
+        pathAt(i, t + flight, pt2, true);
+        arrDist = Math.sqrt(pt2.x * pt2.x + (pt2.y + drop) * (pt2.y + drop));
+        var next = Pl.flightTime(arrDist, qbAttrs, 1, loft), done = Math.abs(next - flight) < eps;
+        flight = next;
+        if (done) break;
+      }
+      return flight;
+    }
     function isLook(o) { return !!(o && typeof o === 'object' && (o.safeties !== undefined || o.press !== undefined || o.box !== undefined)); }
     function lookOf() {
       if (isLook(ctx.look)) return ctx.look;
@@ -739,6 +800,7 @@
     }
     function realId() { var r = ctx.real; return typeof r === 'string' ? r : (r && r.id) || 'COVER3'; }
     function shownId() { var r = ctx.shown; return typeof r === 'string' ? r : (r && r.id) || ''; }
+    function coverageNameOf(id) { var D = RTG.Data && RTG.Data.plays && RTG.Data.plays.coverages; var c = D && D[id]; return (c && c.name) || String(id); }
 
     // ───────────────────────────── the actors ─────────────────────────────
     /** Receivers from the sim (SNAP) or the context (READ): alignments, paths, openness. */
@@ -764,9 +826,12 @@
         recOpenDt[i] = num(op && op.dt, num(r && r.openDt, 0.1));
         recReveal[i] = num(r && r.revealAt, num(src && src.revealAt, 0.6));
         recSpeed[i] = num(r && r.speed, 50);
+        var RR = RTG.Data && RTG.Data.plays && RTG.Data.plays.routes, rt = RR && recRoute[i] ? RR[recRoute[i]] : null;
+        recLoft[i] = rt && rt.ideal ? num(rt.ideal.loft, 0) : 0;
         aX[IREC + i] = al.x; aY[IREC + i] = al.y; recLastX[i] = al.x; recLastY[i] = al.y;
-        recOpen[i] = 0; recRing[i] = -1; aFrame[IREC + i] = 0;
+        recOpen[i] = 0; recOpenNow[i] = 0; recDist[i] = 0; recRing[i] = -1; aFrame[IREC + i] = 0;
       }
+      maxDistYd = RTG.Play && typeof RTG.Play.maxDist === 'function' ? RTG.Play.maxDist(qbAttrs) : Infinity;
       hotSlot = -1;
       var hot = src && src.hot;
       if (hot) for (var h = 0; h < recCount; h++) if (recSlot[h] === hot || recSlot[h] === (hot.slot || hot)) hotSlot = h;
@@ -848,6 +913,8 @@
       for (i = 0; i < 4; i++) { defRole[i] = ROLE_HOLD; defRush[i] = 0; }
       var n = Math.min(3, list.length);
       if (!n) { n = 2; }
+      rushFirst = -1;
+      var firstAt = Infinity;
       for (i = 0; i < n; i++) {
         var r = list[i] || {};
         var laneX = num(r.x, typeof r.lane === 'number' ? (Math.abs(r.lane) <= 2 ? r.lane * 3 : r.lane) : (i === 0 ? -1.5 : (i === 1 ? 4.5 : -4.5)));
@@ -857,6 +924,7 @@
         if (best < 0) continue;
         used[best] = 1;
         defRole[best] = ROLE_RUSH; defRush[best] = 1; defLaneX[best] = laneX; defArrive[best] = Math.max(0.6, arrive);
+        if (defArrive[best] < firstAt) { firstAt = defArrive[best]; rushFirst = best; }   // the first to arrive IS the sack: he ends on the quarterback
         var bo = -1, bdo = 1e9;
         for (j = 0; j < NOL; j++) if (olPush[j] < 0) { var dxo = Math.abs(olX0[j] - laneX); if (dxo < bdo) { bdo = dxo; bo = j; } }
         if (bo >= 0) olPush[bo] = best;
@@ -891,30 +959,37 @@
         recVX[i] = pt2.x - recLastX[i]; recVY[i] = pt2.y - recLastY[i];
         recLastX[i] = pt2.x; recLastY[i] = pt2.y;
         aX[IREC + i] = pt2.x; aY[IREC + i] = pt2.y;
-        recOpen[i] = openAt(i, t);
-        recRing[i] = t >= recReveal[i] ? ringKind(recOpen[i]) : -1;
+        // the ring is coloured by the openness a ball released NOW would find at its arrival (the engine's INT gate
+        // judges open(t + flight), so a green ring means "cannot be picked"); grey when the arrival is beyond the arm
+        recOpenNow[i] = openAt(i, t);
+        recOpen[i] = openAt(i, t + arrivalFlight(i, t));
+        recDist[i] = arrDist;
+        recRing[i] = t >= recReveal[i] ? (recDist[i] > maxDistYd ? 3 : ringKind(recOpen[i])) : -1;
         aFrame[IREC + i] = (Math.abs(recVX[i]) > 0.01 || Math.abs(recVY[i]) > 0.01) ? (Math.floor((t + alignU) * 1000 / TIMING.runFrameMs) & 1) : 0;
       }
-      // the rush and the line
+      // the rush and the line: the first rusher ends on the quarterback's near side (drawn over him: the sack reads
+      // as a tackle), the others land a step wide of him
       var rot = ease(rotateMs > 0 ? t / (rotateMs / 1000) : 1);
       for (j = 0; j < 4; j++) {
         if (defRole[j] === ROLE_RUSH) {
           var p = clamp(t / defArrive[j], 0, 1);
-          var yR = p < 0.25 ? lerp(LOOK.dlY, -0.6, p * 4) : lerp(-0.6, qbY + 0.6, (p - 0.25) / 0.75);
-          aX[j] = lerp(defLaneX[j], qbX, p * 0.9); aY[j] = yR; aFrame[j] = (Math.floor(t * 1000 / TIMING.runFrameMs) & 1);
+          var first = j === rushFirst || rushFirst < 0;
+          var yEnd = first ? qbY - 0.4 : qbY + 0.4, xEnd = first ? qbX : qbX + (defLaneX[j] < 0 ? -0.8 : 0.8);
+          var yR = p < 0.25 ? lerp(LOOK.dlY, -0.6, p * 4) : lerp(-0.6, yEnd, (p - 0.25) / 0.75);
+          aX[j] = lerp(defLaneX[j], xEnd, p * 0.9); aY[j] = yR; aFrame[j] = (Math.floor(t * 1000 / TIMING.runFrameMs) & 1);
         } else { aX[j] = LOOK.dlX[j]; aY[j] = 0.3 - 0.2 * Math.sin(t * 6 + j); aFrame[j] = 0; }
       }
       for (j = 0; j < NOL; j++) {
         var r = olPush[j];
-        if (r >= 0) { aY[IOL + j] = Math.min(-1, aY[r] - 1.0); aX[IOL + j] = lerp(olX0[j], aX[r], 0.6); }
+        if (r >= 0) { aY[IOL + j] = Math.min(-1, Math.max(qbY + 0.5, aY[r] - 1.0)); aX[IOL + j] = lerp(olX0[j], aX[r], 0.6); }
         else { aY[IOL + j] = -1 - 0.15 * Math.sin(t * 5 + j); aX[IOL + j] = olX0[j]; }
       }
       // coverage: roles blend in from the pre-snap spots over rotateMs
       for (j = 4; j < defCount; j++) {
         var tx, ty, role = defRole[j];
-        if (j === intMan) continue;                  // the interceptor is placed by the landing beat
+        if (j === intMan && landBeat) continue;      // the interceptor is placed by the landing beat once the ball is his
         if (role === ROLE_SHADOW && defArg[j] >= 0) {
-          var k = defArg[j], op = recOpen[k], cushion = CUSHION.base + CUSHION.perOpen * op;
+          var k = defArg[j], op = recOpenNow[k], cushion = CUSHION.base + CUSHION.perOpen * op;
           var rx = aX[IREC + k], ry = aY[IREC + k];
           var dxn = (rx < 0 ? 1 : -1) * CUSHION.inside, dyn = 1, nn = Math.sqrt(dxn * dxn + dyn * dyn);
           tx = rx + dxn / nn * cushion; ty = ry + dyn / nn * cushion;
@@ -924,10 +999,12 @@
           aX[j] = tx; aY[j] = ty; aFrame[j] = (Math.floor(t * 1000 / TIMING.runFrameMs) & 1);
           continue;
         } else { tx = defZX[j]; ty = defZY[j]; }
-        if (converge >= 0 && (role === ROLE_DEEP || defArg[j] === converge)) {
-          // the flight: the man on the target and the deep help close on the landing spot
+        if (converge >= 0 && (j === intMan || role === ROLE_DEEP || defArg[j] === converge)) {
+          // the flight: the man on the target and the deep help close on the landing spot; the interceptor (chosen
+          // at the throw) runs all the way, so he arrives with the ball instead of popping onto it
           var cu = clamp((t - tThrowPlay) / Math.max(0.3, flightS), 0, 1);
-          tx = lerp(tx, convergeX, cu * 0.8); ty = lerp(ty, convergeY, cu * 0.8);
+          if (j !== intMan) cu *= 0.8;
+          tx = lerp(tx, convergeX, cu); ty = lerp(ty, convergeY, cu);
         }
         aX[j] = lerp(defPreX[j], tx, rot); aY[j] = lerp(defPreY[j], ty, rot);
         aFrame[j] = t < 0.05 ? 2 : (Math.floor(t * 1000 / TIMING.runFrameMs) & 1);
@@ -953,7 +1030,12 @@
       while (hud.firstChild) hud.removeChild(hud.firstChild);
       var parts = PlayView.hudParts(ctx);
       var strip = el('div', { class: 'pv-strip' });
-      for (var i = 0; i < parts.length; i++) strip.appendChild(el('span', { class: 'chip pv-chip' + (i === 0 ? ' chip-gold' : ''), text: parts[i] }));
+      clockChip = null; clockShown = -1;
+      for (var i = 0; i < parts.length; i++) {
+        var chip = el('span', { class: 'chip pv-chip' + (i === 0 ? ' chip-gold' : ''), text: parts[i] });
+        if (i === 2) clockChip = chip;               // 'Q4 0:48': runs down during a two-minute snap
+        strip.appendChild(chip);
+      }
       playChip = el('span', { class: 'chip pv-chip pv-play', hidden: true });
       strip.appendChild(playChip);
       hud.appendChild(strip);
@@ -966,6 +1048,14 @@
       hud.appendChild(right);
       hudPressureVal = -1;
       setPressure(0);
+    }
+    /** The HUD clock during a two-minute snap: the situation's clock minus the play time (whole seconds, DOM text only when it changes). */
+    function runClock() {
+      if (!clockChip || !sit.twoMinute) return;
+      var left = Math.max(0, Math.round(num(sit.clock, 0)) - Math.floor(tPlay));
+      if (left === clockShown) return;
+      clockShown = left;
+      clockChip.textContent = periodText() + ' ' + clockText(left);
     }
     function setPressure(v) {
       var pct = Math.round(clamp(v, 0, 1) * 100);
@@ -1065,6 +1155,13 @@
     }
 
     // ───────────────────────────── the situation card (SITUATION) ─────────────────────────────
+    /** A keyboard-made click (detail 0) inside armMs of the phase mounting is the tail of an earlier Enter: ignored. */
+    function tooSoon(ev) { return !!ev && ev.detail === 0 && elapsed() < TIMING.armMs; }
+    /** The whole card reads (the text a thumb lands on, not only the button; the button's click bubbles here). */
+    function onSituationClick(ev) {
+      if (phase !== 'SITUATION' || tooSoon(ev)) return;
+      startRead();
+    }
     function buildSituation() {
       while (situationCard.firstChild) situationCard.removeChild(situationCard.firstChild);
       var parts = PlayView.hudParts(ctx);
@@ -1072,10 +1169,19 @@
       situationCard.appendChild(el('div', { class: 'pv-sit-line', text: parts.slice(1, 4).join(' · ') }));
       var stakes = sit.stakes || sit.text || '';
       if (stakes) situationCard.appendChild(el('div', { class: 'pv-sit-stakes', text: stakes }));
-      var go = el('button', { class: 'btn btn-primary pv-go', type: 'button', text: 'TAP TO READ', 'data-action': 'read', onClick: function () { startRead(); } });
+      var go = el('button', { class: 'btn btn-primary pv-go', type: 'button', text: 'TAP TO READ', 'data-action': 'read' });
       situationCard.appendChild(go);
       situationCard.hidden = false;
       setTimer(function () { try { go.focus(); } catch (e) { /* ignore */ } }, 0);
+    }
+    /** The READ panel's look line: the shown look's copy, the pocket warning, the coach's tell. */
+    function buildLookLine() {
+      while (lookLine.firstChild) lookLine.removeChild(lookLine.firstChild);
+      var lk = lookOf(), hot = !!(ctx.pressure && ctx.pressure.hot);
+      var head = 'THEY SHOW: ' + lookText().replace(/\.$/, '').toUpperCase() + (hot ? ' · POCKET: SHORT' : '');
+      lookLine.appendChild(el('span', { class: 'pv-look-head' + (hot ? ' hot' : ''), text: head }));
+      if (lk.tell) lookLine.appendChild(el('span', { class: 'pv-look-tell', text: String(lk.tell) }));
+      lookLine.hidden = false;
     }
 
     // ───────────────────────────── the play cards (READ) ─────────────────────────────
@@ -1145,16 +1251,18 @@
       var options = ctx.options || [];
       for (var i = 0; i < options.length; i++) (function (opt, idx) {
         var adv = String(opt.advice || '?').toUpperCase();
+        var unsure = opt.sure === false && adv !== '?';          // the engine read it off the shown look and this play rates differently against what the look can hide
         var name = opt.name || opt.id || ('PLAY ' + (idx + 1));
         var tags = (opt.tags || []).slice(0, 3);
-        var label = name + '. ' + (adv === '?' ? 'Unsure against this look' : adv + ' against this look') + (tags.length ? '. ' + tags.join(', ') : '') + '. Press ' + (idx + 1) + ' to run it.';
-        var card = el('button', { class: 'pv-card', type: 'button', 'data-play': opt.id, 'data-idx': String(idx), 'aria-label': label, onClick: function () { pick(idx); } });
+        var label = name + '. ' + (adv === '?' ? 'Unsure against this look' : adv + ' against this look' + (unsure ? ' — if the look is honest' : '')) + (tags.length ? '. ' + tags.join(', ') : '') + '. Press ' + (idx + 1) + ' to run it.';
+        var card = el('button', { class: 'pv-card', type: 'button', 'data-play': opt.id, 'data-idx': String(idx), 'data-sure': unsure ? '0' : '1', 'aria-label': label, onClick: function (ev) { if (!tooSoon(ev)) pick(idx); } });
         card.appendChild(el('span', { class: 'pv-card-key num', text: String(idx + 1) }));
         card.appendChild(el('span', { class: 'pv-card-name', text: name }));
         card.appendChild(routeThumb(opt));
         if (opt.line) card.appendChild(el('span', { class: 'pv-card-line', text: opt.line }));
         var meta = el('span', { class: 'pv-card-meta' });
-        meta.appendChild(el('span', { class: 'chip pv-advice chip-' + adviceKind(adv), text: adv === '?' ? '?' : adv }));
+        meta.appendChild(el('span', { class: 'chip pv-advice chip-' + adviceKind(adv) + (unsure ? ' unsure' : ''), text: adv === '?' ? '?' : adv }));
+        if (unsure) meta.appendChild(el('span', { class: 'pv-unsure', text: '?', title: 'If the look is honest' }));
         for (var t = 0; t < tags.length; t++) meta.appendChild(el('span', { class: 'pv-tag', text: tags[t] }));
         card.appendChild(meta);
         cards.appendChild(card);
@@ -1170,7 +1278,7 @@
     function startSituation() {
       setPhase('SITUATION');
       buildSituation();
-      cards.hidden = true; throwBox.hidden = true; feedback.hidden = true;
+      cards.hidden = true; lookLine.hidden = true; throwBox.hidden = true; feedback.hidden = true;
       setAria(situationLabel());
       announce(situationLabel());
     }
@@ -1178,9 +1286,10 @@
       if (destroyed || phase !== 'SITUATION') return;
       situationCard.hidden = true;
       setPhase('READ');
+      buildLookLine();
       buildCards();
       throwBox.hidden = true; feedback.hidden = true;
-      var lt = 'The defence shows ' + lookText() + '. Pick a play.';
+      var lt = 'The defence shows ' + lookText() + (ctx.pressure && ctx.pressure.hot ? ' The pocket will be short.' : '') + ' Pick a play.';
       setAria(lt);
       announce(lt);
       if (ctx.options && ctx.options.length) setTimer(function () { var b = cards.querySelector('button'); if (b) { try { b.focus(); } catch (e) { /* ignore */ } } }, 0);
@@ -1228,15 +1337,18 @@
       buildDefence();
       buildRush();
       placeLine();
-      cards.hidden = true;
+      cards.hidden = true; lookLine.hidden = true; subBanner.hidden = true; toastLine.hidden = true;
       buildThrowBox();
       throwBox.hidden = false;
       if (playChip) { playChip.textContent = (opt && (opt.name || opt.id)) || ''; playChip.hidden = false; }
       setZone(null);
       setHint(snapHint());
       setupInput();
-      tSnap = now() + alignMs; tPlay = 0;
+      tSnap = now() + alignMs; tPlay = 0; clockShown = -1;
       setPhase('SNAP');
+      // a disguised look rotates into the real coverage at the snap: say so, so the fool is visible
+      var shownNow = s && typeof s.shown === 'string' ? s.shown : shownId(), realNow = s && typeof s.real === 'string' ? s.real : realId();
+      if (shownNow && realNow && shownNow !== realNow) showSub('ROTATION · ' + coverageNameOf(realNow), 'clutch', alignMs + rotateMs + 400);
       setAria('Snap. ' + (recCount ? 'Receivers running.' : ''));
       cue('click'); cue('haptic', 15);
       try { canvas.focus({ preventScroll: true }); } catch (e) { try { canvas.focus(); } catch (e2) { /* ignore */ } }
@@ -1259,19 +1371,17 @@
     }
     /**
      * The green band for a throw to receiver i released at t, written into zoneLive: the engine's Play.need rule
-     * (the arrival at full power and the route's ideal loft, solved by four rounds, then needFor / greenBand),
+     * (the arrival at full power and the route's ideal loft — arrivalFlight — then needFor / greenBand),
      * computed here without allocating so it can follow the receiver every frame of the hold — the band the
      * player sees at the release is the band the engine verifies. Without the engine: the scene's own needFor.
      */
     function greenZoneFor(i, t) {
       if (i < 0) return null;
-      var Pl = RTG.Play, R = RTG.Data && RTG.Data.plays && RTG.Data.plays.routes;
+      var Pl = RTG.Play;
       var need, band, dist;
       if (Pl && typeof Pl.flightTime === 'function' && typeof Pl.needFor === 'function' && typeof Pl.greenBand === 'function') {
-        var route = R && recRoute[i] ? R[recRoute[i]] : null, loft = route && route.ideal ? num(route.ideal.loft, 0) : 0;
-        var drop = num((TQ().route || {}).qbDrop, 7), flight = 0;
-        dist = 0;
-        for (var k = 0; k < 4; k++) { pathAt(i, t + flight, pt2, true); dist = Math.sqrt(pt2.x * pt2.x + (pt2.y + drop) * (pt2.y + drop)); flight = Pl.flightTime(dist, qbAttrs, 1, loft); }
+        arrivalFlight(i, t);
+        dist = arrDist;
         need = Pl.needFor(dist, qbAttrs); band = Pl.greenBand(ACC);
         zoneStatic = false;
       } else {
@@ -1285,12 +1395,14 @@
       zoneLive.hi = Math.min(pm, need + band); zoneLive.lo = Math.max(0.05, zoneLive.hi - band); zoneLive.dist = dist;
       return zoneLive;
     }
+    /** The hold's hint: the band, or the range warning when the target's arrival is beyond the arm. */
+    function holdHint() { return target >= 0 && recDist[target] > maxDistYd ? 'OUT OF RANGE · ' + Math.round(maxDistYd) + ' YD ARM' : 'RELEASE IN THE GREEN'; }
     function setupInput() {
       teardownInput();
       input = Inp.create({
         canvasEl: canvas,
         hitTest: hitTest,
-        active: inPlay,
+        active: function () { return inPlay() && !paused(); },
         holdMs: function () { return num((TQ().throw || {}).meterHoldMs, 1300); },
         greenZone: function () { return zone; },
         assist: function () { return liveSettings().greenAssist !== false; },
@@ -1308,7 +1420,7 @@
         onHoldStart: function () {
           hold = true; meterP = 0; lastTick = -1; lastZoneLo = -1;
           setZone(greenZoneFor(target, tPlay));
-          setHint('RELEASE IN THE GREEN');
+          setHint(holdHint());
           cue('click');
         },
         onHold: function (p) {
@@ -1360,7 +1472,7 @@
     function startSack() {
       sacked = true;
       setPhase('SACK');
-      shakeAmp = reduced ? 0 : 3;
+      shakeAmp = reduced ? 0 : 2 + Math.min(4, Math.abs(num(result && result.yards, 7)) * 0.4);   // the shake scales with the yards lost
       flashAlpha = reduced ? 0 : 0.4; flashColor = pal('red');
       qbDown = 1;
       cue('thunk', 1.0); cue('haptic', 60);
@@ -1370,7 +1482,7 @@
     function startRunBeat(res) {
       setPhase('RUN');
       runYards = num(res.yards, 0);
-      runFrom = qbY; runX = qbX;
+      runFrom = qbY; runX = qbX; runT0 = tPlay;
       runActor = IQB;
       qbFace = 1;
       cue('whoosh');
@@ -1389,9 +1501,9 @@
       for (var ri = 0; ri < recCount; ri++) { var fri = fromBySlot[recSlot[ri]]; if (fri !== undefined && fri !== ri) { recFromX[ri] = recFromX[fri]; recFromY[ri] = recFromY[fri]; } }
       cards.hidden = true; throwBox.hidden = true;
       if (playChip) { playChip.textContent = opt.name || opt.id; playChip.hidden = false; }
-      tSnap = now(); tPlay = 0; alignU = 1;
+      tSnap = now() + alignMs; tPlay = 0; runT0 = 0;
       setPhase('RUN');
-      runYards = yards; runFrom = qbY; runX = qbX;
+      runYards = yards; runFrom = gun ? FIELD.qbShotgun : FIELD.qbUnderCentre; runX = qbX;
       var runId = (result.playId || (result.play && result.play.id) || opt.id);
       runActor = runId === 'DRAW' && recIndexOf('RB') >= 0 ? IREC + recIndexOf('RB') : IQB;
       if (runActor !== IQB) { runFrom = aY[runActor]; runX = aX[runActor]; }
@@ -1400,12 +1512,17 @@
     }
     function updateRun() {
       var ms = reduced ? 120 : TIMING.runMs + Math.min(600, Math.abs(runYards) * 25);
-      var u = ease(clamp(elapsed() / ms, 0, 1));
+      if (alignU < 1) {                                  // a run option from READ: the offence slides into the formation first
+        if (runActor === IQB) { qbY = lerp(qbFromY, runFrom, ease(alignU)); aX[IQB] = qbX; aY[IQB] = qbY; qbPose = 0; }
+        return;
+      }
+      var e = (tPlay - runT0) * 1000;
+      var u = ease(clamp(e / ms, 0, 1));
       var y = lerp(runFrom, runYards, u);
       var maxY = Math.max(runFrom, L.goalD);
       if (y > maxY) y = maxY;
-      if (runActor === IQB) { qbY = y; qbX = runX + (runYards > 0 ? Math.sin(u * Math.PI) * 2 : 0); aX[IQB] = qbX; aY[IQB] = qbY; qbPose = (Math.floor(elapsed() / TIMING.runFrameMs) & 1); }
-      else { aY[runActor] = y; aX[runActor] = runX; aFrame[runActor] = (Math.floor(elapsed() / TIMING.runFrameMs) & 1); }
+      if (runActor === IQB) { qbY = y; qbX = runX + (runYards > 0 ? Math.sin(u * Math.PI) * 2 : 0); aX[IQB] = qbX; aY[IQB] = qbY; qbPose = (Math.floor(e / TIMING.runFrameMs) & 1); }
+      else { aY[runActor] = y; aX[runActor] = runX; aFrame[runActor] = (Math.floor(e / TIMING.runFrameMs) & 1); }
       ballCarrier = runActor === IQB ? -2 : runActor - IREC;
       if (u >= 1) startResult();
     }
@@ -1423,6 +1540,18 @@
       }
       convergeX = land.x; convergeY = land.y; converge = ti;
       ballShown = true; ballCarrier = -1; landBeat = null;
+      intMan = -1;
+      if (res.outcome === 'INT') {
+        // the interceptor is chosen at the throw (the deep help or the man on the target, else the nearest) and runs
+        // to the landing spot under the ball — nobody teleports onto it
+        var best = -1, bs = Infinity;
+        for (var j = 4; j < defCount; j++) {
+          var dx = aX[j] - land.x, dy = aY[j] - land.y, d = dx * dx + dy * dy;
+          if (defRole[j] === ROLE_DEEP || (ti >= 0 && defArg[j] === ti)) d *= 0.5;
+          if (d < bs) { bs = d; best = j; }
+        }
+        intMan = best;
+      }
       qbPose = 2;
       cue('whoosh'); cue('haptic', 20);
       skipHint.hidden = reduced;
@@ -1470,10 +1599,10 @@
         return;
       }
       if (out === 'INT') {
-        // the nearest defender takes it
-        var best = -1, bd = 1e9;
-        for (var j = 4; j < defCount; j++) { var dx = aX[j] - result.landing.x, dy = aY[j] - result.landing.y, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = j; } }
-        if (best >= 0) { aX[best] = result.landing.x; aY[best] = result.landing.y; ballCarrier = -3 - best; intMan = best; }
+        // the interceptor chosen at the throw (startFlight) is under the ball; the nearest man stands in otherwise
+        var best = intMan, bd = 1e9;
+        if (best < 0) for (var j = 4; j < defCount; j++) { var dx = aX[j] - result.landing.x, dy = aY[j] - result.landing.y, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = j; } }
+        if (best >= 0) { aX[best] = result.landing.x; aY[best] = result.landing.y; aFrame[best] = 2; ballCarrier = -3 - best; intMan = best; }
         landBeat = 'int'; landMs = reduced ? 60 : TIMING.intReturnMs;
         cue('thunk', 0.6); cue('stingerBad');
         return;
@@ -1516,21 +1645,23 @@
     }
     function bannerFor(res) {
       var b = ownBanner(res);
-      // the engine's copy wins when it speaks: banner ('TOUCHDOWN!' · 'FIRST DOWN' · else text) and text ('CATCH +14' …)
-      if (typeof res.banner === 'string' && res.banner) { b.text = res.banner; b.sub = (typeof res.text === 'string' && res.text && res.text !== res.banner) ? res.text : ''; }
+      // the engine's copy wins when it speaks: banner ('TOUCHDOWN!' · 'FIRST DOWN' · else text) and text ('CATCH +14' …);
+      // a 'FIRST DOWN' on the last play is refused either way (the game was lost)
+      if (typeof res.banner === 'string' && res.banner && !(sit.lastPlay && res.banner === 'FIRST DOWN' && !res.td)) { b.text = res.banner; b.sub = (typeof res.text === 'string' && res.text && res.text !== res.banner) ? res.text : b.sub; }
       if (res.fumble || (res.turnover && res.outcome !== 'INT')) b.kind = 'blocked';
       return b;
     }
     function ownBanner(res) {
       var o = res.outcome, y = Math.round(num(res.yards, 0)), sign = y >= 0 ? '+' : '';
+      var fd = !!res.firstDown && !sit.lastPlay;    // on the last play a first down that does not score loses: never 'FIRST DOWN'
       if (res.td) return { text: 'TOUCHDOWN!', kind: 'gold', sub: o === 'CATCH' ? 'CATCH ' + sign + y : (o === 'SCRAMBLE' ? 'SCRAMBLE ' + sign + y : '') };
-      if (o === 'CATCH') return res.firstDown ? { text: 'FIRST DOWN', kind: 'good', sub: 'CATCH ' + sign + y } : { text: 'CATCH ' + sign + y, kind: 'good', sub: '' };
+      if (o === 'CATCH') return fd ? { text: 'FIRST DOWN', kind: 'good', sub: 'CATCH ' + sign + y } : { text: 'CATCH ' + sign + y, kind: sit.lastPlay ? 'bad' : 'good', sub: sit.lastPlay ? 'SHORT' : '' };
       if (o === 'INT') return { text: 'INTERCEPTED', kind: 'blocked', sub: '' };
       if (o === 'SACK') return { text: 'SACKED ' + (y > 0 ? '-' : sign) + Math.abs(y), kind: 'bad', sub: '' };
       if (o === 'DROP') return { text: 'DROPPED', kind: 'bad', sub: '' };
       if (o === 'THROWAWAY') return { text: 'THROWN AWAY', kind: 'neutral', sub: '' };
-      if (o === 'SCRAMBLE') return res.firstDown ? { text: 'FIRST DOWN', kind: 'good', sub: 'SCRAMBLE ' + sign + y } : { text: 'SCRAMBLE ' + sign + y, kind: y > 0 ? 'good' : 'bad', sub: res.turnover ? 'FUMBLE' : '' };
-      if (o === 'RUN') { var pid = res.playId || (res.play && res.play.id) || res.play; var nm = pid === 'SNEAK' ? 'SNEAK' : (pid === 'DRAW' ? 'DRAW' : 'RUN'); return res.firstDown ? { text: 'FIRST DOWN', kind: 'good', sub: nm + ' ' + sign + y } : { text: nm + ' ' + sign + y, kind: y > 0 ? 'good' : 'bad', sub: '' }; }
+      if (o === 'SCRAMBLE') return fd ? { text: 'FIRST DOWN', kind: 'good', sub: 'SCRAMBLE ' + sign + y } : { text: 'SCRAMBLE ' + sign + y, kind: y > 0 && !sit.lastPlay ? 'good' : 'bad', sub: res.turnover ? 'FUMBLE' : (sit.lastPlay ? 'SHORT' : '') };
+      if (o === 'RUN') { var pid = res.playId || (res.play && res.play.id) || res.play; var nm = pid === 'SNEAK' ? 'SNEAK' : (pid === 'DRAW' ? 'DRAW' : 'RUN'); return fd ? { text: 'FIRST DOWN', kind: 'good', sub: nm + ' ' + sign + y } : { text: nm + ' ' + sign + y, kind: y > 0 && !sit.lastPlay ? 'good' : 'bad', sub: '' }; }
       return { text: 'INCOMPLETE', kind: 'bad', sub: '' };
     }
     function showFeedback(res) {
@@ -1587,7 +1718,8 @@
       return false;
     }
     function onStagePointer(e) {
-      if (phase === 'SITUATION') { if (e.target === canvas) { e.preventDefault(); startRead(); } return; }
+      // the field around the card reads too — but not inside armMs of the card mounting (a double tap on NEXT lands here)
+      if (phase === 'SITUATION') { if (e.target === canvas && elapsed() >= TIMING.armMs) { e.preventDefault(); startRead(); } return; }
       if (phase === 'FLIGHT' || phase === 'RESULT' || phase === 'RUN' || phase === 'SACK') { if (skip()) e.preventDefault(); }
     }
     function onKey(e) {
@@ -1599,13 +1731,14 @@
       }
       var t = e.target, tag = t && t.tagName;
       var confirmKey = e.key === ' ' || e.key === 'Enter' || Inp.keyMatches(e, Inp.resolveKeys(liveSettings().keys).confirm);
+      var soon = elapsed() < TIMING.armMs;             // a key inside armMs of the phase mounting is the tail of an earlier press
       if (phase === 'READ') {
-        if (e.key >= '1' && e.key <= '9' && e.key.length === 1 && tag !== 'INPUT' && tag !== 'TEXTAREA') { e.preventDefault(); pick(e.key.charCodeAt(0) - 49); }
+        if (e.key >= '1' && e.key <= '9' && e.key.length === 1 && tag !== 'INPUT' && tag !== 'TEXTAREA') { e.preventDefault(); if (!soon) pick(e.key.charCodeAt(0) - 49); }
         return;
       }
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || (t && t.isContentEditable)) return;
       if (!confirmKey) return;
-      if (phase === 'SITUATION') { e.preventDefault(); startRead(); return; }
+      if (phase === 'SITUATION') { e.preventDefault(); if (!soon) startRead(); return; }
       if (phase === 'FLIGHT' || phase === 'RESULT' || phase === 'RUN' || phase === 'SACK') { if (skip()) e.preventDefault(); }
     }
 
@@ -1620,7 +1753,7 @@
     }
     function drawRing(i) {
       var k = recRing[i], spr = null;
-      if (k === 0) spr = rings.open; else if (k === 1) spr = rings.closing; else if (k === 2) spr = rings.closed;
+      if (k === 0) spr = rings.open; else if (k === 1) spr = rings.closing; else if (k === 2) spr = rings.closed; else if (k === 3) spr = rings.range;
       if (!spr && i === target && inPlay()) spr = rings.pick;
       if (!spr) return;
       var s = aS[IREC + i], w = Math.max(FIELD.ringMinW, Math.round(FIELD.ringW * s)), h = Math.max(3, Math.round(5 * s));
@@ -1631,7 +1764,15 @@
       var s = aS[a], x = aSX[a], y = aSY[a];
       if (a === IQB) {
         var spr = qbSpr[qbPose] || qbSpr[0];
-        var qx = Math.round(x - spr.width / 2), qy = Math.round(y - spr.height) + qbDown * 3;
+        if (qbDown) {
+          // sacked: the set pose on its side (rotated a quarter turn, the tackler drawn over him) and the ball loose
+          g.save(); g.translate(Math.round(x), Math.round(y)); g.rotate(Math.PI / 2);
+          g.drawImage(spr, -spr.width, -(spr.height >> 1));
+          g.restore();
+          g.drawImage(balls[3], Math.round(x) + (spr.height >> 1) + 2, Math.round(y) - 3);
+          return;
+        }
+        var qx = Math.round(x - spr.width / 2), qy = Math.round(y - spr.height);
         if (mirror) { g.save(); g.translate(qx + spr.width, qy); g.scale(-1, 1); g.drawImage(spr, 0, 0); g.restore(); }
         else g.drawImage(spr, qx, qy);
         if (ballCarrier === -2) g.drawImage(balls[3], qx + (mirror ? 1 : spr.width - 4), qy + 9);
@@ -1715,7 +1856,22 @@
       drawOverlays();
     }
 
+    /** A modal is open: freeze every clock (the play clock, the flight, the landing beat, the skip timer) and cancel a live hold. */
+    function holdPaused(dt) {
+      if (inPlay()) {
+        tSnap += dt;
+        if (hold && input) {
+          input.reset();
+          if (target >= 0) input.setTarget(recSlot[target], 'key');   // the target stays, the climb starts over on resume
+          hold = false; meterP = 0; setVel(0); setZone(null); setHint(snapHint());
+        }
+      } else if (phase === 'RUN') tSnap += dt;
+      else if (phase === 'FLIGHT') { tPhase += dt; landAt += dt; }
+      else if (phase === 'SACK' || phase === 'RESULT') tPhase += dt;
+      projectAll();
+    }
     function update(dt, t) {
+      if (paused()) { holdPaused(dt); return; }
       var period = crowdMode === 'cheer' ? TIMING.crowdCheerMs : TIMING.crowdIdleMs;
       if (t - crowdAt > period) { crowdAt = t; crowdFrame = crowdMode === 'groan' ? 0 : 1 - crowdFrame; }
       var amp = 0;
@@ -1728,7 +1884,8 @@
         tPlay = Math.max(0, raw);
         alignU = alignMs > 0 ? clamp(1 + raw * 1000 / alignMs, 0, 1) : 1;
         positionsAt(tPlay);
-        if (hold && target >= 0 && !zoneStatic) setZone(greenZoneFor(target, tPlay));
+        if (hold && target >= 0 && !zoneStatic) { setZone(greenZoneFor(target, tPlay)); setHint(holdHint()); }
+        runClock();
         var sackAt = num(sim && sim.sackAt, TIMING.playMaxS);
         setPressure(sackAt > 0 ? tPlay / sackAt : 0);
         if (btnAway && btnAway.hidden && canThrowAway()) btnAway.hidden = false;
@@ -1738,7 +1895,7 @@
           resolve({ kind: 'SACK', target: target >= 0 ? recSlot[target] : null, t: tPlay, lead: lead, loft: loft, power: meterP, quality: 0.3, green: false });
         }
       } else if (phase === 'FLIGHT') { updateFlight(); positionsAt(tPlay); }
-      else if (phase === 'RUN') { tPlay = Math.max(0, (t - tSnap) / 1000); alignU = 1; positionsAt(tPlay); updateRun(); }
+      else if (phase === 'RUN') { var rr = (t - tSnap) / 1000; tPlay = Math.max(0, rr); alignU = alignMs > 0 ? clamp(1 + rr * 1000 / alignMs, 0, 1) : 1; positionsAt(tPlay); updateRun(); }
       else if (phase === 'SACK') { positionsAt(num(sim && sim.sackAt, tPlay)); }
       else if (phase === 'RESULT' || phase === 'DONE') { /* frozen */ }
       projectAll();
@@ -1763,6 +1920,7 @@
       buildDefence();
       placeLine();
       hotSlot = -1;
+      loadRings();
       relayout();
       initParticles();
       buildHud();
@@ -1773,7 +1931,20 @@
     }
 
     stage.addEventListener('pointerdown', onStagePointer);
+    situationCard.addEventListener('click', onSituationClick);
     root.addEventListener('keydown', onKey);
+    // a setting toggled from the scene's own Escape → Settings (palette, high contrast, reduced motion, the mirror)
+    // reaches the canvas at once, not on the next moment
+    if (store && typeof store.subscribe === 'function') {
+      unsubSettings = store.subscribe(function (info) {
+        if (destroyed || !info || info.fnName !== 'settings') return;
+        var s = liveSettings();
+        reduced = reducedMotion(s);
+        mirror = !!(s.leftHanded || s.leftFooted || s.mirror);
+        loadRings();
+        relayout();
+      });
+    }
     arm();
     cv.start(loop);
 
@@ -1796,7 +1967,7 @@
         var out = { receivers: [], qb: null, scale: cv.scale };
         for (var i = 0; i < recCount; i++) {
           var h = Math.max(4, Math.round(12 * aS[IREC + i]));
-          out.receivers.push({ slot: recSlot[i], x: aSX[IREC + i] * cv.scale, y: (aSY[IREC + i] - h / 2) * cv.scale, fieldX: aX[IREC + i], fieldY: aY[IREC + i], open: recOpen[i], ring: recRing[i] });
+          out.receivers.push({ slot: recSlot[i], x: aSX[IREC + i] * cv.scale, y: (aSY[IREC + i] - h / 2) * cv.scale, fieldX: aX[IREC + i], fieldY: aY[IREC + i], open: recOpen[i], openNow: recOpenNow[i], dist: recDist[i], ring: recRing[i] });
         }
         out.qb = { x: aSX[IQB] * cv.scale, y: (aSY[IQB] - 10) * cv.scale };
         return out;
@@ -1827,7 +1998,9 @@
         destroyed = true;
         clearTimers();
         teardownInput();
+        if (unsubSettings) { unsubSettings(); unsubSettings = null; }
         stage.removeEventListener('pointerdown', onStagePointer);
+        situationCard.removeEventListener('click', onSituationClick);
         root.removeEventListener('keydown', onKey);
         cue('crowdStop'); cue('heartbeatStop');
         cv.destroy();

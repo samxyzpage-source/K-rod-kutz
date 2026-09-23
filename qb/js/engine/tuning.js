@@ -42,18 +42,21 @@
         archetypes: {
           GUNSLINGER:    { ARM: 72, ACC: 54, IQ: 52, MOB: 52, POI: 56, signature: 'ARM' },   // velocity and deep range
           SURGEON:       { ARM: 55, ACC: 72, IQ: 58, MOB: 50, POI: 56, signature: 'ACC' },   // the green zone and the scatter
-          FIELD_GENERAL: { ARM: 55, ACC: 58, IQ: 72, MOB: 50, POI: 60, signature: 'IQ' },    // reads the look, sees windows early
+          FIELD_GENERAL: { ARM: 55, ACC: 58, IQ: 74, MOB: 50, POI: 60, signature: 'IQ' },    // reads the look, sees windows early (IQ 74 × iqSees → sees 80 % of the disguises)
           DUAL_THREAT:   { ARM: 56, ACC: 52, IQ: 50, MOB: 72, POI: 55, signature: 'MOB' }    // scramble yards, sack escapes
         },
 
         // The pre-snap read.
         read: {
-          disguise: 0.40,          // base probability that the SHOWN look is a disguise of the real coverage
-          iqSees: 0.85,            // the share of that probability IQ 99 removes: p = disguise × (1 − IQ/99 × iqSees)
+          disguise: 0.55,          // base probability that the SHOWN look is a disguise of the real coverage (0.55: a low-IQ QB is lied to on ≈ 1 snap in 4)
+          iqSees: 1.08,            // the share of that probability IQ 99 removes: p = disguise × (1 − IQ/99 × iqSees) (1.08: IQ 74 sees 80 %, IQ 52 sees 57 %; ≥ 92 sees everything)
           iqExact: 80,             // IQ at or above this → the card's advice is the rating vs the REAL coverage
           goodOffered: 0.85,       // probability that at least one option is GOOD vs the real coverage
           revealBase: 1.6,         // s after the snap the UI may show the openness rings at IQ 0 …
           revealIq: 1.2,           // … minus IQ/99 × this (IQ 50 → 0.99 s · IQ 72 → 0.73 s · IQ 99 → 0.40 s)
+          // Below iqExact a card whose rating differs among the coverages the SHOWN look can hide (the shown one and
+          // every coverage that disguises as it) is honest about it: with probability 1 − IQ/99 it carries sure: false
+          // (the chip is dimmed with a '?'). IQ 52 → 47 % of the ambiguous cards flagged · IQ 74 → 25 % · ≥ iqExact → none.
           options: { min: 2, max: 3 },   // number of play cards (a run card replaces one on short yardage)
           sneakToGo: 2,            // toGo ≤ this → SNEAK is offered (never further out)
           drawToGo: 3,             // toGo ≤ this (and above sneakToGo) → DRAW is offered
@@ -74,7 +77,7 @@
 
         // Which coverage the defence really runs: base weights × the situation's multipliers × opp.tendency.
         coverage: {
-          base: { COVER2: 0.20, COVER3: 0.30, COVER4: 0.15, MAN: 0.20, BLITZ: 0.10, PREVENT: 0.05 },
+          base: { COVER2: 0.20, COVER3: 0.30, COVER4: 0.15, MAN: 0.20, BLITZ: 0.10, PREVENT: 0.03 },   // PREVENT 0.03: a late-game look, almost never on a regular down
           longToGo: 7,             // 3rd/4th and at least this → the "long" multipliers
           long: { BLITZ: 1.8, COVER2: 0.8, PREVENT: 0.6 },
           shortToGo: 2,            // toGo ≤ this → the "short" multipliers
@@ -82,7 +85,7 @@
           redZoneYl: 80,           // yl ≥ this → the red-zone multipliers (COVER4 less, MAN more)
           redZone: { COVER4: 0.4, MAN: 1.4, COVER2: 1.2, PREVENT: 0 },
           lateClock: 120,          // Q4 with the clock at or under this and the DEFENCE leading → PREVENT
-          late: { PREVENT: 6, BLITZ: 0.6, COVER4: 1.3 }
+          late: { PREVENT: 3.5, BLITZ: 0.6, COVER4: 0.6 }   // PREVENT ×3.5 ≈ 11 % of last plays (×6 made the game-winner unwinnable); COVER4 ×0.6: quarters late would do the same
         },
 
         // The sack clock (seconds after the snap when the first rusher arrives).
@@ -94,7 +97,7 @@
           down: 1.30,              // soft cap of the line's LOSS: a bad line loses at most ≈ −1.3 s
           poiW: 0.004,             // s per point of (POI − 50): poise buys a beat in the pocket
           mulExp: 0.4,             // the coverage's pressureMul enters as sackAt ÷ pressureMul^mulExp (BLITZ 1.6 → ×0.83 · PREVENT 0.7 → ×1.15)
-          clutchMul: 0.15,         // in the clutch sackAt × (1 − clutchMul × (1 − POI/99)): the rush "feels" faster to a nervous QB
+          clutchMul: 0.30,         // in the clutch sackAt × (1 − clutchMul × (1 − POI/99)): the rush "feels" faster to a nervous QB (0.30: POI 56 loses ≈ 0.4 s on the last two snaps — the stakes reach the hand, not only the sky)
           clutchClock: 120,        // Q4 with the clock at or under this and the game within one score → clutch
           clutchMargin: 8,         // … "within one score"
           sigma: 0.25,             // s: gauss jitter of sackAt in buildContext
@@ -109,7 +112,7 @@
           maxT: 4,                 // s: the last sample; later times hold the last value
           base: 0.70,              // peak openness before the modifiers
           tightW: 0.50,            // − tightW × coverage.tightness[family]
-          skillW: 0.35,            // + skillW × (receiver skill − opp.db)/99 …
+          skillW: 0.17,            // + skillW × (receiver skill − opp.db)/99 … (0.17: the BAD / GREAT rosters are worth ≈ 10 points of completion, not 20)
           manMul: 1.6,             // … × this against MAN (a matchup coverage)
           vs: { GOOD: 0.20, OK: 0.02, BAD: -0.22 },   // + the play's rating vs the REAL coverage
           noiseSd: 0.08,           // gauss on the peak per receiver
@@ -117,13 +120,13 @@
           min: 0.05, max: 0.98,    // peak clamp
           floor: 0.05,             // openness before the break and far after the window
           rise: 0.5,               // s: the window opens linearly over this before window.open
-          fall: 0.7,               // s: … and closes over this after window.close
-          lateFrac: 0.15,          // the openness left after the fall, as a fraction of the peak (a late ball is contested)
+          fall: 0.6,               // s: … and closes over this after window.close (0.6 s: a ball 0.6 s late finds the window shut and is picked 25–40 % of the time)
+          lateFrac: 0.12,          // the openness left after the fall, as a fraction of the peak (a late ball is contested)
           checkdownFloor: 0.35,    // the checkdown's peak is never below this (it is always a little open)
           hotBonus: 0.20,          // the hot read's peak bonus under a real BLITZ …
           hotEarlier: 0.15,        // … and how much earlier (s) its window opens
           windowFrac: 0.75,        // the reported window {from, to} spans where open(t) ≥ windowFrac × peak
-          ring: { open: 0.45, closing: 0.25 }   // the scene's ring colours: green ≥ open (= throw.intWindow: never picked) · gold ≥ closing · red below
+          ring: { open: 0.70, closing: 0.25 }   // the scene's ring colours: green ≥ open (= throw.intWindow: never picked) · gold ≥ closing · red below (0.70: only a real window is green; a checkdown is gold)
         },
 
         // Receiver speed → route timing. A route's waypoints are timed for an average receiver; a fast one
@@ -141,44 +144,50 @@
           powerBase: 0.85, powerPer: 0.3,     // × (0.85 + 0.3 × power); power 0..1.15
           powerMax: 1.15,
           loftTime: 0.30,          // flight × (1 + loftTime × loft): touch hangs in the air
-          maxDist: 48,             // yd × (0.75 + 0.35 × ARM/99): the deep range; beyond it the ball dies (ARM 55 → 45 · 99 → 53)
-          rangeBase: 0.75, rangePer: 0.35,
+          maxDist: 50,             // yd × (0.43 + 0.72 × ARM/99): the deep range; beyond it the ball dies (ARM 55 → 41.5 · 72 → 47.7 · 99 → 57.5: an average arm cannot reach the far GO at full depth, a gunslinger can)
+          rangeBase: 0.43, rangePer: 0.72,
           beyondRangePen: 0.06,    // accuracy − this per yard beyond the range
           // the green band: the on-time power for the throw's distance is need(dist) = needBase + dist / (range × arm);
           // the band is [need, need + greenBand(ACC)] with greenBand = base + perAcc × ACC/99
           needBase: 0.15, range: 50,
-          greenBand: { base: 0.16, perAcc: 0.10 },
+          greenBand: { base: 0.12, perAcc: 0.18 },   // ACC's home is the band (52 → 0.215 · 72 → 0.251 · 99 → 0.30), not the completion roll
+          bandTopMargin: 0.06,     // the band stops this far under powerMax on the deepest ball: an over-hold parked at the top is always red, so a deep throw still needs a release
+          hotBallPen: 0.8,         // fit − hotBallPen × (power − (need + greenBand)) when the ball is thrown too hard to catch (0.8: a parked release costs the fit as well as the quality)
           greenQuality: 0.88,      // an engine-verified `green` claim floors quality here (the UI's own rim value)
           minCommit: 0.08,         // a release under this power is a stray tap (the UI never sends it; the engine treats it as a throwaway)
-          hotBallPen: 0.8,         // fit − hotBallPen × (power − (need + greenBand)) when the ball is thrown too hard to catch
           // fit = 1 − |lead − ideal.lead| × leadW − |loft − ideal.loft| × loftW
           leadW: 0.35, loftW: 0.35,
           // accuracy = ACC/99 × accW + quality × qualW + fit × fitW − pressure − weather
-          accW: 0.60, qualW: 0.22, fitW: 0.18,
+          accW: 0.14, qualW: 0.35, fitW: 0.27,   // the hand (release + lead/loft) is 0.62 of the roll, the attribute 0.14: an expert release completes ≈ 84 % on time, a decent one ≈ 68 %, a sloppy one ≈ 40 %
           pressPen: 0.15,          // full penalty at the sack …
           pressWindow: 0.7,        // … tapering to 0 this many seconds before it
           poiRelief: 0.6,          // × (1 − POI/99 × poiRelief)
           // completion probability = sigmoid(k × (accuracy × accMul + window × windowMul − bias))
-          k: 7.5, accMul: 1.0, windowMul: 0.6, bias: 1.13,
+          k: 7.5, accMul: 1.0, windowMul: 0.6, bias: 0.90,   // bias 0.90 with the weights above (1.13 belonged to accW 0.60)
           // interception: only when the window is closed AND the ball is not perfect: intBase × (1 − window)
-          intWindow: 0.45, intAcc: 0.92, intBase: 0.40,
+          intWindow: 0.70, intAcc: 0.92, intBase: 0.42,   // intWindow 0.70 = open.ring.open: anything not green can be picked; intBase 0.42: a decent player throws 3 % picks, a novice 8–12 %
           drop: 0.08,              // drop probability × (1 − skill/99)
           yac: {
-            base: { SHORT: 6.0, MID: 3.5, DEEP: 4.0 },   // yd by route family …
+            base: { SHORT: 7, MID: 4.5, DEEP: 26 },     // yd by route family … (DEEP 26 × the window factor below: a beaten corner is a footrace ≈ 11 yd, the game-winner from the 40)
             speedBase: 0.6, speedPer: 0.4,               // … × (0.6 + 0.4 × speed/99)
-            windowBase: 0.6, windowPer: 0.4,             // … × (0.6 + 0.4 × window): a contested catch has no room to run
+            windowBase: -0.39, windowPer: 1.4,           // … × (−0.39 + 1.4 × window): nothing under 0.28 openness (a contested catch is tackled at the spot), ×0.62 at 0.72, ×0.87 wide open
             screenBonus: 4,                              // + this on a SCREEN
-            sd: 3, min: 0                                // gauss sd · floor
+            sd: 4.5, min: 0                              // gauss sd · floor (the raw value can go negative on a contested catch; the floor zeroes it)
           },
           sackYards: { mean: -7, sd: 2, min: -12, max: -1 },   // yards on a sack
+          // The tuck-and-run is a bail-out, not a play: MOB 72 means ≈ 4–5 yards once the pocket has been used, a
+          // stacked box stuffs it, it can lose yards and it is never fumble-free (a SCRAMBLE at the snap on every
+          // down out-gained an expert throw on 3rd and medium before this retune).
           scramble: {
             minMob: 55,            // the SCRAMBLE button appears at MOB ≥ this (the engine accepts it always)
-            base: 2, perMob: 0.08, // yd = base + perMob × MOB + look bonus + gauss
+            base: 0, perMob: 0.06, // yd = base + perMob × MOB + look bonus + box + gauss (the yards come from the legs and the look: MOB 72 → 4.3 + look + box)
             look: { COVER2: 1, COVER3: 1, COVER4: 2, MAN: 3, BLITZ: 2, PREVENT: 3 },
-            boxPer: -0.5, boxAnchor: 6,   // + boxPer × (box − 6): a stacked box has nowhere to run
-            sd: 3, sd2: 2.5, min: -2, max: 30,   // sd in snap · a second sd in throw · clamp
+            boxPer: -1.5, boxAnchor: 6,   // + boxPer × (box − 6): an 8-man box costs 3 yards, a 5-man box gives 1.5
+            sd: 3, sd2: 2.5, min: -4, max: 30,   // sd in snap · a second sd in throw · clamp (min −4: a tackle for loss is on the table)
+            useT: 1.2, useMin: 0.3,              // the yards × clamp(t / useT, useMin, 1): a tuck at the snap (t 0.35) is worth 30 % — the lanes open once the rush has committed
             escape: 0.55, escapeMob: 0.5,        // P(escape a sack on SCRAMBLE) = escape × MOB/99 + … − escapeMob × (1 − MOB/99)
-            fumble: 0.06, fumbleMobFree: 60      // P(fumble) = fumble × max(0, 1 − MOB/fumbleMobFree)
+            fumble: 0.06, fumbleMobFree: 60,     // P(fumble) = max(fumbleMin, fumble × max(0, 1 − MOB/fumbleMobFree))
+            fumbleMin: 0.03                      // … never under this: a scramble is never free
           },
           scatter: { sd: 2.5, min: 0.3, leadYd: 3 },    // landing scatter (yd): sd × (1 − accuracy) + min; lead error × leadYd downfield
           meterHoldMs: 1300,       // the velocity meter climbs 0 → powerMax over this (the scene reads it)
@@ -208,7 +217,7 @@
           shortYardage: { down: [3, 4], toGo: [1, 2], yl: [40, 60], clock: [120, 600] },
           twoMinute: { down: [1, 2], toGo: 10, yl: [45, 60], clock: [35, 58], deficit: [1, 3] },
           lastPlay: { fromGoal: [30, 45], clock: [3, 8], deficit: [4, 5] },
-          openingLead: [0, 7]      // the opponent's opening score in the first snap (us 0)
+          openingLead: [0, 3, 7]   // the opponent's opening score in the first snap (us 0): one of these (a real score — no 0-1 or 0-4 scoreboards)
         },
 
         // The demo's team presets (title screen: BAD LINE / AVERAGE / GREAT LINE). `wr` is the five-man roster
@@ -216,13 +225,13 @@
         demo: {
           teams: {
             BAD: {
-              ol: 30, dl: 78, db: 70,
+              ol: 30, dl: 78, db: 62,   // db 62 and skills in the 40s–50s: the bad LINE is the story (2.1 s pocket), the secondary costs ≈ 5 points, not 10
               wr: [
-                { slot: 'WR1', name: 'T. Vance', skill: 48, speed: 62 },
-                { slot: 'WR2', name: 'R. Okafor', skill: 42, speed: 55 },
-                { slot: 'SLOT', name: 'J. Pruitt', skill: 45, speed: 50 },
-                { slot: 'TE', name: 'B. Holm', skill: 40, speed: 38 },
-                { slot: 'RB', name: 'D. Sykes', skill: 44, speed: 58 }
+                { slot: 'WR1', name: 'T. Vance', skill: 52, speed: 62 },
+                { slot: 'WR2', name: 'R. Okafor', skill: 46, speed: 55 },
+                { slot: 'SLOT', name: 'J. Pruitt', skill: 49, speed: 50 },
+                { slot: 'TE', name: 'B. Holm', skill: 44, speed: 38 },
+                { slot: 'RB', name: 'D. Sykes', skill: 48, speed: 58 }
               ]
             },
             AVERAGE: {
@@ -236,7 +245,7 @@
               ]
             },
             GREAT: {
-              ol: 80, dl: 50, db: 48,
+              ol: 80, dl: 50, db: 52,   // db 52: the great line buys the pocket; the receivers are the difference, the secondary is merely average
               wr: [
                 { slot: 'WR1', name: 'Z. Moreau', skill: 82, speed: 86 },
                 { slot: 'WR2', name: 'C. Whitfield', skill: 74, speed: 78 },

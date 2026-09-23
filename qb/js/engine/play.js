@@ -9,7 +9,8 @@
  *   buildContext : 1 parent draw — rng.fork('play:ctx'). Child, in order:
  *                  coverage weighted 1 · disguise roll 1 · disguise pick 1 (always drawn, used only on a disguise)
  *                  · card count int 1 · goodOffered roll 1 · pass-card picks weighted 1 each (2–3) · pass-card shuffle (pass cards − 1)
- *                  = 8 + 2 × pass cards (a run card on short yardage draws nothing)
+ *                  · card clarity roll 1 per pass card (always drawn; it only matters under iqExact on an ambiguous card)
+ *                  = 8 + 3 × pass cards (a run card on short yardage draws nothing)
  *                  · sackAt gauss 2 · hash int 1 · strong-side roll 1.
  *   snap         : 1 parent draw — rng.fork('play:snap'). Child, in order:
  *                  pass play → per receiver in slot order (WR1, WR2, SLOT, TE, RB): peak gauss 2 · window shift gauss 2
@@ -20,8 +21,8 @@
  *                  SACK (t ≥ sackAt, or kind SACK) → yards gauss 2.   THROWAWAY (or no target) → 0.
  *                  SCRAMBLE → [escape roll 1 when t ≥ sackAt; a failed escape is a SACK: + yards gauss 2] · yards gauss 2 · fumble roll 1.
  *                  A run sim (snap already resolved it) → 0 child draws; the sim is returned as the result.
- *   driveScript  : 1 parent draw — rng.fork('play:drive'). Child: 25 ints in a fixed order (see the function).
- *   rating, need, greenBand, inGreen, flightTime, pathAt, openAt, arrival, isClutch, downText, spotText, forcedResult : 0.
+ *   driveScript  : 1 parent draw — rng.fork('play:drive'). Child: 25 draws in a fixed order (24 ints + the opening-score pick; see the function).
+ *   rating, need, greenBand, inGreen, flightTime, pathAt, openAt, arrival, openIfThrown, isClutch, downText, spotText, forcedResult : 0.
  *
  * Shapes (the binding contract with the scene and the shell) are documented on each function.
  * Dependencies (load order): Tuning, Util, RNG (only through the rng passed in), Data.plays.
@@ -36,6 +37,11 @@
   var FIELD_YARDS = 100;                 // goal line to goal line
   var RESULT_DECIMALS = 3;               // formatting precision of PlayResult numbers (not a balance constant)
   var PLATEAU_EPS = 0.02;                // openness within this of the peak counts as the plateau (peakAt = its centre)
+  // The arrival solver (the receiver keeps running while the ball flies): fixed-point rounds until the flight moves
+  // under eps, capped. A slow, lofted ball contracts by receiverSpeed / ballSpeed ≈ 0.8 per round, so a fixed four
+  // rounds left up to 0.36 s of error; the cap is numerical, not a balance constant. The scene mirrors it.
+  var ARRIVAL = { eps: 1e-4, maxRounds: 24 };
+  var T_MAX = 1e6;                       // s: the largest release time accepted (Infinity / 1e308 clamp here and still sack)
   var ATTRS = ['ARM', 'ACC', 'IQ', 'MOB', 'POI'];
   var KINDS = ['THROW', 'THROWAWAY', 'SCRAMBLE', 'SACK'];
   var OUTCOMES = ['CATCH', 'INCOMPLETE', 'INT', 'SACK', 'THROWAWAY', 'SCRAMBLE', 'RUN', 'DROP'];
@@ -66,6 +72,7 @@
   Play.KINDS = KINDS;
   Play.OUTCOMES = OUTCOMES;
   Play.ADVICE = ADVICE;
+  Play.ARRIVAL = ARRIVAL;
 
   // ═══════════════════════════════ NORMALISATION ═══════════════════════════════
 
@@ -102,7 +109,7 @@
   function normRoster(wr, fallbackSkill) {
     var T = P(), slots = D().slots, bySlot = {}, i;
     if (Array.isArray(wr)) for (i = 0; i < wr.length; i++) if (wr[i] && wr[i].slot) bySlot[wr[i].slot] = wr[i];
-    var level = typeof wr === 'number' ? wr : fallbackSkill;
+    var level = num(wr, fallbackSkill);                  // a number is a skill level; NaN / anything else → the fallback
     var out = [];
     for (i = 0; i < slots.length; i++) {
       var slot = slots[i], src = bySlot[slot], dflt = T.demo.defaultRoster[i];
@@ -255,20 +262,35 @@
     return has(ADVICE, a) ? a : 'OK';
   }
 
-  /** A card for the options list. */
+  /**
+   * Is a play's rating ambiguous under a SHOWN look — does it differ among the coverages that look can be: the shown
+   * one and every coverage that disguises as it? 0 draws.
+   */
+  function ambiguousUnder(play, shown) {
+    var covs = D().coverages, first = play.vs && play.vs[shown];
+    for (var id in covs) {
+      if (!Object.prototype.hasOwnProperty.call(covs, id) || id === shown) continue;
+      if (has(covs[id].disguises, shown) && play.vs[id] !== first) return true;
+    }
+    return false;
+  }
+
+  /** A card for the options list (sure: the card's advice can be trusted; pickOptions may clear it on a pass card). */
   function cardFor(play, real, shown, iq, sit) {
     return {
       id: play.id, name: play.name, formation: play.formation,
       routes: play.assignments.map(function (a) { return { slot: a.slot, route: a.route }; }),
-      advice: adviceFor(play, real, shown, iq, sit), tags: play.tags.slice(), run: !!play.run, line: play.line
+      advice: adviceFor(play, real, shown, iq, sit), sure: true, tags: play.tags.slice(), run: !!play.run, line: play.line
     };
   }
 
   /**
    * The 2–3 play cards: a run card on short yardage (SNEAK at toGo ≤ sneakToGo, DRAW up to drawToGo) next to
    * runCardsMin pass cards; at least one GOOD-vs-real card with probability goodOffered (when that roll fails
-   * the GOOD plays are excluded, so the rate is exact).
-   * Draws: count int 1 · goodOffered roll 1 · weighted pick 1 per pass card · shuffle (pass cards − 1).
+   * the GOOD plays are excluded, so the rate is exact). Under iqExact a pass card whose rating is ambiguous under
+   * the shown look (ambiguousUnder) is flagged sure: false with probability 1 − IQ/99 — the chip is honest about
+   * what it cannot know.
+   * Draws: count int 1 · goodOffered roll 1 · weighted pick 1 per pass card · shuffle (pass cards − 1) · clarity roll 1 per pass card.
    */
   function pickOptions(sit, real, shown, iq, r) {
     var T = P().read, all = D().plays, i;
@@ -295,6 +317,10 @@
     }
     r.shuffle(chosen);                                                                  // cards − 1 draws
     var cards = chosen.map(function (pl) { return cardFor(pl, real, shown, iq, sit); });
+    for (i = 0; i < cards.length; i++) {
+      var unsure = r.chance(1 - ratio(iq));                                             // 1 draw per pass card (always)
+      if (unsure && num(iq, 0) < T.iqExact && ambiguousUnder(chosen[i], shown)) cards[i].sure = false;
+    }
     if (runId) {
       for (i = 0; i < all.length; i++) if (all[i].id === runId) cards.push(cardFor(all[i], real, shown, iq, sit));
     }
@@ -323,7 +349,9 @@
    *   real        the coverage the defence really runs (hidden until the snap — the scene must not show it)
    *   shown       the coverage id whose look the defence SHOWS   disguised  shown !== real
    *   look        { safeties, press, box, showBlitz, name, text, tell } of the shown coverage (text/tell are the shown copy)
-   *   options     [{ id, name, formation, routes: [{slot, route}], advice: 'GOOD'|'OK'|'BAD', tags, run, line }]
+   *   options     [{ id, name, formation, routes: [{slot, route}], advice: 'GOOD'|'OK'|'BAD', sure: bool, tags, run, line }]
+   *               (sure false: the advice was read off the shown look and this play rates differently against what
+   *               that look can hide — the scene dims the chip with a '?')
    *   adviceFrom  'REAL' at IQ ≥ read.iqExact, else 'SHOWN' (what the advice was computed against)
    *   pressure    { sackAt (s, jittered), pocket (s, before the jitter), hot, clutch, meterMul }
    *   receivers   the roster aligned in the default formation (the READ picture); snap re-aligns per play
@@ -447,18 +475,34 @@
 
   /**
    * Where the ball meets the receiver for a release at t: the receiver keeps running while the ball flies,
-   * so the flight is solved by fixed-point iteration (4 rounds are plenty at these speeds). 0 draws.
+   * so the flight is solved by fixed-point iteration until it settles (Play.ARRIVAL: eps 1e-4 s, at most 24
+   * rounds; a lofted ball for a weak arm needs a dozen). 0 draws.
    * @param {Object} rec sim receiver @param {Object} attrs @param {number} t release (s) @param {number} power @param {number} loft
    * @returns {{flight:number, arrive:number, pos:{x:number, y:number}, dist:number}}
    */
   Play.arrival = function (rec, attrs, t, power, loft) {
     var drop = P().route.qbDrop, flight = 0, pos, dist = 0;
-    for (var i = 0; i < 4; i++) {
+    for (var i = 0; i < ARRIVAL.maxRounds; i++) {
       pos = Play.pathAt(rec, t + flight);
       dist = Math.sqrt(pos.x * pos.x + (pos.y + drop) * (pos.y + drop));
-      flight = Play.flightTime(dist, attrs, power, loft);
+      var next = Play.flightTime(dist, attrs, power, loft), done = Math.abs(next - flight) < ARRIVAL.eps;
+      flight = next;
+      if (done) break;
     }
     return { flight: flight, arrive: t + flight, pos: pos, dist: dist };
+  };
+
+  /**
+   * The openness a ball released at t would find: Play.openAt at the arrival (full power and the route's ideal
+   * loft unless given). What the scene's rings show. 0 draws.
+   * @param {Object} rec sim receiver @param {Object} attrs @param {number} t release (s) @param {number} [power] @param {number} [loft]
+   * @returns {number} 0..1
+   */
+  Play.openIfThrown = function (rec, attrs, t, power, loft) {
+    if (!rec) return 0;
+    var route = D().routes[rec.route];
+    var a = Play.arrival(rec, attrs, num(t, 0), num(power, 1), num(loft, route ? route.ideal.loft : 0));
+    return Play.openAt(rec, a.arrive);
   };
 
   /** The green band width on the meter for an ACC: base + perAcc × ACC/99. */
@@ -469,13 +513,14 @@
 
   /**
    * The on-time power for a throw of `dist` yards: needBase + dist / (range × arm), clamped so the band
-   * [need, need + greenBand] always fits under powerMax.
+   * [need, need + greenBand] always fits under powerMax − bandTopMargin (the deepest ball still needs a release:
+   * a bar parked at the top is outside the band).
    * @param {number} dist @param {Object} attrs @returns {number}
    */
   Play.needFor = function (dist, attrs) {
     var T = P().throw;
     var arm = T.armBase + T.armPer * ratio(attrs && attrs.ARM);
-    return clamp(T.needBase + Math.max(0, dist) / (T.range * arm), T.minCommit * 2, T.powerMax - Play.greenBand(attrs && attrs.ACC));
+    return clamp(T.needBase + Math.max(0, dist) / (T.range * arm), T.minCommit * 2, T.powerMax - Play.greenBand(attrs && attrs.ACC) - num(T.bandTopMargin, 0));
   };
 
   /**
@@ -527,7 +572,7 @@
       var route = D().routes[rec.route];
       return Play.arrival(rec, sim.ctx.qb.attrs, num(t, 0), num(power, 1), num(loft, route ? route.ideal.loft : 0));
     };
-    sim.openIfThrown = function (slot, t, power, loft) { var a = sim.arrival(slot, t, power, loft); return a ? sim.open(slot, a.arrive) : 0; };
+    sim.openIfThrown = function (slot, t, power, loft) { return Play.openIfThrown(receiverOf(sim, slot), sim.ctx.qb.attrs, t, power, loft); };
     sim.need = function (slot, t) { return Play.need(sim, slot, t); };
     return sim;
   }
@@ -547,6 +592,7 @@
   /**
    * The reported window of a sampled curve: {from, to} the run around the peak where open ≥ windowFrac × peak,
    * peak, and peakAt the CENTRE of the plateau (the run within 2 % of the peak) — the best moment to arrive.
+   * `plateauFrom` (s, internal) is where that plateau starts; releaseWindow uses it to respect the arm.
    */
   function windowOf(samples) {
     var O = P().open, n = samples.length, best = 0, i;
@@ -557,21 +603,34 @@
     var top = samples[best] - PLATEAU_EPS, pFrom = best, pTo = best;
     while (pFrom > 0 && samples[pFrom - 1] >= top) pFrom--;
     while (pTo < n - 1 && samples[pTo + 1] >= top) pTo++;
-    return { from: rd(from * O.sampleDt), to: rd(to * O.sampleDt), peak: rd(samples[best]), peakAt: rd(Math.round((pFrom + pTo) / 2) * O.sampleDt) };
+    return { win: { from: rd(from * O.sampleDt), to: rd(to * O.sampleDt), peak: rd(samples[best]), peakAt: rd(Math.round((pFrom + pTo) / 2) * O.sampleDt) }, plateauFrom: pFrom * O.sampleDt };
   }
 
-  /** The release-time window: the arrival window minus the flight at full power and the route's loft. */
-  function releaseWindow(rec, attrs, win, loft) {
-    function releaseFor(arrive) {                      // find t with t + flight(t) = arrive (a few rounds)
-      var t = arrive;
-      for (var i = 0; i < 4; i++) {
-        var pos = Play.pathAt(rec, arrive), drop = P().route.qbDrop;
-        var dist = Math.sqrt(pos.x * pos.x + (pos.y + drop) * (pos.y + drop));
-        t = arrive - Play.flightTime(dist, attrs, 1, loft);
-      }
-      return Math.max(0, t);
+  /** The last sampled arrival time (s) at which the receiver is still inside the arm's range (Infinity: always is). */
+  function lastInRange(rec, attrs) {
+    var O = P().open, drop = P().route.qbDrop, maxD = Play.maxDist(attrs), n = Math.round(O.maxT / O.sampleDt);
+    for (var k = 0; k <= n; k++) {
+      var pos = Play.pathAt(rec, k * O.sampleDt);
+      if (Math.sqrt(pos.x * pos.x + (pos.y + drop) * (pos.y + drop)) > maxD) return k === 0 ? -Infinity : (k - 1) * O.sampleDt;
     }
-    return { from: rd(releaseFor(win.from)), to: rd(releaseFor(win.to)), peakAt: rd(releaseFor(win.peakAt)) };
+    return Infinity;
+  }
+
+  /**
+   * The release-time window: the arrival window minus the flight at full power and the route's loft. `peakAt`
+   * (the best moment) respects the arm: when the plateau runs past the range it moves back to the last in-range
+   * plateau point (one sample short of the edge, so a ball a shade under full power still lands on the plateau),
+   * so the engine's own best release is one the arm can hit ({from, to} stay the window's edges).
+   */
+  function releaseWindow(rec, attrs, win, loft, plateauFrom) {
+    function releaseFor(arrive) {                      // t with t + flight(dist at the arrival spot) = arrive
+      var pos = Play.pathAt(rec, arrive), drop = P().route.qbDrop;
+      var dist = Math.sqrt(pos.x * pos.x + (pos.y + drop) * (pos.y + drop));
+      return Math.max(0, arrive - Play.flightTime(dist, attrs, 1, loft));
+    }
+    var peakAt = win.peakAt, reach = lastInRange(rec, attrs) - P().open.sampleDt;
+    if (reach < peakAt && reach >= num(plateauFrom, 0)) peakAt = reach;
+    return { from: rd(releaseFor(win.from)), to: rd(releaseFor(win.to)), peakAt: rd(releaseFor(peakAt)) };
   }
 
   /** The slot with the quickest route (smallest base window.open) among a play's assignments. */
@@ -615,8 +674,8 @@
       run: true, playId: play.id, play: { id: play.id, name: play.name, formation: play.formation, tags: play.tags.slice(), line: play.line },
       kind: 'RUN', outcome: 'RUN', target: null, yards: nz(yards), airYards: 0, yac: 0,
       td: td, firstDown: firstDown, turnover: false, fumble: false, big: big,
-      flight: 0, landing: { x: 0, y: nz(yards) }, accuracy: null, fit: null, quality: null, t: 0,
-      text: text, banner: td ? 'TOUCHDOWN!' : (firstDown ? 'FIRST DOWN' : text),
+      flight: 0, arrive: null, need: null, dist: null, landing: { x: 0, y: nz(yards) }, accuracy: null, fit: null, quality: null, t: 0,
+      text: text, banner: td ? 'TOUCHDOWN!' : (firstDown && !sit.lastPlay ? 'FIRST DOWN' : text),
       feedback: { timing: 'ON TIME', touch: 'GOOD', coachSaw: saw },
       receivers: [], sackAt: null, revealAt: null, rushers: [], scrambleYards: 0, hot: null, checkdown: null,
       ctx: ctx
@@ -681,8 +740,9 @@
         route: route.id, family: route.family, path: path, capY: capY,
         open: samples, peak: rd(peak), env: { wo: rd(wo), wc: rd(wc), peak: rd(peak) }, release: null, hot: hot, checkdown: isCheckdown
       };
-      rec[WINDOW] = windowOf(samples);
-      rec.release = releaseWindow(rec, attrs, rec[WINDOW], route.ideal.loft);
+      var w = windowOf(samples);
+      rec[WINDOW] = w.win;
+      rec.release = releaseWindow(rec, attrs, rec[WINDOW], route.ideal.loft, w.plateauFrom);
       receivers.push(rec);
       if (isCheckdown) checkdown = wr.slot;
     }
@@ -724,7 +784,7 @@
     var target = typeof input.target === 'string' && receiverOf(sim, input.target) ? input.target : null;
     return {
       target: target, kind: kind,
-      t: Math.max(0, num(input.t, 0)),
+      t: clamp(input.t === Infinity ? T_MAX : num(input.t, 0), 0, T_MAX),   // Infinity / 1e308 stay a (finite) sack; a string is 0
       lead: clamp(num(input.lead, 0), -1, 1),
       loft: clamp(num(input.loft, 0), 0, 1),
       power: clamp(num(input.power, 1), 0, T.powerMax),
@@ -755,7 +815,7 @@
     var res = {
       run: false, playId: sim.playId, play: sim.play, kind: inp.kind, outcome: outcome, target: inp.target,
       yards: 0, airYards: 0, yac: 0, td: false, firstDown: false, turnover: false, fumble: false,
-      flight: 0, landing: { x: 0, y: 0 }, accuracy: null, fit: null, quality: rd(inp.quality),
+      flight: 0, arrive: null, need: null, dist: null, landing: { x: 0, y: 0 }, accuracy: null, fit: null, quality: rd(inp.quality),
       t: rd(inp.t), lead: rd(inp.lead), loft: rd(inp.loft), power: rd(inp.power), green: false,
       pComplete: null, pInt: null, text: '', banner: '', feedback: null, sackAt: sim.sackAt
     };
@@ -763,7 +823,10 @@
     return res;
   }
 
-  /** Clamp a gain to the field and set td / firstDown / text / banner. */
+  /**
+   * Clamp a gain to the field and set td / firstDown / text / banner. On the last play a first down that does not
+   * score loses the game, so the banner is the text ('CATCH +12'), never 'FIRST DOWN' (the flag stays for the line).
+   */
   function settle(res, sit, verb) {
     res.yards = nz(clamp(res.yards, -(sit.yl - 1), FIELD_YARDS - sit.yl));
     res.td = res.yards > 0 && sit.yl + res.yards >= FIELD_YARDS;
@@ -771,7 +834,7 @@
     res.landing.y = rd(res.landing.y);
     res.landing.x = rd(res.landing.x);
     if (verb) res.text = verb + ' ' + signed(res.yards);
-    res.banner = res.td ? 'TOUCHDOWN!' : (res.firstDown ? 'FIRST DOWN' : res.text);
+    res.banner = res.td ? 'TOUCHDOWN!' : (res.firstDown && !sit.lastPlay ? 'FIRST DOWN' : res.text);
     return res;
   }
 
@@ -799,12 +862,17 @@
     return res;
   }
 
-  /** SCRAMBLE: yards gauss 2 · fumble roll 1. */
+  /**
+   * SCRAMBLE: yards gauss 2 · fumble roll 1. The yards are sim.scrambleYards (+ gauss) × how much of the pocket
+   * was used, clamp(t / useT, useMin, 1): a tuck at the snap is worth useMin of it — the lanes open once the rush
+   * has committed. The fumble roll never goes under fumbleMin.
+   */
   function scrambleResult(sim, inp, r) {
     var SC = P().throw.scramble, sit = sim.ctx.situation, attrs = sim.ctx.qb.attrs;
     var res = baseResult(sim, inp, 'SCRAMBLE');
-    res.yards = clamp(Math.round(sim.scrambleYards + r.gauss(0, SC.sd2)), SC.min, SC.max);   // draws 1, 2
-    res.fumble = r.chance(SC.fumble * Math.max(0, 1 - attrs.MOB / SC.fumbleMobFree));   // draw 3
+    var use = clamp(inp.t / num(SC.useT, 1), num(SC.useMin, 1), 1);
+    res.yards = clamp(Math.round((sim.scrambleYards + r.gauss(0, SC.sd2)) * use), SC.min, SC.max);   // draws 1, 2
+    res.fumble = r.chance(Math.max(num(SC.fumbleMin, 0), SC.fumble * Math.max(0, 1 - attrs.MOB / SC.fumbleMobFree)));   // draw 3
     res.landing = { x: 5 * (sim.ctx.sign || 1), y: res.yards };
     settle(res, sit, 'SCRAMBLE');
     if (res.fumble) {
@@ -837,6 +905,9 @@
     return 'TOO LATE';
   }
 
+  /** 'COVER 2' for a coverage id (the id itself when unknown). */
+  function coverageName(id) { var c = D().coverages[id]; return c && c.name ? c.name : String(id); }
+
   /** One sentence: what the coach saw on a pass. */
   function coachSawPass(res, rec, sim, parts) {
     var name = rec.name;
@@ -848,6 +919,7 @@
       case 'DROP': return 'Coach saw a good ball hit the turf. That one is on ' + name + '.';
       case 'INT':
         if (res.feedback.timing === 'LATE' || res.feedback.timing === 'TOO LATE') return 'Coach saw you throw late into a closed window. The safety was waiting.';
+        if (sim.shown && sim.real && sim.shown !== sim.real) return 'Coach saw them show ' + coverageName(sim.shown) + ' and play ' + coverageName(sim.real) + '. The look lied and you bought it.';
         if (parts.press >= 0.05) return 'Coach saw the rush in your face and the ball come out anyway. Eat it next time.';
         return 'Coach saw you force it into coverage. That is not a window, that is a wish.';
       default: break;
@@ -913,12 +985,14 @@
     res.pComplete = rd(pComplete); res.pInt = rd(pInt);
     res.feedback = { timing: timingLabel(a.arrive, rec[WINDOW]), touch: touchLabel(rec, route, dLead, dLoft), coachSaw: '' };
     if (res.outcome === 'CATCH') {
-      res.yac = Math.max(Y.min, Math.round(yacRaw));
-      res.yards = res.airYards + res.yac;
+      var yac = Math.max(Y.min, Math.round(yacRaw));
+      res.yards = res.airYards + yac;
       res.landing = { x: a.pos.x, y: a.pos.y };
       settle(res, sit, 'CATCH');
-      res.yac = res.yards - res.airYards;                           // the clamp at the goal line comes off the run
-      if (res.yac < 0) { res.yac = 0; res.airYards = res.yards; }
+      // a clamp comes off the run, never invents one: the goal line shortens the yac, the own goal line (a catch
+      // behind the line clamped up to 0) leaves yac 0 and puts the air yards at the spot
+      res.yac = clamp(res.yards - res.airYards, 0, yac);
+      res.airYards = res.yards - res.yac;
     } else {
       res.landing = { x: rd(a.pos.x + sx), y: rd(a.pos.y + sy + dLead * T.scatter.leadYd) };
       res.turnover = res.outcome === 'INT';
@@ -943,7 +1017,7 @@
    *   yards, airYards, yac, td, firstDown, turnover, fumble, flight (s), arrive (s), landing: {x, y} (yards for the scene),
    *   accuracy, window, fit, quality, green, need, dist, pComplete, pInt, t, lead, loft, power, sackAt,
    *   text ('CATCH +14' · 'INCOMPLETE' · 'INTERCEPTED' · 'SACKED -7' · 'DROPPED' · 'THROWN AWAY' · 'SCRAMBLE +6' · 'FUMBLE'),
-   *   banner ('TOUCHDOWN!' · 'FIRST DOWN' · else text),
+   *   banner ('TOUCHDOWN!' · 'FIRST DOWN' (never on a last play: a first down that does not score loses) · else text),
    *   feedback: { timing: 'EARLY'|'ON TIME'|'LATE'|'TOO LATE', touch: 'BULLET'|'GOOD'|'FLOATED'|'OVERTHROWN'|'UNDERTHROWN'|'BEHIND'|'LED', coachSaw }
    * }
    * A run sim is returned as it is (it already is the result).
@@ -987,8 +1061,8 @@
     res.airYards = Math.round(pos.y); res.flight = 1; res.arrive = rd(inp.t + 1);
     res.feedback = { timing: 'ON TIME', touch: 'GOOD', coachSaw: 'Coach saw the debug menu.' };
     switch (kind) {
-      case 'CATCH': res.outcome = 'CATCH'; res.yards = Math.max(1, Math.min(res.airYards + 2, sit.toGo - 1)); settle(res, sit, 'CATCH'); break;
-      case 'FIRST_DOWN': res.outcome = 'CATCH'; res.yards = Math.min(sit.toGo + 3, FIELD_YARDS - sit.yl - 1); settle(res, sit, 'CATCH'); break;
+      case 'CATCH': res.outcome = 'CATCH'; res.yards = Math.max(0, Math.min(res.airYards + 2, sit.toGo - 1)); settle(res, sit, 'CATCH'); break;   // never a first down (0 at toGo 1)
+      case 'FIRST_DOWN': res.outcome = 'CATCH'; res.yards = Math.max(sit.toGo, Math.min(sit.toGo + 3, FIELD_YARDS - sit.yl)); settle(res, sit, 'CATCH'); break;   // always the sticks (a TD when they are the goal line)
       case 'TD': res.outcome = 'CATCH'; res.yards = FIELD_YARDS - sit.yl; settle(res, sit, 'CATCH'); break;
       case 'INT': res.outcome = 'INT'; res.turnover = true; res.text = 'INTERCEPTED'; res.banner = res.text; res[WINDOW] = 0.1; res.accuracy = 0.5; break;
       case 'SACK': res.outcome = 'SACK'; res.kind = 'SACK'; res.yards = T.sackYards.mean; res.landing = { x: 0, y: res.yards }; res.text = 'SACKED ' + signed(res.yards); res.banner = res.text; res.feedback.timing = 'TOO LATE'; break;
@@ -1022,7 +1096,8 @@
    * The demo's drive script: six situations in order — a 3rd-and-medium (Q1), a 3rd-and-long (Q2), a red-zone
    * snap (Q3), a short-yardage snap (Q4, SNEAK offered), a two-minute-drill snap (Q4, clock under 1:00) and a
    * last-play game-winner from the 30–45 (Q4, down by 4–5: a TD wins, a FG does not). ONE fork
-   * rng.fork('play:drive') = 1 parent draw; the child draws 25 ints in this order:
+   * rng.fork('play:drive') = 1 parent draw; the child draws 25 times in this order (ints, except the opening
+   * score which is a pick from drive.openingLead — a real score: 0, 3 or 7):
    *   1: toGo yl clock lead · 2: toGo yl clock deficit · 3: down toGo yl clock deficit · 4: down toGo yl clock deficit
    *   · 5: down yl clock deficit · 6: fromGoal clock deficit.
    * Each situation: { idx, kind, down, toGo, yl, quarter, clock, score: {us, them}, stakes, venue, lastPlay, twoMinute }.
@@ -1039,7 +1114,7 @@
     // 1. third and medium, Q1
     s = { idx: 0, kind: 'THIRD_MEDIUM', down: 3, quarter: 1, lastPlay: false, twoMinute: false };
     s.toGo = between(Dv.thirdMedium.toGo); s.yl = between(Dv.thirdMedium.yl); s.clock = between(Dv.thirdMedium.clock);
-    s.score = { us: 0, them: between(Dv.openingLead) };
+    s.score = { us: 0, them: r.pick(Dv.openingLead) };                                 // 1 draw: a real score, not any integer
     out.push(s);
     // 2. third and long, Q2
     s = { idx: 1, kind: 'THIRD_LONG', down: 3, quarter: 2, lastPlay: false, twoMinute: false };

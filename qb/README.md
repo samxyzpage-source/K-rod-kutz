@@ -43,7 +43,7 @@ qb/
   js/debug.js             RTG.debug — forceResult / current / seed / state / skipTo (shell agent)
   js/ui/app.js            boot: screens, settings classes, resize / key routing (shell agent)
   test/*.test.js          Node engine tests (node:test, no dependencies); test/load.js loads the engine into a vm
-  test/e2e/*.spec.js      Playwright specs (dev-only) + _harness.js, run.js
+  test/e2e/*.spec.js      Playwright specs (dev-only) + _harness.js, _playhelpers.js, run.js, qa_shots.js
   tools/bundle.js         the single-file bundler
 ```
 
@@ -64,7 +64,10 @@ node qb/test/run.js play                     # only the files whose name contain
 ```
 
 `test/purity.test.js` scans every engine / data file for DOM, clock and `Math.random` references, the wrapper, the
-syntax level and Tuning writes, and checks the namespaces of the delivered modules.
+syntax level and Tuning writes, and checks the namespaces of the delivered modules. `test/play.test.js` pins the
+engine (draw counts, determinism, the read, the sack clock, the throw rules, the drive script, the passer rating);
+`test/plays_lint.test.js` lints the play book (every assignment names an existing route and slot, every coverage has
+a look and a pressureMul, every route's ideal lead / loft is in range and its window sits inside [0, 4]).
 
 **Browser (Playwright 1.56 + Chromium, dev-only, never `npm install` — it lives in `/opt/node22/lib/node_modules`):**
 each spec is a plain Node script using `node:test` that opens the demo on **both** `file://…/qb/index.html` and
@@ -75,7 +78,15 @@ each spec is a plain Node script using `node:test` that opens the demo on **both
 /opt/node22/bin/node qb/test/e2e/run.js                 # every spec, both modes
 /opt/node22/bin/node qb/test/e2e/run.js boot moment     # only the specs whose name contains an argument
 /opt/node22/bin/node qb/test/e2e/boot.spec.js           # one spec on its own (starts its own server for the http mode)
+/opt/node22/bin/node qb/test/e2e/qa_shots.js            # screenshots of every beat (title … summary) at phone + desktop
 ```
+
+`boot.spec.js` boots with zero errors; `moment.spec.js` plays six moments through the real screens in every mode ×
+viewport (mouse, keyboard and CDP touch), replays a seed, forces results, opens settings with Escape and checks 320 px
+and landscape; `controls.spec.js` covers THROW AWAY / SCRAMBLE (button, swipe, X / Z keys), the sack, the keyboard-only
+path with target cycling, reduced motion, seed → identical sim, the run card, no horizontal scroll at 320 px in every
+phase and a frame p95 under 4 ms on the desktop. `_playhelpers.js` holds the shared hands (pick, tap a receiver,
+hold / release with a computed hold time, the interstitial).
 
 Never edit source while an e2e run is in progress (false failures). Screenshots land in `qb/test/e2e/shots/`.
 In the browser, `RTG.debug.*` drives the demo from the console (`RTG.debug.forceResult('INT')`,

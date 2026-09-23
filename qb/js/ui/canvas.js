@@ -4,8 +4,9 @@
  * The virtual pixel canvas: 192×320 (portrait) or 320×192 (landscape, chosen by the container's aspect),
  * scaled by an integer factor `scale = floor(min(containerW / w, containerH / h))` (min 1) with the device
  * pixel ratio capped at 2. DEVIATION (phones): when the integer scale would be 1 but the fractional fit is at
- * least Canvas.MIN_FRACTIONAL (1.35 — a 390-px phone fits 1.75×), the fractional fit is used instead: an
- * integer 1× would leave the 192-px scene with empty navy on both sides and a tiny drag area. Nearest-neighbour
+ * least Canvas.MIN_FRACTIONAL (1.15 here — a 390-px phone fits 1.75×, a 320×568 phone with the QB's HUD and panel
+ * 1.25×; the kicker's copy says 1.35), the fractional fit is used instead: an integer 1× would leave the 192-px
+ * scene with empty navy on both sides, 4-px receivers and a tiny drag area. Nearest-neighbour
  * sampling keeps the pixels crisp; desktops (fit ≥ 2) always integer-scale. Drawing happens in virtual pixels through ctx.setTransform(scale·dpr, …);
  * imageSmoothingEnabled is false and the element carries `image-rendering: pixelated`.
  *
@@ -27,8 +28,8 @@
 
   var instances = [];
   var RING = 120;
-  /** Below 2× an integer scale is replaced by the fractional fit when the fit reaches this value (phones). */
-  Canvas.MIN_FRACTIONAL = 1.35;
+  /** Below 2× an integer scale is replaced by the fractional fit when the fit reaches this value (phones; 320×568 → 1.25×; 1.15 leaves a margin for a HUD one chip line taller, so the field never drops to 1× mid-moment). */
+  Canvas.MIN_FRACTIONAL = 1.15;
 
   function now() { return (root.performance && root.performance.now) ? root.performance.now() : Date.now(); }
 
