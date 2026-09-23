@@ -66,7 +66,7 @@ test('public API, Tuning.finance, the schema enums and the exported lists', () =
     assert.equal(typeof Finance[f], 'function', 'Finance.' + f);
   }
   assert.ok(T && T.scale && T.takeHome && T.lifestyle && T.lifestyle.tiers && T.debt && T.invest && T.services && T.timeline, 'Tuning.finance block');
-  assert.equal(T.scale.COLLEGE, 1); assert.ok(T.scale.NFL > T.scale.COLLEGE, 'pro prices are bigger');
+  assert.equal(T.scale.COLLEGE, 1); assert.equal(T.scale.NFL, 1, 'no inflation: a pro pays college prices (D28)');
   assert.ok(T.takeHome.COLLEGE > 0 && T.takeHome.COLLEGE <= 1 && T.takeHome.NFL > 0 && T.takeHome.NFL <= 1);
   assert.ok(T.ledgerCap >= 12 && T.resale > 0 && T.resale < 1 && T.debt.rate > 0 && T.debt.liquidateAfter >= 1 && T.invest.perYear >= 1);
   deq(Object.keys(T.lifestyle.tiers), ['FRUGAL', 'COMFORTABLE', 'FLASHY', 'BALLER']);
@@ -199,7 +199,7 @@ test('netWorth = bank + holdings at value + owned purchases at paid × resale (c
   void truck;
 });
 
-test('scale: the league sets the price multiplier (COLLEGE 1, NFL ×10); the draft falls back on the stage', () => {
+test('scale: the league sets the price multiplier (1 in both leagues since D28); the draft falls back on the stage', () => {
   assert.equal(Finance.scale({ player: { league: 'COLLEGE' }, stage: 'COLLEGE' }), T.scale.COLLEGE);
   assert.equal(Finance.scale({ player: { league: 'NFL' }, stage: 'NFL' }), T.scale.NFL);
   assert.equal(Finance.scale({ player: {}, stage: 'DRAFT' }), T.scale.COLLEGE, 'the draft is priced like college');

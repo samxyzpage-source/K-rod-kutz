@@ -27,7 +27,8 @@
  *   }
  *
  * Units: everything in this module is $k. history.earnings ($M, gross career money) keeps its meaning and is never
- * reduced by spending. Catalogue prices are $k at scale 1 × Finance.scale(state) (Tuning.finance.scale by league).
+ * reduced by spending. Catalogue prices are $k × Finance.scale(state) (Tuning.finance.scale by league — 1 in both
+ * leagues since D28, so a price never moves between college and the NFL; the machinery below still honours the knob).
  *
  * RNG draw contract (the parent rng only ever sees forks; every sample comes from the child):
  *   Finance.tick          : exactly 1 parent draw — rng.fork('finance:tick:<year>'); 0 when the year was already ticked.
@@ -204,7 +205,7 @@
   };
 
   /**
-   * The money scale of the player's league (Tuning.finance.scale: COLLEGE 1, NFL 10). Pure, 0 draws.
+   * The money scale of the player's league (Tuning.finance.scale — 1 for both since D28). Pure, 0 draws.
    * @param {Object} state @returns {number}
    */
   Finance.scale = function (state) {

@@ -74,7 +74,7 @@
     var T = TF();
     var league = state.player && state.player.league || state.stage;
     if (T && T.scale && typeof T.scale[league] === 'number') return T.scale[league];
-    return league === 'NFL' ? 10 : 1;
+    return 1;                                                                                          // prices do not move between leagues (D28)
   }
 
   function netWorthOf(state, fin, scale) {

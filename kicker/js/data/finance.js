@@ -3,8 +3,8 @@
  *
  * RTG.Data.finance = { purchases, services, investments, purchasesById, servicesById, investmentsById }
  *
- * Every price is $k AT SCALE 1 (college). The engine multiplies by Finance.scale(state) (Tuning.finance.scale:
- * COLLEGE 1, NFL 10), so the $25k college truck is a $250k car in the NFL. "Mostly lifestyle, a little bit of play":
+ * Every price is $k. The engine multiplies by Finance.scale(state) (Tuning.finance.scale), which is 1 in both leagues
+ * since D28 — the $25k truck costs $25k in college and in the NFL; the pros simply earn more. "Mostly lifestyle, a little bit of play":
  * purchases and the lifestyle plan move the soft meters only (morale / fame / fans / trust); the three services are
  * the only money that reaches a kick, and they act through the ordinary one-season Modifier machinery
  * (Finance.applyServices); investments carry real risk and real loss.

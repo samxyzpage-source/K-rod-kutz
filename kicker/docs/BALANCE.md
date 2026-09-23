@@ -266,7 +266,8 @@ league and contract phase; (d) the star thresholds of §6 read from `Career.star
 ### 7.1 Take-home vs the lifestyle tiers
 
 `Tuning.finance.takeHome`: college 0.85 (NIL money), NFL 0.52 (salary, bonus, dead money); catalogue prices ×
-`Tuning.finance.scale` (college 1, NFL 10). Measured take-home per season (24 auto careers, $k):
+`Tuning.finance.scale` — **1 in both leagues since D28** (§7.1–7.4 below were measured at the original NFL ×10; §7.5 has the
+D28 re-measure). Measured take-home per season (24 auto careers, $k):
 
 | Take-home ($k) | n | p10 | median | p90 |
 |---|---|---|---|---|
@@ -340,8 +341,8 @@ memorabilia 0.04 / franchise 0.05 busts so MED sits at 19–37 % ten-year losses
   debt exceeds what could be sold, or after `liquidateAfter` red years, and sells the smallest asset that clears the
   debt), charges the lifestyle plan at the price quoted when it was picked (a college BALLER is not $1.1M at the first
   NFL tick) and upkeep off what was paid, and refuses a dearer plan while the bank is red.
-- NFL scale ×10 makes the Sure Thing ask $100–500k and the lake house $5M; a per-league `min` / `max` cap on the
-  pitches (or a smaller scale for the buy-ins than for the purchases) if that reads wrong.
+- ~~NFL scale ×10 makes the Sure Thing ask $100–500k and the lake house $5M~~ — D28 set the NFL scale to 1: the
+  pitches ask the same $k in both leagues and the lake house is $500k for everyone.
 - ~~The opportunity card prints the holding `kind` next to the pitcher ("A DM · SCAM")~~ — the card now prints a
   display label (INDEX and SCAM both read FUND).
 - A sale haircut for HIGH / WILD holdings (or a one-year lock after a boom) if the sell-after-the-boom play should
@@ -353,3 +354,22 @@ memorabilia 0.04 / franchise 0.05 busts so MED sits at 19–37 % ten-year losses
   tables are unaffected; `finance.test.js`'s `[risk]` row asserts the direction of the tier checks above on 200 seeds
   (all-WILD loses in > 100 / 200, all-LOW in < 20 / 200 and never to zero). Still open: a 200-career `career_balance`
   assertion (bank ≥ 0, nothing owned, FRUGAL) and a checked-in `finance_report.js` for the full tables.
+
+### 7.5 D28 re-measure — flat prices (NFL scale 1)
+
+Same probe (40 seeds × 5 personas, `money_probe.js`, 3 workers) after D28 set `Tuning.finance.scale.NFL` to 1:
+
+| Persona | gross median | net worth median | NW / gross p10 · median · p90 | in debt (seeds) | liquidated (seeds) | best / worst holding median |
+|---|---|---|---|---|---|---|
+| HOARDER (never spends) | $72.6M | $38.0M | 52 % · 52 % · 52 % | 0 % | 0 % | — |
+| SAVER | $72.6M | $39.7M | 53 % · 54 % · 57 % | 0 % | 0 % | +352 % / −100 % |
+| LIVER | $71.5M | $38.1M | 51 % · 53 % · 55 % | 0 % | 0 % | +302 % / −100 % |
+| GAMBLER (BALLER, buys everything, all-in WILD) | $70.7M | $34.3M | 46 % · 48 % · 54 % | 5 % | 0 % | +500 % / −100 % |
+| GAMBLER_RAW (the same without the college guard) | $71.4M | $34.0M | 45 % · 47 % · 51 % | 95 % (all college) | 70 % (all college) | +251 % / −100 % |
+
+Read: with prices, plan costs and pitch sizes fixed at college numbers, **college is unchanged** (a college BALLER
+still goes into debt and gets sold up), while **the NFL cannot be lost**: a vet's take-home is $2–6M a season and
+the most a year of books can move is the plan ($110k), the catalogue (~$1.1M once) and three pitches capped at
+$40–500k, so every persona retires within a few points of the 52 % hoarder line. The lever that is not inflation,
+if the pros should be able to lose real money, is the pitch **`max`** (a stake sized to the bank rather than a fixed
+$k cap) — open, not done: the player asked only for prices that do not move.

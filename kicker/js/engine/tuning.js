@@ -703,11 +703,12 @@
       },
 
       // ───────────────────────────── §2.7.10 MONEY (engine/finance.js → RTG.Finance; state.finance) ─────────────────────────────
-      // Every amount here is $k at scale 1 (college); Finance.scale multiplies catalogue prices by league so a $30k
-      // college truck is a $300k car in the NFL. "Mostly lifestyle but a little bit of play": lifestyle and big buys move
-      // the soft meters only; the three services are the only gameplay edge; investments carry real risk, real loss.
+      // Every amount here is $k. Finance.scale multiplies catalogue prices by league, and it is 1 in both leagues (D28:
+      // "get rid of the inflation" — a $25k truck is a $25k truck; the NFL simply pays more). The knob stays for anyone
+      // who wants pro prices. "Mostly lifestyle but a little bit of play": lifestyle and big buys move the soft meters
+      // only; the three services are the only gameplay edge; investments carry real risk, real loss.
       finance: {
-        scale: { COLLEGE: 1, NFL: 10 },              // catalogue price multiplier by league
+        scale: { COLLEGE: 1, NFL: 1 },               // catalogue price multiplier by league — 1 everywhere since D28 (was NFL 10)
         takeHome: { COLLEGE: 0.85, NFL: 0.52 },      // share of gross money (history.earnings) that reaches the bank (tax + agent)
         ledgerCap: 60,                               // ledger rows kept (newest last)
         closedCap: 20,                               // sold / liquidated holdings remembered for the legacy card (best / worst)
