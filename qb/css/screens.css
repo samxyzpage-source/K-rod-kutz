@@ -1,0 +1,7 @@
+/* ==========================================================================
+   Road to Glory: QB — screens.css (owner: the SHELL agent — the DOM screens: title (archetype cards,
+   TEAM / VENUE pickers), the drive interstitial between moments, summary (the drive's line, the passer
+   rating, the best throw), the settings modal). Scoped per screen (.scr-*). Reuses the style.css
+   vocabulary; phone-first (390 px), desktop tweaks at ≥ 900 px. Motion is zeroed globally by
+   style.css under prefers-reduced-motion / body.reduced-motion.
+   ========================================================================== */
