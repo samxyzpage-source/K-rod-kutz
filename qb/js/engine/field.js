@@ -31,11 +31,14 @@
  * (their trail, cushion and inside leverage), zones drop to landmarks and shade to the nearest threat (deep zones stay
  * over the top), the spy mirrors, the rush is held by the line until beatAt and then chases the QB where he IS; a
  * free defender within tackleR of the QB behind the line → the sack roll (escape by MOB); the ball flies its path at
- * its speed with height h(u); every defender gets one contact roll the first time it passes within reachR under his
- * reach (tip, or a pick); a defender in the lane jumps it; everybody else breaks on the landing spot after his react;
- * at the landing the catch contest; after a catch the carrier runs for the goal line, bending away from pursuit, and
+ * its speed with height h(u) (a lofted ball is put up higher: Field.apex × (1 + height.lift × loft)); every defender
+ * gets one contact roll the first time it passes within reachR under his reach (tip, or a pick); a defender in the
+ * lane jumps it; everybody else breaks on the landing spot after his react; at the landing the catch contest (a flat
+ * ball over a short flight is hot — catch.heat — and never previews GREEN); after a catch the carrier runs for the goal line, bending away from pursuit, and
  * every defender within tackleR rolls a tackle (or is broken and shed); the QB across the line is a scramble; the
- * sideline, the goal line and maxT end it. After DONE everybody coasts (presentation only: no rolls, no events).
+ * sideline, the goal line and maxT end it (on a scramble the defenders who face him react × react.scramble, the man
+ * defenders with their backs turned × react.manScramble). After DONE everybody coasts (presentation only: no rolls,
+ * no events).
  *
  * RNG draw accounting (binding):
  *   setup  (inside Play.snap's 'play:snap' child), in order: per receiver in slot order a route-clock jitter gauss 2
@@ -984,7 +987,7 @@
         var d = live.defenders[d2], dd = hyp(d.x - b.x, d.y - b.y);
         if (dd < nd) { nd = dd; nj = d2; }
         if (dd <= T.contestR) {
-          var cj = Math.pow(1 - dd / T.contestR, num(C.contestExp, 1)) * (0.5 + 0.5 * ratio(dS[d2].skill)) * (t >= dS[d2].ballAt ? 1 : T.tip.blind) * (dd < cd ? C.first : 1) * (dS[d2].held ? T.tip.held : 1);   // first to the ball counts more; an engaged rusher hardly at all
+          var cj = (1 - dd / T.contestR) * (0.5 + 0.5 * ratio(dS[d2].skill)) * (t >= dS[d2].ballAt ? 1 : T.tip.blind) * (dd < cd ? C.first : 1) * (dS[d2].held ? T.tip.held : 1);   // first to the ball counts more; an engaged rusher hardly at all
           contest += cj;
           if (cj > top) top = cj;
         }

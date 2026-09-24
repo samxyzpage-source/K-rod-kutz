@@ -92,11 +92,11 @@
 
         // The sack clock (seconds after the snap when the first rusher arrives).
         pressure: {
-          base: 2.6,               // s for an even line battle, neutral coverage, POI 50 (the first rusher home on a QB who stands at the top of his drop; 2.6: a novice who waits for a wide-open man is sacked on ≈ 1 dropback in 6, a decent reader ≈ 1 in 14)
+          base: 2.6,               // s for an even line battle, neutral coverage, POI 50 (the first rusher home on a QB who stands at the top of his drop; 2.6: a novice who waits for a wide-open man is sacked on ≈ 1 dropback in 5, a decent reader ≈ 1 in 17, an expert ≈ 1 in 100)
           olW: 0.025,              // s per point of (ol − 50) …
           dlW: 0.025,              // … minus s per point of (dl − 50); the sum is softened below
           up: 0.25,                // soft cap of the line's GAIN (tanh): a great line buys at most ≈ +0.25 s (GREAT 2.85 s pocket, AVERAGE 2.7)
-          down: 0.70,              // soft cap of the line's LOSS: a bad line loses at most ≈ −0.7 s (BAD 1.95 s: the bad line is the story — ≈ 3.5× the sacks of GREAT)
+          down: 0.70,              // soft cap of the line's LOSS: a bad line loses at most ≈ −0.7 s (BAD 1.95 s: the bad line is the story — 3–4.5× the sacks of GREAT for a novice / decent reader)
           poiW: 0.004,             // s per point of (POI − 50): poise buys a beat in the pocket
           mulExp: 0.4,             // the coverage's pressureMul enters as sackAt ÷ pressureMul^mulExp (BLITZ 1.6 → ×0.83 · PREVENT 0.7 → ×1.15)
           clutchMul: 0.30,         // in the clutch sackAt × (1 − clutchMul × (1 − POI/99)): the rush "feels" faster to a nervous QB (0.30: POI 56 loses ≈ 0.4 s on the last two snaps — the stakes reach the hand, not only the sky)
@@ -206,10 +206,10 @@
           targetReact: 0.15,       // s: the target breaks off his route toward the landing spot this long after the release
           hopeless: -1.0,          // s: a line no receiver reaches, thrown anyway, is meant for the one with the best margin unless even he is this far off (then it is thrown to nobody)
           sack: { base: -0.06, perMob: 0.42, max: 0.6 },   // P(escape) = base + perMob × MOB/99: 50 → 15 % · 72 → 25 % · 99 → 36 %
-          tip: { base: 0.5, perSkill: 0.3, near: 0.4, blind: 0.45, held: 0.08, hBand: 0.6, hMin: 0.1, max: 0.85 },   // P(a hand on it) = (base + perSkill × skill/99) × (near + (1 − near) × closeness) × clamp((reach − h) / hBand, hMin, 1) × (blind before his react) × (held: an engaged rusher)
-          int: { touch: 0.5, high: 0.35, blind: 0.4, chest: 0.7, held: 0.3, alone: 0.65, contest: 0.1 },   // P(pick | a hand on it in flight) = touch × (high when the ball is above chest height: h > reach − chest) × (blind) · at the landing: a defender alone → alone × closeness · a contested miss → contest × Σ contest
-          catch: { base: 0.95, perSkill: 0.08, reachPen: 0.35, contest: 0.45, first: 1.3, heat: 0.3, heatT: 0.5, heatLoft: 0.5, min: 0.05, max: 0.98 },   // P(catch) = base + perSkill × skill/99 − reachPen × (miss/catchR)² (0.35: a ball he has to reach for at the edge of his radius is caught ≈ 1 time in 3 less — where the ball lands, the accuracy, counts) − contest × Σ contest (a defender closer to the ball than the catcher counts × first) − hot, hot = heat × (1 − flight/heatT) × (1 − loft/heatLoft) (a flat ball over a short flight is too hot to handle: a 5-yd bullet −0.19, a touch pass 0)
-          drop: { base: 0.07, contest: 0.08 },   // P(drop | caught) = base × (1 − skill/99) + contest × Σ contest
+          tip: { base: 0.42, perSkill: 0.3, near: 0.4, blind: 0.45, held: 0.08, hBand: 0.6, hMin: 0.1, max: 0.85 },   // P(a hand on it) = (base + perSkill × skill/99) × (near + (1 − near) × closeness) × clamp((reach − h) / hBand, hMin, 1) × (blind before his react) × (held: an engaged rusher) (base 0.42: a 20-yd bullet through a linebacker is got ≈ 1 time in 2; a touch pass over him mid-flight ≈ 1 in 60, but 1 in 4 when he sits just in front of the receiver; a lob never)
+          int: { touch: 0.5, high: 0.35, blind: 0.4, chest: 0.7, held: 0.3, alone: 0.8, contest: 0.1 },   // P(pick | a hand on it in flight) = touch × (high when the ball is above chest height: h > reach − chest) × (blind) · at the landing: a defender alone → alone × closeness · a contested miss → contest × Σ contest
+          catch: { base: 0.95, perSkill: 0.08, reachPen: 0.35, contest: 0.4, first: 1.3, heat: 0.3, heatT: 0.5, heatLoft: 0.5, min: 0.05, max: 0.98 },   // P(catch) = base + perSkill × skill/99 − reachPen × (miss/catchR)² (0.35: a ball he has to reach for at the edge of his radius is caught ≈ 1 time in 3 less — where the ball lands, the accuracy, counts) − contest × Σ contest (a defender closer to the ball than the catcher counts × first) − hot, hot = heat × (1 − flight/heatT) × (1 − loft/heatLoft) (a flat ball over a short flight is too hot to handle: a 5-yd bullet −0.19, a touch pass 0)
+          drop: { base: 0.05, contest: 0.08 },   // P(drop | caught) = base × (1 − skill/99) + contest × Σ contest (an open 60-skill receiver drops ≈ 2 %)
           tackle: { base: 0.04, perSkill: 0.14, perSpeed: 0.1, defSkill: 0.14, min: 0.03, max: 0.5 },   // P(broken tackle) = base + perSkill × skill/99 + perSpeed × speed/99 − defSkill × def skill/99
           evade: { r: 6, w: 0.6, upW: 0.3, minUp: 0.35, sideR: 3, look: 5 },   // the ball carrier bends away from defenders inside r (weight w laterally, × upW along the field), never less than minUp upfield, off a sideline inside sideR, steering at a point look yd ahead
           pursueBurst: 1.1,        // × a pursuer's speed after a catch / on a scramble (everybody runs to the ball)

@@ -4,7 +4,8 @@
  *   const Bots = require('./fixtures/bots')(RTG);     // RTG from qb/test/load.js (either realm)
  *   const res = Bots.playSnap('EXPERT', sim, live, botRng);        // one snap, driven step by step
  *   const d = Bots.drive('DECENT', { seed, archetype, team, venue });   // a six-moment drive through RTG.UI.Store
- *   Bots.withStore(RTG)                                  // evaluates qb/js/ui/store.js into the main realm (realm 'this')
+ *   Bots.withStore()                                     // evaluates qb/js/ui/store.js into the main realm (load({realm: 'this'}))
+ *   Bots.tally(records[, acc]) · Bots.counters() · Bots.merge(a, b) · Bots.derive(acc)   // the numbers (mergeable across workers)
  *
  * THE RULE: a bot decides from what a player can SEE — the live's positions and velocities (who is blocked, who is
  * running at the QB), the separation rings once they are shown (t ≥ revealAt), the routes on the play card
@@ -79,7 +80,7 @@ function makeBots(RTG) {
   //                seeing him, and the finger getting to the QB (full speed: the slow motion only starts with the stroke)
   //   rollout      a rollout away from the pressure when the RUSH chip reaches rollAt or a free rusher is noticed; his
   //                clock runs rollClock s longer after it
-  //   rollout      true: a free rusher → a rollout away from him (then keep reading)
+  //   assist       false: he plays with the aim assist OFF (settings) — an expert's deliberate lead is not snapped back
   const BRAINS = {
     NOVICE: {
       card: 'RANDOM', every: 0.25, from: [1.3, 2.3], drawS: [0.04, 0.14], eye: 1.8, sepSd: 1.2, judge: 'SEP',
@@ -313,8 +314,7 @@ function makeBots(RTG) {
     const q = live.qb;
     const line = [{ x: q.x, y: q.y }].concat(pts.slice(1));
     let c = live.classify(line, loft), use = line;
-    const a = assist(live, sim, line, loft, c);
-    c = a.c; use = a.pts;
+    if (brain.assist !== false) { const a = assist(live, sim, line, loft, c); c = a.c; use = a.pts; }   // the settings' aim assist (default ON)
     if (c.kind === 'PASS') { live.throwAlong(use, loft); return 'PASS'; }
     if (c.kind === 'THROWAWAY') { live.throwAway(); return 'THROWAWAY'; }
     if (c.kind === 'RUN') { live.setRun(use); return 'RUN'; }
