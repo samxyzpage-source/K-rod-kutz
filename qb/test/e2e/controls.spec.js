@@ -6,8 +6,9 @@
  *     a tap on him) then a drawn scramble → a cancelled draft (touchcancel on the phone, Backspace under the mouse)
  *     then a drawn pass → the X key (desktop) / a drawn throw-away line (phone) → a keyboard run (desktop) / a drawn
  *     scramble (phone) → the summary's line adds up (attempts + sacks + rushes = 6, scrambles are rushes).
- *   file desktop — slow motion engages while a finger is down (timeScale = Tuning.qb.draw.slowMo, the play clock
- *     crawls, the SLOW-MO chip, the stage's slow band) and the per-play budget runs out (then full speed, SLOW-MO OUT);
+ *   file desktop — the first moment waits for the first touch (timeScale 0, the hint up); slow motion engages while a
+ *     finger is down (timeScale = Tuning.qb.draw.slowMo, the play clock crawls, the SLOW-MO chip, the stage's slow band)
+ *     and the per-play budget runs out (then full speed, SLOW-MO OUT);
  *     INVALID lines do nothing (strays, taps, garbage through the debug hands, no second throw); the preview colour
  *     shows only for a FIELD GENERAL (IQ ≥ Tuning.qb.draw.previewIq); aim assist on snaps the line's end onto the
  *     receiver's spot, off leaves it; keyboard composing (Enter / 1–5 / L / arrows / Q-E / Backspace / R / Enter,
@@ -16,6 +17,10 @@
  *   file narrow (320 px) — no horizontal scroll in SITUATION, READ, PLAY, mid-draw, flight, RESULT, the story, the summary.
  *   http desktop — the canvas loop's frame p95 stays under 4 ms while drawing and while the ball is in the air.
  *   file phone — forced INT / DROP / INCOMPLETE beats, then the SNEAK card resolves at the snap as a rush.
+ *   file phone — the hands: the drive's first moment waits at the snap for the first touch; a press on the QB during
+ *     the slide into the formation draws once it can; a touch line is drawn touchLiftCss above the fingertip; a line
+ *     dragged back onto the QB or off the field shows LET GO TO CANCEL and is dropped.
+ *   file desktop — a finger resting on its pass line keeps it a PASS (the sticky intent): the release throws it.
  *   Zero console / page errors everywhere.
  *
  *   /opt/node22/bin/node qb/test/e2e/controls.spec.js
@@ -217,7 +222,14 @@ test('controls file desktop: slow motion engages while drawing — the clock cra
     await H.debug(page, 'tune', 'qb.draw.slowMoBudgetS', 1.2);                 // a short budget keeps the test quick
     await startWith(page, 'SURGEON', 'GREAT', 'COLLEGE');
     await readAndSnap(page, 'slow');
-    assert.equal(await H.debug(page, 'timeScale'), 1, 'full speed before a finger is down');
+    // the drive's first moment waits at the snap for the first touch: no clock, the hint up, a ring on the QB
+    assert.equal(await H.debug(page, 'holding'), true, 'the first moment waits for a touch');
+    assert.equal(await H.debug(page, 'timeScale'), 0, 'the clock waits');
+    const tHold = (await Q.current(page)).t;
+    await Q.sleep(300);
+    assert.equal((await Q.current(page)).t, tHold, 'no time passes before the first touch');
+    assert.match(await page.locator('.pv-toast').textContent(), /DRAW FROM THE QB/, 'the hint stays up while it waits');
+    assert.equal(await page.locator('.playview').getAttribute('data-hold'), '1');
     const q = await H.debug(page, 'qbPoint');
     await page.mouse.move(q.x, q.y); await page.mouse.down();
     for (let i = 1; i <= 5; i++) await page.mouse.move(q.x + 6 * i, q.y - 8 * i);      // a draft (a short run line) — still drawing
@@ -482,7 +494,10 @@ test('controls file desktop: reduced motion — the OS hint and the setting drop
     const card = list.find(c => !c.run) || list[0];
     await Q.pickPlay(page, card.idx);
     await Q.sleep(150);
-    assert.ok((await Q.current(page)).t > 0.05, 'no align beat: the play clock runs at once');
+    assert.equal(await page.evaluate(() => RTG.UI.PlayView.current().canDraw()), true, 'no align beat: the QB can draw at once');
+    await Q.unhold(page);                                                   // the first moment waits for a touch; start its clock
+    await Q.sleep(150);
+    assert.ok((await Q.current(page)).t > 0.05, 'the play clock runs at once');
     await Q.waitCanDraw(page);
     const tgt = await Q.chooseTarget(page, { loft: 0.3, minT: 0.6 });
     assert.ok(tgt && tgt.slot);
@@ -508,7 +523,10 @@ test('controls file desktop: reduced motion — the OS hint and the setting drop
     const list = await Q.cards(p2);
     await Q.pickPlay(p2, (list.find(c => !c.run) || list[0]).idx);
     await Q.sleep(150);
-    assert.ok((await Q.current(p2)).t > 0.05, 'the setting drops the align beat too');
+    assert.equal(await p2.evaluate(() => RTG.UI.PlayView.current().canDraw()), true, 'the setting drops the align beat too');
+    await Q.unhold(p2);
+    await Q.sleep(150);
+    assert.ok((await Q.current(p2)).t > 0.05, 'and the clock runs at once');
     await H.debug(p2, 'forceResult', 'CATCH');
     const t2 = Date.now();
     await Q.waitDone(p2);
@@ -611,9 +629,11 @@ test('controls http desktop: the frame p95 stays under ' + FRAME_P95_BUDGET_MS +
 });
 
 /**
- * The core rule, watched every frame: after the slide the scene's 22 actors are exactly the live's positions (QB,
- * receivers, defenders) — through the drop, the draw, the flight and after it; and a press anywhere in the start
- * circle (over his helmet, at its side edge — yards from him on a small screen) starts a line ON the quarterback.
+ * The core rule, watched every frame: after the slide the scene's 22 actors are the live's positions (QB, receivers,
+ * defenders) — through the drop, the draw, the flight and after it — within the presentation offset x + vx × live.rest
+ * (under one 1/60-s sub-step of motion: ≤ 0.2 yd; it keeps slow motion smooth between sub-steps); and a press anywhere
+ * in the start circle (over his helmet, at its side edge — yards from him on a small screen) starts a line ON the
+ * quarterback.
  */
 for (const vp of ['narrow', 'desktop']) {
   test(`controls file ${vp}: the scene draws the live's positions every frame; a press at the edge of the start circle anchors the line on the QB`, async () => {
@@ -632,7 +652,7 @@ for (const vp of ['narrow', 'desktop']) {
           const l = v.live();
           if (l && (v.phase() === 'PLAY' || v.phase() === 'RESULT') && l.t > 0) {
             const a = v.actors();
-            const cmp = (who, sx, sy, lx, ly) => { if ((Math.abs(sx - lx) > 1e-9 || Math.abs(sy - ly) > 1e-9) && M.bad.length < 5) M.bad.push({ t: l.t, who, scene: [sx, sy], live: [lx, ly] }); };
+            const cmp = (who, sx, sy, lx, ly) => { if ((Math.abs(sx - lx) > 0.2 || Math.abs(sy - ly) > 0.2) && M.bad.length < 5) M.bad.push({ t: l.t, who, scene: [sx, sy], live: [lx, ly] }); };
             for (let i = 0; i < l.receivers.length; i++) cmp(l.receivers[i].slot, a.receivers[i].fieldX, a.receivers[i].fieldY, l.receivers[i].x, l.receivers[i].y);
             for (let j = 0; j < l.defenders.length; j++) cmp(l.defenders[j].id, a.defenders[j].fieldX, a.defenders[j].fieldY, l.defenders[j].x, l.defenders[j].y);
             cmp('QB', a.qb.fieldX, a.qb.fieldY, l.qb.x, l.qb.y);
@@ -676,6 +696,92 @@ for (const vp of ['narrow', 'desktop']) {
     } finally { await app.close(); }
   });
 }
+
+test('controls file phone: the hands — the first moment waits for a touch; a press during the slide draws once it can; a touch line is drawn above the fingertip; a line dragged back onto the QB or off the field is dropped', async () => {
+  const app = await H.openDemo({ mode: 'file', viewport: 'phone', seed: 4242 });
+  const { page } = app;
+  const cdp = await page.context().newCDPSession(page);
+  const tp = (x, y) => ({ x, y, id: 1, radiusX: 2, radiusY: 2, force: 1 });
+  const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', type === 'touchEnd' || type === 'touchCancel' ? { type, touchPoints: [] } : { type, touchPoints: [tp(x, y)] });
+  try {
+    await startWith(page, 'GUNSLINGER', 'AVERAGE', 'COLLEGE');
+    await H.waitPhase(page, 'SITUATION');
+    await Q.tapToRead(page);
+    const list = await Q.cards(page);
+    const card = list.find(c => !c.run) || list[0];
+    // a press on the QB while the offence is still sliding into the formation: kept, drawn from once the play can be
+    await page.locator('.pv-card[data-idx="' + card.idx + '"]').click();
+    await page.waitForFunction(() => { const v = RTG.UI.PlayView.current(); return !!v && v.phase() === 'PLAY'; });
+    const q0 = await H.debug(page, 'qbPoint');
+    const early = await page.evaluate(() => RTG.UI.PlayView.current().canDraw());
+    await touch('touchStart', q0.x, q0.y);
+    await Q.waitCanDraw(page);
+    assert.equal(await H.debug(page, 'holding'), true, 'the first moment waits at the snap (the finger is down, not drawing yet)');
+    for (let i = 1; i <= 4; i++) await touch('touchMove', q0.x + 10 * i, q0.y - 25 * i);
+    await page.waitForFunction(() => !!RTG.UI.PlayView.current().drawing());
+    assert.equal(early, false, 'the press came while the offence slid in');
+    assert.ok(await Q.drawing(page), 'the press during the slide became a draft');
+    assert.equal(await H.debug(page, 'holding'), false, 'the first touch starts the clock');
+    // the touch line is drawn above the fingertip: its end sits touchLiftCss over the finger
+    const lift = await page.evaluate(() => RTG.UI.PlayInput.CONST.touchLiftCss);
+    const fx = q0.x + 60, fy = q0.y - 170;
+    await touch('touchMove', fx, fy);
+    await Q.sleep(80);
+    const endCss = await page.evaluate(() => { const v = RTG.UI.PlayView.current(), d = v.drawing(), e = d.raw[d.raw.length - 1]; return v.fieldToCss(e.x, e.y); });
+    assert.ok(Math.abs(endCss.x - fx) < 3 && Math.abs(fy - endCss.y - lift) < 3, 'the line ends ' + lift + ' css px above the finger (' + JSON.stringify({ end: endCss, finger: { x: fx, y: fy } }) + ')');
+    // dragged back onto the QB (where he is now: under centre he stepped up during the slide): the chip says so and letting go drops the line
+    const qn = await H.debug(page, 'qbPoint'), bx = qn.x, by = (qn.y + qn.chestY) / 2;
+    for (let i = 1; i <= 6; i++) await touch('touchMove', fx + (bx - fx) * i / 6, fy + (by - fy) * i / 6);
+    await Q.sleep(80);
+    const back = await Q.draftNow(page);
+    assert.match(back.chip.text, /LET GO TO CANCEL/, 'back on the QB: LET GO TO CANCEL');
+    await touch('touchEnd');
+    await Q.sleep(120);
+    let ls = await liveState(page);
+    assert.equal(ls.runs, 0, 'let go on the QB: no run'); assert.equal(ls.ball, false, 'no ball'); assert.equal(await Q.drawing(page), null);
+    // dragged off the field (its line's end below the canvas, onto the panel): dropped too
+    const q1 = await H.debug(page, 'qbPoint'), g = await Q.geometry(page);
+    await touch('touchStart', q1.x, q1.y);
+    for (let i = 1; i <= 6; i++) await touch('touchMove', q1.x + 6 * i, q1.y + (g.rect.y + g.rect.h + lift + 30 - q1.y) * i / 6);
+    await Q.sleep(80);
+    assert.match((await Q.draftNow(page)).chip.text, /LET GO TO CANCEL/, 'off the field: LET GO TO CANCEL');
+    await touch('touchEnd');
+    await Q.sleep(120);
+    ls = await liveState(page);
+    assert.equal(ls.runs, 0, 'let go off the field: no run'); assert.equal(ls.ball, false);
+    // and a real line still throws
+    const tgt = await Q.chooseTarget(page, { loft: 0.1, minT: 0 });
+    if (tgt && tgt.slot) {
+      const r = await Q.drawPass(page, tgt.slot, { speed: 'fast', touch: true });
+      assert.equal(r.drawing && r.drawing.kind, 'PASS', 'a drawn pass after the aborted lines'); assert.ok(r.released);
+    }
+    await finishMoment(page, 'hands');
+    noErrors(app, 'hands');
+  } finally { await cdp.detach().catch(() => {}); await app.close(); }
+});
+
+test('controls file desktop: a finger resting on its pass line keeps it a PASS (sticky intent) — the release throws it, never a scramble', async () => {
+  const app = await H.openDemo({ mode: 'file', viewport: 'desktop', seed: 12 });
+  const { page } = app;
+  try {
+    await startWith(page, 'GUNSLINGER', 'AVERAGE', 'COLLEGE');
+    await readAndSnap(page, 'sticky');
+    const tgt = await Q.chooseTarget(page, { loft: 0.1, minT: 0.6, maxT: 1.2 });
+    assert.ok(tgt && tgt.slot, 'a receiver can be reached');
+    const r = await Q.drawPass(page, tgt.slot, { speed: 'fast', keepDown: true });
+    assert.equal(r.drawing && r.drawing.kind, 'PASS', 'a pass line to ' + tgt.slot);
+    const kinds = new Set();
+    for (let i = 0; i < 25; i++) { const d = await Q.drawing(page); if (d) kinds.add(d.kind); await Q.sleep(100); }   // 2.5 s of rest: ~0.4 s of play in slow motion
+    assert.deepEqual([...kinds], ['PASS'], 'the resting line stays a PASS (' + [...kinds].join(', ') + ')');
+    await r.up();
+    await Q.waitReleased(page);
+    const cur = await Q.current(page);
+    const ev = cur.events.map(e => e.kind);
+    assert.ok(ev.includes('RELEASE') && !ev.includes('RUN'), 'the release threw it (' + ev.join(', ') + ')');
+    await finishMoment(page, 'sticky');
+    noErrors(app, 'sticky');
+  } finally { await app.close(); }
+});
 
 test('controls file desktop: the summary — NEW DRIVE rolls a fresh seed with the same picks, TITLE keeps them selected', async () => {
   const app = await H.openDemo({ mode: 'file', viewport: 'desktop', seed: 8080 });

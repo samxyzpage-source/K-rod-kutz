@@ -42,6 +42,9 @@
  *   LOB_ONLY / BULLET_ONLY   EXPERT restricted to one loft (1 / 0): the same reads, one touch
  *   DECENT_GOOD / DECENT_BAD DECENT forced onto a play rated GOOD / BAD vs the REAL coverage (the call experiment only —
  *               it reads ctx.real, which no player can; the probe uses it to measure what the call is worth)
+ *   QUICK       no read: the best-advice card, and at `at` (0.7 s) a touch pass (0.5) at the spot of the receiver who
+ *               LOOKS most open right now (his ring once shown, his eyes before), else thrown away — the dominant-strategy
+ *               probe: patience and reading must beat it
  *   STATUE      never throws (the sack clock)
  *
  * Metrics: Bots.tally(records) → the box score plus sack %, tips, air yards, the decision rate (the share of pass
@@ -105,6 +108,7 @@ function makeBots(RTG) {
     SCRAMBLER: {
       card: 'BEST', every: 0.1, from: 0.7, drawS: [0.03, 0.1], eye: 0.8, sepSd: 0.8, judge: 'RUN', runBy: 1.5, notice: [0.3, 0.5]
     },
+    QUICK: { card: 'BEST', judge: 'QUICK', at: 0.7, drawS: [0.03, 0.1], eye: 0.8, sepSd: 0.8, lofts: [0.5] },
     STATUE: { card: 'BEST', judge: 'NONE' }
   };
   BRAINS.ROLLOUT = Object.assign({}, BRAINS.DECENT, { rollout: true, rollAt: 0.45, rollClock: 0.8 });
@@ -271,8 +275,7 @@ function makeBots(RTG) {
     for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + hyp(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
     const steps = Math.max(4, Math.ceil(len / 1.5));
     for (let s = 1; s < steps; s++) {
-      const arc = len * s / steps;
-      if (arc > len - 2.5) break;
+      const arc = len * s / steps, nearEnd = arc > len - 2.5;   // the last yards: only the man AT the catch point contests instead of getting a hand on it
       const u = arc / len, h = Field.heightAt(u, apex);
       if (h > 3.2) continue;
       let k = 1;
@@ -281,6 +284,7 @@ function makeBots(RTG) {
       const x = pts[k - 1].x + (pts[k].x - pts[k - 1].x) * f, y = pts[k - 1].y + (pts[k].y - pts[k - 1].y) * f;
       const tau = arc / v, reachYd = 1.3 + Math.max(0, tau - 0.35) * 3;
       for (const d of live.defenders) {
+        if (nearEnd && hyp(d.x - end.x, d.y - end.y) <= 1.3) continue;
         const dd = hyp(d.x - x, d.y - y) + rng.gauss(0, brain.eye * 0.5);
         if (dd > reachYd) continue;
         const low = clamp((3.2 - h) / 0.8, 0.2, 1) * (d.blocked ? 0.15 : 1) * (1 - dd / (reachYd + 0.5));
@@ -288,9 +292,11 @@ function makeBots(RTG) {
       }
     }
     const pSpot = clamp((spotLead - recLate + 0.05) / 0.45, 0, 1);
-    // a hot ball: he has learned that a flat, fast ball over a short flight is hard to handle (the coach says so)
+    // a hot ball: he has learned that a flat, fast ball over a short flight is hard to handle (the coach says so) — and
+    // that a ball which gets there before the route breaks (the card shows where it breaks) finds a man not looking yet
     const C = F().catch, hot = (C.heat || 0) * clamp(1 - fl / Math.max(1e-9, C.heatT || 1), 0, 1) * clamp(1 - loft / Math.max(1e-9, C.heatLoft || 1), 0, 1);
-    return { p: pSpot * (1 - 0.85 * lane) * (1 - hot), lane: lane, spot: spotLead - recLate, flight: fl };
+    const early = (C.early || 0) * clamp((Field.routeOpen(sim.receivers[targetIdx]) - (live.t + fl)) / Math.max(1e-9, C.earlyT || 1), 0, 1);
+    return { p: pSpot * (1 - 0.85 * lane) * (1 - hot) * (1 - early), lane: lane, spot: spotLead - recLate, flight: fl };
   }
 
   /** The value of a completion at the end of a line: air yards, the sticks on a money down, the end zone when only a TD counts. */
@@ -418,7 +424,7 @@ function makeBots(RTG) {
     const q = live.qb;
     for (let k = 0; k < 8; k++) {
       const c = live.classify(pts, loft);
-      if (c.kind === 'PASS' && c.target === sim.receivers[i].slot) return pts;
+      if (c.kind === 'PASS' && c.target === sim.receivers[i].slot && !c.early) return pts;
       const p = routeAt(sim, i, live.t + 0.15 * (k + 1));
       const e = pts[pts.length - 1];
       pts = [{ x: q.x, y: q.y }, { x: e.x + (p.x - e.x) * 0.5, y: e.y + (p.y - e.y) * 0.5 }];
@@ -452,7 +458,7 @@ function makeBots(RTG) {
               const m = meet(live, sim, i, loft, bend, lead ? brain.leadYd : 0, ax / al, ay / al);
               if (m.end.y > sim.field.endY - 0.5) continue;
               let c = live.classify(m.pts, loft);
-              if (c.kind !== 'PASS' || c.target !== r.slot || c.tooLong) continue;
+              if (c.kind !== 'PASS' || c.target !== r.slot || c.tooLong || c.early) continue;   // the chip: PASS to him, not TOO LONG / TOO FAST
               const e = eyeRace(live, sim, m.pts, loft, i, brain, rng);
               let p = e.p;
               const room = e.spot;
@@ -472,7 +478,7 @@ function makeBots(RTG) {
               const p0 = routeAt(sim, i, live.t + fl0);
               const pts = [{ x: live.qb.x, y: live.qb.y }, { x: clamp(p0.x, f.sideL + 1, f.sideR - 1), y: Math.min(f.endY - 1, f.goalY + dy) }];
               const c = live.classify(pts, loft);
-              if (c.kind !== 'PASS' || c.target !== r.slot || c.tooLong) continue;
+              if (c.kind !== 'PASS' || c.target !== r.slot || c.tooLong || c.early) continue;
               const e = eyeRace(live, sim, pts, loft, i, brain, rng);
               let p = e.p;
               if (live.previewShown) p = c.preview === 'GREEN' ? Math.max(p, 0.92) : (c.preview === 'RED' ? Math.min(p, 0.3) : p);
@@ -514,12 +520,31 @@ function makeBots(RTG) {
       const th = aware(live, st);
       if (a && !a.tooLong) {
         const c = live.classify(a.points, brain.lofts[0]);
-        if (c.kind === 'PASS' && c.target === slot) { note.decision = { t: live.t, slot, loft: brain.lofts[0] }; if (commitAfter(live, sim, a.points, brain.lofts[0], brain.drawS[0], brain) === 'PASS') break; }
+        if (c.kind === 'PASS' && c.target === slot && !c.early) { note.decision = { t: live.t, slot, loft: brain.lofts[0] }; if (commitAfter(live, sim, a.points, brain.lofts[0], brain.drawS[0], brain) === 'PASS') break; }
       }
       if (th && throwAway(live, brain)) { note.commit = 'AWAY'; break; }
       stepTo(live, live.t + brain.every);
     }
     if (i < 0) note.noCheckdown = true;
+    return finish(live);
+  }
+
+  /** QUICK: at brain.at, a touch pass to whoever looks most open (no progression, no patience), else a throw-away. */
+  function quick(live, sim, brain, rng, note) {
+    stepTo(live, brain.at);
+    if (canPass(live)) {
+      const order = live.receivers.map((r, i) => ({ i, sep: sepSeen(live, i, brain, rng) })).sort((a, b) => b.sep - a.sep);
+      for (const o of order) {
+        const r = live.receivers[o.i], a = live.aim(r.slot, brain.lofts[0]);
+        if (!a || a.tooLong) continue;
+        const c = live.classify(a.points, brain.lofts[0]);
+        if (c.kind !== 'PASS' || c.target !== r.slot || c.early) continue;
+        note.decision = { t: live.t, slot: r.slot, loft: brain.lofts[0], sep: o.sep };
+        note.commit = commitAfter(live, sim, a.points, brain.lofts[0], brain.drawS[0], brain);
+        break;
+      }
+      if (canPass(live) && throwAway(live, brain)) note.commit = 'AWAY';
+    }
     return finish(live);
   }
 
@@ -567,6 +592,7 @@ function makeBots(RTG) {
       case 'RACE': res = racer(live, sim, brain, rng, note); break;
       case 'CHECKDOWN': res = checkdown(live, sim, brain, rng, note); break;
       case 'RUN': res = scrambler(live, sim, brain, rng, note); break;
+      case 'QUICK': res = quick(live, sim, brain, rng, note); break;
       default: res = finish(live);
     }
     res.botNote = note;

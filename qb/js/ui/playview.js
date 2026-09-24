@@ -29,14 +29,21 @@
  * BALL_IN_AIR | AFTER_CATCH | SCRAMBLE | DONE) and the draft on [data-draft] (PASS | RUN | THROWAWAY | INVALID | '').
  *
  * DRAWING (RTG.UI.PlayInput): a press within Tuning.qb.draw.startR of the quarterback (css px at his depth, ≥ 22 px)
- * starts a draft; while it lasts the play runs at Tuning.qb.draw.slowMo (until slowMoBudgetS of real time per play is
- * spent — then 1.0 and the SLOW-MO chip says OUT); every frame (never per pointermove) the draft is classified by
- * live.classify(points, loft) and drawn: PASS = gold dots, thin for a bullet, fat in the middle for a lob, the landing
- * marker coloured by the preview when previewShown, the target bracketed; RUN = chalk footprints; THROWAWAY = grey
- * dots out of bounds; the part past the arm (tooLong) in red; INVALID = nothing. The release commits: PASS →
- * live.throwAlong, THROWAWAY → live.throwAway, RUN → live.setRun (the QB runs it; draw again for another run or the
- * pass). Aim assist (settings.aimAssist, default on): a PASS line's end within Tuning.qb.draw.assistYd of the spot the
- * target can reach snaps onto it (the magnet tick) — only when the snapped line still classifies as a PASS to him.
+ * starts a draft (a touch line is drawn a little above the fingertip); while it lasts the play runs at
+ * Tuning.qb.draw.slowMo (until slowMoBudgetS of real time per play is spent — then 1.0 and the SLOW-MO chip says OUT);
+ * every frame (never per pointermove) the draft is classified by live.classify(points, loft) and drawn: PASS = gold
+ * dots, thin for a bullet, fat in the middle for a lob, the landing marker coloured by the preview when previewShown,
+ * the target bracketed (TOO FAST on the chip for a line drawn faster than he can get there); RUN = chalk footprints;
+ * THROWAWAY = grey dots out of bounds; the part past the arm (tooLong) in red; INVALID = nothing. A finger's intent is
+ * sticky: while it rests the line keeps the kind it had when it last moved (a pass line whose man runs past its end
+ * stays his PASS, now RED). The release commits: PASS → live.throwAlong, a drawn THROWAWAY → live.throwAlong (it flies
+ * as drawn), RUN → live.setRun (the QB runs it; draw again for another run or the pass); a finger dragged back onto
+ * the QB or with its line off the canvas lets go of nothing (LET GO TO CANCEL). Aim assist (settings.aimAssist, default
+ * on): a PASS line's end within Tuning.qb.draw.assistYd of the spot the target can reach snaps onto it (the magnet
+ * tick) — only when the snapped line still classifies as a PASS to him. The drive's first moment, until the player has
+ * drawn once, WAITS at the snap (timeScale 0, a pulsing ring on the QB, the hint up) for the first touch, key or THROW
+ * AWAY. Slow motion stays smooth: the actors and the ball are drawn at x + vx × live.rest (a presentation offset under
+ * one 1/60-s sub-step).
  *
  * Camera: fixed behind and above the quarterback. project(xYd, yYd) puts the line of scrimmage at 0.73 × H, the
  * horizon at 0.26 × H, 50 yards of depth in view (the longest arm's line stays on screen) and 53⅓ yards across the
@@ -56,6 +63,8 @@
   var doc = root.document;
   var PlayView = {};
   var current = null;
+  var sessionDrew = false;                 // the player has drawn (or thrown) once this page: the first moment no longer waits for him
+  var HINT = 'DRAW FROM THE QB — TO A RECEIVER TO PASS, INTO SPACE TO RUN';
 
   var TIMING = {
     alignMs: 420,                        // the offence slides from the READ picture into the play's formation before t starts (0 reduced)
@@ -269,8 +278,11 @@
     var balls = { 2: Sp.get('ball_2'), 3: Sp.get('ball_3'), 5: Sp.get('ball_5'), 8: Sp.get('ball_8') };
     var spinSpr = [Sp.get('ball_spin0'), Sp.get('ball_spin1')], tipStar = Sp.get('tip_star');
     var rings = {}, marks = {};
+    // the colour tokens the draw loop paints with, cached here (Palette.get builds a merged palette per call: never per frame)
+    var COL = { ink: '#101226', gold: '#f6c445', red: '#d8433a', chalk: '#f2f2e6', grey: '#8a8f9e' };
     /** The palette-tinted tiles (re-read on every arm and on a settings change, so a palette toggled mid-moment shows at once). */
     function loadTinted() {
+      COL.ink = pal('ink'); COL.gold = pal('gold'); COL.red = pal('red'); COL.chalk = pal('chalk'); COL.grey = pal('grey');
       rings.open = Sp.get('ring_open', { tint: [pal('mint'), pal('mint')] }); rings.tight = Sp.get('ring_closing', { tint: [pal('gold'), pal('gold')] });
       rings.covered = Sp.get('ring_closed', { tint: [pal('red'), pal('red')] });
       marks.pass = Sp.get('land_x', { tint: [pal('gold'), pal('gold')] }); marks.away = Sp.get('land_x', { tint: [pal('grey'), pal('grey')] });
@@ -288,11 +300,11 @@
     var input = null, evIdx = 0, livePhase = '', draftAttr = '';
     var alignMs = 0, alignU = 1, tAlign0 = 0;
     var slowUsed = 0, slowBudget = 4, curScale = 1, lastSlowPct = -1, slowOut = false;
-    var cls = null, dkind = '', clsAssist = false, dispArr = null, dispN = 0, firstHintShown = false;
+    var cls = null, dkind = '', clsAssist = false, dispArr = null, dispN = 0, firstHintShown = false, holdFirst = false;
     var releaseReal = 0, releaseT = -1, doneAt = 0, resultAt = 0, tipReal = 0, catchT = -1, catchSlot = -1;
     var shakeAmp = 0, camX = 0, camY = 0, flashAlpha = 0, flashColor = null;
     var crowdFrame = 0, crowdAt = 0, crowdMode = 'idle';
-    var stadium = null, fieldLayer = null, posts = null, slowBands = false;
+    var stadium = null, fieldLayer = null, posts = null, slowBands = false, fogOn = false;
     var destroyed = false, timers = [];
     var venue = venueOf(ctx);
     var clutch = !!(ctx.clutch || (ctx.pressure && ctx.pressure.clutch) || sit.clutch);
@@ -342,6 +354,8 @@
 
     // ───────────────────────────── the camera ─────────────────────────────
     function relayout() {
+      // a resize or a rotation mid-stroke: the finger's samples were taken against the old canvas — drop the draft
+      if (input && input.drafting() && input.source() === 'pointer') input.cancel();
       var W = cv.w, H = cv.h, land = cv.landscape;
       L.W = W; L.H = H; L.land = land;
       L.yHor = Math.round(H * FIELD.horizonFrac);
@@ -790,19 +804,25 @@
       hotSlot = sim && sim.hot ? (recIdx[sim.hot] !== undefined ? recIdx[sim.hot] : -1) : -1;
     }
     function moving(vx, vy) { return num(vx, 0) * num(vx, 0) + num(vy, 0) * num(vy, 0) > FIELD.moveEps; }
+    /**
+     * The part of the last step the live has not simulated yet (live.rest, < 1 sub-step): the scene draws every actor at
+     * x + vx × rest — a presentation offset (≤ 0.17 yd) so slow motion moves smoothly between the engine's 1/60-s
+     * sub-steps instead of in ~9-Hz hops. None while frozen, during the slide or after the whistle.
+     */
+    function restNow() { return !frozen && alignU >= 1 && lv && lv.phase !== 'DONE' ? clamp(num(lv.rest, 0), 0, 0.05) : 0; }
     /** Copy the live's positions into the actor arrays (every frame; no allocation), blended from the READ picture during the slide. */
     function readLive() {
-      var i, t = num(lv.t, 0), step = (Math.floor(t * 1000 / TIMING.runFrameMs) & 1);
+      var i, t = num(lv.t, 0), step = (Math.floor(t * 1000 / TIMING.runFrameMs) & 1), rs = restNow();
       var q = lv.qb;
-      aX[IQB] = num(q.x, 0); aY[IQB] = num(q.y, -5);
+      aX[IQB] = num(q.x, 0) + num(q.vx, 0) * rs; aY[IQB] = num(q.y, -5) + num(q.vy, 0) * rs;
       for (i = 0; i < recCount; i++) {
         var r = lv.receivers[i];
-        aX[IREC + i] = num(r.x, 0); aY[IREC + i] = num(r.y, 0);
+        aX[IREC + i] = num(r.x, 0) + num(r.vx, 0) * rs; aY[IREC + i] = num(r.y, 0) + num(r.vy, 0) * rs;
         aFrame[IREC + i] = catchSlot === i && catchT >= 0 && t - catchT < TIMING.catchPoseS ? 2 : (moving(r.vx, r.vy) ? step : 0);
       }
       for (i = 0; i < defCount; i++) {
         var d = lv.defenders[i];
-        aX[i] = num(d.x, 0); aY[i] = num(d.y, 1);
+        aX[i] = num(d.x, 0) + num(d.vx, 0) * rs; aY[i] = num(d.y, 1) + num(d.vy, 0) * rs;
         aFrame[i] = t < 0.05 ? 2 : (moving(d.vx, d.vy) ? step : 2);
       }
       for (i = 0; i < olCount; i++) { var o = lv.linemen[i]; aX[IOL + i] = num(o.x, 0); aY[IOL + i] = num(o.y, -1); }
@@ -1007,23 +1027,25 @@
       }
       var out = left <= 0;
       if (out !== slowOut) { slowOut = out; slowEl.classList.toggle('out', out); slowLabel.textContent = out ? 'SLOW-MO OUT' : 'SLOW-MO'; }
-      var stageSlow = drafting && !out;
+      var stageSlow = drafting && !out && !reduced;   // reduced motion: the SLOW-MO chip and the time scale, no bands or desaturation
       if (stageSlow !== slowBands) { slowBands = stageSlow; stage.classList.toggle('is-slow', stageSlow); }
     }
     /** The draft chip: PASS → WR1 · BULLET · RUN · THROW AWAY · TOO LONG (DOM writes only when something changed; no per-frame strings). */
-    var chipK = null, chipTarget = null, chipTouch = null, chipLong = false, chipPrev = null, chipAssist = false;
+    var chipK = null, chipTarget = null, chipTouch = null, chipLong = false, chipPrev = null, chipAssist = false, chipEarly = false, chipCancel = false;
     function setDraftChip() {
       var k = cls ? dkind : '';
       var target = k === 'PASS' && cls.target ? cls.target : '';
       var touch = k === 'PASS' ? Inp.touchName(input ? input.loft() : 0.5) : '';
-      var tooLong = !!(k === 'PASS' && cls.tooLong);
+      var tooLong = !!((k === 'PASS' || k === 'THROWAWAY') && cls.tooLong);
       var prev = k === 'PASS' && cls.previewShown && cls.preview ? cls.preview : '';
-      if (k === chipK && target === chipTarget && touch === chipTouch && tooLong === chipLong && prev === chipPrev && clsAssist === chipAssist) return;
-      chipK = k; chipTarget = target; chipTouch = touch; chipLong = tooLong; chipPrev = prev; chipAssist = clsAssist;
+      var early = !!(k === 'PASS' && cls.early), cancel = !!(k && input && input.overQb && input.overQb());
+      if (k === chipK && target === chipTarget && touch === chipTouch && tooLong === chipLong && prev === chipPrev && clsAssist === chipAssist && early === chipEarly && cancel === chipCancel) return;
+      chipK = k; chipTarget = target; chipTouch = touch; chipLong = tooLong; chipPrev = prev; chipAssist = clsAssist; chipEarly = early; chipCancel = cancel;
       var text = '';
-      if (k === 'PASS') text = tooLong ? 'TOO LONG' : 'PASS → ' + (target || '?') + ' · ' + touch;
+      if (cancel) text = 'LET GO TO CANCEL';                                    // the finger came back onto the QB
+      else if (k === 'PASS') text = tooLong ? 'TOO LONG' : 'PASS → ' + (target || '?') + ' · ' + (early ? 'TOO FAST' : touch);
       else if (k === 'RUN') text = 'RUN';
-      else if (k === 'THROWAWAY') text = 'THROW AWAY';
+      else if (k === 'THROWAWAY') text = tooLong ? 'TOO LONG' : 'THROW AWAY';   // out of bounds past the arm: it would die in the field
       draftChip.textContent = text;
       draftChip.hidden = !text;
       draftChip.setAttribute('data-kind', k || '');
@@ -1031,6 +1053,8 @@
       draftChip.setAttribute('data-touch', touch);
       if (prev) draftChip.setAttribute('data-preview', String(prev)); else draftChip.removeAttribute('data-preview');
       draftChip.setAttribute('data-assist', clsAssist ? '1' : '0');
+      draftChip.setAttribute('data-early', early ? '1' : '0');
+      draftChip.setAttribute('data-cancel', cancel ? '1' : '0');
       draftChip.className = 'pv-draft pv-draft-' + (k ? k.toLowerCase() : 'none') + (tooLong ? ' too-long' : '') + (prev ? ' pv-preview-' + String(prev).toLowerCase() : '');
     }
     function setHidden(e, h) { if (e.hidden !== h) e.hidden = h; }
@@ -1180,6 +1204,8 @@
       announce(lt);
       if (ctx.options && ctx.options.length) setTimer(function () { var b = cards.querySelector('button'); if (b) { try { b.focus(); } catch (e) { /* ignore */ } } }, 0);
       showSub('READ THE LOOK', 'info', 900);
+      // until he has drawn once: what comes after the card (the overlay, so the panel's height never changes)
+      if (!sessionDrew) setTimer(function () { if (phase === 'READ') showSub('AFTER THE SNAP: DRAW FROM THE QB', 'info', 60000); }, 950);
     }
     function makeLiveFor(s) {
       if (typeof opts.makeLive === 'function') return opts.makeLive(s);
@@ -1229,7 +1255,12 @@
       clockShown = -1;
       var shownNow = s && typeof s.shown === 'string' ? s.shown : shownId(), realNow = s && typeof s.real === 'string' ? s.real : (typeof ctx.real === 'string' ? ctx.real : '');
       if (shownNow && realNow && shownNow !== realNow) showSub('ROTATION · ' + coverageNameOf(realNow), 'clutch', alignMs + 1400);
-      if (!firstHintShown && num(sit.idx, -1) === 0) { firstHintShown = true; showToast('DRAW FROM THE QB — TO A RECEIVER TO PASS, INTO SPACE TO RUN', TIMING.firstHintMs); }
+      // the drive's first moment, until he has drawn once: the play WAITS at the snap (a pulsing ring on the QB, the
+      // hint up) for the first touch on the QB, a key (1–5, R, X) or THROW AWAY — the one instruction is never raced by the rush
+      holdFirst = !sessionDrew && num(sit.idx, -1) === 0;
+      if (holdFirst) { firstHintShown = true; toastLine.textContent = HINT; toastLine.hidden = false; }
+      else if (!firstHintShown && num(sit.idx, -1) === 0) { firstHintShown = true; showToast(HINT, TIMING.firstHintMs); }
+      elRoot.setAttribute('data-hold', holdFirst ? '1' : '0');
       setAria('Snap. Draw from the quarterback: to a receiver to pass, into space to run.');
       cue('click'); cue('haptic', 15);
       try { canvas.focus({ preventScroll: true }); } catch (e) { try { canvas.focus(); } catch (e2) { /* ignore */ } }
@@ -1256,14 +1287,15 @@
       input = Inp.create({
         canvasEl: canvas,
         active: canDraw,
+        pending: function () { return phase === 'PLAY' && !!lv && !frozen && alignU < 1 && !paused() && !!lv.qb.hasBall; },   // a press during the slide waits for the snap
         qbHit: qbHit,
         toField: cssToFieldCached,
         cssHeight: function () { return cv.h * (cv.scale || 1); },
         qbAt: function (out) { out.x = num(lv.qb.x, 0); out.y = num(lv.qb.y, 0); return out; },
         propose: proposeSpot,
         keys: function () { return liveSettings().keys; },
-        onDraftStart: function (src) { if (src === 'pointer') refreshRect(); cls = null; clsAssist = false; toastLine.hidden = true; },
-        onDraftEnd: function () { cls = null; dkind = ''; clsAssist = false; dispArr = null; dispN = 0; setDraftChip(); setDraftAttr(''); },
+        onDraftStart: function (src) { if (src === 'pointer') refreshRect(); cls = null; clsAssist = false; stickyKind = ''; stickyTarget = null; toastLine.hidden = true; releaseHold(); },
+        onDraftEnd: function () { cls = null; dkind = ''; clsAssist = false; dispArr = null; dispN = 0; setDraftChip(); setDraftAttr(''); },   // (the sticky intent survives to the commit, which follows the end; the next draft resets it)
         onCommit: onCommit,
         onThrowAway: doThrowAway,
         onStray: function (reason) {
@@ -1336,16 +1368,32 @@
       var c2 = lv.classify(assistArr, loftV);
       return c2 && c2.kind === 'PASS' && c2.target === c.target ? c2 : null;
     }
-    /** Once a frame while a draft exists: classify it (and the aim assist's snapped copy) — never per pointermove. */
-    function classifyDraft() {
-      var arr = input.points(), n = input.count(), lf = input.loft();
+    /**
+     * Once a frame while a draft exists: classify it (and the aim assist's snapped copy) — never per pointermove.
+     * A finger's INTENT is sticky: the kind the line had when the finger last moved (`moved`: new samples this frame)
+     * holds while it rests — a pass line whose receiver runs past its end in slow motion stays a PASS (a RED one: he is
+     * late now), and a run line a receiver wanders into stays a RUN. The commit follows the same rule (onCommit).
+     */
+    var stickyKind = '', stickyTarget = null;
+    function classifyDraft(moved) {
+      var arr = input.points(), n = input.count(), lf = input.loft(), ptr = input.source() === 'pointer';
       if (n < 1) { cls = null; clsAssist = false; dispArr = null; dispN = 0; return; }
       var c = lv.classify(arr, lf);
-      var a = input.source() === 'pointer' ? assistFor(arr, n, c, lf) : null;   // a keyboard line is built on the engine's spot already (and its nudges must stick)
+      var a = ptr ? assistFor(arr, n, c, lf) : null;   // a keyboard line is built on the engine's spot already (and its nudges must stick)
       if (a) { if (!clsAssist) cue('click'); cls = a; clsAssist = true; dispArr = assistArr; }
       else { cls = c; clsAssist = false; dispArr = arr; }
       dispN = n;
       dkind = cls ? String(cls.kind || '') : '';
+      if (ptr) {
+        if (moved || !stickyKind) { if (dkind === 'PASS' || dkind === 'RUN' || dkind === 'THROWAWAY') { stickyKind = dkind; stickyTarget = cls.target || null; } }
+        else if (stickyKind === 'PASS' && dkind === 'RUN') {             // resting on a pass line: still his pass, now RED
+          cls = { kind: 'PASS', target: stickyTarget, points: cls.points, length: cls.length, maxLen: cls.maxLen, tooLong: false, preview: 'RED', previewShown: cls.previewShown, margin: null, early: false, reason: '', sticky: true };
+          dkind = 'PASS';
+        } else if (stickyKind === 'RUN' && dkind === 'PASS') {           // resting on a run line: still his run
+          cls = { kind: 'RUN', target: null, points: cls.points, length: cls.length, maxLen: cls.maxLen, tooLong: false, preview: null, previewShown: cls.previewShown, margin: null, early: false, reason: '', sticky: true };
+          dkind = 'RUN'; clsAssist = false; dispArr = arr;
+        }
+      }
       // a keyboard RUN draft is a run whatever it crosses (the classify still says what a finger's line would be)
       if (dkind && dkind !== 'INVALID' && input.source() === 'key' && input.mode() === 'RUN') dkind = 'RUN';
       setDraftAttr(dkind);
@@ -1353,13 +1401,23 @@
     /** The draft was released (a finger lifted, Enter): classify the final line and hand it to the engine. */
     function onCommit(info) {
       if (!canDraw()) return;
-      var pts = info.points, lf = info.loft;
+      var pts = info.points, lf = info.loft, sticky = stickyKind;
       var c = lv.classify(pts, lf);
       var a = info.source === 'pointer' ? assistFor(pts, pts.length, c, lf) : null;
       if (a) { pts = copyPts(assistArr); c = a; }
       var kind = c ? c.kind : 'INVALID';
+      // a finger that rested before letting go commits what the line was when it last moved (classifyDraft's rule)
+      if (info.source === 'pointer' && !info.fresh && ((sticky === 'PASS' && kind === 'RUN') || (sticky === 'RUN' && kind === 'PASS'))) kind = sticky;
       if (info.source === 'key' && info.mode === 'RUN' && kind !== 'INVALID') kind = 'RUN';   // a keyboard RUN draft is a run whatever it crosses
       if (info.source === 'key' && info.mode === 'PASS' && kind === 'RUN') { showToast('NOBODY GETS THERE'); return; }   // … and a keyboard PASS never turns into a run
+      if (info.source === 'key' && info.mode === 'PASS' && kind === 'PASS' && info.slot && c.target !== info.slot) {
+        // the number named him but the line is another man's (a crosser flooding the same spot): re-aim straight at
+        // the spot HE can reach; if that is still someone else's ball, refuse — the key never throws to the wrong man
+        var o = { x: 0, y: 0 };
+        var c2 = proposeSpot(info.slot, lf, o, false) ? lv.classify([{ x: num(lv.qb.x, 0), y: num(lv.qb.y, 0) }, { x: o.x, y: o.y }], lf) : null;
+        if (!c2 || c2.kind !== 'PASS' || c2.target !== info.slot) { showToast(String(c.target) + ' GETS THERE FIRST'); return; }
+        pts = c2.points;
+      }
       applyCommit(kind, pts, lf);
     }
     function keepRun(points) {
@@ -1381,8 +1439,17 @@
       if (r && !r.ok && r.reason && kind !== 'INVALID') showToast(String(r.reason).toUpperCase());
       return r || { ok: false };
     }
+    /** The first moment's wait ends (a touch on the QB, a key, THROW AWAY, a programmatic line): the clock runs. */
+    function releaseHold() {
+      sessionDrew = true;
+      if (!holdFirst) return;
+      holdFirst = false;
+      elRoot.setAttribute('data-hold', '0');
+      if (!toastLine.hidden && toastLine.textContent === HINT) setTimer(function () { if (toastLine.textContent === HINT) toastLine.hidden = true; }, TIMING.hintMs);
+    }
     function doThrowAway() {
       if (!canPass()) return { ok: false, reason: 'NOT NOW' };
+      releaseHold();
       if (input) input.cancel();
       return applyCommit('THROWAWAY', null, 0.5);
     }
@@ -1405,10 +1472,12 @@
         case 'INT':
           cue('thunk', 0.6); cue('stingerBad');
           flashAlpha = reduced ? 0 : 0.35; flashColor = pal('red');
+          showSub('PICKED!', 'clutch', 900);                 // the pick reads at the pick, not 1.5 s later with the banner
           break;
         case 'CATCH':
           catchT = num(e.t, num(lv.t, 0)); catchSlot = recIdx[e.who] !== undefined ? recIdx[e.who] : -1;
           cue('thunk', 0.6); setAria('Caught.');
+          showSub('CAUGHT!', 'good', 700);
           break;
         case 'DROP': case 'INCOMPLETE': case 'OUT_OF_BOUNDS': case 'THROWAWAY':
           cue('whistle');
@@ -1452,9 +1521,9 @@
         readLive();
         return;
       }
-      if (input) input.update(t);
+      var moved = input ? input.update(t) : false;
       var drafting = !!(input && input.drafting());
-      var ts = frozen ? 0 : timeScaleNow(drafting);
+      var ts = frozen || holdFirst ? 0 : timeScaleNow(drafting);   // the first moment waits at the snap for the first touch
       if (drafting && ts < 1) slowUsed += dt / 1000;
       curScale = ts;
       if (!frozen) {
@@ -1463,7 +1532,7 @@
       }
       drainEvents();
       readLive();
-      if (drafting && input && input.drafting()) classifyDraft();
+      if (drafting && input && input.drafting()) classifyDraft(moved);
       else if (cls) { cls = null; dkind = ''; clsAssist = false; dispArr = null; dispN = 0; setDraftAttr(''); }
       setDraftChip();
       setSlowHud(!!(input && input.drafting()));
@@ -1632,7 +1701,9 @@
       if (phase === 'RESULT' || phase === 'RUN') { if (skip()) e.preventDefault(); }
     }
     function onKey(e) {
-      if (destroyed || e.repeat) return;
+      if (destroyed) return;
+      // a held Enter / Space auto-repeats: swallow the repeats so they never click the focused TAP TO READ or a card
+      if (e.repeat) { if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') e.preventDefault(); return; }
       if (e.key === 'Escape' && !e.altKey && !e.ctrlKey && !e.metaKey) {
         if (opts.onSettings) { e.preventDefault(); if (input) input.cancel(); opts.onSettings(); return; }
         if (PlayView.escapeToSettings(e)) { e.preventDefault(); if (input) input.cancel(); }
@@ -1689,6 +1760,10 @@
       if (!aShow[a]) return;
       var s = aS[a], x = aSX[a], y = aSY[a];
       if (a === IQB) {
+        if (holdFirst && phase === 'PLAY' && alignU >= 1) {       // the first moment waits for a touch: a pulsing ring says where
+          var pulse = reduced ? 1 : 1 + 0.18 * Math.sin(now() / 160), rw = Math.max(10, Math.round(FIELD.ringW * 1.5 * pulse)), rh = Math.max(4, Math.round(7.5 * pulse));
+          g.drawImage(rings.tight, Math.round(x - rw / 2), Math.round(y - rh / 2), rw, rh);
+        }
         var spr = qbSpr[phase === 'RUN' && runActor === IQB ? aFrame[IQB] : qbPose()] || qbSpr[0];
         if (lv && lv.qb.down) {
           // sacked / tackled: the set pose on his side (rotated a quarter turn, the tackler drawn over him) and the ball loose
@@ -1743,7 +1818,7 @@
       for (k = 1; k < n; k++) { bx = arr[k].x; by = arr[k].y; total += Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay)); ax = bx; ay = by; }
       if (!(total > 0)) return;
       g.globalAlpha = alpha;
-      var red = false, ink = pal('ink'), redC = pal('red');
+      var red = false, ink = COL.ink, redC = COL.red;
       var cum = 0, fx0 = sx, fy0 = sy;
       project(fx0, fy0); var px0 = pt.x, py0 = pt.y, carry = 0;
       for (k = 1; k < n; k++) {
@@ -1775,7 +1850,7 @@
     function drawFeet(arr, n, sx, sy, alpha, fromIdx) {
       if (n < 2) return;
       g.globalAlpha = alpha;
-      var fx0 = sx, fy0 = sy, carry = 0, side = 1, ink = pal('ink'), chalk = pal('chalk');
+      var fx0 = sx, fy0 = sy, carry = 0, side = 1, ink = COL.ink, chalk = COL.chalk;
       for (var k = Math.max(1, fromIdx); k < n; k++) {
         var fx1 = arr === null ? runBufX[k] : arr[k].x, fy1 = arr === null ? runBufY[k] : arr[k].y;
         var dx = fx1 - fx0, dy = fy1 - fy0, d = Math.sqrt(dx * dx + dy * dy);
@@ -1819,13 +1894,13 @@
         return;
       }
       if (k === 'THROWAWAY') {
-        drawDots(dispArr, dispN, qx, qy, pal('grey'), FIELD.awayDotPx, 0, Infinity, 1, 0);
+        drawDots(dispArr, dispN, qx, qy, COL.grey, FIELD.awayDotPx, 0, cls.tooLong ? num(cls.maxLen, Infinity) : Infinity, 1, 0);
         var e = dispArr[dispN - 1]; drawLanding(e.x, e.y, 'THROWAWAY', null, false, false);
         return;
       }
       if (k !== 'PASS') return;
       var maxLen = num(cls.maxLen, Infinity);
-      drawDots(dispArr, dispN, qx, qy, pal('gold'), FIELD.passDotPx, input ? input.loft() : 0.5, maxLen, 1, 0);
+      drawDots(dispArr, dispN, qx, qy, COL.gold, FIELD.passDotPx, input ? input.loft() : 0.5, maxLen, 1, 0);
       // the landing: the end of the engine's (truncated) line
       var cp = cls.points && cls.points.length ? cls.points[cls.points.length - 1] : dispArr[dispN - 1];
       drawLanding(num(cp.x, 0), num(cp.y, 0), 'PASS', cls.preview, !!cls.previewShown, clsAssist);
@@ -1842,25 +1917,45 @@
       if (runBufI >= runBufN - 1) return;
       drawFeet(null, runBufN, qx, qy, 0.6, runBufI + 1);
     }
+    /** The ball in flight advanced along its own flown path by speed × live.rest (the actors' presentation offset) → bpt. */
+    var bpt = { x: 0, y: 0, h: 0 };
+    function ballNow(b) {
+      bpt.x = num(b.x, 0); bpt.y = num(b.y, 0); bpt.h = Math.max(0, num(b.h, 0));
+      var rs = restNow(), P = b.path, len = num(b.length, 0), sp = num(b.speed, 0);
+      if (!(rs > 0) || lv.phase !== 'BALL_IN_AIR' || !P || P.length < 2 || !(len > 0) || !(sp > 0)) return bpt;
+      var want = Math.min(len, num(b.u, 0) * len + sp * rs), acc = 0;
+      for (var k = 1; k < P.length; k++) {
+        var dx = P[k].x - P[k - 1].x, dy = P[k].y - P[k - 1].y, d = Math.sqrt(dx * dx + dy * dy);
+        if (acc + d >= want || k === P.length - 1) { var u = d > 0 ? clamp((want - acc) / d, 0, 1) : 0; bpt.x = P[k - 1].x + dx * u; bpt.y = P[k - 1].y + dy * u; break; }
+        acc += d;
+      }
+      var Fd = RTG.Field;
+      if (Fd && typeof Fd.heightAt === 'function') bpt.h = Math.max(0, num(Fd.heightAt(want / len, num(b.apex, 0)), bpt.h));
+      return bpt;
+    }
     function drawBall() {
       if (phase !== 'PLAY' && phase !== 'RESULT' && phase !== 'DONE') return;
       if (!lv || !lv.ball) return;
       var b = lv.ball;
       if (b.caught && carrier !== -1) return;                     // in someone's hands (drawn on him)
       var dead = num(b.deadAt, -1) >= 0;
-      var bx = num(b.x, 0), by = num(b.y, 0), h = Math.max(0, num(b.h, 0));
+      ballNow(b);
+      var bx = bpt.x, by = bpt.y, h = bpt.h;
       if (!dead && lv.phase === 'BALL_IN_AIR') {
         // the rest of the flown path, faint, and where it lands
         if (b.path && b.path.length > 1) {
           var tot = 0;
           for (var k = 1; k < b.path.length; k++) { var ddx = b.path[k].x - b.path[k - 1].x, ddy = b.path[k].y - b.path[k - 1].y; tot += Math.sqrt(ddx * ddx + ddy * ddy); }
-          drawDots(b.path, b.path.length, num(b.path[0].x, 0), num(b.path[0].y, 0), pal('gold'), 4, 0, Infinity, 0.45, num(b.u, 0) * tot);
+          drawDots(b.path, b.path.length, num(b.path[0].x, 0), num(b.path[0].y, 0), COL.gold, 4, 0, Infinity, 0.45, num(b.u, 0) * tot);
         }
         if (b.landing) drawLanding(num(b.landing.x, 0), num(b.landing.y, 0), b.kind === 'THROWAWAY' ? 'THROWAWAY' : 'PASS', null, false, false);
       }
       project(bx, by);
       var groundY = Math.round(pt.y), sx = Math.round(pt.x), s = pt.s, lift = h * L.pxPerYd * s * L.kv;
-      if (b.tipped && tipReal && now() - tipReal < TIMING.tipMs * 0.4) drawMark(tipStar, pt.x, groundY - lift, 1);   // the hand on it
+      if (b.tipped && tipReal && now() - tipReal < TIMING.tipMs * 0.4) {        // the hand on it: a star that reads at phone size, a one-frame ring pulse
+        drawMark(tipStar, pt.x, groundY - lift, 2);
+        if (now() - tipReal < 50) drawMark(rings.covered, pt.x, groundY - lift, 2);
+      }
       // the shadow on the ground (narrower the higher the ball) and the ball above it (a tipped ball tumbles)
       var size = 3 + 5 * s * (1 + 0.04 * h);
       // the shadow on the ground: two rows (a flat oval), so the gap between it and the ball reads as height
@@ -1877,14 +1972,14 @@
       for (var i = 0; i < pCount; i++) g.drawImage(spr, Math.round(particles[i * 4]), Math.round(particles[i * 4 + 1]));
     }
     function drawOverlays() {
-      if (weatherKind() === 'fog') { g.fillStyle = pal('chalk'); g.globalAlpha = 0.18; g.fillRect(0, L.yHor - 12, L.W, Math.round((L.yLOS - L.yHor) * 0.6)); g.globalAlpha = 1; }
+      if (fogOn) { g.fillStyle = COL.chalk; g.globalAlpha = 0.18; g.fillRect(0, L.yHor - 12, L.W, Math.round((L.yLOS - L.yHor) * 0.6)); g.globalAlpha = 1; }
       if (slowBands) {
         // slow motion: letterbox bands (the stage's CSS also desaturates the canvas)
         var bh = Math.max(6, Math.round(L.H * 0.035));
-        g.fillStyle = pal('ink'); g.globalAlpha = 0.55; g.fillRect(0, 0, L.W, bh); g.fillRect(0, L.H - bh, L.W, bh); g.globalAlpha = 1;
-        g.fillStyle = pal('gold'); g.fillRect(0, bh, L.W, 1); g.fillRect(0, L.H - bh - 1, L.W, 1);
+        g.fillStyle = COL.ink; g.globalAlpha = 0.55; g.fillRect(0, 0, L.W, bh); g.fillRect(0, L.H - bh, L.W, bh); g.globalAlpha = 1;
+        g.fillStyle = COL.gold; g.fillRect(0, bh, L.W, 1); g.fillRect(0, L.H - bh - 1, L.W, 1);
       }
-      if (phase === 'SITUATION') { g.fillStyle = pal('ink'); g.globalAlpha = 0.55; g.fillRect(0, 0, L.W, L.H); g.globalAlpha = 1; }
+      if (phase === 'SITUATION') { g.fillStyle = COL.ink; g.globalAlpha = 0.55; g.fillRect(0, 0, L.W, L.H); g.globalAlpha = 1; }
       if (flashAlpha > 0) { g.fillStyle = flashColor; g.globalAlpha = flashAlpha; g.fillRect(0, 0, L.W, L.H); g.globalAlpha = 1; flashAlpha = Math.max(0, flashAlpha - 0.05); }
     }
     function draw() {
@@ -1936,6 +2031,7 @@
       teardownInput();
       sit = ctx.situation || {};
       venue = venueOf(ctx);
+      fogOn = weatherKind() === 'fog';
       clutch = !!(ctx.clutch || (ctx.pressure && ctx.pressure.clutch) || sit.clutch);
       pressure = clamp(num(sit.pressure, num(ctx.pressureLevel, clutch ? 0.7 : 0.35)), 0, 1);
       if (pressure >= 0.6) clutch = true;
@@ -1988,7 +2084,7 @@
         assisted: clsAssist, reason: cls ? (cls.reason || '') : ''
       };
     }
-    function timeScale() { return paused() && phase === 'PLAY' ? 0 : (phase === 'PLAY' && lv && !frozen ? curScale : 1); }
+    function timeScale() { return paused() && phase === 'PLAY' ? 0 : (phase === 'PLAY' && lv && !frozen ? (holdFirst ? 0 : curScale) : 1); }
 
     var view = {
       el: elRoot, canvas: canvas, cv: cv,
@@ -2001,7 +2097,11 @@
       timeScale: timeScale,
       drawing: drawing,
       /** {sim, t, phase, livePhase, play, timeScale, drafting, target}: what the scene is playing right now (RTG.debug). */
-      current: function () { return { sim: sim, t: lv ? num(lv.t, 0) : 0, phase: phase, livePhase: lv ? lv.phase : null, play: pickedId, timeScale: timeScale(), drafting: !!(input && input.drafting()), target: cls && cls.kind === 'PASS' ? cls.target : null, slowLeftS: Math.max(0, slowBudget - slowUsed) }; },
+      current: function () { return { sim: sim, t: lv ? num(lv.t, 0) : 0, phase: phase, livePhase: lv ? lv.phase : null, play: pickedId, timeScale: timeScale(), drafting: !!(input && input.drafting()), target: cls && cls.kind === 'PASS' ? cls.target : null, slowLeftS: Math.max(0, slowBudget - slowUsed), holding: holdFirst }; },
+      /** The drive's first moment waits at the snap for the first touch (true while it waits; .playview[data-hold="1"]). */
+      holding: function () { return holdFirst; },
+      /** Start the clock without a touch (the e2e hands that watch the play run first; RTG.debug.unhold). */
+      unhold: function () { var was = holdFirst; releaseHold(); return was; },
       /** Field yards → client css px (the viewport coordinates a pointer event carries). */
       fieldToCss: fieldToCss,
       /** True while a draft may start: PLAY, the slide done, the QB has the ball, no modal (also .playview[data-can-draw="1"]). */
@@ -2032,12 +2132,14 @@
       /** Programmatic pass along field points (tests / RTG.debug.drawPass): straight to live.throwAlong. */
       commitPass: function (points, loft) {
         if (!canPass()) return { ok: false, reason: 'NOT NOW' };
+        releaseHold();
         if (input) input.cancel();
         return applyCommit('PASS', copyPts(points), clamp(num(loft, 0.5), 0, 1));
       },
       /** Programmatic run along field points: live.setRun. */
       commitRun: function (points) {
         if (!canDraw()) return { ok: false, reason: 'NOT NOW' };
+        releaseHold();
         if (input) input.cancel();
         return applyCommit('RUN', copyPts(points), 0.5);
       },

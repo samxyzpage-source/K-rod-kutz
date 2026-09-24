@@ -132,6 +132,7 @@
           hash: { HS: 6.667, COLLEGE: 6.667, NFL: 3.083 },   // yd from the field's centre to a hash (ctx.hash −1 left / 0 middle / 1 right; the scene's numbers)
           sideMargin: 3,           // yd: no one lines up closer than this to a sideline (a 22-yd split on the short side is pulled in)
           inbounds: 0.6,           // yd: a route runs along the sideline this far inside it, never out of bounds
+          feetIn: 0.2,             // yd: a receiver breaking to the ball keeps his feet this far inside a sideline / the end line (a toe-tap: his hands reach catchR past it; a man out of bounds never catches)
           arriveGain: 3.2,         // 1/s: a steered player wants min(vmax, gain × distance) — he slows into his spot
           accel: 21,               // yd/s²: how fast anybody changes velocity (0 → 9 yd/s in under half a second)
           recAccel: 11,            // yd/s²: a receiver breaking to the ball (a ball thrown behind him costs him the stop and the turn)
@@ -154,7 +155,7 @@
           },
           qbDrop: { depth: -7, gunT: 0.6, underT: 1.1, paT: 0.35 },   // the default drop: to y = depth by gunT (gun) / underT (under centre), + paT on play action
           // speeds (yd/s)
-          qbSpeed: { base: 4.9, perMob: 3.0 },            // MOB 50 → 6.4 · 72 → 7.1 · 99 → 7.9 (a Dual Threat who scrambles every snap makes ≈ 5 yd — viable, not better than passing)
+          qbSpeed: { base: 4.9, perMob: 3.0, back: 0.45, backFree: 0.25 }, // MOB 50 → 6.4 · 72 → 7.1 · 99 → 7.9 (a Dual Threat who scrambles every snap makes ≈ 5 yd — viable, not better than passing) · back / backFree: a drawn run heading for his own goal line is × (1 − back × (its backward share − backFree) / (1 − backFree)) (straight back 55 %: a retreat is a backpedal and buys ≤ 0.5 s; a rollout drifting back less than 1 yd in 4 is not slowed)
           recSpeed: { base: 7.2, perSpeed: 2.8 },         // a receiver off his route (breaking to the ball, after the catch): speed 50 → 8.6 · 70 → 9.2 · 86 → 9.6
           defSpeed: { base: 7.6, perSkill: 2.6, pos: { CB: 1.0, NB: 0.98, S: 0.97, LB: 0.9, DL: 0.78 } },   // × by position group: a 56-skill corner 9.1 (a receiver's pace) · linebacker 8.2 · lineman 7.1
           shedSlow: 0.35,          // × speed while shed (a broken tackle / an escaped sack: he is on the ground for shedS)
@@ -184,7 +185,10 @@
             pocketBack: 3.0,       // yd: an unblocked lineman settles this far in front of the drop
             olGap: 0.9,            // yd: a blocker stands this far between his rusher and the QB
             olNarrow: 0.85,        // × his split: an unblocked lineman's home narrows toward the pocket
-            olSettle: 2            // 1/s: how fast an unblocked lineman eases to his home
+            olSettle: 2,           // 1/s: how fast an unblocked lineman eases to his home
+            olSpeed: 8,            // yd/s: a lineman never moves faster than this (presentation: no pop at the snap)
+            olReach: 4,            // yd: a lineman picks up a rusher only this close laterally (a guard does not leave the pocket for a blitzer from the slot)
+            leash: 4               // yd: a QB this much deeper than a held rusher's pocket spot (1.4 yd behind the drop) releases him (running away from the pocket buys no time; depth only, so a rollout keeps its benefit)
           },
           pressR: 4,               // yd: a rusher inside tackleR + pressR puts pressure on the throw (scatter) and the RUSH meter
           heldPressure: 0.5,       // × a still-blocked rusher's pressure
@@ -208,7 +212,7 @@
           sack: { base: -0.06, perMob: 0.42, max: 0.6 },   // P(escape) = base + perMob × MOB/99: 50 → 15 % · 72 → 25 % · 99 → 36 %
           tip: { base: 0.42, perSkill: 0.3, near: 0.4, blind: 0.45, held: 0.08, hBand: 0.6, hMin: 0.1, max: 0.85 },   // P(a hand on it) = (base + perSkill × skill/99) × (near + (1 − near) × closeness) × clamp((reach − h) / hBand, hMin, 1) × (blind before his react) × (held: an engaged rusher) (base 0.42: a 20-yd bullet through a linebacker is got ≈ 1 time in 2; a touch pass over him mid-flight ≈ 1 in 60, but 1 in 4 when he sits just in front of the receiver; a lob never)
           int: { touch: 0.5, high: 0.35, blind: 0.4, chest: 0.7, held: 0.3, alone: 0.8, contest: 0.1 },   // P(pick | a hand on it in flight) = touch × (high when the ball is above chest height: h > reach − chest) × (blind) · at the landing: a defender alone → alone × closeness · a contested miss → contest × Σ contest
-          catch: { base: 0.95, perSkill: 0.08, reachPen: 0.35, contest: 0.4, first: 1.3, heat: 0.3, heatT: 0.5, heatLoft: 0.5, min: 0.05, max: 0.98 },   // P(catch) = base + perSkill × skill/99 − reachPen × (miss/catchR)² (0.35: a ball he has to reach for at the edge of his radius is caught ≈ 1 time in 3 less — where the ball lands, the accuracy, counts) − contest × Σ contest (a defender closer to the ball than the catcher counts × first) − hot, hot = heat × (1 − flight/heatT) × (1 − loft/heatLoft) (a flat ball over a short flight is too hot to handle: a 5-yd bullet −0.19, a touch pass 0)
+          catch: { base: 0.95, perSkill: 0.08, reachPen: 0.35, contest: 0.4, first: 1.3, heat: 0.3, heatT: 0.5, heatLoft: 0.5, early: 0.35, earlyT: 0.8, min: 0.05, max: 0.98 },   // P(catch) = base + perSkill × skill/99 − reachPen × (miss/catchR)² (0.35: a ball he has to reach for at the edge of his radius is caught ≈ 1 time in 3 less — where the ball lands, the accuracy, counts) − contest × Σ contest (a defender closer to the ball than the catcher counts × first) − hot, hot = heat × (1 − flight/heatT) × (1 − loft/heatLoft) (a flat ball over a short flight is too hot to handle: a 5-yd bullet −0.19, a touch pass 0) − early × clamp((his route's window.open − the arrival) / earlyT, 0, 1) (a ball that beats the break finds a man not looking yet: the no-read throw at 0.7 s completes ≈ 69 %, not ≈ 78 %)
           drop: { base: 0.05, contest: 0.08 },   // P(drop | caught) = base × (1 − skill/99) + contest × Σ contest (an open 60-skill receiver drops ≈ 2 %)
           tackle: { base: 0.04, perSkill: 0.14, perSpeed: 0.1, defSkill: 0.14, min: 0.03, max: 0.5 },   // P(broken tackle) = base + perSkill × skill/99 + perSpeed × speed/99 − defSkill × def skill/99
           evade: { r: 6, w: 0.6, upW: 0.3, minUp: 0.35, sideR: 3, look: 5 },   // the ball carrier bends away from defenders inside r (weight w laterally, × upW along the field), never less than minUp upfield, off a sideline inside sideR, steering at a point look yd ahead
@@ -238,7 +242,10 @@
           previewPad: 0.3,         // yd: added to reachR for the preview's in-flight check (the defender will move)
           previewHot: 0.1,         // a line whose hot-ball catch penalty (field.catch.heat) reaches this is never GREEN (take something off it)
           previewIq: 70,           // IQ at or above this sees the preview colour (the FIELD GENERAL's perk)
-          loft: { fastHps: 2.4, slowHps: 0.5 },   // canvas-heights per second of drawing: this fast or faster → a bullet (loft 0), this slow or slower → a lob (1)
+          loft: { fastHps: 1.3, slowHps: 0.35 },  // canvas-heights per second of drawing: this fast or faster → a bullet (loft 0), this slow or slower → a lob (1) (1.3 / 0.35: on a 390-px phone a 12-yd line drawn in ≤ 0.36 s is a bullet, ≥ 0.53 s a lob — an aimed thumb stroke, 0.3–0.5 s, is a bullet or a touch pass)
+          earlyDepth: 6,           // yd past the line: a line ending at least this deep on a receiver's route ahead of him is a pass drawn too fast (a RED PASS), not a run (shorter lines stay runs: the scramble)
+          earlyS: 2.0,             // s: … when his route gets within catchR of its end within this long after the ball lands (2: a bullet flicked to a deep man's lob spot lands up to ≈ 1.6 s early)
+          earlyStep: 0.1,          // s: … checked every this along his route
           assistYd: 3.5,           // yd: a PASS line's end this close to the target's reachable spot snaps onto it (aim assist; 3.5: a new player's line at where the man IS snaps to where he is going on most short routes)
           resampleYd: 0.75,        // yd: the scene resamples the drawn points to this spacing
           maxPoints: 600           // points: longer polylines are thinned (classify stays cheap)

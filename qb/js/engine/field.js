@@ -27,18 +27,23 @@
  *                               a RUN line thrown anyway is a pass to nobody)
  *   throwAway()               → {ok, kind: 'THROWAWAY', target: null, reason}
  *   result() · plan() · snapshot()
- * The rules in one breath: the QB drops (or runs his line); receivers run their paths; man defenders trail their man
- * (their trail, cushion and inside leverage), zones drop to landmarks and shade to the nearest threat (deep zones stay
- * over the top), the spy mirrors, the rush is held by the line until beatAt and then chases the QB where he IS; a
- * free defender within tackleR of the QB behind the line → the sack roll (escape by MOB); the ball flies its path at
- * its speed with height h(u) (a lofted ball is put up higher: Field.apex × (1 + height.lift × loft)); every defender
- * gets one contact roll the first time it passes within reachR under his reach (tip, or a pick); a defender in the
- * lane jumps it; everybody else breaks on the landing spot after his react; at the landing the catch contest (a flat
- * ball over a short flight is hot — catch.heat — and never previews GREEN); after a catch the carrier runs for the goal line, bending away from pursuit, and
- * every defender within tackleR rolls a tackle (or is broken and shed); the QB across the line is a scramble; the
- * sideline, the goal line and maxT end it (on a scramble the defenders who face him react × react.scramble, the man
- * defenders with their backs turned × react.manScramble). After DONE everybody coasts (presentation only: no rolls,
- * no events).
+ * The rules in one breath: the QB drops (or runs his line; heading for his own goal line is a backpedal,
+ * qbSpeed.back); receivers run their paths (a man who starts behind the line makes up his depth in time, not speed);
+ * man defenders trail their man (their trail, cushion and inside leverage), zones drop to landmarks and shade to the
+ * nearest threat (deep zones stay over the top), the spy mirrors, the rush is held by the line until beatAt (or until
+ * the QB runs rush.leash yd behind the pocket) and then chases the QB where he IS; a free defender within tackleR of the
+ * QB behind the line → the sack roll (escape by MOB); the ball flies its path at its speed with height h(u) (a lofted
+ * ball is put up higher: Field.apex × (1 + height.lift × loft)); every defender gets one contact roll the first time
+ * it passes within reachR under his reach (tip, or a pick) — up to the catch point: only a man within catchR of the
+ * landing contests the catch instead; a defender in the lane jumps it; everybody else breaks on the landing spot after
+ * his react (a throw-away is nobody's ball); at the landing the catch contest (a flat ball over a short flight is hot —
+ * catch.heat —, a ball that beats his route's break finds him not looking — catch.early —, and neither previews GREEN;
+ * a man out of bounds never catches or picks it: receivers keep their feet in, defenders stop at the lines); after a
+ * catch the carrier runs for the goal line, bending away from pursuit, and every defender within tackleR rolls a tackle
+ * (or is broken and shed); the QB across the line is a scramble; the sidelines, his own end line, the goal line (the
+ * TD event: a spot is never rounded up into a score or the sticks) and maxT end it (on a scramble the defenders who
+ * face him react × react.scramble, the man defenders with their backs turned × react.manScramble). After DONE
+ * everybody coasts (presentation only: no rolls, no events).
  *
  * RNG draw accounting (binding):
  *   setup  (inside Play.snap's 'play:snap' child), in order: per receiver in slot order a route-clock jitter gauss 2
@@ -48,9 +53,11 @@
  *          in-play events, in EVENT ORDER: a free defender reaching the QB behind the line → escape roll 1 ·
  *          a PASS release → scatter gauss 2 (lateral) + gauss 2 (length) (a THROWAWAY draws nothing) · the ball
  *          passing within reachR of a defender under his reach → touch roll 1 (+ pick roll 1 on a touch; once per
- *          defender per throw) · the landing: a receiver within catchR → catch roll 1, then drop roll 1 (caught) or
- *          pick roll 1 (missed with a defender contesting) · no receiver but a defender within catchR → pick roll 1 ·
- *          a defender within tackleR of the ball carrier → broken-tackle roll 1 each time.
+ *          defender per throw; in the last catchZone yd too for anyone farther than catchR from the landing — the
+ *          ones still pending on the landing sub-step, before the catch) · the landing: a catcher out of bounds → 0
+ *          (INCOMPLETE); a receiver within catchR → catch roll 1, then drop roll 1 (caught) or pick roll 1 (missed with
+ *          a defender contesting, in bounds) · no receiver but a defender within catchR, in bounds → pick roll 1 · a
+ *          defender within tackleR of the ball carrier → broken-tackle roll 1 each time.
  *          The same sim, the same rng state and the same inputs at the same sim times give the same draws.
  *   ghost, classify, aim, frame, alignment, every helper: 0.
  */
@@ -298,6 +305,17 @@
     return out;
   }
 
+  /**
+   * When a sim receiver's route is "there" (his window opens): the route's window.open on his clock (speed-scaled, the
+   * snap's jitter in — derived from his key spot, which sits at the window's middle); 0 when unknown. 0 draws.
+   */
+  function routeOpen(rec) {
+    var rt = rec && D().routes[rec.route], W0 = rt && rt[WINDOW];
+    if (!W0 || !rec.key || typeof rec.key.t !== 'number') return 0;
+    return Math.max(0, rec.key.t - (W0.close - W0.open) / 2 * speedScale(rec.speed));
+  }
+  Field.routeOpen = routeOpen;
+
   /** {x, y} of a sim receiver at time t (a copy; the scene's READ → snap slide and the tests use it). 0 draws. */
   Field.pathAt = function (rec, t) { return pathInto(rec, num(t, 0), { x: 0, y: 0 }); };
 
@@ -408,7 +426,10 @@
   /**
    * A receiver's absolute path: the route's waypoints (t × speedScale + the snap's clock jitter; x from the alignment
    * toward his sideline; y downfield, capped at capY) plus his depth at the line fading out over route.releaseT (the gun
-   * back starts 5 yd deep). Exact piecewise-linear waypoints; x is held inside the field when sampled (xMin / xMax).
+   * back starts 5 yd deep). A man who starts behind the line makes up that depth in TIME, not in speed: no segment of
+   * his path is faster than max(his route's fastest segment, Field.recSpeed(speed)) — a slower segment is stretched and
+   * everything after it shifts later (the gun back's wheel starts ≈ 0.1 s later; he never outruns every defender).
+   * Exact piecewise-linear waypoints; x is held inside the field when sampled (xMin / xMax).
    */
   function buildPath(route, wr, scale, jitter, capY) {
     var R = P().route, rel = Math.max(0.1, num(R.releaseT, 1)), y0 = num(wr.y0, 0);
@@ -433,12 +454,28 @@
     var all = times.slice();
     if (y0 !== 0 && rel < times[times.length - 1]) all.push(rel);
     all.sort(function (a, b) { return a - b; });
+    var PT = [], PX = [], PY = [];
     for (i = 0; i < all.length; i++) {
       if (i && Math.abs(all[i] - all[i - 1]) < 1e-6) continue;
       var t2 = all[i], r = routeAt(t2);
       var fade = y0 * Math.max(0, 1 - t2 / rel);
-      pts.push({ t: rd(t2), x: rd(wr.x0 + wr.side * r.x), y: rd(Math.min(capY, r.y + fade)) });
+      PT.push(t2); PX.push(wr.x0 + wr.side * r.x); PY.push(Math.min(capY, r.y + fade));
     }
+    if (y0 !== 0) {                              // the depth fade is paid in time: cap every segment's speed
+      var vCap = Field.recSpeed(wr.speed);
+      for (i = 1; i < times.length; i++) {
+        var rdt = times[i] - times[i - 1];
+        if (rdt > EPS) vCap = Math.max(vCap, hyp(route.path[i].x - route.path[i - 1].x, route.path[i].y - route.path[i - 1].y) / rdt);
+      }
+      var shift = 0, prevT = PT[0];
+      for (i = 1; i < PT.length; i++) {
+        var segT = PT[i] - prevT, need = hyp(PX[i] - PX[i - 1], PY[i] - PY[i - 1]) / vCap;
+        prevT = PT[i];
+        if (need > segT) shift += need - segT;
+        PT[i] = PT[i] + shift;
+      }
+    }
+    for (i = 0; i < PT.length; i++) pts.push({ t: rd(PT[i]), x: rd(PX[i]), y: rd(PY[i]) });
     return pts;
   }
 
@@ -619,6 +656,7 @@
     var qbSpd = Field.qbSpeed(attrs), maxLen = Field.maxLen(attrs);
     var dropY = sim.qbDrop.y, dropT = Math.max(0.05, sim.qbDrop.t), qbX0 = sim.qbStart.x, qbY0 = sim.qbStart.y;
     var revealAt = num(sim.revealAt, 0);
+    var ownEndY = fld.goalY - FIELD_YARDS - T.endZone;           // the back of the offence's own end zone
     var tmp = { x: 0, y: 0 }, tmp2 = { x: 0, y: 0 }, lastMargin = 0, lastBest = -1, lastBestM = -Infinity;
 
     var live = {
@@ -631,13 +669,14 @@
     };
 
     // ── receivers ──
-    var recSpd = new Array(nR), recMode = new Array(nR), recBreakAt = new Array(nR), recBreakSpd = new Array(nR);
+    var recSpd = new Array(nR), recMode = new Array(nR), recBreakAt = new Array(nR), recBreakSpd = new Array(nR), recOpen = new Array(nR);
     var hist = new Float64Array(nR * HISTORY * 2);
     for (i = 0; i < nR; i++) {
       pathInto(roster[i], 0, tmp);
       live.receivers[i] = { slot: roster[i].slot, x: tmp.x, y: tmp.y, vx: 0, vy: 0, sep: 0, open: 0, target: false, shown: revealAt <= 0 };
       recSpd[i] = Field.recSpeed(roster[i].speed);
       recMode[i] = M_ROUTE; recBreakAt[i] = Infinity; recBreakSpd[i] = recSpd[i];
+      recOpen[i] = routeOpen(roster[i]);
       for (j = 0; j < HISTORY; j++) { hist[(i * HISTORY + j) * 2] = tmp.x; hist[(i * HISTORY + j) * 2 + 1] = tmp.y; }
     }
     var slotIdx = {};
@@ -663,7 +702,9 @@
     }
     var firstBeat = sim.rushers.length ? sim.rushers[0].beatAt : Infinity;
 
-    // ── linemen: each blocks the nearest rusher (greedy in beat order) ──
+    // ── linemen: each blocks the nearest rusher (greedy in beat order) within rush.olReach yd laterally (a blitzer
+    //    from the slot is nobody's man: a guard does not leave the pocket for him). Presentation only: whether a
+    //    rusher is held is his beatAt, not the linemen. ──
     var olAssign = [-1, -1, -1, -1, -1], olHomeX = new Array(5), olHomeY = new Array(5);
     for (i = 0; i < 5; i++) {
       live.linemen[i] = { x: sim.linemen[i].x, y: sim.linemen[i].y };
@@ -673,11 +714,11 @@
       var ri = -1;
       for (j = 0; j < nD; j++) if (defs[j].id === sim.rushers[i].defId) ri = j;
       if (ri < 0) continue;
-      var bestOl = -1, bestD = Infinity;
+      var bestOl = -1, bestD = num(T.rush.olReach, Infinity);
       for (var m = 0; m < 5; m++) {
         if (olAssign[m] >= 0) continue;
         var dxo = Math.abs(sim.linemen[m].x - defs[ri].x0);
-        if (dxo < bestD) { bestD = dxo; bestOl = m; }
+        if (dxo <= bestD) { bestD = dxo; bestOl = m; }
       }
       if (bestOl >= 0) olAssign[bestOl] = ri;
     }
@@ -757,11 +798,10 @@
         var w = (E.r - dist) / E.r * E.w;
         dx += ex / dist * w; dy += ey / dist * w * E.upW;
       }
-      if (!returning) {
-        if (o.x - fld.sideL < E.sideR) dx += (E.sideR - (o.x - fld.sideL)) / E.sideR;
-        if (fld.sideR - o.x < E.sideR) dx -= (E.sideR - (fld.sideR - o.x)) / E.sideR;
-        if (dy < E.minUp) dy = E.minUp;
-      }
+      // off a sideline (an interceptor's return too: he stays in bounds); a carrier always makes some ground upfield
+      if (o.x - fld.sideL < E.sideR) dx += (E.sideR - (o.x - fld.sideL)) / E.sideR;
+      if (fld.sideR - o.x < E.sideR) dx -= (E.sideR - (fld.sideR - o.x)) / E.sideR;
+      if (!returning && dy < E.minUp) dy = E.minUp;
       var n = hyp(dx, dy) || 1;
       steer(o, o.x + dx / n * E.look, o.y + dy / n * E.look, vmax, false);
     }
@@ -773,7 +813,15 @@
       var q = live.qb;
       if (q.down) { brake(q); return; }
       if (q.hasBall && runPts) {
-        runSpeed = Math.min(qbSpd, runSpeed + T.accel * DT);
+        // his speed along the line: full laterally, upfield and on a shallow drift back (a rollout), a backpedal when it
+        // heads for his own goal line (qbSpeed.back × the backward share past qbSpeed.backFree: a retreat buys no time)
+        var vRun = qbSpd, back = num(T.qbSpeed.back, 0), bFree = clamp(num(T.qbSpeed.backFree, 0), 0, 0.95);
+        if (back > 0) {
+          pointAt(runPts, runCum, runS, tmp); pointAt(runPts, runCum, Math.min(runLen, runS + 0.25), tmp2);
+          var sdx = tmp2.x - tmp.x, sdy = tmp2.y - tmp.y, sdl = hyp(sdx, sdy), share = sdl > EPS ? -sdy / sdl : 0;
+          if (share > bFree) vRun = qbSpd * (1 - back * (share - bFree) / (1 - bFree));
+        }
+        runSpeed = Math.min(vRun, runSpeed + T.accel * DT);
         runS += runSpeed * DT;
         if (runS >= runLen) { runS = runLen; pointAt(runPts, runCum, runLen, tmp); place(q, tmp.x, tmp.y); runPts = null; return; }
         pointAt(runPts, runCum, runS, tmp); place(q, tmp.x, tmp.y);
@@ -789,6 +837,15 @@
     }
 
     // ── the receivers ──
+    /**
+     * A receiver off his route (breaking to the ball, escorting) keeps his feet in bounds: field.feetIn yd inside the
+     * sidelines and the end line (a toe-tap: his hands still reach catchR past the line).
+     */
+    function keepIn(o, rec) {
+      var m = num(T.feetIn, 0.2), x0 = fld.sideL + m, x1 = fld.sideR - m, y1 = fld.endY - m;
+      if (o.x < x0) { o.x = x0; if (o.vx < 0) o.vx = 0; } else if (o.x > x1) { o.x = x1; if (o.vx > 0) o.vx = 0; }
+      if (o.y > y1) { o.y = y1; if (o.vy > 0) o.vy = 0; }
+    }
     function moveReceivers(t) {
       for (var r2 = 0; r2 < nR; r2++) {
         var o = live.receivers[r2];
@@ -799,14 +856,18 @@
         if (recMode[r2] === M_ROUTE) { routeAt(r2, t, tmp); place(o, tmp.x, tmp.y); }
         else if (recMode[r2] === M_BREAK) {
           // he paces to the landing spot so he gets there WITH the ball (a catch in stride — the pace classify / aim
-          // assume), not early to a dead stop: a ball led onto his route is caught on the run
-          var lx = live.ball.landing.x, ly = live.ball.landing.y, left = bArrive - t;
+          // assume), not early to a dead stop: a ball led onto his route is caught on the run. He stays in bounds
+          // (keepIn: his feet feetIn inside the lines): a ball over the sideline is a toe-tap catch or nobody's
+          var fi = num(T.feetIn, 0.2), lx = clamp(live.ball.landing.x, fld.sideL + fi, fld.sideR - fi);
+          var ly = Math.min(live.ball.landing.y, fld.endY - fi), left = bArrive - t;
           steer(o, lx, ly, left > DT ? Math.min(recBreakSpd[r2], hyp(lx - o.x, ly - o.y) / left) : recBreakSpd[r2], false, T.recAccel);
+          keepIn(o, roster[r2]);
         }
         else if (recMode[r2] === M_CARRY) carry(o, recSpd[r2] * T.carry.speedMul * (t < carryPauseUntil ? T.carry.pauseMul : 1), false);
-        else if (live.phase === 'AFTER_CATCH' && carrierObj()) {   // the others drift toward the play (presentation: nobody blocks)
+        else if (live.phase === 'AFTER_CATCH' && carrierObj()) {   // the others drift toward the play (presentation: nobody blocks), inside the field
           var c = carrierObj();
-          steer(o, c.x + (o.x < c.x ? -T.carry.escortX : T.carry.escortX), c.y + T.carry.escortY, recSpd[r2] * T.carry.escortMul, true);
+          steer(o, inside(c.x + (o.x < c.x ? -T.carry.escortX : T.carry.escortX), fld, 0.5), Math.min(c.y + T.carry.escortY, fld.endY - 0.5), recSpd[r2] * T.carry.escortMul, true);
+          keepIn(o, roster[r2]);
         } else brake(o);
       }
       var slotK = k % HISTORY;
@@ -826,13 +887,16 @@
       for (var d2 = 0; d2 < nD; d2++) {
         var o = live.defenders[d2], s = dS[d2];
         var vmax = t < s.shedUntil ? s.speed * T.shedSlow : s.speed;
-        if (s.held && (t >= s.beatAt || (phase === 'SCRAMBLE' && t >= s.chaseAt))) { s.held = false; o.blocked = false; }
+        // a held rusher is released at his beatAt, when the QB scrambles (at his chase time) — and when the QB runs
+        // away from the pocket: rush.leash yd deeper than his pocket spot (depth only: a rollout keeps its designed benefit)
+        if (s.held && (t >= s.beatAt || (phase === 'SCRAMBLE' && t >= s.chaseAt) || q.y < s.pocketY - num(T.rush.leash, Infinity))) { s.held = false; o.blocked = false; }
         // 1. the ball carrier (after a catch, on a scramble)
         if (carrier && (phase === 'AFTER_CATCH' || phase === 'SCRAMBLE') && t >= s.chaseAt && !s.held) { pursue(o, carrier, vmax * T.pursueBurst); continue; }
-        // 2. the ball in the air: jump the lane where he can beat the ball to it under his reach, else the landing spot
-        if (phase === 'BALL_IN_AIR' && t >= s.ballAt && !s.held) {
-          if (!s.rolled && live.ball.kind === 'PASS' && laneSpot(o, s, tmp2)) steer(o, tmp2.x, tmp2.y, vmax, true, 0, T.breakGain);
-          else steer(o, live.ball.landing.x, live.ball.landing.y, vmax, true, 0, T.breakGain);
+        // 2. a pass in the air: jump the lane where he can beat the ball to it under his reach, else the landing spot
+        //    (held inside the field). A throw-away is nobody's ball: they play on.
+        if (phase === 'BALL_IN_AIR' && t >= s.ballAt && !s.held && live.ball.kind === 'PASS') {
+          if (!s.rolled && laneSpot(o, s, tmp2)) steer(o, tmp2.x, tmp2.y, vmax, true, 0, T.breakGain);
+          else steer(o, inside(live.ball.landing.x, fld, 0.5), Math.min(live.ball.landing.y, fld.endY - 0.5), vmax, true, 0, T.breakGain);
           continue;
         }
         // 3. the role
@@ -866,7 +930,17 @@
           } else { tx = s.zx; ty = s.zy; }
         }
         if (blend < 1) { tx = s.x0 + (tx - s.x0) * blend; ty = s.y0 + (ty - s.y0) * blend; tvx *= blend; tvy *= blend; }
-        track(o, clamp(tx, fld.sideL + 0.5, fld.sideR - 0.5), ty, tvx, tvy, vmax);
+        // the spot is held inside the field (a man deep in the end zone stops at its back line): a clamped axis drops its feed-forward
+        var cx = clamp(tx, fld.sideL + 0.5, fld.sideR - 0.5), cy = Math.min(ty, fld.endY - 0.5);
+        if (cx !== tx) tvx = 0;
+        if (cy !== ty && tvy > 0) tvy = 0;
+        track(o, cx, cy, tvx, tvy, vmax);
+      }
+      // nobody plays out of bounds: a defender's momentum stops at the sidelines and the back line of the end zone
+      for (d2 = 0; d2 < nD; d2++) {
+        var od = live.defenders[d2];
+        if (od.x < fld.sideL) { od.x = fld.sideL; if (od.vx < 0) od.vx = 0; } else if (od.x > fld.sideR) { od.x = fld.sideR; if (od.vx > 0) od.vx = 0; }
+        if (od.y > fld.endY) { od.y = fld.endY; if (od.vy > 0) od.vy = 0; }
       }
     }
 
@@ -888,17 +962,21 @@
       return false;
     }
 
+    /** The five blockers (presentation: no rule reads them). Each moves at most rush.olSpeed yd/s — no pop at the snap. */
     function moveLinemen() {
-      var q = live.qb;
+      var q = live.qb, vmax = num(T.rush.olSpeed, Infinity) * DT;
       for (var m2 = 0; m2 < 5; m2++) {
-        var o = live.linemen[m2], a = olAssign[m2];
-        if (a >= 0 && dS[a].held) {
+        var o = live.linemen[m2], a = olAssign[m2], tx, ty;
+        if (a >= 0 && dS[a].held) {             // between his rusher and the QB
           var d = live.defenders[a], ux = q.x - d.x, uy = q.y - d.y, n = hyp(ux, uy) || 1;
-          o.x = d.x + ux / n * T.rush.olGap; o.y = d.y + uy / n * T.rush.olGap;
-        } else {
+          tx = d.x + ux / n * T.rush.olGap; ty = d.y + uy / n * T.rush.olGap;
+        } else {                                 // eases to his home in the pocket
           var f = Math.min(1, T.rush.olSettle * DT);
-          o.x += (olHomeX[m2] - o.x) * f; o.y += (olHomeY[m2] - o.y) * f;
+          tx = o.x + (olHomeX[m2] - o.x) * f; ty = o.y + (olHomeY[m2] - o.y) * f;
         }
+        var ex = tx - o.x, ey = ty - o.y, e = hyp(ex, ey);
+        if (e > vmax) { ex *= vmax / e; ey *= vmax / e; }
+        o.x += ex; o.y += ey;
       }
     }
 
@@ -936,7 +1014,7 @@
       pointAt(bPts, bCum, bS, tmp);
       b.x = tmp.x; b.y = tmp.y; b.u = bLen > EPS ? bS / bLen : 1; b.h = Field.heightAt(b.u, bApex);
       if (b.kind === 'PASS' && !ghost) {
-        contact(px, py, t);
+        contact(px, py, t, bS >= bLen - EPS);
         if (live.phase !== 'BALL_IN_AIR') return;
       }
       if (bS >= bLen - EPS) land(t);
@@ -944,18 +1022,22 @@
     /**
      * One contact roll per defender per throw, taken as the ball passes him: while it is within reachR under his reach
      * the closest approach is tracked; the roll comes when it starts to pull away (or leaves his reach) with the
-     * closeness and the height of that closest point. The last catchZone yards belong to the catch contest: a pass
-     * still pending there is dropped (that defender contests the catch instead).
+     * closeness and the height of that closest point. The last catchZone yards belong to the catch contest, but only
+     * for the defenders AT the catch point (within catchR of the landing): one of them still pending there is dropped
+     * and contests the catch instead; anyone else in the lane keeps his roll, and on the last sub-step (`final`, the
+     * ball at the landing) every approach still pending is rolled before the catch — a man standing on the line one
+     * to three yards in front of the receiver is never a free pass (he may still contest the catch, weakly, from there).
      */
-    function contact(px, py, t) {
-      var b = live.ball;
-      if (bS >= bLen - T.catchZone) return;
+    function contact(px, py, t, final) {
+      var b = live.ball, zone = bS >= bLen - T.catchZone;
       for (var d2 = 0; d2 < nD; d2++) {
         var s = dS[d2];
         if (s.rolled) continue;
-        var d = live.defenders[d2], dist = segDist(px, py, b.x, b.y, d.x, d.y);
+        var d = live.defenders[d2];
+        if (zone && hyp(d.x - b.landing.x, d.y - b.landing.y) <= T.catchR) continue;   // at the catch point: he contests the catch instead
+        var dist = segDist(px, py, b.x, b.y, d.x, d.y);
         if (dist <= T.reachR && b.h <= s.reach) {
-          if (s.minD < 0 || dist < s.minD) { s.minD = dist; s.minH = b.h; continue; }   // still closing: wait for the pass
+          if (s.minD < 0 || dist < s.minD) { s.minD = dist; s.minH = b.h; if (!final) continue; }   // still closing: wait for the pass
         } else if (s.minD < 0) continue;
         s.rolled = true;
         if (rollContact(d2, s, t)) return;
@@ -995,11 +1077,15 @@
       endInfo = { catcher: ci, missBy: cd, contest: contest, top: top, nearDef: nj, nearBy: nd, targetBy: bTarget >= 0 ? hyp(live.receivers[bTarget].x - b.x, live.receivers[bTarget].y - b.y) : Infinity, targetSep: bTarget >= 0 ? live.receivers[bTarget].sep : null };
       if (ghost) { b.deadAt = rd(t); finish('INCOMPLETE', 'LANDED'); return; }
       if (ci >= 0 && cd <= T.catchR) {
+        // a man out of bounds (past a sideline or the end line) cannot make the catch: incomplete, no roll (0 draws)
+        if (offField(live.receivers[ci].x, live.receivers[ci].y)) { b.deadAt = rd(t); endInfo.oob = true; addEvent('INCOMPLETE', roster[ci].slot, b.x, b.y); finish('INCOMPLETE', 'OUT_OF_BOUNDS'); return; }
         var skill = roster[ci].skill, miss = cd / T.catchR;
         // a hot ball: a flat, fast ball over a short flight gives the hands no time (touch takes it off)
         var hot = num(C.heat, 0) * clamp(1 - (bArrive - b.releaseT) / Math.max(EPS, num(C.heatT, 1)), 0, 1) * clamp(1 - b.loft / Math.max(EPS, num(C.heatLoft, 1)), 0, 1);
-        var pC = clamp(C.base + C.perSkill * ratio(skill) - C.reachPen * miss * miss - C.contest * contest - hot, C.min, C.max);
-        endInfo.pCatch = pC; endInfo.hot = hot;
+        // a ball that beats the break: it gets there before his route's window opens (he has not turned for it yet)
+        var early = num(C.early, 0) * clamp((recOpen[ci] - t) / Math.max(EPS, num(C.earlyT, 1)), 0, 1);
+        var pC = clamp(C.base + C.perSkill * ratio(skill) - C.reachPen * miss * miss - C.contest * contest - hot - early, C.min, C.max);
+        endInfo.pCatch = pC; endInfo.hot = hot; endInfo.early = early;
         if (rng.chance(pC)) {                                                                  // draw: catch
           var pD = DR.base * (1 - ratio(skill)) + DR.contest * contest;
           if (rng.chance(pD)) { b.deadAt = rd(t); addEvent('DROP', roster[ci].slot, b.x, b.y); finish('DROP', 'DROP'); return; }   // draw: drop
@@ -1012,17 +1098,18 @@
           for (r2 = 0; r2 < nR; r2++) if (r2 !== ci && recMode[r2] !== M_CARRY) recMode[r2] = M_FREE;
           return;
         }
-        if (top > 0 && nj >= 0 && nd <= T.contestR && rng.chance(IN.contest * top)) { intercept(nj, t, 'CONTEST'); return; }   // draw: pick
+        if (top > 0 && nj >= 0 && nd <= T.contestR && !offField(live.defenders[nj].x, live.defenders[nj].y) && rng.chance(IN.contest * top)) { intercept(nj, t, 'CONTEST'); return; }   // draw: pick (never by a man out of bounds)
         b.deadAt = rd(t); addEvent('INCOMPLETE', roster[ci].slot, b.x, b.y); finish('INCOMPLETE', 'MISSED');
         return;
       }
-      if (nj >= 0 && nd <= T.catchR) {
+      if (nj >= 0 && nd <= T.catchR && !offField(live.defenders[nj].x, live.defenders[nj].y)) {
         if (rng.chance(IN.alone * (1 - nd / T.catchR) * (0.6 + 0.4 * ratio(dS[nj].skill)))) { intercept(nj, t, 'ALONE'); return; }   // draw: pick
       }
       b.deadAt = rd(t); addEvent('INCOMPLETE', null, b.x, b.y); finish('INCOMPLETE', 'NOBODY');
     }
     function intercept(d2, t, where) {
       var b = live.ball, d = live.defenders[d2];
+      if (offField(d.x, d.y)) { tipped(d2, t); return; }   // his hands were out of bounds: the ball is dead (no extra draw)
       b.caught = true; b.deadAt = -1; b.x = d.x; b.y = d.y;
       live.carrier = d.id; returnUntil = t + T.intReturnS;
       endInfo = endInfo || {};
@@ -1046,7 +1133,8 @@
       if (!q.hasBall || q.down) return;
       if (live.phase === 'SCRAMBLE') { carrierChecks(t, q, 'QB', attrs.MOB, attrs.MOB); return; }
       if (live.phase !== 'PRE_THROW') return;
-      if (q.x <= fld.sideL || q.x >= fld.sideR) { addEvent('OUT_OF_BOUNDS', 'QB', q.x, q.y); finish('SCRAMBLE', 'OUT_OF_BOUNDS'); return; }
+      // a sideline, or his own end line (he ran out of the back of the end zone): out of bounds for a loss, never a sack
+      if (q.x <= fld.sideL || q.x >= fld.sideR || q.y <= ownEndY) { addEvent('OUT_OF_BOUNDS', 'QB', q.x, q.y); finish('SCRAMBLE', 'OUT_OF_BOUNDS'); return; }
       if (q.y > fld.losY) {
         live.phase = 'SCRAMBLE'; live.carrier = 'QB';
         addEvent('SCRAMBLE', 'QB', q.x, q.y);
@@ -1074,7 +1162,7 @@
     }
     function carrierChecks(t, c, who, skill, speedAttr) {
       if (c.y >= fld.goalY) { addEvent('TD', who, c.x, c.y); finish(who === 'QB' ? 'SCRAMBLE' : 'CATCH', 'TD'); return; }
-      if (c.x <= fld.sideL || c.x >= fld.sideR) { addEvent('OUT_OF_BOUNDS', who, c.x, c.y); finish(who === 'QB' ? 'SCRAMBLE' : 'CATCH', 'OUT_OF_BOUNDS'); return; }
+      if (c.x <= fld.sideL || c.x >= fld.sideR || c.y <= ownEndY) { addEvent('OUT_OF_BOUNDS', who, c.x, c.y); finish(who === 'QB' ? 'SCRAMBLE' : 'CATCH', 'OUT_OF_BOUNDS'); return; }
       if (ghost) return;
       var TK = T.tackle;
       for (var d2 = 0; d2 < nD; d2++) {
@@ -1092,12 +1180,27 @@
         return;
       }
     }
+    /**
+     * maxT: the play never resolved. A ball in the air dies where it is (a throw-away is still a throw-away); after a
+     * catch or on a scramble the carrier is down where he is; a QB who still holds it is sacked by the nearest
+     * defender (the SACK event names him — never a sack with no sacker). No draws.
+     */
     function timeout() {
-      var ph = live.phase;
-      if (ph === 'BALL_IN_AIR') { live.ball.deadAt = rd(live.t); finish('INCOMPLETE', 'TIMEOUT'); }
+      var ph = live.phase, b = live.ball, q = live.qb;
+      if (ph === 'BALL_IN_AIR') {
+        b.deadAt = rd(live.t);
+        if (b.kind === 'THROWAWAY') { addEvent('THROWAWAY', 'QB', b.x, b.y); finish('THROWAWAY', 'THROWAWAY'); }
+        else { addEvent('INCOMPLETE', null, b.x, b.y); finish('INCOMPLETE', 'TIMEOUT'); }
+      }
       else if (ph === 'AFTER_CATCH') finish('CATCH', 'TIMEOUT');
       else if (ph === 'SCRAMBLE') finish('SCRAMBLE', 'TIMEOUT');
-      else { live.qb.down = true; finish('SACK', 'TIMEOUT'); }
+      else {
+        var nj = -1, nd = Infinity;
+        for (var d2 = 0; d2 < nD; d2++) { var dd = hyp(live.defenders[d2].x - q.x, live.defenders[d2].y - q.y); if (dd < nd) { nd = dd; nj = d2; } }
+        q.down = true; endInfo = { sacker: nj };
+        addEvent('SACK', nj >= 0 ? live.defenders[nj].id : null, q.x, q.y);
+        finish('SACK', 'TIMEOUT');
+      }
     }
 
     // ── after DONE: everyone coasts (presentation only: no rolls, no events) ──
@@ -1164,6 +1267,8 @@
     }
     function normLoft(loft) { return clamp(num(loft, 0.5), 0, 1); }
     function outOfBounds(p) { return p.x < fld.sideL || p.x > fld.sideR || p.y > fld.endY; }
+    /** A player standing here is out of bounds (on or past a sideline, past the end line). */
+    function offField(x, y) { return x <= fld.sideL || x >= fld.sideR || y > fld.endY; }
 
     /** A receiver's margin (s) to reach (ex, ey) by a ball arriving `flight` s from now (straight line or on his route). */
     function reachMargin(r2, ex, ey, flight) {
@@ -1199,14 +1304,14 @@
       var low = false, risk = false, apex = Field.apex(flight, loft);
       var cum = cumOf(pts), steps = Math.min(32, Math.max(4, Math.ceil(len / 1.5)));
       for (var si = 1; si <= steps; si++) {
-        var sArc = len * si / steps;
-        if (sArc > len - T.catchZone) break;
+        var sArc = len * si / steps, inZone = sArc > len - T.catchZone;
         pointAt(pts, cum, sArc, tmp);
         var u = sArc / len, h = Field.heightAt(u, apex), tau = sArc / v;
         for (d2 = 0; d2 < nD; d2++) {
           var o = live.defenders[d2], st = dS[d2];
           if (h > st.reach) continue;
           var lead = Math.min(tau, st.react), px = o.x + o.vx * lead, py = o.y + o.vy * lead;
+          if (inZone && hyp(px - end.x, py - end.y) <= T.catchR) continue;   // the catch zone: a man at the catch point contests (the race above), anyone else in the lane still gets his roll
           if (hyp(px - tmp.x, py - tmp.y) > T.reachR + DW.previewPad) continue;
           risk = true;
           if (!st.held && h <= st.reach - DW.previewLowBand) low = true;
@@ -1215,6 +1320,7 @@
       lastMargin = Math.min(margin, contestAt - flight);
       if (firstDef < recArrive || low || margin < DW.redReach) return 'RED';
       var C = T.catch, hot = num(C.heat, 0) * clamp(1 - flight / Math.max(EPS, num(C.heatT, 1)), 0, 1) * clamp(1 - loft / Math.max(EPS, num(C.heatLoft, 1)), 0, 1);
+      hot += num(C.early, 0) * clamp((recOpen[target] - live.t - flight) / Math.max(EPS, num(C.earlyT, 1)), 0, 1);   // … nor is a ball that beats his break
       if (contestAt - flight >= DW.greenMargin && margin >= DW.greenReach && !risk && hot < num(DW.previewHot, Infinity)) return 'GREEN';   // a hot ball is never GREEN
       return 'GOLD';
     }
@@ -1224,11 +1330,13 @@
      * points (the first point replaced by the QB; truncated at the arm's max length for a PASS / THROWAWAY), length,
      * maxLen, tooLong, preview: 'GREEN'|'GOLD'|'RED'|null, previewShown, margin (s, PASS only: the race's margin — the
      * smaller of the target's lead on the ball and the ball's lead on the first contesting defender; null otherwise),
-     * reason}.
+     * early (a PASS drawn too fast: he gets to its end after the ball), reason}. In order: INVALID · RUN once passing is
+     * over · THROWAWAY when the ball dies out of bounds · PASS when a receiver makes the race (reachSlack) · a TOO LONG
+     * THROWAWAY when only the untruncated end is out of bounds · an early PASS (RED) · RUN.
      */
     live.classify = function (points, loft) {
       var DW = W(), q = live.qb;
-      var out = { kind: 'INVALID', target: null, points: [], length: 0, maxLen: rd(maxLen), tooLong: false, preview: null, previewShown: live.previewShown, margin: null, reason: '' };
+      var out = { kind: 'INVALID', target: null, points: [], length: 0, maxLen: rd(maxLen), tooLong: false, preview: null, previewShown: live.previewShown, margin: null, early: false, reason: '' };
       loft = normLoft(loft);
       if (live.phase === 'DONE' || live.ball || !q.hasBall || q.down) { out.reason = live.phase === 'DONE' ? 'the play is over' : 'the ball is gone'; return out; }
       var pts = Field.clean(points, DW.maxPoints);
@@ -1242,16 +1350,19 @@
       out.points = pts;
       if (live.phase !== 'PRE_THROW' || q.y > fld.losY) { out.kind = 'RUN'; return out; }
       var end = pts[pts.length - 1], v = Field.ballSpeed(attrs, loft), flight = len / v;
+      var flightPts = pts, flen = len, tooLong = len > maxLen;
+      if (tooLong) { flightPts = Field.truncate(pts, maxLen); flen = maxLen; }
+      // out of bounds where the ball dies (the drawn end, or the arm's end on a too-long line): a throw-away, whoever
+      // might run there — a line never makes a catch out of bounds
+      if (outOfBounds(flightPts[flightPts.length - 1])) { out.kind = 'THROWAWAY'; out.points = flightPts; out.tooLong = tooLong; return out; }
       var best = -1, bestM = -Infinity;
       for (var r2 = 0; r2 < nR; r2++) {
         var mg = reachMargin(r2, end.x, end.y, flight);
         if (mg > bestM) { bestM = mg; best = r2; }
       }
       lastBest = best; lastBestM = bestM;
-      var flightPts = pts, flen = len;
-      if (len > maxLen) { flightPts = Field.truncate(pts, maxLen); flen = maxLen; }
       if (best >= 0 && bestM >= -DW.reachSlack) {
-        out.kind = 'PASS'; out.target = roster[best].slot; out.points = flightPts; out.tooLong = len > maxLen;
+        out.kind = 'PASS'; out.target = roster[best].slot; out.points = flightPts; out.tooLong = tooLong;
         if (out.tooLong) {                                           // the ball dies at maxLen: the race is at the real end
           var fe = flightPts[flightPts.length - 1];
           bestM = reachMargin(best, fe.x, fe.y, flen / v);
@@ -1260,7 +1371,21 @@
         out.margin = rd(lastMargin);
         return out;
       }
-      if (outOfBounds(end)) { out.kind = 'THROWAWAY'; out.points = flightPts; out.tooLong = len > maxLen; return out; }
+      // drawn out of bounds but past the arm: the ball would die in the field — a TOO LONG throw-away line (thrown, it
+      // is a ball to nobody where the arm gives out, never a throw-away)
+      if (outOfBounds(end)) { out.kind = 'THROWAWAY'; out.points = flightPts; out.tooLong = true; return out; }
+      // drawn too fast: the line ends draw.earlyDepth yd or more downfield on a receiver's route AHEAD of him — he gets
+      // there, just after the ball (within draw.earlyS). That is a pass arriving early (RED), not a 30-yard run
+      if (!tooLong && end.y >= fld.losY + num(DW.earlyDepth, Infinity)) {
+        var eBest = -1, eLate = Infinity, eStep = Math.max(0.02, num(DW.earlyStep, 0.1)), eMax = num(DW.earlyS, 0);
+        for (r2 = 0; r2 < nR; r2++) {
+          for (var tau = eStep; tau <= eMax + EPS && tau < eLate; tau += eStep) {
+            routeAt(r2, live.t + flight + tau, tmp2);
+            if (hyp(tmp2.x - end.x, tmp2.y - end.y) <= T.catchR) { eLate = tau; eBest = r2; break; }
+          }
+        }
+        if (eBest >= 0) { out.kind = 'PASS'; out.target = roster[eBest].slot; out.points = flightPts; out.preview = 'RED'; out.margin = rd(-eLate); out.early = true; return out; }
+      }
       out.kind = 'RUN';
       return out;
     };
@@ -1358,10 +1483,13 @@
       lastBest = -1; lastBestM = -Infinity;
       var c = live.classify(points, loft);
       if (c.kind === 'INVALID') return { ok: false, kind: 'INVALID', target: null, reason: c.reason };
-      var kind = c.kind === 'THROWAWAY' ? 'THROWAWAY' : 'PASS';
+      var pts = c.kind === 'RUN' && c.length > maxLen ? Field.truncate(c.points, maxLen) : c.points;
+      // a throw-away line the arm cannot get out of bounds (TOO LONG) is a ball to nobody, dying in the field
+      var kind = c.kind === 'THROWAWAY' && outOfBounds(pts[pts.length - 1]) ? 'THROWAWAY' : 'PASS';
       // a line nobody can reach, thrown anyway: the man with the best chance is the one it was meant for (he tries)
       var aimedAt = c.kind === 'RUN' && lastBest >= 0 && lastBestM >= T.hopeless ? roster[lastBest].slot : c.target;
-      var pts = c.kind === 'RUN' && c.length > maxLen ? Field.truncate(c.points, maxLen) : c.points;
+      // the ball must land before the play's clock runs out (maxT): a release that late is refused (no draws)
+      if (live.t + Math.min(maxLen, Field.length(pts) * 1.25 + 1) / Field.ballSpeed(attrs, loft) >= T.maxT) return { ok: false, kind: null, target: null, reason: 'too late' };
       var clean = Field.clean(points, W().maxPoints), drawn = [{ x: live.qb.x, y: live.qb.y }];   // what the player drew, from the QB, untruncated
       for (var p = 1; p < clean.length; p++) drawn.push({ x: clean[p].x, y: clean[p].y });
       log.pass = { t: rd6(live.t), points: clean, loft: loft };
@@ -1377,6 +1505,7 @@
       if (why) return { ok: false, kind: null, target: null, reason: why };
       var q = live.qb, left = (q.x - fld.sideL) <= (fld.sideR - q.x);
       var A = T.away, pts = [{ x: q.x, y: q.y }, { x: left ? fld.sideL - A.out : fld.sideR + A.out, y: Math.max(A.minY, q.y + A.depth) }];
+      if (live.t + Field.length(pts) / Field.ballSpeed(attrs, A.loft) >= T.maxT) return { ok: false, kind: null, target: null, reason: 'too late' };
       log.away = rd6(live.t);
       release(pts, [{ x: pts[0].x, y: pts[0].y }, { x: pts[1].x, y: pts[1].y }], A.loft, 'THROWAWAY', null);
       return { ok: true, kind: 'THROWAWAY', target: null, reason: '' };
@@ -1393,19 +1522,22 @@
       var kind = b ? (b.kind === 'THROWAWAY' ? 'THROWAWAY' : 'PASS') : (outcome === 'SACK' ? 'SACK' : 'SCRAMBLE');
       var target = b && b.target ? b.target : null;
       var yards = 0, airYards = 0, yac = 0, tIdx = target ? slotIdx[target] : -1;
-      var minY = -(sit.yl - 1);
+      var minY = -(sit.yl - 1), isTd = how === 'TD';
+      // a spot is never rounded UP into a gain: a man down 0.4 yd short of the goal line or the sticks did not get
+      // there (a loss rounds to the nearest yard). Only the TD event scores; a stop short of the goal line is at most goal − 1.
+      var spotOf = function (y) { return y < 0 ? Math.round(y) : Math.floor(y + 1e-6); };
+      var maxSpot = isTd ? goal : goal - 1;
       if (outcome === 'CATCH') {
         var ci = slotIdx[live.carrier];
-        var endY = how === 'TD' ? goal : live.receivers[ci].y;
-        yards = how === 'TD' ? goal : clamp(Math.round(endY), minY, goal);
-        airYards = clamp(Math.round(num(endInfo && endInfo.catchY, endY)), minY, goal);
-        if (how === 'TD' && airYards >= goal) airYards = goal;
+        var endY = isTd ? goal : live.receivers[ci].y;
+        yards = isTd ? goal : clamp(spotOf(endY), minY, maxSpot);
+        airYards = clamp(spotOf(num(endInfo && endInfo.catchY, endY)), minY, maxSpot);
         yac = yards - airYards;
       } else if (outcome === 'SACK' || outcome === 'SCRAMBLE') {
-        yards = how === 'TD' ? goal : clamp(Math.round(live.qb.y), minY, goal);
+        yards = isTd ? goal : clamp(spotOf(live.qb.y), minY, maxSpot);
       }
       yards = nz(yards); airYards = nz(airYards); yac = nz(yac);
-      var td = (outcome === 'CATCH' || outcome === 'SCRAMBLE') && yards > 0 && sit.yl + yards >= FIELD_YARDS;
+      var td = (outcome === 'CATCH' || outcome === 'SCRAMBLE') && isTd;
       var firstDown = (outcome === 'CATCH' || outcome === 'SCRAMBLE') && (td || yards >= sit.toGo);
       var tipped = !!(b && b.tipped);
       var text;
@@ -1521,6 +1653,7 @@
         default: break;
       }
       // INCOMPLETE
+      if (endInfo && endInfo.oob && endInfo.catcher >= 0) return 'Coach saw ' + roster[endInfo.catcher].name + ' come down out of bounds. Keep it inside the numbers.';
       if (b && b.tipped) return endInfo && who(endInfo.tipper) === 'DL' ? 'Coach saw it batted at the line. Find a lane or put air under it.' : 'Coach saw a hand on it. Loft it over the underneath guy.';
       if (b && b.tooLong) return 'Coach saw you throw it further than your arm goes. Know your range.';
       if (!b || !b.target) return 'Coach saw you throw it to nobody. Pick a man.';

@@ -27,6 +27,7 @@
  *   classify(points, loft) → live.classify (the scene's own rule; 0 draws)
  *   fieldToCss(x, y) → {x, y} client css px · cssToField(px, py) → {x, y} field yards · qbPoint() → {x, y, chestY, r, fieldX, fieldY}
  *   throwAway() · live() → the live snapshot · plan() → live.plan() · events() → live.events · timeScale()
+ *   holding() → the drive's first moment is waiting at the snap for the first touch · unhold() → start its clock
  *   autoThrow() → drawPass to the receiver with the best race right now (the engine's preview margin)
  *   replay(idx) → {same, recorded, replayed}   Play.resolve of a recorded moment (its plan, a scratch rng at its liveRng)
  *   seed()           the drive's seed as typed ('4242' / 'a word'); state().drive.seedNum is the uint32
@@ -256,6 +257,9 @@
   };
 
   D.timeScale = function () { var v = view(); return v && typeof v.timeScale === 'function' ? v.timeScale() : 1; };
+  /** The first moment waits at the snap for the first touch (the scene's hold); unhold starts its clock. */
+  D.holding = function () { var v = view(); return !!(v && typeof v.holding === 'function' && v.holding()); };
+  D.unhold = function () { var v = view(); return !!(v && typeof v.unhold === 'function' && v.unhold()); };
 
   /** Draw a pass to the receiver with the best race right now (the engine's preview, then its margin). */
   D.autoThrow = function (opts) {
@@ -385,7 +389,7 @@
       t: lv ? r3(lv.t) : (cur ? r3(cur.t) : 0),
       timeScale: v && typeof v.timeScale === 'function' ? v.timeScale() : 1,
       slowLeftS: cur && typeof cur.slowLeftS === 'number' ? r3(cur.slowLeftS) : null,
-      drafting: !!(cur && cur.drafting), target: cur ? cur.target || null : null, play: cur ? cur.play || null : null,
+      drafting: !!(cur && cur.drafting), target: cur ? cur.target || null : null, play: cur ? cur.play || null : null, holding: !!(cur && cur.holding),
       liveSnapshot: snapshot(lv),
       drawing: v && typeof v.drawing === 'function' ? safe(v.drawing()) : null,
       sim: simIds(sim),

@@ -201,6 +201,8 @@
       if (sc && sc.keysInFields === true && typeof sc.onKey === 'function' && sc.onKey(ev)) ev.preventDefault();
       return;
     }
+    // a held Enter / Space auto-repeats: the repeats never activate a focused button (NEXT, START, a card)
+    if (ev.repeat && (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar')) { ev.preventDefault(); return; }
     if (sc && typeof sc.onKey === 'function' && sc.onKey(ev)) { ev.preventDefault(); return; }
     // Escape → settings on every screen; the live scene handles it itself (onSettings) and stops the event, so only
     // a mounted PlayView is left alone — the DRIVE interstitial (no scene) gets the modal from here

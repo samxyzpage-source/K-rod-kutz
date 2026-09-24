@@ -46,6 +46,7 @@ body.hc .pv-stage canvas.rtg-canvas:focus-visible, html.hc .pv-stage canvas.rtg-
 .pv-pressure.hot .pv-pressure-fill { background: var(--red, #d8433a); }
 .pv-pressure.hot .pv-pressure-label { color: var(--red, #d8433a); animation: pv-blink 0.4s steps(2) infinite; }
 .pv-pressure.clutch .pv-pressure-track { border-color: var(--red, #d8433a); }
+body.hc .pv-pressure-track, html.hc .pv-pressure-track { border-color: #fff; }   /* high contrast: the empty meter still reads on black */
 
 /* ───────────────────────────── the situation card (SITUATION) ───────────────────────────── */
 .pv-situation {

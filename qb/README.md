@@ -21,23 +21,30 @@ of every kit file copied here.
    tell). Pick one of the 2–3 play cards; each carries the coach's advice (GOOD / OK / BAD, or `?` when the look may
    be lying — a smarter quarterback sees through more disguises). A SNEAK or a DRAW card on short yardage is resolved
    at the snap.
-3. **The snap — draw it.** Put your finger (or the mouse) on the quarterback and draw:
+3. **The snap — draw it.** Put your finger (or the mouse) on the quarterback and draw (on a touch screen the line is
+   drawn a little above your fingertip, so your thumb never hides it; on the very first snap the play waits for your
+   first touch):
    - **To a receiver → a pass.** The line is the ball's exact path: it flies along it and lands where the line ends.
      Bend it around a linebacker. A defender near the line can get a hand on it (a tip, or a pick).
-   - **Fast for a bullet, slow for a lob.** The speed of your stroke is the touch: a quick flick is a bullet on a
-     rope (a linebacker at chest height is where interceptions come from); a slow, patient line floats over the
+   - **Fast for a bullet, slow for a lob.** The speed of your stroke is the touch: a quick, aimed stroke is a bullet
+     on a rope (a linebacker at chest height is where interceptions come from); a slow, patient line floats over the
      underneath defenders and is contested at the end. A longer line needs more arm — past your arm's range the line
-     turns red and the ball dies there.
+     turns red and the ball dies there. Draw a deep line too fast and the HUD says `TOO FAST`: the ball gets there
+     before your receiver does. Throw before his route breaks and he is not looking yet.
    - **Into space → a run.** Roll out, step up, scramble: the quarterback runs the line you drew (draw again for a new
      run, or draw the pass from wherever he got to). Cross the line of scrimmage with the ball and it is a scramble —
      no more passing, and the yards are rushing yards.
-   - **Out of bounds → a throw-away** (or the THROW AWAY button / the X key). Never a turnover.
+   - **Out of bounds → a throw-away** (or the THROW AWAY button / the X key). Never a turnover. Nobody catches a
+     ball out of bounds.
+   - **Changed your mind?** Drag the line back onto the quarterback, or off the field, and let go (`LET GO TO
+     CANCEL`). A finger resting on its line keeps what it drew: a pass line stays a pass.
    - **While your finger is down the play runs in slow motion** (about 15 % speed — the rush still creeps). The slow
      motion budget is about four real seconds per play; after that time runs at full speed.
-   - The HUD says what your line is (`PASS → WR1 · BULLET`, `RUN`, `THROW AWAY`, `TOO LONG`). A **FIELD GENERAL**
+   - The HUD says what your line is (`PASS → WR1 · BULLET`, `RUN`, `THROW AWAY`, `TOO LONG`, `TOO FAST`). A **FIELD GENERAL**
      also sees the landing spot coloured by the race to it — green, gold or red — before he lets go. Aim assist
      (Settings, on by default) snaps a pass line's end onto the spot its receiver can reach when you end close to it.
-   - Stand there holding it and the pocket collapses: sacked.
+   - Stand there holding it and the pocket collapses: sacked. Running straight back is a backpedal — the rush runs
+     you down (roll out across the field instead).
 4. **The result** — the banner, what the throw looked like (on the money / led him / behind him · on time / late ·
    bullet / touch / lob) and what the coach saw. Then the story of the drive and the next snap.
 
@@ -101,9 +108,12 @@ node qb/test/run.js play                     # only the files whose name contain
 syntax level and Tuning writes, and checks the namespaces of the delivered modules. `test/play.test.js` pins the
 engine (draw counts, determinism, the read, the snap's cast, the run cards, the drive script, the passer rating);
 `test/field.test.js` pins the field simulation (live vs resolve equality, classify's PASS / RUN / THROWAWAY / INVALID
-rules, tips and picks on a bullet through a linebacker vs a lob over him, scatter, the rush and the rollout, the
-scramble / tackle / out-of-bounds / touchdown rules, a GOOD call's separation over a BAD one, a ball led onto a
-receiver's route caught in stride, the catcher on the result, garbage in → no NaN);
+rules, tips and picks on a bullet through a linebacker vs a lob over him — up to the catch point — scatter, the rush
+and the rollout, a retreat that buys nothing, the scramble / tackle / out-of-bounds / touchdown rules, nobody catching or
+playing out of bounds, a spot never rounded up into a score or a first down, a GOOD call's separation over a BAD one, a
+ball led onto a receiver's route caught in stride, a ball that beats the break, the catcher on the result, garbage in
+→ no NaN); `test/balance.test.js` (`--balance`, about 1.5 min) pins the bots' tiers and strategies, including the
+no-read quick throw (QUICK) trailing a reader;
 `test/plays_lint.test.js` lints the play book (every assignment names an existing route and slot, every coverage has
 a look and a pressureMul, every route's ideal lead / loft is in range and its window sits inside [0, 4]).
 
@@ -127,14 +137,17 @@ results, pins the draw accounting (every moment costs the drive's rng 3 draws), 
 320 px and landscape; `controls.spec.js` covers THROW AWAY, the sack, invalid and cancelled drafts, slow motion and its
 budget, the FIELD GENERAL's preview colour, aim assist on / off, keyboard composing, reduced motion, seed → identical
 situations and cast, no horizontal scroll at 320 px in every phase, a frame p95 under 4 ms while drawing and in flight,
-the SNEAK card, and the core rule watched every frame (the scene's 22 actors are the live's positions; a press anywhere
-in the start circle starts the line on the quarterback). `_playhelpers.js` holds the shared hands (pick, wait for a window, draw a pass / a run / a
+the SNEAK card, the core rule watched every frame (the scene's 22 actors are the live's positions, within the
+sub-step presentation offset; a press anywhere in the start circle starts the line on the quarterback), the first
+moment waiting for a touch, a press during the slide, the touch lift, the two abort gestures and a resting pass line
+that stays a pass. `_playhelpers.js` holds the shared hands (pick, wait for a window, draw a pass / a run / a
 throw-away with timed mouse or CDP-touch strokes, the keyboard pass and run, the interstitial).
 
 Never edit source while an e2e run is in progress (false failures). Screenshots land in `qb/test/e2e/shots/`.
 In the browser, `RTG.debug.*` drives the demo from the console (`RTG.debug.forceResult('INT')`,
 `RTG.debug.current()` (the live snapshot and the draft), `RTG.debug.drawPass('WR1', {loft: 1})`,
-`RTG.debug.drawRun('rollout')`, `RTG.debug.replay(0)`, `RTG.debug.seed()`, `RTG.debug.skipTo('summary')`).
+`RTG.debug.drawRun('rollout')`, `RTG.debug.replay(0)`, `RTG.debug.seed()`, `RTG.debug.skipTo('summary')`,
+`RTG.debug.unhold()` (start the first moment's clock without a touch)).
 
 ## The single-file bundle
 

@@ -15,6 +15,8 @@
  *   the strategies          CHECKDOWN 4–6 yd a play, never better than DECENT, (almost) never wins the last play ·
  *                           SCRAMBLER on a DUAL THREAT 4–7 yd a play but below DECENT's expected points · ROLLOUT cuts
  *                           DECENT's sacks by ≥ 30 % · LOB_ONLY and BULLET_ONLY each worse than mixing the loft (EXPERT)
+ *   the no-read throw       QUICK (a touch pass at 0.7 s to whoever looks most open) completes under 72 % and is worth
+ *                           at least 0.2 expected points a play less than DECENT's reading (a ball that beats the break)
  *   the call                a GOOD call vs the real coverage completes ≥ 8 points more than a BAD one (DECENT)
  *   the archetypes          SURGEON the smallest scatter, GUNSLINGER the most yards per attempt and the deepest intended
  *                           air yards (DECENT and EXPERT pooled), FIELD GENERAL the best decision rate (EXPERT)
@@ -47,7 +49,7 @@ function run(bot, team, drives, archs) {
   return Bots.derive(acc);
 }
 // the sample sizes (drives per archetype): the reading bots are slow (EXPERT ≈ 45 ms a drive), the rest fast
-const N = { EXPERT: 150, ONE_LOFT: 100, DECENT: 300, NOVICE: 300, LINE: 150, CHECKDOWN: 150, SCRAMBLE: 300, ROLLOUT: 300, CALL: 200 };
+const N = { EXPERT: 150, ONE_LOFT: 100, DECENT: 300, NOVICE: 300, LINE: 150, CHECKDOWN: 150, SCRAMBLE: 300, ROLLOUT: 300, CALL: 200, QUICK: 300 };
 const pct = (x) => (100 * x).toFixed(1) + '%';
 function band(x, lo, hi, what) { assert.ok(x >= lo && x <= hi, what + ' ' + (typeof x === 'number' && x < 1.5 ? pct(x) : x.toFixed(2)) + ' outside [' + lo + ', ' + hi + ']'); }
 
@@ -86,6 +88,12 @@ test('the strategies: CHECKDOWN, SCRAMBLER, ROLLOUT, one loft only — none of t
   assert.ok(lob.epaPerPlay < ex.epaPerPlay - 0.5, 'LOB_ONLY ' + lob.epaPerPlay.toFixed(2) + ' vs mixing ' + ex.epaPerPlay.toFixed(2));
   // the bullet's cost: it cannot go over a man in the lane (tipped ≈ 2× as often) and is worth less than the mix
   assert.ok(bul.epaPerPlay < ex.epaPerPlay && bul.tipPct > 1.5 * ex.tipPct, 'BULLET_ONLY ' + bul.epaPerPlay.toFixed(2) + ' EPA, ' + pct(bul.tipPct) + ' tipped vs mixing ' + ex.epaPerPlay.toFixed(2) + ', ' + pct(ex.tipPct));
+});
+
+test('the no-read throw: QUICK at 0.7 s completes under 72 % and trails DECENT\'s reading by ≥ 0.2 expected points a play', () => {
+  const qk = run('QUICK', 'AVERAGE', N.QUICK), de = run('DECENT', 'AVERAGE', N.DECENT);
+  assert.ok(qk.cmpPct < 0.72, 'QUICK completions ' + pct(qk.cmpPct) + ' (the ball beats the break)');
+  assert.ok(qk.epaPerPlay < de.epaPerPlay - 0.2, 'QUICK ' + qk.epaPerPlay.toFixed(2) + ' EPA vs DECENT ' + de.epaPerPlay.toFixed(2) + ': reading is worth something');
 });
 
 test('the call: a GOOD call vs the real coverage completes ≥ 8 points more than a BAD one (DECENT)', () => {

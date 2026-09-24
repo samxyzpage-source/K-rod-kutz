@@ -761,11 +761,231 @@ test('tackles: after a catch the carrier runs until he is tackled (or breaks tac
   assert.ok(broken >= 1, 'somebody breaks a tackle');
 });
 
-test('maxT: a play that never resolves ends at maxT (the QB with the ball and nobody rushing is a SACK by the clock)', () => {
+test('maxT: a play that never resolves ends at maxT (the QB with the ball and nobody rushing is a SACK by the clock, by a named defender); a ball that cannot land before it is not released', () => {
   const live = liveOf(lab(), 1);
+  stepTo(live, F.maxT - 0.3);
+  assert.equal(live.phase, 'PRE_THROW');
+  const late = live.throwAlong(line(live, 0, 30), 0.9);
+  assert.equal(late.ok, false, 'a 37-yd lob 0.3 s before maxT cannot land in time'); assert.equal(live.ball, null);
   const res = finish(live);
   assert.equal(res.outcome, 'SACK'); assert.equal(res.ended, 'TIMEOUT');
   near(res.endT, F.maxT, F.dt * 2, 'at maxT');
+  const sack = live.events.find((e) => e.kind === 'SACK');
+  assert.ok(sack && typeof sack.who === 'string', 'the SACK event names the man nearest the QB (never a sack with no sacker)');
+});
+
+// ═══════════════════════════════ THE FIELD'S EDGES, THE SPOT, THE LINE, THE LANE ═══════════════════════════════
+
+/** Step a live one sub-step at a time until DONE, calling each(live) after every sub-step while the play is live. */
+function watch(live, each) { let n = 0; while (live.phase !== 'DONE' && n++ < 2000) { live.step(F.dt); if (live.phase !== 'DONE') each(live); } return live.result(); }
+
+test('the edges: a line ending out of bounds is a THROWAWAY, never a PASS; while the play is live nobody stands out of bounds, and nobody catches or picks it there', () => {
+  let lines = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const { sim } = mk({ seed: 300 + seed });
+    const live = liveOf(sim, seed);
+    stepTo(live, 1.1);
+    if (live.phase !== 'PRE_THROW') continue;
+    for (const r of live.receivers) {
+      const a = live.aim(r.slot, 0.5);
+      if (!a || a.tooLong) continue;
+      const left = a.x - live.field.sideL < live.field.sideR - a.x;
+      const c = live.classify(line(live, left ? live.field.sideL - 2 : live.field.sideR + 2, a.y), 0.5);
+      assert.notEqual(c.kind, 'PASS', 'a line 2 yd out of bounds (' + c.kind + ' to ' + c.target + ')');
+      lines++;
+    }
+  }
+  assert.ok(lines >= 100, lines + ' lines');
+  // wild scatter (this test only) so balls land over the sidelines and the end line: nobody catches them out there
+  const S0 = Object.assign({}, F.scatter);
+  F.scatter.base = 3;
+  let oob = 0, outside = [], plays = 0;
+  try {
+    for (let seed = 1; seed <= 150; seed++) {
+      const { sim } = mk({ seed: 500 + seed, sit: seed % 3 ? {} : { yl: 85, toGo: 7 } });
+      const live = liveOf(sim, seed);
+      stepTo(live, 1.2);
+      if (live.phase !== 'PRE_THROW') continue;
+      const f = live.field, near = live.receivers.slice().sort((a, b) => Math.min(a.x - f.sideL, f.sideR - a.x) - Math.min(b.x - f.sideL, f.sideR - b.x))[0];
+      const a = live.aim(near.slot, 0.5);
+      if (!a || a.tooLong || !live.throwAlong(a.points, 0.5).ok) continue;
+      plays++;
+      const res = watch(live, (l) => {
+        for (const p of l.defenders.concat(l.receivers)) if ((p.x < f.sideL - 1e-9 || p.x > f.sideR + 1e-9 || p.y > f.endY + 1e-9) && outside.length < 3) outside.push({ t: l.t, who: p.id || p.slot, x: p.x, y: p.y });
+      });
+      const ev = live.events.find((e) => e.kind === 'CATCH' || e.kind === 'INT');
+      if (ev) assert.ok(ev.x > f.sideL && ev.x < f.sideR && ev.y <= f.endY, 'a ' + ev.kind + ' in bounds (' + ev.x + ', ' + ev.y + ')');
+      if (res.landing.x < f.sideL || res.landing.x > f.sideR || res.landing.y > f.endY) oob++;
+    }
+  } finally { Object.assign(F.scatter, S0); }
+  assert.deepEqual(outside, [], 'nobody out of bounds while the play is live');
+  assert.ok(plays >= 100 && oob >= 5, plays + ' throws, ' + oob + ' landed out of bounds (a toe-tap catch or nobody\'s)');
+});
+
+test('the spot: a carrier stopped short of the goal line or the sticks is short — td only on the TD event, yards never rounded up into a score or a first down', () => {
+  let checked = 0, nearGoal = 0, nearSticks = 0;
+  for (let seed = 1; seed <= 400; seed++) {
+    const sit = seed % 2 ? { yl: 88, toGo: 6, down: 2 } : { yl: 45, toGo: 3 + (seed % 7) };
+    const { sim } = mk({ seed: 7000 + seed, sit });
+    if (sim.run) continue;
+    const live = liveOf(sim, seed);
+    const res = Field.replay(live, Play.autoPlan(sim));
+    const td = live.events.some((e) => e.kind === 'TD');
+    assert.equal(res.td, td, 'td only with the TD event');
+    if (res.outcome !== 'CATCH' && res.outcome !== 'SCRAMBLE') continue;
+    assert.equal(res.firstDown, res.td || res.yards >= sit.toGo, 'first down = a TD or the sticks reached');
+    if (td) continue;
+    const last = live.events[live.events.length - 1];
+    if (last.kind !== 'TACKLE' && last.kind !== 'OUT_OF_BOUNDS') continue;
+    checked++;
+    assert.ok(res.yards <= last.y + 1e-6 || last.y < 0, 'yards ' + res.yards + ' never past the spot ' + last.y);
+    assert.ok(res.yards < sim.field.goalY, 'short of the goal line is never the goal line');
+    if (sim.field.goalY - last.y < 1) nearGoal++;
+    if (last.y < sit.toGo && last.y > sit.toGo - 1) { nearSticks++; assert.equal(res.firstDown, false, 'down ' + (sit.toGo - last.y).toFixed(2) + ' yd short of the sticks is no first down'); }
+  }
+  assert.ok(checked >= 60 && nearSticks >= 1, checked + ' spots checked, ' + nearSticks + ' within a yard of the sticks, ' + nearGoal + ' of the goal line');
+});
+
+test('the line: a lineman never moves faster than rush.olSpeed (no pop at the snap), and a blitzer from the slot is nobody\'s man', () => {
+  const cap = F.rush.olSpeed * F.dt + 1e-9;
+  let worst = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const { sim } = mk({ seed: 900 + seed, cov: seed % 2 ? 'BLITZ' : undefined });
+    const live = liveOf(sim, seed);
+    let prev = live.linemen.map((o) => [o.x, o.y]);
+    for (let k = 0; k < 150 && live.phase !== 'DONE'; k++) {
+      live.step(F.dt);
+      live.linemen.forEach((o, i) => { worst = Math.max(worst, hyp(o.x - prev[i][0], o.y - prev[i][1])); });
+      prev = live.linemen.map((o) => [o.x, o.y]);
+    }
+  }
+  assert.ok(worst <= cap, 'the fastest lineman step ' + worst.toFixed(4) + ' yd ≤ ' + cap.toFixed(4));
+});
+
+test('running away: straight back is a backpedal — the rush is released and catches him (a SACK with its sacker) or he runs out of his own end zone; a retreat buys little, a rollout still buys more', () => {
+  const ends = { stand: [], back: [], roll: [] };
+  for (let seed = 1; seed <= 150; seed++) {
+    const { sim } = mk({ seed: 1200 + seed });
+    const ownEnd = sim.field.goalY - 100 - F.endZone;
+    for (const how of ['stand', 'back', 'roll', 'far']) {
+      const live = liveOf(sim, seed);
+      live.step(0.1);
+      const q = { x: live.qb.x, y: live.qb.y };
+      if (how === 'back') live.setRun([q, { x: q.x, y: q.y - 13 }]);
+      if (how === 'roll') live.setRun([q, { x: q.x + (seed % 2 ? 10 : -10), y: q.y - 1 }]);
+      if (how === 'far') live.setRun([q, { x: q.x, y: -130 }]);
+      const res = watch(live, (l) => assert.ok(l.qb.y > ownEnd - 0.5, 'never behind his own end line while the play is live'));
+      if (how === 'far') {
+        assert.ok((res.outcome === 'SACK' && live.events.some((e) => e.kind === 'SACK')) || (res.ended === 'OUT_OF_BOUNDS' && res.outcome === 'SCRAMBLE'), 'straight back to the wall: ' + res.outcome + '/' + res.ended);
+        continue;
+      }
+      ends[how].push(res.endT);
+    }
+  }
+  const st = median(ends.stand), bk = median(ends.back), ro = median(ends.roll);
+  assert.ok(bk - st <= 0.7, '13 yd back buys ' + (bk - st).toFixed(2) + ' s (median ' + bk + ' vs ' + st + ')');
+  assert.ok(ro > bk, 'a rollout across buys more than a retreat (' + ro + ' vs ' + bk + ')');
+});
+
+test('the lane before the catch: a linebacker standing on the line 2–3 yd in front of the receiver gets his roll like one 4 yd out; only the man AT the catch point contests instead', () => {
+  const rate = (d) => {
+    let hit = 0, n = 0;
+    for (let seed = 0; seed < 160; seed++) {
+      const live = liveOf(lab({ tx: 0, ty: 12, place: [{ id: 'LB1', x: 0, y: 12 - d, react: 100 }] }), 9100 + seed);
+      stepTo(live, 1.2);
+      live.throwAlong(line(live, 0, 12), 0.05);
+      const res = finish(live);
+      n++;
+      if (res.ended === 'TIPPED' || (res.outcome === 'INT' && res.ended === 'FLIGHT')) hit++;
+    }
+    return hit / n;
+  };
+  const r4 = rate(4), r25 = rate(2.5), r18 = rate(1.8);
+  assert.ok(r25 >= 0.25 && r18 >= 0.25, 'on the lane 2.5 / 1.8 yd out he gets a hand on it: ' + r25.toFixed(2) + ' / ' + r18.toFixed(2));
+  assert.ok(Math.abs(r25 - r4) <= 0.15, '2.5 yd out ≈ 4 yd out (' + r25.toFixed(2) + ' vs ' + r4.toFixed(2) + ')');
+});
+
+test('too long: a line drawn out of bounds past the arm is a TOO LONG throw-away line — thrown, the ball dies where the arm gives out, a ball to nobody, never THROWN AWAY', () => {
+  let n = 0;
+  for (let seed = 1; seed <= 20; seed++) {
+    const { sim } = mk({ seed: 1500 + seed });
+    const live = liveOf(sim, seed);
+    stepTo(live, 1.0);
+    if (live.phase !== 'PRE_THROW') continue;
+    const c = live.classify(line(live, 0, live.field.endY + 150), 0.5);
+    assert.equal(c.kind, 'THROWAWAY'); assert.equal(c.tooLong, true);
+    const r = live.throwAlong(line(live, 0, live.field.endY + 150), 0.5);
+    assert.equal(r.ok, true); assert.equal(r.kind, 'PASS'); assert.equal(r.target, null);
+    const res = finish(live);
+    assert.notEqual(res.outcome, 'THROWAWAY'); assert.equal(res.tooLong, true);
+    assert.ok(res.landing.y < live.field.endY, 'it dies in the field');
+    n++;
+  }
+  assert.ok(n >= 15);
+});
+
+test('a back who starts behind the line makes up his depth in time: no segment of his path is faster than his route\'s fastest one (or his own speed)', () => {
+  let checked = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const { sim } = mk({ seed: 1700 + seed, play: ['FOUR_VERTS', 'MESH', 'SLANT_FLAT', 'FLOOD', 'SCREEN'][seed % 5] });
+    for (const r of sim.receivers) {
+      if (r.y0 > -2) continue;
+      const rt = Dp.routes[r.route], sc = Field.speedScale(r.speed);
+      let vCap = Field.recSpeed(r.speed);
+      for (let i = 1; i < rt.path.length; i++) vCap = Math.max(vCap, hyp(rt.path[i].x - rt.path[i - 1].x, rt.path[i].y - rt.path[i - 1].y) / ((rt.path[i].t - rt.path[i - 1].t) * sc) * 1.08);
+      for (let i = 1; i < r.path.length; i++) {
+        const a = r.path[i - 1], b = r.path[i], dt = b.t - a.t;
+        if (dt > 0.01) assert.ok(hyp(b.x - a.x, b.y - a.y) / dt <= vCap + 0.05, r.slot + ' ' + r.route + ' segment ' + (hyp(b.x - a.x, b.y - a.y) / dt).toFixed(2) + ' yd/s > ' + vCap.toFixed(2));
+      }
+      checked++;
+    }
+  }
+  assert.ok(checked >= 40, checked + ' backs');
+});
+
+test('drawn too fast: a bullet to where a deep man will be for a lofted ball is a RED PASS to him (early), not a 30-yard run; a short scramble line never is', () => {
+  let early = 0, pass = 0, n = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const { sim } = mk({ seed: 1900 + seed, play: 'FOUR_VERTS' });
+    const live = liveOf(sim, seed);
+    stepTo(live, 0.9);
+    if (live.phase !== 'PRE_THROW') continue;
+    for (const slot of ['WR1', 'WR2', 'SLOT', 'TE']) {
+      const lob = live.aim(slot, 0.8);
+      if (!lob || lob.tooLong || lob.y < T.draw.earlyDepth + 1) continue;
+      const c = live.classify(lob.points, 0);
+      n++;
+      if (c.kind === 'PASS') { pass++; if (c.early) { early++; assert.equal(c.preview, 'RED'); assert.ok(c.margin < 0); } }
+      else assert.notEqual(c.kind, 'RUN', 'a bullet line onto a deep route is never a 30-yard run (' + c.kind + ')');
+    }
+    const q = { x: live.qb.x, y: live.qb.y };
+    assert.notEqual(live.classify([q, { x: q.x + 4, y: -1 }, { x: q.x + 5, y: 3 }], 0).early, true, 'a short scramble line (3 yd past the line) is never an early pass');
+  }
+  assert.ok(n >= 60 && pass === n && early >= n * 0.5, n + ' lines, ' + pass + ' PASS, ' + early + ' early');
+});
+
+test('the break: a ball that gets there before the route\'s window opens is caught less often (catch.early) — the no-read throw pays for it', () => {
+  const E0 = F.catch.early;
+  const cmp = () => {
+    let c = 0, n = 0;
+    for (let seed = 1; seed <= 150; seed++) {
+      const { sim } = mk({ seed: 2100 + seed, play: 'FOUR_VERTS', cov: 'COVER4' });
+      const live = liveOf(sim, seed);
+      stepTo(live, 0.7);
+      const a = live.aim('WR1', 0.5);
+      if (!a || a.tooLong || !live.throwAlong(a.points, 0.5).ok) continue;
+      const res = finish(live);
+      n++; if (res.outcome === 'CATCH') c++;
+    }
+    return c / n;
+  };
+  try {
+    const withIt = cmp();
+    F.catch.early = 0;
+    const without = cmp();
+    assert.ok(without - withIt >= 0.08, 'the same early deep balls: ' + (100 * withIt).toFixed(0) + ' % caught vs ' + (100 * without).toFixed(0) + ' % without the rule');
+    assert.ok(Field.routeOpen(mk({ seed: 1, play: 'FOUR_VERTS' }).sim.receivers[0]) > 2.5, 'a GO route is "there" late');
+  } finally { F.catch.early = E0; }
 });
 
 // ═══════════════════════════════ COVERAGE ═══════════════════════════════

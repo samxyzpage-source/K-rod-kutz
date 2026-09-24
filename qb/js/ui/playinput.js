@@ -10,6 +10,7 @@
  *   var inp = RTG.UI.PlayInput.create({
  *     canvasEl,                               pointer events target (touch-action: none)
  *     active() → bool                         a draft may start / continue (PLAY, the QB has the ball, no modal)
+ *     pending() → bool                        a press on the QB now is kept until active() (the offence is still sliding into the formation)
  *     qbHit(clientX, clientY) → bool          the press is within the start radius of the quarterback (css px, the scene converts)
  *     toField(clientX, clientY, out) → out    client css px → field yards {x, y} (the scene's exact inverse projection)
  *     cssHeight() → px                        the canvas' css height (the draw speed is measured in canvas-heights / s)
@@ -18,12 +19,14 @@
  *                                             (fast: the engine's live.aim only — called every frame; else classify-checked)
  *     keys() → settings.keys                  remaps (see DEFAULT_KEYS)
  *     onDraftStart(source 'pointer'|'key', mode 'PASS'|'RUN'|null) · onDraftEnd(reason 'commit'|'cancel')
- *     onCommit({source, mode, points: [{x, y}] (a fresh copy), loft})
+ *     onCommit({source, mode, points: [{x, y}] (a fresh copy), loft, fresh (a sample arrived since the last update: the
+ *       finger was still moving), slot (a keyboard PASS: the receiver its number named)})
  *     onThrowAway() · onStray(reason)          (a press away from the QB · a confirm with nothing drafted)
  *   })
- *   → { update(now) → bool (the draft changed), drafting(), source(), mode(), points() (pooled array, valid until the
- *       next update), count(), loft(), loftName(), speedHps(), cancel(), commit(), proposePass(slot), startRun(),
- *       nudge(dx, dy), bend(d), cycleLoft(), setLoft(v), reset(), destroy() }
+ *   → { update(now) → bool (new samples: the finger moved), drafting(), source(), mode(), points() (pooled array, valid
+ *       until the next update), count(), loft(), loftName(), speedHps(), overQb() (the finger came back onto the QB, or
+ *       the line's end is off the canvas: letting go cancels), slot(), cancel(), commit(), proposePass(slot), startRun(), nudge(dx, dy), bend(d),
+ *       cycleLoft(), setLoft(v), reset(), destroy() }
  *
  * THE POINTER (the kicker's capture rules): a press within the start radius of the QB starts a draft (first pointer
  * only; setPointerCapture; mouse button 0); moves collect samples in css px (a sample every ≥ 1.5 px); once per
@@ -31,8 +34,14 @@
  * the last point kept) and lightly smoothed (one [¼ ½ ¼] pass over the interior); the loft is the average draw speed —
  * the stroke's css length ÷ the canvas' css height ÷ the seconds from the first move past `deadCss` to the last sample —
  * mapped linearly from `draw.loft.fastHps` (and faster: 0, a bullet) to `draw.loft.slowHps` (and slower: 1, a lob).
- * pointerup commits — unless the finger never got minStrokeCss from the press (a tap on the QB is nothing); pointercancel, a lost capture and a window blur DISCARD the draft (never a throw). A press away
- * from the QB is a stray (the scene says 'START ON THE QB').
+ * The draft is re-anchored on the QB every frame (he keeps dropping while a finger rests: the line shown is the line
+ * a release commits). A TOUCH stroke is drawn a little ABOVE the fingertip (touchLiftCss, ramped in over the first
+ * touchLiftCss / touchLiftRamp px of travel) so the thumb never hides the line's end or a short run.
+ * pointerup commits — unless the finger never got minStrokeCss from the press (a tap on the QB is nothing), came back
+ * onto the QB after leaving him, or lifted with the point it draws off the canvas (both: the draft is dropped — the
+ * way to abort a line); pointercancel, a lost capture and a window blur DISCARD the draft (never a throw). A press on
+ * the QB while the offence is still sliding into the formation (opts.pending) is kept and starts the draft on the first
+ * move once drawing is allowed. A press away from the QB is a stray (the scene says 'START ON THE QB').
  *
  * THE KEYBOARD (a complete path): 1–5 start a PASS draft to that receiver (slot order WR1 WR2 SLOT TE RB): a straight
  * line from the QB to the spot he can reach (opts.propose; the line FOLLOWS that spot every frame, and a new loft
@@ -54,6 +63,9 @@
     deadCss: 4,                   // the stroke's clock starts at the first sample this far from the press
     restMs: 60, frameMs: 16.7,    // … from the sample before it when that one is this recent, else one frame before it
     minStrokeCss: 14,             // a stroke that never gets this far from the press is a tap, not a line (a twitch on the QB's helmet is not a 2-yd run)
+    touchLiftCss: 36,             // a touch stroke is drawn this many css px above the fingertip (the thumb hides the QB and a short run otherwise) …
+    touchLiftRamp: 0.5,           // … ramped in at this × the finger's distance from the press (full after 72 px; a stroke back toward the QB stays under him)
+    cancelOffCss: 0,              // a release whose DRAWN point (the finger less its lift) is this far (or more) outside the canvas drops the draft (drag it off the field to abort)
     maxPoints: 240,               // resampled points handed to classify (a 240-yd line is already absurd)
     minDurS: 0.03,                // a stroke faster than this reads as this long (no division by ~0)
     nudgeYd: 1, bendYd: 1, bendMax: 15, runAheadYd: 5,
@@ -61,7 +73,7 @@
   };
   PlayInput.CONST = CONST;
   /** Fallbacks for Tuning.qb.draw (the engine's block wins field by field). */
-  var DRAW_DEFAULTS = { slowMo: 0.15, slowMoBudgetS: 4, startR: 2.5, minLen: 2, reachSlack: 0.2, greenMargin: 0.3, previewIq: 70, loft: { fastHps: 2.4, slowHps: 0.5 }, assistYd: 2.5, resampleYd: 0.75 };
+  var DRAW_DEFAULTS = { slowMo: 0.15, slowMoBudgetS: 4, startR: 2.5, minLen: 2, reachSlack: 0.2, greenMargin: 0.3, previewIq: 70, loft: { fastHps: 1.3, slowHps: 0.35 }, assistYd: 3.5, resampleYd: 0.75 };
   PlayInput.DRAW_DEFAULTS = DRAW_DEFAULTS;
   /** Tuning.qb.draw merged over DRAW_DEFAULTS, read at call time (RTG.debug.tune edits apply). Allocation-free: returns a shared object. */
   var drawOut = { slowMo: 0, slowMoBudgetS: 0, startR: 0, minLen: 0, reachSlack: 0, greenMargin: 0, previewIq: 0, loft: { fastHps: 0, slowHps: 0 }, assistYd: 0, resampleYd: 0 };
@@ -132,6 +144,9 @@
     var N = CONST.maxRaw;
     var rawX = new Float64Array(N), rawY = new Float64Array(N), rawT = new Float64Array(N), fX = new Float64Array(N), fY = new Float64Array(N);
     var rawN = 0, convN = 0, pointerId = null, tMove0 = 0, tLast = 0, cssLen = 0, moved = false, reach2 = 0;
+    // the finger itself (client css px; the samples above are the drawn points: lifted over a touch), the press, the
+    // stroke's pointer type; a press kept until drawing is allowed; the finger left the QB / came back onto him
+    var fingerX = 0, fingerY = 0, downX = 0, downY = 0, touchStroke = false, pendingPress = false, leftQb = false, backOnQb = false, offNow = false, fresh = false;
     // the resampled draft (field yd) — pooled point objects in a reused array
     var M = CONST.maxPoints;
     var pool = [], pts = [], pX = new Float64Array(M), pY = new Float64Array(M), nPts = 0;
@@ -144,6 +159,18 @@
     if (canvasEl) canvasEl.style.touchAction = 'none';
 
     function isActive() { return opts.active ? !!opts.active() : true; }
+    /** How far above the fingertip a touch stroke is drawn: ramped in with the finger's distance from the press. */
+    function liftAt(x, y) {
+      if (!touchStroke) return 0;
+      var dx = x - downX, dy = y - downY;
+      return Math.min(CONST.touchLiftCss, CONST.touchLiftRamp * Math.sqrt(dx * dx + dy * dy));
+    }
+    /** The point a finger at (x, y) draws (a touch stroke's is lifted above it) is more than cancelOffCss outside the canvas. */
+    function offCanvas(x, y) {
+      if (!canvasEl || !canvasEl.getBoundingClientRect) return false;
+      var r = canvasEl.getBoundingClientRect(), m = CONST.cancelOffCss, dy = y - liftAt(x, y);
+      return x <= r.left - m || x >= r.right + m || dy <= r.top - m || dy >= r.bottom + m;
+    }
     function keys() { return PlayInput.resolveKeys(call(opts.keys)); }
 
     function begin(src, m) {
@@ -153,6 +180,7 @@
     function end(reason) {
       var was = drafting;
       drafting = false; source = null; mode = null; dirty = false; nPts = 0; pts.length = 0; rawN = 0; convN = 0;
+      pendingPress = false; leftQb = false; backOnQb = false; offNow = false; fresh = false;
       releaseCapture();
       if (was) call(opts.onDraftEnd, reason);
     }
@@ -241,6 +269,7 @@
       var spot = call(opts.propose, slot, CONST.lofts[loftIdx], tmp, false);
       if (!spot) return false;
       if (drafting && source === 'pointer') end('cancel');
+      if (pendingPress) { pendingPress = false; releaseCapture(); }
       kSlot = slot; kDX = 0; kDY = 0; kEndX = spot.x; kEndY = spot.y; kBend = 0;
       // the full proposal may have searched past the fast one: keep the difference as the player's offset
       var fast = call(opts.propose, slot, CONST.lofts[loftIdx], { x: 0, y: 0 }, true);
@@ -252,6 +281,7 @@
     function startRun() {
       if (destroyed || !isActive()) return false;
       if (drafting && source === 'pointer') end('cancel');
+      if (pendingPress) { pendingPress = false; releaseCapture(); }
       call(opts.qbAt, qbPt);
       kSlot = null; kDX = 0; kDY = CONST.runAheadYd; kEndX = qbPt.x; kEndY = qbPt.y + CONST.runAheadYd; kBend = 0;
       if (!drafting) begin('key', 'RUN'); else { mode = 'RUN'; source = 'key'; }
@@ -276,10 +306,11 @@
     }
     function commit() {
       if (!drafting) return false;
+      var wasFresh = fresh;
       if (dirty) { if (source === 'key') buildKey(); else buildPointer(); dirty = false; }
       var copy = new Array(nPts);
       for (var i = 0; i < nPts; i++) copy[i] = { x: pX[i], y: pY[i] };
-      var info = { source: source, mode: mode, points: copy, loft: loft };
+      var info = { source: source, mode: mode, points: copy, loft: loft, fresh: source === 'key' || wasFresh, slot: source === 'key' && mode === 'PASS' ? kSlot : null };
       end('commit');
       call(opts.onCommit, info);
       return true;
@@ -287,64 +318,88 @@
 
     // ── pointer ──
     function stamp(e) { var t = e && typeof e.timeStamp === 'number' && e.timeStamp > 0 ? e.timeStamp : now(); return t; }
+    /** A sample at the finger (x, y): the drawn point sits liftAt() above it on a touch stroke. */
     function pushSample(x, y, t) {
-      if (rawN >= N) { rawX[N - 1] = x; rawY[N - 1] = y; rawT[N - 1] = t; if (convN > N - 1) convN = N - 1; return; }
-      rawX[rawN] = x; rawY[rawN] = y; rawT[rawN] = t; rawN++;
+      var sy = y - liftAt(x, y);
+      fingerX = x; fingerY = y; fresh = true;
+      if (rawN >= N) { rawX[N - 1] = x; rawY[N - 1] = sy; rawT[N - 1] = t; if (convN > N - 1) convN = N - 1; return; }
+      rawX[rawN] = x; rawY[rawN] = sy; rawT[rawN] = t; rawN++;
+    }
+    /** The finger's position vs the QB: it left his start circle / came back onto him (letting go there cancels). */
+    function trackQb(x, y) {
+      var on = !!call(opts.qbHit, x, y);
+      if (!on) leftQb = true;
+      backOnQb = leftQb && on;
+    }
+    function startStroke(e, t) {
+      rawN = 0; convN = 0; cssLen = 0; moved = false; tMove0 = 0; reach2 = 0; leftQb = false; backOnQb = false;
+      tLast = t;
+      pushSample(downX, downY, t);
+      loft = 0.5; speed = 0;
+      begin('pointer', null);
     }
     function onDown(e) {
       if (destroyed || pointerId !== null) return;
       if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
-      if (!isActive()) return;
-      if (!call(opts.qbHit, e.clientX, e.clientY)) { call(opts.onStray, 'START ON THE QB'); return; }
+      var active = isActive();
+      if (!active && !(opts.pending && opts.pending())) return;
+      if (!call(opts.qbHit, e.clientX, e.clientY)) { if (active) call(opts.onStray, 'START ON THE QB'); return; }
       if (e.preventDefault) e.preventDefault();
       if (drafting) end('cancel');                  // a keyboard draft gives way to the finger
       pointerId = e.pointerId !== undefined ? e.pointerId : 1;
       try { if (canvasEl.setPointerCapture) canvasEl.setPointerCapture(pointerId); } catch (err) { /* ignore */ }
-      rawN = 0; convN = 0; cssLen = 0; moved = false; tMove0 = 0; reach2 = 0;
-      var t = stamp(e);
-      tLast = t;
-      pushSample(e.clientX, e.clientY, t);
-      loft = 0.5; speed = 0;
-      begin('pointer', null);
+      downX = e.clientX; downY = e.clientY; touchStroke = e.pointerType === 'touch';
+      if (!active) { pendingPress = true; return; }  // the offence is still sliding in: the press waits for the play
+      startStroke(e, stamp(e));
     }
     function onMove(e) {
       if (pointerId === null || (e.pointerId !== undefined && e.pointerId !== pointerId)) return;
       if (e.preventDefault) e.preventDefault();
+      if (pendingPress) {
+        if (!isActive()) return;
+        pendingPress = false;
+        startStroke(e, stamp(e) - CONST.frameMs);
+      }
       if (!drafting || source !== 'pointer') return;
-      var li = rawN - 1, dx = e.clientX - rawX[li], dy = e.clientY - rawY[li], d = Math.sqrt(dx * dx + dy * dy);
+      var dx = e.clientX - fingerX, dy = e.clientY - fingerY, d = Math.sqrt(dx * dx + dy * dy);
       if (d < CONST.minStepCss) return;
-      var t = stamp(e);
+      var t = stamp(e), li = rawN - 1;
       if (!moved) {
-        var ox = e.clientX - rawX[0], oy = e.clientY - rawY[0];
+        var ox = e.clientX - downX, oy = e.clientY - downY;
         // the stroke's clock starts when the finger leaves the QB: a finger that rested on him first is not drawing
         // slowly (the previous sample counts only when it is recent; else one frame before this one)
         if (ox * ox + oy * oy >= CONST.deadCss * CONST.deadCss) { moved = true; tMove0 = t - rawT[li] < CONST.restMs ? rawT[li] : t - CONST.frameMs; }
       }
       cssLen += d; tLast = t;
-      var rx = e.clientX - rawX[0], ry = e.clientY - rawY[0];
+      var rx = e.clientX - downX, ry = e.clientY - downY;
       if (rx * rx + ry * ry > reach2) reach2 = rx * rx + ry * ry;
+      trackQb(e.clientX, e.clientY);
+      offNow = offCanvas(e.clientX, e.clientY);
       pushSample(e.clientX, e.clientY, t);
       dirty = true;
     }
     function onUp(e) {
       if (pointerId === null || (e.pointerId !== undefined && e.pointerId !== pointerId)) return;
       if (e.preventDefault) e.preventDefault();
+      if (pendingPress) { pendingPress = false; releaseCapture(); return; }   // pressed and let go while the offence slid in
       if (!drafting || source !== 'pointer') { releaseCapture(); return; }
       // a release at the last move's position adds no motion (a late pointerup would dilute the speed)
-      var li = rawN - 1, dx = e.clientX - rawX[li], dy = e.clientY - rawY[li];
+      var dx = e.clientX - fingerX, dy = e.clientY - fingerY;
       if (dx * dx + dy * dy >= CONST.minStepCss * CONST.minStepCss) { cssLen += Math.sqrt(dx * dx + dy * dy); tLast = stamp(e); pushSample(e.clientX, e.clientY, tLast); if (!moved) { moved = true; tMove0 = rawT[0]; } }
-      var ux = e.clientX - rawX[0], uy = e.clientY - rawY[0];
+      var ux = e.clientX - downX, uy = e.clientY - downY;
       if (ux * ux + uy * uy > reach2) reach2 = ux * ux + uy * uy;
       if (reach2 < CONST.minStrokeCss * CONST.minStrokeCss) { end('cancel'); return; }   // a tap on the QB is nothing
+      trackQb(e.clientX, e.clientY);
+      if (backOnQb || offCanvas(e.clientX, e.clientY)) { end('cancel'); return; }       // dragged back onto him or off the field: abort
       dirty = true;
       commit();
     }
     function onCancel(e) {
       if (pointerId === null) return;
       if (e && e.pointerId !== undefined && e.pointerId !== pointerId) return;
-      if (drafting && source === 'pointer') end('cancel'); else releaseCapture();
+      if (drafting && source === 'pointer') end('cancel'); else { pendingPress = false; releaseCapture(); }
     }
-    function onBlur() { if (drafting && source === 'pointer') end('cancel'); }
+    function onBlur() { if (drafting && source === 'pointer') end('cancel'); else if (pendingPress) { pendingPress = false; releaseCapture(); } }
 
     // ── keyboard ──
     function keyLR(e) {
@@ -413,8 +468,13 @@
         if (destroyed || !drafting) return false;
         if (!isActive()) { end('cancel'); return true; }
         if (source === 'key') { buildKey(); dirty = false; return true; }
-        if (!dirty) return false;
-        buildPointer(); dirty = false;
+        if (!dirty) {
+          // no new samples: the line stays where the finger left it, but it starts on the QB where he is NOW (he keeps
+          // dropping under a resting finger) — the draft shown is the draft a release commits
+          if (nPts > 0 && typeof opts.qbAt === 'function') { call(opts.qbAt, qbPt); pX[0] = qbPt.x; pY[0] = qbPt.y; pool[0].x = qbPt.x; pool[0].y = qbPt.y; }
+          return false;
+        }
+        buildPointer(); dirty = false; fresh = false;
         return true;
       },
       drafting: function () { return drafting; },
@@ -425,6 +485,8 @@
       loft: function () { return loft; },
       loftName: function () { return PlayInput.touchName(loft); },
       speedHps: function () { return speed; },
+      overQb: function () { return drafting && source === 'pointer' && (backOnQb || offNow); },   // letting go now drops the line
+      slot: function () { return drafting && source === 'key' && mode === 'PASS' ? kSlot : null; },
       cancel: function () { if (drafting) end('cancel'); },
       commit: commit,
       proposePass: proposePass,

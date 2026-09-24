@@ -2,7 +2,9 @@
  * Shared hands for the QB moment specs (v2 "DRAW THE PASS"): the title picks, the situation card, the play cards, and
  * the DRAW — real pointer gestures (the mouse, or CDP touch on a touch context) from the quarterback along a timed path
  * of moves: fast (as quick as the harness moves, ≤ ~120 ms) → a BULLET, slow (~0.9 s or more, from Tuning.qb.draw.loft)
- * → a LOB. The target's reachable spot comes from RTG.debug.reachSpot (the engine's live.aim checked with
+ * → a LOB. A touch stroke is drawn above the fingertip (PlayInput.CONST.touchLiftCss, ramped in with the finger's
+ * distance from the press): gesture() moves the finger under each point it means to draw. The drive's first moment waits
+ * at the snap for the first touch: the hands that watch the play run first (chooseTarget, waitPlayTime) start its clock. The target's reachable spot comes from RTG.debug.reachSpot (the engine's live.aim checked with
  * live.classify, else a classify loop over his route); field yards become css px through the view's fieldToCss.
  * Everything reads the live scene through RTG.UI.PlayView.current() / RTG.debug.
  *
@@ -111,8 +113,12 @@ async function waitCanDraw(page, timeout) {
   }, null, { timeout: timeout || 6000 });
 }
 
+/** The drive's first moment waits at the snap for the first touch: start its clock (a no-op otherwise). */
+function unhold(page) { return page.evaluate(() => { const v = RTG.UI.PlayView.current(); return !!(v && v.unhold && v.unhold()); }); }
+
 /** The live's clock reached t sim-seconds (or the QB no longer holds the ball, or the scene left PLAY). */
 async function waitPlayTime(page, t, timeout) {
+  await unhold(page);
   await page.waitForFunction(tt => {
     const v = RTG.UI.PlayView.current(), l = v && v.live && v.live();
     return !v || v.phase() !== 'PLAY' || !l || !l.qb.hasBall || l.t >= tt;
@@ -140,6 +146,8 @@ async function chooseTarget(page, opts) {
   const minT = typeof opts.minT === 'number' ? opts.minT : 0.7;
   return page.evaluate(([loft, minT, maxT0, minDepth]) => new Promise(resolve => {
     const t0 = performance.now();
+    const v0 = RTG.UI.PlayView.current();
+    if (v0 && v0.unhold) v0.unhold();                         // the first moment waits for a touch: this hand watches the play first
     (function poll() {
       const v = RTG.UI.PlayView.current(), l = v && v.live && v.live(), sim = v && v.sim && v.sim();
       if (!v || v.phase() !== 'PLAY' || !l || !sim || !sim.receivers || !l.qb.hasBall || l.phase !== 'PRE_THROW') return resolve(null);
@@ -192,8 +200,17 @@ async function gesture(page, css, opts) {
   opts = opts || {};
   const cdp = opts.touch ? await page.context().newCDPSession(page) : null;
   const tp = p => ({ x: p.x, y: p.y, id: 1, radiusX: 2, radiusY: 2, force: 1 });
-  const moveTo = p => cdp ? cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [tp(p)] }) : page.mouse.move(p.x, p.y);
   const start = css[0];
+  // a touch stroke is drawn liftAt() above the finger (min(touchLiftCss, touchLiftRamp × the finger's distance from the
+  // press)): put the finger under the point (a monotone fixed point: bisect on the lift)
+  const lift = cdp && opts.lift !== false ? await page.evaluate(() => { const C = RTG.UI.PlayInput.CONST; return { L: C.touchLiftCss || 0, k: C.touchLiftRamp || 0 }; }) : { L: 0, k: 0 };
+  const finger = p => {
+    if (!lift.L || !lift.k) return p;
+    let lo = 0, hi = lift.L;
+    for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; if (Math.min(lift.L, lift.k * Math.hypot(p.x - start.x, p.y + m - start.y)) > m) lo = m; else hi = m; }
+    return { x: p.x, y: p.y + (lo + hi) / 2 };
+  };
+  const moveTo = p => { const f = finger(p); return cdp ? cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [tp(f)] }) : page.mouse.move(f.x, f.y); };
   if (cdp) await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [tp(start)] });
   else { await page.mouse.move(start.x, start.y); await page.mouse.down(); }
   const dur = opts.durationMs || 0, n = css.length - 1, t0 = Date.now(), half = Math.max(1, Math.ceil(n / 2));
@@ -542,7 +559,7 @@ module.exports = {
   SLOTS, sleep, current, state, phase, drawing, live, geometry,
   pickArchetype, pickTeam, pickVenue, startDrive,
   tapToRead, cards, bestCard, pickPlay, pickPassCard, pickFirstGood: pickPassCard,
-  waitCanDraw, waitPlayTime, chooseTarget, waitReleased,
+  waitCanDraw, waitPlayTime, unhold, chooseTarget, waitReleased,
   touchTap, gesture, planStroke, draftNow, drawPass, runLine, drawRun, awayEnd, drawThrowAway, focusCanvas, keyPass, keyRun,
   waitResult, skipResult, waitDone, next, playMoment
 };
