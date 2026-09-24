@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>RTG dev — kick scene</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/kick.css">
+  <style>
+    /* dev-page base (mirrors the shell tokens so the scene renders without css/style.css) */
+    :root { --navy:#1b1f3a; --navy2:#262b4d; --cream:#f4e9d0; --ink:#101226; --grass:#3a8c3f; --grass-2:#2e7233; --chalk:#f2f2e6; --gold:#f6c445; --red:#d8433a; --sky:#7fc7ff; --mint:#4dbb63; --grey:#8a8f9e; --dusk:#5b3a6e; --night:#12142a; --team-1:#f6c445; --team-2:#f4e9d0; }
+    html, body { margin: 0; padding: 0; background: var(--navy); color: var(--cream); font-family: "Press Start 2P", "Courier New", Courier, monospace; font-size: 10px; line-height: 1.6; }
+    body { min-height: 100vh; }
+    #devbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px; background: #000; font-size: 9px; border-bottom: 2px solid var(--navy2); }
+    #devbar select, #devbar label { font: inherit; font-size: 9px; }
+    #devbar select { height: 28px; padding: 2px 4px; background: var(--navy2); color: var(--cream); border: 2px solid var(--grey); }
+    #devbar input[type=checkbox] { width: 14px; height: 14px; margin: 0 4px 0 0; }
+    body.nobar #devbar { display: none; }
+    body.nobar #host { height: 100vh; }
+    #devbar .btn { min-height: 28px; }
+    .dev-perf { margin-left: auto; color: var(--sky); }
+    #host { position: relative; width: 100%; height: calc(100vh - 44px); overflow: hidden; background: var(--navy); }
+    #host.sized { margin: 8px auto; box-shadow: 0 0 0 2px var(--grey); }
+    #host .screen { height: 100%; }
+    .screen-kick, .screen-session { height: 100%; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 6px 12px; border: 2px solid var(--cream); background: var(--navy2); color: var(--cream); font: inherit; font-size: 9px; letter-spacing: 1px; cursor: pointer; box-shadow: 3px 3px 0 #000; text-transform: uppercase; }
+    .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #000; }
+    .btn-primary { background: var(--gold); color: var(--ink); border-color: var(--gold); }
+    .btn-ghost { background: transparent; box-shadow: none; }
+    .btn-sm { min-height: 28px; padding: 4px 8px; font-size: 8px; }
+    .btn-block { width: 100%; }
+    .btn[disabled] { opacity: 0.5; cursor: default; }
+    .btn-row { display: flex; gap: 6px; }
+    .chip { display: inline-flex; align-items: center; gap: 3px; padding: 3px 6px; border: 2px solid var(--navy2); background: var(--navy2); color: var(--cream); font-size: 9px; }
+    .chip-gold { background: var(--gold); border-color: var(--gold); color: var(--ink); }
+    .card { border: 2px solid var(--navy2); background: var(--navy2); padding: 8px; box-shadow: 3px 3px 0 #000; }
+    .card-gold { border-color: var(--gold); }
+    .card-title { margin: 0 0 6px; font-size: 11px; color: var(--gold); }
+    .txt-gold { color: var(--gold); } .txt-grey { color: var(--grey); } .txt-mint { color: var(--mint); } .txt-red { color: var(--red); }
+    .small { font-size: 8px; }
+    .num { font-variant-numeric: tabular-nums; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+    .toast-host { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 50; }
+    .toast { padding: 8px 12px; background: var(--ink); border: 2px solid var(--gold); color: var(--cream); font-size: 9px; box-shadow: 3px 3px 0 #000; }
+    .screen-head { display: flex; align-items: center; gap: 8px; }
+    .screen-title { font-size: 12px; color: var(--gold); margin: 0; }
+    .crest { display: inline-block; }
+    .icon { display: inline-block; vertical-align: middle; }
+  </style>
+</head>
+<body>
+  <div id="devbar" role="toolbar" aria-label="Dev controls"></div>
+  <div id="host"></div>
+  <div id="live" class="sr-only" aria-live="polite"></div>
+
+  <!-- engine (SPEC §3.2 order) -->
+  <script src="../js/00_namespace.js"></script>
+  <script src="../js/engine/tuning.js"></script>
+  <script src="../js/engine/util.js"></script>
+  <script src="../js/engine/rng.js"></script>
+  <script src="../js/engine/schema.js"></script>
+  <script src="../js/data/blocklist.js"></script>
+  <script src="../js/data/names.js"></script>
+  <script src="../js/data/colleges.js"></script>
+  <script src="../js/data/nfl.js"></script>
+  <script src="../js/data/records.js"></script>
+  <script src="../js/data/awards.js"></script>
+  <script src="../js/data/events.js"></script>
+  <script src="../js/data/headlines.js"></script>
+  <script src="../js/engine/names.js"></script>
+  <script src="../js/engine/weather.js"></script>
+  <script src="../js/engine/player.js"></script>
+  <script src="../js/engine/kick.js"></script>
+  <script src="../js/engine/schedule.js"></script>
+  <script src="../js/engine/standings.js"></script>
+  <script src="../js/engine/sim.js"></script>
+  <script src="../js/engine/stats.js"></script>
+  <script src="../js/engine/awards.js"></script>
+  <script src="../js/engine/events.js"></script>
+  <script src="../js/engine/contracts.js"></script>
+  <script src="../js/engine/draft.js"></script>
+  <script src="../js/engine/season.js"></script>
+  <script src="../js/engine/career.js"></script>
+  <script src="../js/engine/save.js"></script>
+  <script src="../js/engine/api.js"></script>
+
+  <!-- shell core (U1) when present; fakestore.js fills any gap -->
+  <script src="../js/ui/storage.js"></script>
+  <script src="../js/ui/palette.js"></script>
+  <script src="../js/ui/store.js"></script>
+  <script src="../js/ui/router.js"></script>
+  <script src="../js/ui/components.js"></script>
+
+  <!-- U2 -->
+  <script src="../js/ui/sprites.js"></script>
+  <script src="../js/ui/canvas.js"></script>
+  <script src="../js/ui/audio.js"></script>
+  <script src="../js/ui/input.js"></script>
+  <script src="../js/ui/kickview.js"></script>
+  <script src="../js/ui/screens/showcase.js"></script>
+  <script src="../js/ui/screens/game.js"></script>
+  <script src="../js/ui/screens/kick.js"></script>
+  <script src="../js/ui/screens/combine.js"></script>
+  <script src="../js/ui/screens/campbattle.js"></script>
+  <script src="../js/ui/screens/practice.js"></script>
+
+  <!-- dev harness (+ U1 debug API when present) -->
+  <script src="fakestore.js"></script>
+  <script src="../js/debug.js"></script>
+  <script>
+    (function () {
+      var store = new RTG.UI.Store();
+      RTG.UI.store = store; RTG.UI.uiRng = store.uiRng;
+      RTG.Dev.boot(document.getElementById('host'), document.getElementById('devbar'));
+    })();
+  </script>
+</body>
+</html>

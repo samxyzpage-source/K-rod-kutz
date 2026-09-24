@@ -1,0 +1,3712 @@
+{
+ "v": 0,
+ "savedAt": 1740000000000,
+ "seed": 11,
+ "rngState": 611522872,
+ "checksum": "b574372c",
+ "career": {
+  "v": 0,
+  "seed": 11,
+  "rngState": 611522872,
+  "difficulty": "pro",
+  "createdAt": 1757000000000,
+  "stage": "COLLEGE",
+  "phase": "PRE",
+  "year": 2,
+  "week": 0,
+  "player": {
+   "id": "pcb0c2866",
+   "name": {
+    "first": "Otis",
+    "last": "Fenwick",
+    "full": "Otis Fenwick"
+   },
+   "hometown": {
+    "city": "Springfield",
+    "state": "IL",
+    "region": "MW"
+   },
+   "archetype": "CANNON",
+   "look": {
+    "skin": 1,
+    "hair": 2,
+    "boot": 0
+   },
+   "foot": "R",
+   "age": 19,
+   "stars": 3,
+   "attrs": {
+    "POW": 55,
+    "ACC": 41,
+    "CON": 36,
+    "CLU": 42,
+    "KO": 45
+   },
+   "pot": {
+    "POW": 85,
+    "ACC": 76,
+    "CON": 86,
+    "CLU": 79,
+    "KO": 74
+   },
+   "xp": 60,
+   "xpSpent": 0,
+   "form": 0,
+   "morale": 60,
+   "trust": 58,
+   "fans": 50,
+   "fame": 34,
+   "js": 61,
+   "traits": [],
+   "flags": {},
+   "injury": null,
+   "missStreak": 0,
+   "makeStreak": 0,
+   "role": "K1",
+   "teamId": "COA2",
+   "league": "COLLEGE",
+   "contract": {
+    "type": "SCHOLARSHIP",
+    "years": 4,
+    "yearIdx": 1,
+    "aav": 0,
+    "gtdPct": 0,
+    "signingBonus": 0,
+    "startYear": 1
+   },
+   "nil": 0,
+   "collegeSeasons": 1,
+   "nflSeasons": 0
+  },
+  "leagues": {
+   "college": {
+    "kind": "COLLEGE",
+    "year": 2,
+    "teams": [
+     {
+      "id": "COA0",
+      "name": "Atlantic Tech Tidewaters",
+      "city": "Norfolk",
+      "nick": "Tidewaters",
+      "abbr": "ATT",
+      "colors": [
+       "#0b3d91",
+       "#f2c14e"
+      ],
+      "conf": "COA",
+      "div": null,
+      "prestige": 5,
+      "OFF": 88,
+      "DEF": 85,
+      "ST": 76,
+      "coachAgg": 0.36,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Sylvester Quinn",
+       "age": 34,
+       "ovr": 73,
+       "attrs": {
+        "POW": 70,
+        "ACC": 76,
+        "CON": 80,
+        "CLU": 75,
+        "KO": 69
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 0,
+      "rival": "COA7",
+      "school": "Atlantic Tech"
+     },
+     {
+      "id": "COA1",
+      "name": "Chesapeake State Admirals",
+      "city": "Annapolis",
+      "nick": "Admirals",
+      "abbr": "CHS",
+      "colors": [
+       "#14213d",
+       "#c0c0c0"
+      ],
+      "conf": "COA",
+      "div": null,
+      "prestige": 4,
+      "OFF": 82,
+      "DEF": 80,
+      "ST": 72,
+      "coachAgg": 0.72,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Trey Farouk",
+       "age": 27,
+       "ovr": 69,
+       "attrs": {
+        "POW": 61,
+        "ACC": 68,
+        "CON": 69,
+        "CLU": 68,
+        "KO": 68
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "NE",
+      "confIdx": 1,
+      "rival": "COA6",
+      "school": "Chesapeake State"
+     },
+     {
+      "id": "COA2",
+      "name": "Carolina Pines Foxhounds",
+      "city": "Raleigh",
+      "nick": "Foxhounds",
+      "abbr": "CPN",
+      "colors": [
+       "#1d4d2b",
+       "#f4e9d0"
+      ],
+      "conf": "COA",
+      "div": null,
+      "prestige": 3,
+      "OFF": 76,
+      "DEF": 74,
+      "ST": 65,
+      "coachAgg": 0.51,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": null,
+      "kicker2": {
+       "name": "Otis Hooper II",
+       "age": 28,
+       "ovr": 60,
+       "attrs": {
+        "POW": 57,
+        "ACC": 64,
+        "CON": 59,
+        "CLU": 64,
+        "KO": 57
+       },
+       "contractYears": 4
+      },
+      "region": "SE",
+      "confIdx": 2,
+      "rival": "COA5",
+      "school": "Carolina Pines"
+     },
+     {
+      "id": "COA3",
+      "name": "Savannah Marsh Herons",
+      "city": "Savannah",
+      "nick": "Herons",
+      "abbr": "SAV",
+      "colors": [
+       "#2a6f5c",
+       "#f7f3e3"
+      ],
+      "conf": "COA",
+      "div": null,
+      "prestige": 3,
+      "OFF": 74,
+      "DEF": 76,
+      "ST": 63,
+      "coachAgg": 0.61,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Nikola Lindgren",
+       "age": 28,
+       "ovr": 58,
+       "attrs": {
+        "POW": 58,
+        "ACC": 55,
+        "CON": 60,
+        "CLU": 52,
+        "KO": 62
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 3,
+      "rival": "COA4",
+      "school": "Savannah Marsh"
+     },
+     {
+      "id": "COA4",
+      "name": "James River Ironclads",
+      "city": "Richmond",
+      "nick": "Ironclads",
+      "abbr": "JRV",
+      "colors": [
+       "#7a1f2b",
+       "#d4af37"
+      ],
+      "conf": "COA",
+      "div": null,
+      "prestige": 4,
+      "OFF": 80,
+      "DEF": 82,
+      "ST": 74,
+      "coachAgg": 0.74,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Bobby Rivera",
+       "age": 30,
+       "ovr": 75,
+       "attrs": {
+        "POW": 72,
+        "ACC": 72,
+        "CON": 76,
+        "CLU": 81,
+        "KO": 78
+       },
+       "contractYears": 2
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 4,
+      "rival": "COA3",
+      "school": "James River"
+     },
+     {
+      "id": "COA5",
+      "name": "Jersey Shore Boardwalkers",
+      "city": "Atlantic City",
+      "nick": "Boardwalkers",
+      "abbr": "JSH",
+      "colors": [
+       "#005f73",
+       "#ee9b00"
+      ],
+      "conf": "COA",
+      "div": null,
+      "prestige": 2,
+      "OFF": 68,
+      "DEF": 66,
+      "ST": 62,
+      "coachAgg": 0.63,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Walker Sparks",
+       "age": 31,
+       "ovr": 59,
+       "attrs": {
+        "POW": 62,
+        "ACC": 55,
+        "CON": 60,
+        "CLU": 59,
+        "KO": 59
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "NE",
+      "confIdx": 5,
+      "rival": "COA2",
+      "school": "Jersey Shore"
+     },
+     {
+      "id": "COA6",
+      "name": "Beacon Hill Lamplighters",
+      "city": "Boston",
+      "nick": "Lamplighters",
+      "abbr": "BHL",
+      "colors": [
+       "#1b263b",
+       "#e0e1dd"
+      ],
+      "conf": "COA",
+      "div": null,
+      "prestige": 3,
+      "OFF": 75,
+      "DEF": 72,
+      "ST": 73,
+      "coachAgg": 0.65,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Tyler Nakamura",
+       "age": 24,
+       "ovr": 76,
+       "attrs": {
+        "POW": 78,
+        "ACC": 74,
+        "CON": 83,
+        "CLU": 87,
+        "KO": 74
+       },
+       "contractYears": 2
+      },
+      "kicker2": null,
+      "region": "NE",
+      "confIdx": 6,
+      "rival": "COA1",
+      "school": "Beacon Hill"
+     },
+     {
+      "id": "COA7",
+      "name": "Newport Bay Schooners",
+      "city": "Newport",
+      "nick": "Schooners",
+      "abbr": "NPB",
+      "colors": [
+       "#003049",
+       "#fcbf49"
+      ],
+      "conf": "COA",
+      "div": null,
+      "prestige": 2,
+      "OFF": 66,
+      "DEF": 68,
+      "ST": 57,
+      "coachAgg": 0.57,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": true,
+      "kicker": {
+       "name": "Tanner McGrath",
+       "age": 28,
+       "ovr": 50,
+       "attrs": {
+        "POW": 47,
+        "ACC": 54,
+        "CON": 47,
+        "CLU": 49,
+        "KO": 47
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "NE",
+      "confIdx": 7,
+      "rival": "COA0",
+      "school": "Newport Bay"
+     },
+     {
+      "id": "HRT0",
+      "name": "Prairie Tech Sodbusters",
+      "city": "Lincoln",
+      "nick": "Sodbusters",
+      "abbr": "PRT",
+      "colors": [
+       "#d00000",
+       "#f4e9d0"
+      ],
+      "conf": "HRT",
+      "div": null,
+      "prestige": 5,
+      "OFF": 90,
+      "DEF": 86,
+      "ST": 79,
+      "coachAgg": 0.37,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Jeff Chambers",
+       "age": 24,
+       "ovr": 77,
+       "attrs": {
+        "POW": 80,
+        "ACC": 79,
+        "CON": 78,
+        "CLU": 76,
+        "KO": 78
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 0,
+      "rival": "HRT7",
+      "school": "Prairie Tech"
+     },
+     {
+      "id": "HRT1",
+      "name": "Great Plains Tech Windmills",
+      "city": "Wichita",
+      "nick": "Windmills",
+      "abbr": "GPT",
+      "colors": [
+       "#ffb703",
+       "#023047"
+      ],
+      "conf": "HRT",
+      "div": null,
+      "prestige": 4,
+      "OFF": 84,
+      "DEF": 80,
+      "ST": 74,
+      "coachAgg": 0.59,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": true,
+      "rainy": false,
+      "kicker": {
+       "name": "Gerald Keller",
+       "age": 25,
+       "ovr": 71,
+       "attrs": {
+        "POW": 77,
+        "ACC": 76,
+        "CON": 63,
+        "CLU": 79,
+        "KO": 72
+       },
+       "contractYears": 2
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 1,
+      "rival": "HRT6",
+      "school": "Great Plains Tech"
+     },
+     {
+      "id": "HRT2",
+      "name": "Iowa Ridge Harvesters",
+      "city": "Des Moines",
+      "nick": "Harvesters",
+      "abbr": "IWR",
+      "colors": [
+       "#1a1a1a",
+       "#f6c445"
+      ],
+      "conf": "HRT",
+      "div": null,
+      "prestige": 4,
+      "OFF": 82,
+      "DEF": 84,
+      "ST": 68,
+      "coachAgg": 0.37,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Walter Aaltonen",
+       "age": 27,
+       "ovr": 61,
+       "attrs": {
+        "POW": 62,
+        "ACC": 63,
+        "CON": 52,
+        "CLU": 62,
+        "KO": 69
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 2,
+      "rival": "HRT5",
+      "school": "Iowa Ridge"
+     },
+     {
+      "id": "HRT3",
+      "name": "Twin Cities Northmen",
+      "city": "Minneapolis",
+      "nick": "Northmen",
+      "abbr": "TWC",
+      "colors": [
+       "#2a3d66",
+       "#e4c580"
+      ],
+      "conf": "HRT",
+      "div": null,
+      "prestige": 3,
+      "OFF": 76,
+      "DEF": 78,
+      "ST": 62,
+      "coachAgg": 0.33,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Hassan Chapman",
+       "age": 23,
+       "ovr": 51,
+       "attrs": {
+        "POW": 55,
+        "ACC": 48,
+        "CON": 51,
+        "CLU": 55,
+        "KO": 48
+       },
+       "contractYears": 2
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 3,
+      "rival": "HRT4",
+      "school": "Twin Cities"
+     },
+     {
+      "id": "HRT4",
+      "name": "Ozark Ridgerunners",
+      "city": "Springfield",
+      "nick": "Ridgerunners",
+      "abbr": "OZK",
+      "colors": [
+       "#4e6e3f",
+       "#f2e8cf"
+      ],
+      "conf": "HRT",
+      "div": null,
+      "prestige": 2,
+      "OFF": 68,
+      "DEF": 70,
+      "ST": 64,
+      "coachAgg": 0.42,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Grover Amato",
+       "age": 33,
+       "ovr": 61,
+       "attrs": {
+        "POW": 62,
+        "ACC": 57,
+        "CON": 57,
+        "CLU": 67,
+        "KO": 60
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 4,
+      "rival": "HRT3",
+      "school": "Ozark"
+     },
+     {
+      "id": "HRT5",
+      "name": "Missouri Valley Steamboats",
+      "city": "St. Louis",
+      "nick": "Steamboats",
+      "abbr": "MOV",
+      "colors": [
+       "#0b3954",
+       "#bfd7ea"
+      ],
+      "conf": "HRT",
+      "div": null,
+      "prestige": 3,
+      "OFF": 74,
+      "DEF": 72,
+      "ST": 69,
+      "coachAgg": 0.56,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Ned Brewster",
+       "age": 35,
+       "ovr": 67,
+       "attrs": {
+        "POW": 66,
+        "ACC": 68,
+        "CON": 57,
+        "CLU": 66,
+        "KO": 65
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 5,
+      "rival": "HRT2",
+      "school": "Missouri Valley"
+     },
+     {
+      "id": "HRT6",
+      "name": "Cornbelt State Reapers",
+      "city": "Cedar Rapids",
+      "nick": "Reapers",
+      "abbr": "CBS",
+      "colors": [
+       "#386641",
+       "#f2e8cf"
+      ],
+      "conf": "HRT",
+      "div": null,
+      "prestige": 2,
+      "OFF": 64,
+      "DEF": 66,
+      "ST": 63,
+      "coachAgg": 0.36,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Andrew Lockhart",
+       "age": 33,
+       "ovr": 63,
+       "attrs": {
+        "POW": 65,
+        "ACC": 63,
+        "CON": 61,
+        "CLU": 62,
+        "KO": 58
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 6,
+      "rival": "HRT1",
+      "school": "Cornbelt State"
+     },
+     {
+      "id": "HRT7",
+      "name": "Dakota Frontier Drovers",
+      "city": "Fargo",
+      "nick": "Drovers",
+      "abbr": "DKF",
+      "colors": [
+       "#5c4033",
+       "#e9d8a6"
+      ],
+      "conf": "HRT",
+      "div": null,
+      "prestige": 1,
+      "OFF": 60,
+      "DEF": 62,
+      "ST": 54,
+      "coachAgg": 0.7,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": true,
+      "rainy": false,
+      "kicker": {
+       "name": "Kiran Fuentes",
+       "age": 23,
+       "ovr": 48,
+       "attrs": {
+        "POW": 42,
+        "ACC": 47,
+        "CON": 47,
+        "CLU": 49,
+        "KO": 51
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 7,
+      "rival": "HRT0",
+      "school": "Dakota Frontier"
+     },
+     {
+      "id": "BFR0",
+      "name": "Lone Star Tech Longriders",
+      "city": "Lubbock",
+      "nick": "Longriders",
+      "abbr": "LST",
+      "colors": [
+       "#8b0000",
+       "#e8d5a3"
+      ],
+      "conf": "BFR",
+      "div": null,
+      "prestige": 5,
+      "OFF": 91,
+      "DEF": 85,
+      "ST": 72,
+      "coachAgg": 0.4,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": true,
+      "rainy": false,
+      "kicker": {
+       "name": "Tanner Kimura",
+       "age": 28,
+       "ovr": 64,
+       "attrs": {
+        "POW": 61,
+        "ACC": 64,
+        "CON": 65,
+        "CLU": 60,
+        "KO": 57
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "SW",
+      "confIdx": 0,
+      "rival": "BFR7",
+      "school": "Lone Star Tech"
+     },
+     {
+      "id": "BFR1",
+      "name": "Red River State Rustlers",
+      "city": "Denison",
+      "nick": "Rustlers",
+      "abbr": "RRS",
+      "colors": [
+       "#7b2d26",
+       "#e6b422"
+      ],
+      "conf": "BFR",
+      "div": null,
+      "prestige": 4,
+      "OFF": 84,
+      "DEF": 80,
+      "ST": 72,
+      "coachAgg": 0.36,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Bryce Rahimi",
+       "age": 23,
+       "ovr": 69,
+       "attrs": {
+        "POW": 76,
+        "ACC": 73,
+        "CON": 70,
+        "CLU": 74,
+        "KO": 70
+       },
+       "contractYears": 2
+      },
+      "kicker2": null,
+      "region": "SW",
+      "confIdx": 1,
+      "rival": "BFR6",
+      "school": "Red River State"
+     },
+     {
+      "id": "BFR2",
+      "name": "Hill Country Armadillos",
+      "city": "Austin",
+      "nick": "Armadillos",
+      "abbr": "HCA",
+      "colors": [
+       "#5b8c5a",
+       "#f4e9d0"
+      ],
+      "conf": "BFR",
+      "div": null,
+      "prestige": 3,
+      "OFF": 74,
+      "DEF": 76,
+      "ST": 68,
+      "coachAgg": 0.31,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Dean Volkov",
+       "age": 27,
+       "ovr": 66,
+       "attrs": {
+        "POW": 65,
+        "ACC": 67,
+        "CON": 69,
+        "CLU": 64,
+        "KO": 63
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "SW",
+      "confIdx": 2,
+      "rival": "BFR5",
+      "school": "Hill Country"
+     },
+     {
+      "id": "BFR3",
+      "name": "Cimarron Twisters",
+      "city": "Stillwater",
+      "nick": "Twisters",
+      "abbr": "CIM",
+      "colors": [
+       "#e07a1f",
+       "#2b2b2b"
+      ],
+      "conf": "BFR",
+      "div": null,
+      "prestige": 4,
+      "OFF": 83,
+      "DEF": 82,
+      "ST": 77,
+      "coachAgg": 0.65,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": true,
+      "rainy": false,
+      "kicker": {
+       "name": "Sung Ledger",
+       "age": 26,
+       "ovr": 77,
+       "attrs": {
+        "POW": 81,
+        "ACC": 78,
+        "CON": 76,
+        "CLU": 80,
+        "KO": 74
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "SW",
+      "confIdx": 3,
+      "rival": "BFR4",
+      "school": "Cimarron"
+     },
+     {
+      "id": "BFR4",
+      "name": "Rio Bravo Mesquites",
+      "city": "Laredo",
+      "nick": "Mesquites",
+      "abbr": "RIO",
+      "colors": [
+       "#2b6a4d",
+       "#f5d49b"
+      ],
+      "conf": "BFR",
+      "div": null,
+      "prestige": 2,
+      "OFF": 66,
+      "DEF": 64,
+      "ST": 63,
+      "coachAgg": 0.74,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Andre Oakes",
+       "age": 35,
+       "ovr": 63,
+       "attrs": {
+        "POW": 59,
+        "ACC": 61,
+        "CON": 65,
+        "CLU": 66,
+        "KO": 60
+       },
+       "contractYears": 2
+      },
+      "kicker2": null,
+      "region": "SW",
+      "confIdx": 4,
+      "rival": "BFR3",
+      "school": "Rio Bravo"
+     },
+     {
+      "id": "BFR5",
+      "name": "Gulf Shore Squalls",
+      "city": "Corpus Christi",
+      "nick": "Squalls",
+      "abbr": "GSS",
+      "colors": [
+       "#006d77",
+       "#ffddd2"
+      ],
+      "conf": "BFR",
+      "div": null,
+      "prestige": 3,
+      "OFF": 78,
+      "DEF": 72,
+      "ST": 67,
+      "coachAgg": 0.56,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": true,
+      "rainy": false,
+      "kicker": {
+       "name": "Andrew Schmidt",
+       "age": 28,
+       "ovr": 63,
+       "attrs": {
+        "POW": 65,
+        "ACC": 63,
+        "CON": 62,
+        "CLU": 63,
+        "KO": 66
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "SW",
+      "confIdx": 5,
+      "rival": "BFR2",
+      "school": "Gulf Shore"
+     },
+     {
+      "id": "BFR6",
+      "name": "Panhandle Dusters",
+      "city": "Amarillo",
+      "nick": "Dusters",
+      "abbr": "PAN",
+      "colors": [
+       "#9c6644",
+       "#f1dca7"
+      ],
+      "conf": "BFR",
+      "div": null,
+      "prestige": 1,
+      "OFF": 58,
+      "DEF": 60,
+      "ST": 56,
+      "coachAgg": 0.46,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": true,
+      "rainy": false,
+      "kicker": {
+       "name": "Tomas Ravenscroft",
+       "age": 32,
+       "ovr": 53,
+       "attrs": {
+        "POW": 56,
+        "ACC": 53,
+        "CON": 53,
+        "CLU": 51,
+        "KO": 54
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "SW",
+      "confIdx": 6,
+      "rival": "BFR1",
+      "school": "Panhandle"
+     },
+     {
+      "id": "BFR7",
+      "name": "Sonoran Tech Sidewinders",
+      "city": "Tucson",
+      "nick": "Sidewinders",
+      "abbr": "SNT",
+      "colors": [
+       "#b35c1e",
+       "#f2e2c4"
+      ],
+      "conf": "BFR",
+      "div": null,
+      "prestige": 2,
+      "OFF": 66,
+      "DEF": 68,
+      "ST": 57,
+      "coachAgg": 0.3,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Cameron Morales-Steele",
+       "age": 32,
+       "ovr": 50,
+       "attrs": {
+        "POW": 53,
+        "ACC": 44,
+        "CON": 49,
+        "CLU": 47,
+        "KO": 57
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "SW",
+      "confIdx": 7,
+      "rival": "BFR0",
+      "school": "Sonoran Tech"
+     },
+     {
+      "id": "PAC0",
+      "name": "Golden Coast Condors",
+      "city": "Los Angeles",
+      "nick": "Condors",
+      "abbr": "GCC",
+      "colors": [
+       "#ffb100",
+       "#1c3f60"
+      ],
+      "conf": "PAC",
+      "div": null,
+      "prestige": 5,
+      "OFF": 89,
+      "DEF": 84,
+      "ST": 72,
+      "coachAgg": 0.5,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Frank Riggs",
+       "age": 24,
+       "ovr": 63,
+       "attrs": {
+        "POW": 66,
+        "ACC": 67,
+        "CON": 63,
+        "CLU": 64,
+        "KO": 62
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "W",
+      "confIdx": 0,
+      "rival": "PAC7",
+      "school": "Golden Coast"
+     },
+     {
+      "id": "PAC1",
+      "name": "Bay Area Tech Fog",
+      "city": "San Francisco",
+      "nick": "Fog",
+      "abbr": "BAT",
+      "colors": [
+       "#4a6d7c",
+       "#dfe7ea"
+      ],
+      "conf": "PAC",
+      "div": null,
+      "prestige": 4,
+      "OFF": 82,
+      "DEF": 80,
+      "ST": 68,
+      "coachAgg": 0.72,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Kyle Gallagher",
+       "age": 28,
+       "ovr": 62,
+       "attrs": {
+        "POW": 67,
+        "ACC": 62,
+        "CON": 67,
+        "CLU": 61,
+        "KO": 65
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "W",
+      "confIdx": 1,
+      "rival": "PAC6",
+      "school": "Bay Area Tech"
+     },
+     {
+      "id": "PAC2",
+      "name": "Cascadia Stormcrows",
+      "city": "Portland",
+      "nick": "Stormcrows",
+      "abbr": "CAS",
+      "colors": [
+       "#1d3b2a",
+       "#a9c5b3"
+      ],
+      "conf": "PAC",
+      "div": null,
+      "prestige": 4,
+      "OFF": 83,
+      "DEF": 83,
+      "ST": 73,
+      "coachAgg": 0.38,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": true,
+      "kicker": {
+       "name": "Daniel Adeyemi Jr.",
+       "age": 22,
+       "ovr": 69,
+       "attrs": {
+        "POW": 70,
+        "ACC": 64,
+        "CON": 69,
+        "CLU": 68,
+        "KO": 69
+       },
+       "contractYears": 2
+      },
+      "kicker2": null,
+      "region": "W",
+      "confIdx": 2,
+      "rival": "PAC5",
+      "school": "Cascadia"
+     },
+     {
+      "id": "PAC3",
+      "name": "Sierra State Prospectors",
+      "city": "Reno",
+      "nick": "Prospectors",
+      "abbr": "SRS",
+      "colors": [
+       "#5e503f",
+       "#eae2b7"
+      ],
+      "conf": "PAC",
+      "div": null,
+      "prestige": 3,
+      "OFF": 76,
+      "DEF": 74,
+      "ST": 65,
+      "coachAgg": 0.36,
+      "climate": "cold",
+      "dome": false,
+      "altitude": true,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Gus Liu",
+       "age": 24,
+       "ovr": 60,
+       "attrs": {
+        "POW": 59,
+        "ACC": 63,
+        "CON": 57,
+        "CLU": 61,
+        "KO": 65
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "W",
+      "confIdx": 3,
+      "rival": "PAC4",
+      "school": "Sierra State"
+     },
+     {
+      "id": "PAC4",
+      "name": "Desert Vista Scorpions",
+      "city": "Phoenix",
+      "nick": "Scorpions",
+      "abbr": "DVS",
+      "colors": [
+       "#6b2737",
+       "#e9c46a"
+      ],
+      "conf": "PAC",
+      "div": null,
+      "prestige": 3,
+      "OFF": 75,
+      "DEF": 75,
+      "ST": 65,
+      "coachAgg": 0.46,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Lou Graves",
+       "age": 36,
+       "ovr": 59,
+       "attrs": {
+        "POW": 58,
+        "ACC": 59,
+        "CON": 61,
+        "CLU": 61,
+        "KO": 55
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "SW",
+      "confIdx": 4,
+      "rival": "PAC3",
+      "school": "Desert Vista"
+     },
+     {
+      "id": "PAC5",
+      "name": "Emerald City Orcas",
+      "city": "Seattle",
+      "nick": "Orcas",
+      "abbr": "EMC",
+      "colors": [
+       "#0b3d2e",
+       "#7fc7ff"
+      ],
+      "conf": "PAC",
+      "div": null,
+      "prestige": 3,
+      "OFF": 74,
+      "DEF": 76,
+      "ST": 70,
+      "coachAgg": 0.35,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": true,
+      "kicker": {
+       "name": "Emeka Kramer",
+       "age": 24,
+       "ovr": 67,
+       "attrs": {
+        "POW": 71,
+        "ACC": 63,
+        "CON": 61,
+        "CLU": 71,
+        "KO": 67
+       },
+       "contractYears": 2
+      },
+      "kicker2": null,
+      "region": "W",
+      "confIdx": 5,
+      "rival": "PAC2",
+      "school": "Emerald City"
+     },
+     {
+      "id": "PAC6",
+      "name": "High Desert Kestrels",
+      "city": "Boise",
+      "nick": "Kestrels",
+      "abbr": "HDK",
+      "colors": [
+       "#1f4e79",
+       "#f4a259"
+      ],
+      "conf": "PAC",
+      "div": null,
+      "prestige": 2,
+      "OFF": 66,
+      "DEF": 66,
+      "ST": 58,
+      "coachAgg": 0.6,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Ambrose Talbot-Giordano",
+       "age": 28,
+       "ovr": 52,
+       "attrs": {
+        "POW": 47,
+        "ACC": 55,
+        "CON": 52,
+        "CLU": 45,
+        "KO": 54
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "W",
+      "confIdx": 6,
+      "rival": "PAC1",
+      "school": "High Desert"
+     },
+     {
+      "id": "PAC7",
+      "name": "Sonoma Vintners",
+      "city": "Santa Rosa",
+      "nick": "Vintners",
+      "abbr": "SNM",
+      "colors": [
+       "#6a1b4d",
+       "#f1e3d3"
+      ],
+      "conf": "PAC",
+      "div": null,
+      "prestige": 1,
+      "OFF": 60,
+      "DEF": 58,
+      "ST": 58,
+      "coachAgg": 0.38,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Quincy Lane",
+       "age": 23,
+       "ovr": 57,
+       "attrs": {
+        "POW": 60,
+        "ACC": 58,
+        "CON": 56,
+        "CLU": 53,
+        "KO": 56
+       },
+       "contractYears": 2
+      },
+      "kicker2": null,
+      "region": "W",
+      "confIdx": 7,
+      "rival": "PAC0",
+      "school": "Sonoma"
+     },
+     {
+      "id": "SOU0",
+      "name": "Crimson Bluff Boars",
+      "city": "Tuscaloosa",
+      "nick": "Boars",
+      "abbr": "CRB",
+      "colors": [
+       "#8b1a1a",
+       "#f4e9d0"
+      ],
+      "conf": "SOU",
+      "div": null,
+      "prestige": 5,
+      "OFF": 92,
+      "DEF": 88,
+      "ST": 72,
+      "coachAgg": 0.54,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Angelo Navarro",
+       "age": 23,
+       "ovr": 62,
+       "attrs": {
+        "POW": 54,
+        "ACC": 64,
+        "CON": 63,
+        "CLU": 61,
+        "KO": 63
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 0,
+      "rival": "SOU7",
+      "school": "Crimson Bluff"
+     },
+     {
+      "id": "SOU1",
+      "name": "Magnolia Thoroughbreds",
+      "city": "Jackson",
+      "nick": "Thoroughbreds",
+      "abbr": "MAG",
+      "colors": [
+       "#2d3a8c",
+       "#e8e3d3"
+      ],
+      "conf": "SOU",
+      "div": null,
+      "prestige": 4,
+      "OFF": 84,
+      "DEF": 85,
+      "ST": 68,
+      "coachAgg": 0.59,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Robert Reynolds",
+       "age": 29,
+       "ovr": 60,
+       "attrs": {
+        "POW": 61,
+        "ACC": 64,
+        "CON": 61,
+        "CLU": 59,
+        "KO": 55
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 1,
+      "rival": "SOU6",
+      "school": "Magnolia"
+     },
+     {
+      "id": "SOU2",
+      "name": "Bayou Tech Egrets",
+      "city": "Baton Rouge",
+      "nick": "Egrets",
+      "abbr": "BYT",
+      "colors": [
+       "#2f1f5e",
+       "#e5b83b"
+      ],
+      "conf": "SOU",
+      "div": null,
+      "prestige": 4,
+      "OFF": 82,
+      "DEF": 80,
+      "ST": 75,
+      "coachAgg": 0.64,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Jin Boone",
+       "age": 24,
+       "ovr": 76,
+       "attrs": {
+        "POW": 84,
+        "ACC": 74,
+        "CON": 76,
+        "CLU": 81,
+        "KO": 76
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 2,
+      "rival": "SOU5",
+      "school": "Bayou Tech"
+     },
+     {
+      "id": "SOU3",
+      "name": "Tennessee Ridge Copperheads",
+      "city": "Knoxville",
+      "nick": "Copperheads",
+      "abbr": "TNR",
+      "colors": [
+       "#d1541e",
+       "#f4e9d0"
+      ],
+      "conf": "SOU",
+      "div": null,
+      "prestige": 3,
+      "OFF": 76,
+      "DEF": 78,
+      "ST": 67,
+      "coachAgg": 0.53,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Hank Pearson",
+       "age": 25,
+       "ovr": 64,
+       "attrs": {
+        "POW": 60,
+        "ACC": 68,
+        "CON": 66,
+        "CLU": 64,
+        "KO": 63
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 3,
+      "rival": "SOU4",
+      "school": "Tennessee Ridge"
+     },
+     {
+      "id": "SOU4",
+      "name": "Peachtree Kingfishers",
+      "city": "Atlanta",
+      "nick": "Kingfishers",
+      "abbr": "PCH",
+      "colors": [
+       "#0d5c63",
+       "#f6ae2d"
+      ],
+      "conf": "SOU",
+      "div": null,
+      "prestige": 3,
+      "OFF": 78,
+      "DEF": 74,
+      "ST": 66,
+      "coachAgg": 0.46,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Cruz Bowers III",
+       "age": 24,
+       "ovr": 59,
+       "attrs": {
+        "POW": 54,
+        "ACC": 58,
+        "CON": 59,
+        "CLU": 58,
+        "KO": 58
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 4,
+      "rival": "SOU3",
+      "school": "Peachtree"
+     },
+     {
+      "id": "SOU5",
+      "name": "Blue Ridge Colliers",
+      "city": "Asheville",
+      "nick": "Colliers",
+      "abbr": "BLR",
+      "colors": [
+       "#22333b",
+       "#c6ac8f"
+      ],
+      "conf": "SOU",
+      "div": null,
+      "prestige": 2,
+      "OFF": 68,
+      "DEF": 70,
+      "ST": 64,
+      "coachAgg": 0.56,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Leonard Lee",
+       "age": 36,
+       "ovr": 63,
+       "attrs": {
+        "POW": 58,
+        "ACC": 69,
+        "CON": 58,
+        "CLU": 61,
+        "KO": 65
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 5,
+      "rival": "SOU2",
+      "school": "Blue Ridge"
+     },
+     {
+      "id": "SOU6",
+      "name": "Gulfport Sailfish",
+      "city": "Gulfport",
+      "nick": "Sailfish",
+      "abbr": "GPS",
+      "colors": [
+       "#0077b6",
+       "#caf0f8"
+      ],
+      "conf": "SOU",
+      "div": null,
+      "prestige": 2,
+      "OFF": 66,
+      "DEF": 64,
+      "ST": 58,
+      "coachAgg": 0.79,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Anthony Buchanan",
+       "age": 35,
+       "ovr": 54,
+       "attrs": {
+        "POW": 46,
+        "ACC": 53,
+        "CON": 55,
+        "CLU": 51,
+        "KO": 56
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 6,
+      "rival": "SOU1",
+      "school": "Gulfport"
+     },
+     {
+      "id": "SOU7",
+      "name": "Everglades Tech Manatees",
+      "city": "Miami",
+      "nick": "Manatees",
+      "abbr": "EVT",
+      "colors": [
+       "#0a6b5e",
+       "#f7a823"
+      ],
+      "conf": "SOU",
+      "div": null,
+      "prestige": 5,
+      "OFF": 90,
+      "DEF": 84,
+      "ST": 80,
+      "coachAgg": 0.37,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Woodrow Wolfe",
+       "age": 23,
+       "ovr": 81,
+       "attrs": {
+        "POW": 81,
+        "ACC": 83,
+        "CON": 83,
+        "CLU": 83,
+        "KO": 87
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 7,
+      "rival": "SOU0",
+      "school": "Everglades Tech"
+     },
+     {
+      "id": "GLL0",
+      "name": "Lakeshore State Freighters",
+      "city": "Cleveland",
+      "nick": "Freighters",
+      "abbr": "LKS",
+      "colors": [
+       "#4b2e1e",
+       "#f5b400"
+      ],
+      "conf": "GLL",
+      "div": null,
+      "prestige": 5,
+      "OFF": 87,
+      "DEF": 89,
+      "ST": 82,
+      "coachAgg": 0.4,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Alex Townsend",
+       "age": 34,
+       "ovr": 84,
+       "attrs": {
+        "POW": 85,
+        "ACC": 82,
+        "CON": 86,
+        "CLU": 84,
+        "KO": 84
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 0,
+      "rival": "GLL7",
+      "school": "Lakeshore State"
+     },
+     {
+      "id": "GLL1",
+      "name": "Motor City Tech Gears",
+      "city": "Detroit",
+      "nick": "Gears",
+      "abbr": "MCT",
+      "colors": [
+       "#0f4c81",
+       "#c0c0c0"
+      ],
+      "conf": "GLL",
+      "div": null,
+      "prestige": 4,
+      "OFF": 82,
+      "DEF": 84,
+      "ST": 74,
+      "coachAgg": 0.63,
+      "climate": "cold",
+      "dome": true,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Levi Souza",
+       "age": 22,
+       "ovr": 71,
+       "attrs": {
+        "POW": 77,
+        "ACC": 66,
+        "CON": 75,
+        "CLU": 72,
+        "KO": 70
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 1,
+      "rival": "GLL6",
+      "school": "Motor City Tech"
+     },
+     {
+      "id": "GLL2",
+      "name": "Scioto Valley Ironmen",
+      "city": "Columbus",
+      "nick": "Ironmen",
+      "abbr": "SCV",
+      "colors": [
+       "#9c1c1c",
+       "#e6e6e6"
+      ],
+      "conf": "GLL",
+      "div": null,
+      "prestige": 4,
+      "OFF": 84,
+      "DEF": 84,
+      "ST": 70,
+      "coachAgg": 0.3,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Ambrose Olsen",
+       "age": 32,
+       "ovr": 62,
+       "attrs": {
+        "POW": 69,
+        "ACC": 63,
+        "CON": 70,
+        "CLU": 61,
+        "KO": 62
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 2,
+      "rival": "GLL5",
+      "school": "Scioto Valley"
+     },
+     {
+      "id": "GLL3",
+      "name": "Northwoods Voyageurs",
+      "city": "Green Bay",
+      "nick": "Voyageurs",
+      "abbr": "NWV",
+      "colors": [
+       "#1e3a2f",
+       "#c8a951"
+      ],
+      "conf": "GLL",
+      "div": null,
+      "prestige": 3,
+      "OFF": 74,
+      "DEF": 76,
+      "ST": 69,
+      "coachAgg": 0.59,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Alex Koskinen",
+       "age": 36,
+       "ovr": 65,
+       "attrs": {
+        "POW": 63,
+        "ACC": 64,
+        "CON": 64,
+        "CLU": 71,
+        "KO": 67
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 3,
+      "rival": "GLL4",
+      "school": "Northwoods"
+     },
+     {
+      "id": "GLL4",
+      "name": "Rust Belt Foundrymen",
+      "city": "Pittsburgh",
+      "nick": "Foundrymen",
+      "abbr": "RBF",
+      "colors": [
+       "#3a3a3a",
+       "#d9a520"
+      ],
+      "conf": "GLL",
+      "div": null,
+      "prestige": 3,
+      "OFF": 72,
+      "DEF": 76,
+      "ST": 62,
+      "coachAgg": 0.39,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Michael Jacobs",
+       "age": 35,
+       "ovr": 53,
+       "attrs": {
+        "POW": 58,
+        "ACC": 54,
+        "CON": 46,
+        "CLU": 51,
+        "KO": 50
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "NE",
+      "confIdx": 4,
+      "rival": "GLL3",
+      "school": "Rust Belt"
+     },
+     {
+      "id": "GLL5",
+      "name": "Erie Shore Lightkeepers",
+      "city": "Erie",
+      "nick": "Lightkeepers",
+      "abbr": "ERI",
+      "colors": [
+       "#234e70",
+       "#fbd1a2"
+      ],
+      "conf": "GLL",
+      "div": null,
+      "prestige": 2,
+      "OFF": 66,
+      "DEF": 68,
+      "ST": 61,
+      "coachAgg": 0.62,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": true,
+      "kicker": {
+       "name": "Jeff Eckhart",
+       "age": 23,
+       "ovr": 57,
+       "attrs": {
+        "POW": 56,
+        "ACC": 59,
+        "CON": 48,
+        "CLU": 64,
+        "KO": 55
+       },
+       "contractYears": 2
+      },
+      "kicker2": null,
+      "region": "NE",
+      "confIdx": 5,
+      "rival": "GLL2",
+      "school": "Erie Shore"
+     },
+     {
+      "id": "GLL6",
+      "name": "Wabash Valley Pacesetters",
+      "city": "Indianapolis",
+      "nick": "Pacesetters",
+      "abbr": "WAB",
+      "colors": [
+       "#0e2a47",
+       "#b9c6d2"
+      ],
+      "conf": "GLL",
+      "div": null,
+      "prestige": 2,
+      "OFF": 68,
+      "DEF": 64,
+      "ST": 61,
+      "coachAgg": 0.6,
+      "climate": "cold",
+      "dome": true,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Lou Steele",
+       "age": 24,
+       "ovr": 57,
+       "attrs": {
+        "POW": 53,
+        "ACC": 56,
+        "CON": 51,
+        "CLU": 58,
+        "KO": 59
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 6,
+      "rival": "GLL1",
+      "school": "Wabash Valley"
+     },
+     {
+      "id": "GLL7",
+      "name": "Superior Bay Icebreakers",
+      "city": "Duluth",
+      "nick": "Icebreakers",
+      "abbr": "SUP",
+      "colors": [
+       "#274c77",
+       "#e7ecef"
+      ],
+      "conf": "GLL",
+      "div": null,
+      "prestige": 1,
+      "OFF": 60,
+      "DEF": 62,
+      "ST": 57,
+      "coachAgg": 0.7,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": true,
+      "rainy": false,
+      "kicker": {
+       "name": "Dean Fuentes",
+       "age": 35,
+       "ovr": 53,
+       "attrs": {
+        "POW": 51,
+        "ACC": 55,
+        "CON": 51,
+        "CLU": 39,
+        "KO": 51
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 7,
+      "rival": "GLL0",
+      "school": "Superior Bay"
+     }
+    ]
+   },
+   "nfl": {
+    "kind": "NFL",
+    "year": 2,
+    "teams": [
+     {
+      "id": "BOS",
+      "name": "Boston Harbormen",
+      "city": "Boston",
+      "nick": "Harbormen",
+      "abbr": "BOS",
+      "colors": [
+       "#0b2a4a",
+       "#d8172f"
+      ],
+      "conf": "Liberty",
+      "div": "North",
+      "prestige": null,
+      "OFF": 66,
+      "DEF": 76,
+      "ST": 66,
+      "coachAgg": 0.46,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Lou Calloway",
+       "age": 23,
+       "ovr": 71,
+       "attrs": {
+        "POW": 70,
+        "ACC": 66,
+        "CON": 79,
+        "CLU": 63,
+        "KO": 77
+       },
+       "contractYears": 2
+      },
+      "kicker2": null,
+      "region": "NE",
+      "confIdx": 0,
+      "divIdx": 0,
+      "bigMarket": true
+     },
+     {
+      "id": "PIT",
+      "name": "Pittsburgh Forge",
+      "city": "Pittsburgh",
+      "nick": "Forge",
+      "abbr": "PIT",
+      "colors": [
+       "#1a1a1a",
+       "#f2b705"
+      ],
+      "conf": "Liberty",
+      "div": "North",
+      "prestige": null,
+      "OFF": 71,
+      "DEF": 77,
+      "ST": 68,
+      "coachAgg": 0.55,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Mason Zamora",
+       "age": 22,
+       "ovr": 68,
+       "attrs": {
+        "POW": 61,
+        "ACC": 71,
+        "CON": 66,
+        "CLU": 69,
+        "KO": 69
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "NE",
+      "confIdx": 0,
+      "divIdx": 0,
+      "bigMarket": false
+     },
+     {
+      "id": "CLE",
+      "name": "Cleveland Rockhounds",
+      "city": "Cleveland",
+      "nick": "Rockhounds",
+      "abbr": "CLE",
+      "colors": [
+       "#5b3a1a",
+       "#f37021"
+      ],
+      "conf": "Liberty",
+      "div": "North",
+      "prestige": null,
+      "OFF": 76,
+      "DEF": 87,
+      "ST": 68,
+      "coachAgg": 0.43,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": true,
+      "rainy": false,
+      "kicker": {
+       "name": "Drew Fontaine",
+       "age": 30,
+       "ovr": 68,
+       "attrs": {
+        "POW": 73,
+        "ACC": 71,
+        "CON": 61,
+        "CLU": 69,
+        "KO": 69
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 0,
+      "divIdx": 0,
+      "bigMarket": false
+     },
+     {
+      "id": "BUF",
+      "name": "Buffalo Blizzard",
+      "city": "Buffalo",
+      "nick": "Blizzard",
+      "abbr": "BUF",
+      "colors": [
+       "#1c3f95",
+       "#ffffff"
+      ],
+      "conf": "Liberty",
+      "div": "North",
+      "prestige": null,
+      "OFF": 78,
+      "DEF": 80,
+      "ST": 70,
+      "coachAgg": 0.38,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": true,
+      "rainy": false,
+      "kicker": {
+       "name": "Kyle Dunlap",
+       "age": 36,
+       "ovr": 67,
+       "attrs": {
+        "POW": 65,
+        "ACC": 66,
+        "CON": 69,
+        "CLU": 67,
+        "KO": 74
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "NE",
+      "confIdx": 0,
+      "divIdx": 0,
+      "bigMarket": false
+     },
+     {
+      "id": "NSH",
+      "name": "Nashville Rhythm",
+      "city": "Nashville",
+      "nick": "Rhythm",
+      "abbr": "NSH",
+      "colors": [
+       "#27235c",
+       "#c9a227"
+      ],
+      "conf": "Liberty",
+      "div": "South",
+      "prestige": null,
+      "OFF": 60,
+      "DEF": 74,
+      "ST": 75,
+      "coachAgg": 0.36,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Earl Danforth",
+       "age": 26,
+       "ovr": 85,
+       "attrs": {
+        "POW": 93,
+        "ACC": 84,
+        "CON": 92,
+        "CLU": 84,
+        "KO": 85
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 0,
+      "divIdx": 1,
+      "bigMarket": false
+     },
+     {
+      "id": "JAX",
+      "name": "Jacksonville Tidewater",
+      "city": "Jacksonville",
+      "nick": "Tidewater",
+      "abbr": "JAX",
+      "colors": [
+       "#00594c",
+       "#c0c0c0"
+      ],
+      "conf": "Liberty",
+      "div": "South",
+      "prestige": null,
+      "OFF": 73,
+      "DEF": 75,
+      "ST": 73,
+      "coachAgg": 0.37,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Frank Schroeder",
+       "age": 24,
+       "ovr": 68,
+       "attrs": {
+        "POW": 72,
+        "ACC": 69,
+        "CON": 64,
+        "CLU": 65,
+        "KO": 69
+       },
+       "contractYears": 2
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 0,
+      "divIdx": 1,
+      "bigMarket": false
+     },
+     {
+      "id": "HOU",
+      "name": "Houston Launch",
+      "city": "Houston",
+      "nick": "Launch",
+      "abbr": "HOU",
+      "colors": [
+       "#0c2340",
+       "#e03a3e"
+      ],
+      "conf": "Liberty",
+      "div": "South",
+      "prestige": null,
+      "OFF": 75,
+      "DEF": 65,
+      "ST": 67,
+      "coachAgg": 0.79,
+      "climate": "dome",
+      "dome": true,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Zane Robles",
+       "age": 32,
+       "ovr": 65,
+       "attrs": {
+        "POW": 64,
+        "ACC": 57,
+        "CON": 67,
+        "CLU": 69,
+        "KO": 68
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "SW",
+      "confIdx": 0,
+      "divIdx": 1,
+      "bigMarket": false
+     },
+     {
+      "id": "CHA",
+      "name": "Charlotte Crown",
+      "city": "Charlotte",
+      "nick": "Crown",
+      "abbr": "CHA",
+      "colors": [
+       "#1b1b1b",
+       "#7ac142"
+      ],
+      "conf": "Liberty",
+      "div": "South",
+      "prestige": null,
+      "OFF": 70,
+      "DEF": 74,
+      "ST": 74,
+      "coachAgg": 0.57,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Grant Vega",
+       "age": 22,
+       "ovr": 78,
+       "attrs": {
+        "POW": 78,
+        "ACC": 80,
+        "CON": 80,
+        "CLU": 67,
+        "KO": 75
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 0,
+      "divIdx": 1,
+      "bigMarket": false
+     },
+     {
+      "id": "NYE",
+      "name": "New York Empire",
+      "city": "New York",
+      "nick": "Empire",
+      "abbr": "NYE",
+      "colors": [
+       "#0f2c59",
+       "#ffffff"
+      ],
+      "conf": "Liberty",
+      "div": "East",
+      "prestige": null,
+      "OFF": 66,
+      "DEF": 79,
+      "ST": 72,
+      "coachAgg": 0.75,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": true,
+      "rainy": false,
+      "kicker": {
+       "name": "Danny Torres",
+       "age": 23,
+       "ovr": 78,
+       "attrs": {
+        "POW": 82,
+        "ACC": 77,
+        "CON": 74,
+        "CLU": 83,
+        "KO": 79
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "NE",
+      "confIdx": 0,
+      "divIdx": 2,
+      "bigMarket": true
+     },
+     {
+      "id": "BAL",
+      "name": "Baltimore Privateers",
+      "city": "Baltimore",
+      "nick": "Privateers",
+      "abbr": "BAL",
+      "colors": [
+       "#2e1a47",
+       "#d4a017"
+      ],
+      "conf": "Liberty",
+      "div": "East",
+      "prestige": null,
+      "OFF": 77,
+      "DEF": 61,
+      "ST": 67,
+      "coachAgg": 0.56,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Gianni Park",
+       "age": 22,
+       "ovr": 59,
+       "attrs": {
+        "POW": 58,
+        "ACC": 58,
+        "CON": 60,
+        "CLU": 63,
+        "KO": 55
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "NE",
+      "confIdx": 0,
+      "divIdx": 2,
+      "bigMarket": false
+     },
+     {
+      "id": "MIA",
+      "name": "Miami Barracudas",
+      "city": "Miami",
+      "nick": "Barracudas",
+      "abbr": "MIA",
+      "colors": [
+       "#005c6e",
+       "#ff8552"
+      ],
+      "conf": "Liberty",
+      "div": "East",
+      "prestige": null,
+      "OFF": 82,
+      "DEF": 73,
+      "ST": 80,
+      "coachAgg": 0.46,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": true,
+      "kicker": {
+       "name": "Moe Porter",
+       "age": 26,
+       "ovr": 87,
+       "attrs": {
+        "POW": 88,
+        "ACC": 96,
+        "CON": 89,
+        "CLU": 89,
+        "KO": 86
+       },
+       "contractYears": 2
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 0,
+      "divIdx": 2,
+      "bigMarket": false
+     },
+     {
+      "id": "PHI",
+      "name": "Philadelphia Founders",
+      "city": "Philadelphia",
+      "nick": "Founders",
+      "abbr": "PHI",
+      "colors": [
+       "#004c54",
+       "#a5acaf"
+      ],
+      "conf": "Liberty",
+      "div": "East",
+      "prestige": null,
+      "OFF": 80,
+      "DEF": 63,
+      "ST": 72,
+      "coachAgg": 0.33,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Delbert Salinas II",
+       "age": 23,
+       "ovr": 69,
+       "attrs": {
+        "POW": 75,
+        "ACC": 70,
+        "CON": 70,
+        "CLU": 69,
+        "KO": 65
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "NE",
+      "confIdx": 0,
+      "divIdx": 2,
+      "bigMarket": false
+     },
+     {
+      "id": "DEN",
+      "name": "Denver Summit",
+      "city": "Denver",
+      "nick": "Summit",
+      "abbr": "DEN",
+      "colors": [
+       "#e8641b",
+       "#1b2a49"
+      ],
+      "conf": "Liberty",
+      "div": "West",
+      "prestige": null,
+      "OFF": 76,
+      "DEF": 68,
+      "ST": 70,
+      "coachAgg": 0.74,
+      "climate": "cold",
+      "dome": false,
+      "altitude": true,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Alejandro Hubbard",
+       "age": 36,
+       "ovr": 77,
+       "attrs": {
+        "POW": 79,
+        "ACC": 76,
+        "CON": 74,
+        "CLU": 81,
+        "KO": 73
+       },
+       "contractYears": 2
+      },
+      "kicker2": null,
+      "region": "W",
+      "confIdx": 0,
+      "divIdx": 3,
+      "bigMarket": false
+     },
+     {
+      "id": "KC",
+      "name": "Kansas City Stampede",
+      "city": "Kansas City",
+      "nick": "Stampede",
+      "abbr": "KC",
+      "colors": [
+       "#b3121b",
+       "#f2c14e"
+      ],
+      "conf": "Liberty",
+      "div": "West",
+      "prestige": null,
+      "OFF": 75,
+      "DEF": 72,
+      "ST": 69,
+      "coachAgg": 0.51,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Jay Abernathy",
+       "age": 31,
+       "ovr": 74,
+       "attrs": {
+        "POW": 76,
+        "ACC": 66,
+        "CON": 74,
+        "CLU": 73,
+        "KO": 81
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 0,
+      "divIdx": 3,
+      "bigMarket": false
+     },
+     {
+      "id": "LV",
+      "name": "Las Vegas Neon",
+      "city": "Las Vegas",
+      "nick": "Neon",
+      "abbr": "LV",
+      "colors": [
+       "#000000",
+       "#ff2d95"
+      ],
+      "conf": "Liberty",
+      "div": "West",
+      "prestige": null,
+      "OFF": 73,
+      "DEF": 78,
+      "ST": 71,
+      "coachAgg": 0.42,
+      "climate": "dome",
+      "dome": true,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Frank Barnaby",
+       "age": 26,
+       "ovr": 71,
+       "attrs": {
+        "POW": 74,
+        "ACC": 75,
+        "CON": 67,
+        "CLU": 70,
+        "KO": 76
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "W",
+      "confIdx": 0,
+      "divIdx": 3,
+      "bigMarket": false
+     },
+     {
+      "id": "SLC",
+      "name": "Salt Lake Peaks",
+      "city": "Salt Lake",
+      "nick": "Peaks",
+      "abbr": "SLC",
+      "colors": [
+       "#3a5f8f",
+       "#ffffff"
+      ],
+      "conf": "Liberty",
+      "div": "West",
+      "prestige": null,
+      "OFF": 80,
+      "DEF": 69,
+      "ST": 70,
+      "coachAgg": 0.39,
+      "climate": "cold",
+      "dome": false,
+      "altitude": true,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Emilio Barrera",
+       "age": 34,
+       "ovr": 66,
+       "attrs": {
+        "POW": 68,
+        "ACC": 70,
+        "CON": 73,
+        "CLU": 64,
+        "KO": 66
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "W",
+      "confIdx": 0,
+      "divIdx": 3,
+      "bigMarket": false
+     },
+     {
+      "id": "CHI",
+      "name": "Chicago Wind",
+      "city": "Chicago",
+      "nick": "Wind",
+      "abbr": "CHI",
+      "colors": [
+       "#0b162a",
+       "#c83803"
+      ],
+      "conf": "Frontier",
+      "div": "North",
+      "prestige": null,
+      "OFF": 81,
+      "DEF": 75,
+      "ST": 77,
+      "coachAgg": 0.77,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": true,
+      "rainy": false,
+      "kicker": {
+       "name": "Dev Benedetto",
+       "age": 25,
+       "ovr": 79,
+       "attrs": {
+        "POW": 79,
+        "ACC": 80,
+        "CON": 75,
+        "CLU": 80,
+        "KO": 80
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 1,
+      "divIdx": 0,
+      "bigMarket": true
+     },
+     {
+      "id": "DET",
+      "name": "Detroit Motors",
+      "city": "Detroit",
+      "nick": "Motors",
+      "abbr": "DET",
+      "colors": [
+       "#005e91",
+       "#c0c6ca"
+      ],
+      "conf": "Frontier",
+      "div": "North",
+      "prestige": null,
+      "OFF": 77,
+      "DEF": 64,
+      "ST": 71,
+      "coachAgg": 0.45,
+      "climate": "dome",
+      "dome": true,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "William Bryant",
+       "age": 34,
+       "ovr": 72,
+       "attrs": {
+        "POW": 74,
+        "ACC": 67,
+        "CON": 69,
+        "CLU": 80,
+        "KO": 78
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 1,
+      "divIdx": 0,
+      "bigMarket": false
+     },
+     {
+      "id": "MIN",
+      "name": "Minneapolis Frost",
+      "city": "Minneapolis",
+      "nick": "Frost",
+      "abbr": "MIN",
+      "colors": [
+       "#5a3d8f",
+       "#f4d35e"
+      ],
+      "conf": "Frontier",
+      "div": "North",
+      "prestige": null,
+      "OFF": 70,
+      "DEF": 71,
+      "ST": 66,
+      "coachAgg": 0.76,
+      "climate": "dome",
+      "dome": true,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Weston Lyle",
+       "age": 28,
+       "ovr": 74,
+       "attrs": {
+        "POW": 74,
+        "ACC": 85,
+        "CON": 71,
+        "CLU": 72,
+        "KO": 77
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 1,
+      "divIdx": 0,
+      "bigMarket": false
+     },
+     {
+      "id": "MIL",
+      "name": "Milwaukee Brewmasters",
+      "city": "Milwaukee",
+      "nick": "Brewmasters",
+      "abbr": "MIL",
+      "colors": [
+       "#1f4d3a",
+       "#f2c14e"
+      ],
+      "conf": "Frontier",
+      "div": "North",
+      "prestige": null,
+      "OFF": 85,
+      "DEF": 66,
+      "ST": 76,
+      "coachAgg": 0.37,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Santiago Landry",
+       "age": 24,
+       "ovr": 72,
+       "attrs": {
+        "POW": 73,
+        "ACC": 72,
+        "CON": 72,
+        "CLU": 71,
+        "KO": 64
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 1,
+      "divIdx": 0,
+      "bigMarket": false
+     },
+     {
+      "id": "ATL",
+      "name": "Atlanta Phoenix",
+      "city": "Atlanta",
+      "nick": "Phoenix",
+      "abbr": "ATL",
+      "colors": [
+       "#a71930",
+       "#000000"
+      ],
+      "conf": "Frontier",
+      "div": "South",
+      "prestige": null,
+      "OFF": 71,
+      "DEF": 73,
+      "ST": 71,
+      "coachAgg": 0.43,
+      "climate": "dome",
+      "dome": true,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Ahmed Coleman",
+       "age": 27,
+       "ovr": 71,
+       "attrs": {
+        "POW": 66,
+        "ACC": 72,
+        "CON": 74,
+        "CLU": 73,
+        "KO": 66
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 1,
+      "divIdx": 1,
+      "bigMarket": false
+     },
+     {
+      "id": "NO",
+      "name": "New Orleans Brass",
+      "city": "New Orleans",
+      "nick": "Brass",
+      "abbr": "NO",
+      "colors": [
+       "#d3bc8d",
+       "#101820"
+      ],
+      "conf": "Frontier",
+      "div": "South",
+      "prestige": null,
+      "OFF": 81,
+      "DEF": 73,
+      "ST": 70,
+      "coachAgg": 0.55,
+      "climate": "dome",
+      "dome": true,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Dev Appleby",
+       "age": 23,
+       "ovr": 67,
+       "attrs": {
+        "POW": 65,
+        "ACC": 55,
+        "CON": 67,
+        "CLU": 70,
+        "KO": 73
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 1,
+      "divIdx": 1,
+      "bigMarket": false
+     },
+     {
+      "id": "TB",
+      "name": "Tampa Bay Cannons",
+      "city": "Tampa Bay",
+      "nick": "Cannons",
+      "abbr": "TB",
+      "colors": [
+       "#d50a0a",
+       "#1f1c19"
+      ],
+      "conf": "Frontier",
+      "div": "South",
+      "prestige": null,
+      "OFF": 69,
+      "DEF": 70,
+      "ST": 68,
+      "coachAgg": 0.61,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": true,
+      "kicker": {
+       "name": "Hunter Olsen",
+       "age": 34,
+       "ovr": 67,
+       "attrs": {
+        "POW": 71,
+        "ACC": 70,
+        "CON": 67,
+        "CLU": 67,
+        "KO": 64
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 1,
+      "divIdx": 1,
+      "bigMarket": false
+     },
+     {
+      "id": "MEM",
+      "name": "Memphis Soul",
+      "city": "Memphis",
+      "nick": "Soul",
+      "abbr": "MEM",
+      "colors": [
+       "#5d76a9",
+       "#12173f"
+      ],
+      "conf": "Frontier",
+      "div": "South",
+      "prestige": null,
+      "OFF": 74,
+      "DEF": 71,
+      "ST": 68,
+      "coachAgg": 0.34,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Jordan Shields",
+       "age": 29,
+       "ovr": 70,
+       "attrs": {
+        "POW": 69,
+        "ACC": 70,
+        "CON": 74,
+        "CLU": 72,
+        "KO": 70
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "SE",
+      "confIdx": 1,
+      "divIdx": 1,
+      "bigMarket": false
+     },
+     {
+      "id": "WAS",
+      "name": "Washington Sentinels",
+      "city": "Washington",
+      "nick": "Sentinels",
+      "abbr": "WAS",
+      "colors": [
+       "#5a1414",
+       "#ffb612"
+      ],
+      "conf": "Frontier",
+      "div": "East",
+      "prestige": null,
+      "OFF": 74,
+      "DEF": 66,
+      "ST": 74,
+      "coachAgg": 0.75,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Harold Larkin",
+       "age": 22,
+       "ovr": 82,
+       "attrs": {
+        "POW": 76,
+        "ACC": 82,
+        "CON": 80,
+        "CLU": 84,
+        "KO": 85
+       },
+       "contractYears": 3
+      },
+      "kicker2": null,
+      "region": "NE",
+      "confIdx": 1,
+      "divIdx": 2,
+      "bigMarket": false
+     },
+     {
+      "id": "DAL",
+      "name": "Dallas Outlaws",
+      "city": "Dallas",
+      "nick": "Outlaws",
+      "abbr": "DAL",
+      "colors": [
+       "#041e42",
+       "#869397"
+      ],
+      "conf": "Frontier",
+      "div": "East",
+      "prestige": null,
+      "OFF": 74,
+      "DEF": 71,
+      "ST": 78,
+      "coachAgg": 0.6,
+      "climate": "dome",
+      "dome": true,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Cruz Ames",
+       "age": 28,
+       "ovr": 88,
+       "attrs": {
+        "POW": 91,
+        "ACC": 75,
+        "CON": 94,
+        "CLU": 90,
+        "KO": 85
+       },
+       "contractYears": 2
+      },
+      "kicker2": null,
+      "region": "SW",
+      "confIdx": 1,
+      "divIdx": 2,
+      "bigMarket": true
+     },
+     {
+      "id": "CIN",
+      "name": "Cincinnati Riverhawks",
+      "city": "Cincinnati",
+      "nick": "Riverhawks",
+      "abbr": "CIN",
+      "colors": [
+       "#e5581b",
+       "#1a1a1a"
+      ],
+      "conf": "Frontier",
+      "div": "East",
+      "prestige": null,
+      "OFF": 63,
+      "DEF": 61,
+      "ST": 67,
+      "coachAgg": 0.75,
+      "climate": "cold",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Cooper Emerson",
+       "age": 30,
+       "ovr": 62,
+       "attrs": {
+        "POW": 68,
+        "ACC": 64,
+        "CON": 67,
+        "CLU": 61,
+        "KO": 66
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 1,
+      "divIdx": 2,
+      "bigMarket": false
+     },
+     {
+      "id": "IND",
+      "name": "Indianapolis Speed",
+      "city": "Indianapolis",
+      "nick": "Speed",
+      "abbr": "IND",
+      "colors": [
+       "#002c5f",
+       "#a2aaad"
+      ],
+      "conf": "Frontier",
+      "div": "East",
+      "prestige": null,
+      "OFF": 72,
+      "DEF": 70,
+      "ST": 67,
+      "coachAgg": 0.53,
+      "climate": "dome",
+      "dome": true,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Wendell Novak",
+       "age": 27,
+       "ovr": 64,
+       "attrs": {
+        "POW": 68,
+        "ACC": 60,
+        "CON": 73,
+        "CLU": 58,
+        "KO": 69
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "MW",
+      "confIdx": 1,
+      "divIdx": 2,
+      "bigMarket": false
+     },
+     {
+      "id": "LA",
+      "name": "Los Angeles Stars",
+      "city": "Los Angeles",
+      "nick": "Stars",
+      "abbr": "LA",
+      "colors": [
+       "#1e3a8a",
+       "#f5c518"
+      ],
+      "conf": "Frontier",
+      "div": "West",
+      "prestige": null,
+      "OFF": 85,
+      "DEF": 80,
+      "ST": 75,
+      "coachAgg": 0.3,
+      "climate": "warm",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Sean Berger",
+       "age": 26,
+       "ovr": 80,
+       "attrs": {
+        "POW": 78,
+        "ACC": 75,
+        "CON": 88,
+        "CLU": 79,
+        "KO": 80
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "W",
+      "confIdx": 1,
+      "divIdx": 3,
+      "bigMarket": true
+     },
+     {
+      "id": "SF",
+      "name": "San Francisco Quakes",
+      "city": "San Francisco",
+      "nick": "Quakes",
+      "abbr": "SF",
+      "colors": [
+       "#9b1c1c",
+       "#c7b07a"
+      ],
+      "conf": "Frontier",
+      "div": "West",
+      "prestige": null,
+      "OFF": 71,
+      "DEF": 80,
+      "ST": 82,
+      "coachAgg": 0.63,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": true,
+      "rainy": false,
+      "kicker": {
+       "name": "Ahmed Villanueva",
+       "age": 25,
+       "ovr": 84,
+       "attrs": {
+        "POW": 81,
+        "ACC": 82,
+        "CON": 91,
+        "CLU": 82,
+        "KO": 79
+       },
+       "contractYears": 4
+      },
+      "kicker2": null,
+      "region": "W",
+      "confIdx": 1,
+      "divIdx": 3,
+      "bigMarket": true
+     },
+     {
+      "id": "SEA",
+      "name": "Seattle Rain",
+      "city": "Seattle",
+      "nick": "Rain",
+      "abbr": "SEA",
+      "colors": [
+       "#1a2b4c",
+       "#6cc04a"
+      ],
+      "conf": "Frontier",
+      "div": "West",
+      "prestige": null,
+      "OFF": 74,
+      "DEF": 69,
+      "ST": 77,
+      "coachAgg": 0.57,
+      "climate": "temperate",
+      "dome": false,
+      "altitude": false,
+      "windy": false,
+      "rainy": true,
+      "kicker": {
+       "name": "Woodrow McBride",
+       "age": 36,
+       "ovr": 84,
+       "attrs": {
+        "POW": 85,
+        "ACC": 78,
+        "CON": 83,
+        "CLU": 80,
+        "KO": 88
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "W",
+      "confIdx": 1,
+      "divIdx": 3,
+      "bigMarket": false
+     },
+     {
+      "id": "PHX",
+      "name": "Phoenix Firebirds",
+      "city": "Phoenix",
+      "nick": "Firebirds",
+      "abbr": "PHX",
+      "colors": [
+       "#b0243c",
+       "#1a1a1a"
+      ],
+      "conf": "Frontier",
+      "div": "West",
+      "prestige": null,
+      "OFF": 67,
+      "DEF": 66,
+      "ST": 64,
+      "coachAgg": 0.43,
+      "climate": "dome",
+      "dome": true,
+      "altitude": false,
+      "windy": false,
+      "rainy": false,
+      "kicker": {
+       "name": "Jalen Ostrowski",
+       "age": 23,
+       "ovr": 65,
+       "attrs": {
+        "POW": 65,
+        "ACC": 67,
+        "CON": 61,
+        "CLU": 65,
+        "KO": 66
+       },
+       "contractYears": 1
+      },
+      "kicker2": null,
+      "region": "SW",
+      "confIdx": 1,
+      "divIdx": 3,
+      "bigMarket": false
+     }
+    ]
+   }
+  },
+  "season": {
+   "league": "COLLEGE",
+   "year": 2,
+   "schedule": [],
+   "results": {},
+   "rankings": {},
+   "standings": [],
+   "playoffs": null,
+   "bowls": null,
+   "goals": [],
+   "trainingDone": false,
+   "focus": null,
+   "userGameId": null,
+   "weekGameDone": false,
+   "kickerStats": {}
+  },
+  "game": null,
+  "pending": null,
+  "history": {
+   "seasons": [
+    {
+     "year": 1,
+     "league": "COLLEGE",
+     "teamId": "COA2",
+     "teamName": "Carolina Pines Foxhounds",
+     "age": 18,
+     "ovr": 52,
+     "role": "K1",
+     "stats": {
+      "fga": 19,
+      "fgm": 15,
+      "pat": 34,
+      "patMade": 33,
+      "pts": 78,
+      "long": 49,
+      "clutchA": 0,
+      "clutchM": 0,
+      "decisiveA": 0,
+      "decisiveM": 0,
+      "gameWinners": 0,
+      "tieForcers": 0,
+      "blocked": 0,
+      "doinks": 0,
+      "doinkIn": 0,
+      "wideL": 0,
+      "wideR": 0,
+      "short": 0,
+      "made50plus": 0,
+      "consecutive": 0,
+      "bestConsecutive": 0,
+      "games": 12,
+      "gamesStarted": 12,
+      "koTouchbacks": 0,
+      "koCount": 0,
+      "wins": 0,
+      "losses": 0,
+      "buckets": {
+       "0-29": {
+        "a": 0,
+        "m": 0
+       },
+       "30-39": {
+        "a": 0,
+        "m": 0
+       },
+       "40-49": {
+        "a": 0,
+        "m": 0
+       },
+       "50-59": {
+        "a": 0,
+        "m": 0
+       },
+       "60+": {
+        "a": 0,
+        "m": 0
+       }
+      }
+     },
+     "awards": [],
+     "teamRecord": "7-5",
+     "champion": false,
+     "playoffResult": "BOWL_W",
+     "grade": "B",
+     "salary": 0
+    }
+   ],
+   "awards": [],
+   "contracts": [],
+   "teams": [
+    {
+     "teamId": "COA2",
+     "league": "COLLEGE",
+     "fromYear": 1,
+     "toYear": null,
+     "reason": "SIGNED"
+    }
+   ],
+   "timeline": []
+  },
+  "stats": {
+   "season": {
+    "fga": 0,
+    "fgm": 0,
+    "pat": 0,
+    "patMade": 0,
+    "pts": 0,
+    "long": 0,
+    "clutchA": 0,
+    "clutchM": 0,
+    "decisiveA": 0,
+    "decisiveM": 0,
+    "gameWinners": 0,
+    "tieForcers": 0,
+    "blocked": 0,
+    "doinks": 0,
+    "wideL": 0,
+    "wideR": 0,
+    "short": 0,
+    "made50plus": 0,
+    "consecutive": 0,
+    "bestConsecutive": 0,
+    "games": 0,
+    "gamesStarted": 0,
+    "buckets": {
+     "0-29": {
+      "a": 0,
+      "m": 0
+     },
+     "30-39": {
+      "a": 0,
+      "m": 0
+     },
+     "40-49": {
+      "a": 0,
+      "m": 0
+     },
+     "50-59": {
+      "a": 0,
+      "m": 0
+     },
+     "60+": {
+      "a": 0,
+      "m": 0
+     }
+    }
+   },
+   "career": {
+    "fga": 19,
+    "fgm": 15,
+    "pat": 34,
+    "patMade": 33,
+    "pts": 78,
+    "long": 49,
+    "clutchA": 0,
+    "clutchM": 0,
+    "decisiveA": 0,
+    "decisiveM": 0,
+    "gameWinners": 0,
+    "tieForcers": 0,
+    "blocked": 0,
+    "doinks": 0,
+    "wideL": 0,
+    "wideR": 0,
+    "short": 0,
+    "made50plus": 0,
+    "consecutive": 0,
+    "bestConsecutive": 0,
+    "games": 12,
+    "gamesStarted": 12,
+    "buckets": {
+     "0-29": {
+      "a": 0,
+      "m": 0
+     },
+     "30-39": {
+      "a": 0,
+      "m": 0
+     },
+     "40-49": {
+      "a": 0,
+      "m": 0
+     },
+     "50-59": {
+      "a": 0,
+      "m": 0
+     },
+     "60+": {
+      "a": 0,
+      "m": 0
+     }
+    }
+   },
+   "kicks": [
+    {
+     "id": "old-1",
+     "year": 1,
+     "week": 12,
+     "league": "COLLEGE",
+     "gameId": "c12",
+     "teamId": "COA2",
+     "oppId": "HRT1",
+     "type": "FG",
+     "distance": 44,
+     "outcome": "GOOD",
+     "made": 1
+    },
+    {
+     "id": "old-2",
+     "year": 1,
+     "week": 12,
+     "league": "COLLEGE",
+     "gameId": "c12",
+     "teamId": "COA2",
+     "oppId": "HRT1",
+     "type": "FG",
+     "distance": 51,
+     "outcome": "WIDE_R",
+     "made": 0
+    }
+   ]
+  },
+  "records": {
+   "college": {
+    "longFG": {
+     "value": 62,
+     "holder": "Thomas Forsythe",
+     "isUser": false
+    },
+    "seasonFGM": {
+     "value": 29,
+     "holder": "Mickey Foster",
+     "isUser": false
+    },
+    "seasonPts": {
+     "value": 140,
+     "holder": "Frank Mehta",
+     "isUser": false
+    },
+    "seasonFGpct": {
+     "value": 96,
+     "holder": "Wilbur Malone",
+     "isUser": false
+    },
+    "season50plus": {
+     "value": 8,
+     "holder": "Jay Eckhart",
+     "isUser": false
+    },
+    "careerFGM": {
+     "value": 90,
+     "holder": "Ian Byrne",
+     "isUser": false
+    },
+    "careerPts": {
+     "value": 460,
+     "holder": "Ken Whitaker",
+     "isUser": false
+    },
+    "careerFGpct": {
+     "value": 89.5,
+     "holder": "Barney Briggs III",
+     "isUser": false
+    },
+    "consecutiveFGM": {
+     "value": 26,
+     "holder": "Earl Kowalczyk",
+     "isUser": false
+    },
+    "careerGW": {
+     "value": 7,
+     "holder": "Angelo Jensen",
+     "isUser": false
+    }
+   },
+   "nfl": {
+    "longFG": {
+     "value": 66,
+     "holder": "Maurice Rutledge",
+     "isUser": false
+    },
+    "seasonFGM": {
+     "value": 40,
+     "holder": "Vernon Dobbs",
+     "isUser": false
+    },
+    "seasonPts": {
+     "value": 166,
+     "holder": "Aaron Wilcox",
+     "isUser": false
+    },
+    "seasonFGpct": {
+     "value": 97.2,
+     "holder": "Nick Park",
+     "isUser": false
+    },
+    "season50plus": {
+     "value": 12,
+     "holder": "Earl Warner",
+     "isUser": false
+    },
+    "careerFGM": {
+     "value": 560,
+     "holder": "Zach Patel",
+     "isUser": false
+    },
+    "careerPts": {
+     "value": 2600,
+     "holder": "Ace Mackey",
+     "isUser": false
+    },
+    "careerFGpct": {
+     "value": 91,
+     "holder": "Earl Talbot II",
+     "isUser": false
+    },
+    "consecutiveFGM": {
+     "value": 44,
+     "holder": "Raul Vargas",
+     "isUser": false
+    },
+    "careerGW": {
+     "value": 30,
+     "holder": "Eugene Dunbar",
+     "isUser": false
+    },
+    "careerSeasons": {
+     "value": 22,
+     "holder": "Wallace Garza",
+     "isUser": false
+    }
+   }
+  },
+  "inbox": [],
+  "headlines": [],
+  "recentHeadlineIds": []
+ }
+}
