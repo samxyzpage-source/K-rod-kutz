@@ -1372,7 +1372,9 @@
       var r = null;
       try {
         if (kind === 'PASS') r = lv.throwAlong(points, lf);
-        else if (kind === 'THROWAWAY') r = lv.throwAway();
+        // a DRAWN throw-away flies the line the player drew (the engine flies a THROWAWAY-classified line as one: no
+        // scatter, never a turnover); the button / the X key have no line: the engine's own, past the nearer sideline
+        else if (kind === 'THROWAWAY') r = points && points.length >= 2 ? lv.throwAlong(points, lf) : lv.throwAway();
         else if (kind === 'RUN') { r = lv.setRun(points); if (r && r.ok) { keepRun(points); cue('whoosh'); } }
         else r = { ok: false, reason: 'INVALID' };
       } catch (e) { if (root.console) root.console.error('PlayView commit failed', e); r = { ok: false, reason: 'ERROR' }; }
@@ -1570,7 +1572,7 @@
       var thrown = !(res.run || o === 'RUN' || o === 'SACK' || o === 'SCRAMBLE');   // placement / timing / touch describe a throw
       if (thrown && fb.placement && fb.placement !== '—') parts.push(fb.placement);
       if (thrown && fb.timing && fb.timing !== '—') parts.push(fb.timing);
-      if (thrown && fb.touch && fb.touch !== '—') parts.push(fb.touch);
+      if (thrown && fb.touch && fb.touch !== '—' && o !== 'THROWAWAY') parts.push(fb.touch);   // (the interstitial's rule: a throw-away has no touch)
       if (typeof res.airYards === 'number' && res.outcome === 'CATCH') parts.push('AIR ' + Math.round(res.airYards) + ' · YAC ' + Math.round(num(res.yac, 0)));
       feedback.textContent = '';
       if (parts.length) feedback.appendChild(el('div', { class: 'pv-feedback-line', text: parts.join(' · ') }));
@@ -1741,8 +1743,7 @@
       for (k = 1; k < n; k++) { bx = arr[k].x; by = arr[k].y; total += Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay)); ax = bx; ay = by; }
       if (!(total > 0)) return;
       g.globalAlpha = alpha;
-      var red = false, cur = '';
-      g.fillStyle = color; cur = color;
+      var red = false, ink = pal('ink'), redC = pal('red');
       var cum = 0, fx0 = sx, fy0 = sy;
       project(fx0, fy0); var px0 = pt.x, py0 = pt.y, carry = 0;
       for (k = 1; k < n; k++) {
@@ -1756,10 +1757,11 @@
             var u = d / segPx, yd = cum + segYd * u;
             if (yd >= fromLen) {
               red = yd > maxLen;
-              var want = red ? pal('red') : color;
-              if (want !== cur) { g.fillStyle = want; cur = want; }
+              var want = red ? redC : color;
               var tu = yd / total, th = arcLoft > 0 ? 1 + Math.round(2 * arcLoft * 4 * tu * (1 - tu)) : 1;
-              g.fillRect(Math.round(px0 + (px1 - px0) * u - (th >> 1)), Math.round(py0 + (py1 - py0) * u - (th >> 1)), th, th);
+              var dx0 = Math.round(px0 + (px1 - px0) * u - (th >> 1)), dy0 = Math.round(py0 + (py1 - py0) * u - (th >> 1));
+              g.fillStyle = ink; g.fillRect(dx0 + 1, dy0 + 1, th, th);            // a hard shadow: the line reads over grass and the chalk hashes
+              g.fillStyle = want; g.fillRect(dx0, dy0, th, th);
             }
             d += gap;
           }

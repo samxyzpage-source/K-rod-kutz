@@ -84,8 +84,11 @@
     var u = (f - hps) / (f - s);
     return u < 0 ? 0 : (u > 1 ? 1 : u);
   };
-  /** 'BULLET' | 'TOUCH' | 'LOB' for a loft (thirds). */
-  PlayInput.touchName = function (loft) { return loft < 1 / 3 ? 'BULLET' : (loft < 2 / 3 ? 'TOUCH' : 'LOB'); };
+  /** 'BULLET' | 'TOUCH' | 'LOB' for a loft — the engine's own cut (Tuning.qb.feedback.bullet / lob, the result's label), else thirds. */
+  PlayInput.touchName = function (loft) {
+    var F = (RTG.Tuning && RTG.Tuning.qb && RTG.Tuning.qb.feedback) || {};
+    return loft < dnum(F.bullet, 1 / 3) ? 'BULLET' : (loft < dnum(F.lob, 2 / 3) ? 'TOUCH' : 'LOB');
+  };
 
   var DEFAULT_KEYS = {
     confirm: ' ', confirmAlt: 'Enter', left: 'ArrowLeft', right: 'ArrowRight', up: 'ArrowUp', down: 'ArrowDown',

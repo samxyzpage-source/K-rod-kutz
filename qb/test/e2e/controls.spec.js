@@ -610,6 +610,73 @@ test('controls http desktop: the frame p95 stays under ' + FRAME_P95_BUDGET_MS +
   } finally { await app.close(); }
 });
 
+/**
+ * The core rule, watched every frame: after the slide the scene's 22 actors are exactly the live's positions (QB,
+ * receivers, defenders) — through the drop, the draw, the flight and after it; and a press anywhere in the start
+ * circle (over his helmet, at its side edge — yards from him on a small screen) starts a line ON the quarterback.
+ */
+for (const vp of ['narrow', 'desktop']) {
+  test(`controls file ${vp}: the scene draws the live's positions every frame; a press at the edge of the start circle anchors the line on the QB`, async () => {
+    const app = await H.openDemo({ mode: 'file', viewport: vp, seed: 4711 });
+    const { page } = app;
+    const touch = vp !== 'desktop';
+    try {
+      await startWith(page, 'GUNSLINGER', 'AVERAGE', 'COLLEGE');
+      await readAndSnap(page, 'core ' + vp);
+      await page.evaluate(() => {
+        const M = window.__core = { frames: 0, phases: {}, bad: [] };
+        const v0 = RTG.UI.PlayView.current();
+        (function tick() {
+          const v = RTG.UI.PlayView.current();
+          if (v !== v0) return;
+          const l = v.live();
+          if (l && (v.phase() === 'PLAY' || v.phase() === 'RESULT') && l.t > 0) {
+            const a = v.actors();
+            const cmp = (who, sx, sy, lx, ly) => { if ((Math.abs(sx - lx) > 1e-9 || Math.abs(sy - ly) > 1e-9) && M.bad.length < 5) M.bad.push({ t: l.t, who, scene: [sx, sy], live: [lx, ly] }); };
+            for (let i = 0; i < l.receivers.length; i++) cmp(l.receivers[i].slot, a.receivers[i].fieldX, a.receivers[i].fieldY, l.receivers[i].x, l.receivers[i].y);
+            for (let j = 0; j < l.defenders.length; j++) cmp(l.defenders[j].id, a.defenders[j].fieldX, a.defenders[j].fieldY, l.defenders[j].x, l.defenders[j].y);
+            cmp('QB', a.qb.fieldX, a.qb.fieldY, l.qb.x, l.qb.y);
+            M.frames++; M.phases[l.phase] = (M.phases[l.phase] || 0) + 1;
+          }
+          requestAnimationFrame(tick);
+        })();
+      });
+      const tgt = await Q.chooseTarget(page, { loft: 0.1, minT: 0.6 });
+      assert.ok(tgt && tgt.slot, 'a receiver can be reached');
+      const spot = await H.debug(page, 'reachSpot', tgt.slot, 0.05);
+      // press at the edge of the start circle: over the helmet on the desktop (the circle reaches ~6 yd downfield
+      // there), at its side on the narrow phone (~4 yd across) — the engine's startR is 2.5 yd
+      const plan = await page.evaluate(([end, desk]) => {
+        const v = RTG.UI.PlayView.current(), q = v.qbPoint(), l = v.live();
+        const press = desk ? { x: q.x, y: q.chestY - q.r * 0.85 } : { x: q.x + q.r * 0.85, y: q.y - 2 };
+        const f = v.cssToField(press.x, press.y);
+        const css = [press];
+        for (let i = 1; i <= 6; i++) css.push(v.fieldToCss(l.qb.x + (end.x - l.qb.x) * i / 6, l.qb.y + (end.y - l.qb.y) * i / 6));
+        return { css, pressYd: Math.hypot(f.x - l.qb.x, f.y - l.qb.y), startR: RTG.Tuning.qb.draw.startR };
+      }, [spot, vp === 'desktop']);
+      assert.ok(plan.pressYd > plan.startR, 'the press is farther from the QB than the engine\'s startR (' + plan.pressYd.toFixed(2) + ' yd > ' + plan.startR + ')');
+      const g = await Q.gesture(page, plan.css, { touch, beforeUp: async () => { await Q.sleep(40); return Q.draftNow(page); } });
+      const d = g.before && g.before.drawing;
+      assert.ok(d, 'a draft from the edge of the circle');
+      assert.notEqual(d.kind, 'INVALID', 'the line is not refused as "start at the quarterback" (' + d.reason + ')');
+      assert.equal(d.kind, 'PASS', 'a line from the circle\'s edge to his spot is a PASS (' + JSON.stringify({ kind: d.kind, target: d.target }) + ')');
+      const ball = await Q.waitReleased(page);
+      assert.ok(ball && ball.kind === 'PASS', 'the ball is out');
+      const ev = (await Q.current(page)).events.find(e => e.kind === 'RELEASE');
+      assert.ok(Math.hypot(ball.drawn[0].x - ev.x, ball.drawn[0].y - ev.y) < 0.01, 'the flight starts on the QB, not where the finger pressed');
+      await Q.waitResult(page);
+      await Q.sleep(400);                                                        // the coast under the banner is the live's too
+      const M = await page.evaluate(() => window.__core);
+      assert.deepEqual(M.bad, [], 'every frame the scene drew the live\'s positions');
+      assert.ok(M.frames > 40, 'watched ' + M.frames + ' frames');
+      assert.ok(M.phases.PRE_THROW && M.phases.BALL_IN_AIR, 'through the drop, the draw and the flight: ' + JSON.stringify(M.phases));
+      await Q.skipResult(page);
+      await Q.waitDone(page);
+      noErrors(app, 'core ' + vp);
+    } finally { await app.close(); }
+  });
+}
+
 test('controls file desktop: the summary — NEW DRIVE rolls a fresh seed with the same picks, TITLE keeps them selected', async () => {
   const app = await H.openDemo({ mode: 'file', viewport: 'desktop', seed: 8080 });
   const { page } = app;

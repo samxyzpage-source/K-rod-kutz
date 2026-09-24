@@ -19,28 +19,34 @@
  * a few hundredths of a sim second for a flick, a tenth and more for a slow lob).
  *
  * The bots (Bots.BOTS; every one is a parameter set of the same brain, so their differences are the skill, not code):
- *   NOVICE      any card at random; holds it until he feels ready (1.3–2.4 s), then the man who LOOKS most open (noisy
- *               eyes) — a fast, flat line at where the man IS, dragged toward him until the chip says PASS; no lane
- *               reading, no throw-aways, panics only when the rusher is on him
- *   DECENT      the best-advice card; a ring reader: the most open man past the sticks (else the most open), a touch
- *               pass to the spot he can reach, a lob over a man in the lane; waits for green, settles for gold late,
- *               throws it away when the pocket folds with nothing on
- *   EXPERT      the best-advice card; every read he races the ball against the defence for every man × BULLET / TOUCH /
- *               LOB × straight or bent around a man in the lane × on him or led away from the nearest defender; the
- *               FIELD GENERAL reads the engine's preview colour, everyone else his own eyes (the same race from the
- *               visible positions, with a little noise); he waits for a safe ball worth throwing (the sticks on 3rd
- *               down, the end zone on the last play), settles as the pocket shrinks, slides away from a free rusher,
- *               throws it away rather than into coverage
+ *   NOVICE      any card at random; looks up late (1.3–2.3 s), then waits for a man who LOOKS wide open (noisy eyes,
+ *               3.6 yd) until his patience runs out (2.2–3.2 s) — a fast, flat line at where the man IS, dragged toward him
+ *               until the chip says PASS (aim assist does the rest); no lane reading, no throw-aways, notices a free
+ *               rusher late (0.45–0.8 s); on the last play he heaves it past the deepest man into the end zone
+ *   DECENT      the best-advice card; a ring reader from 1.0–1.2 s: on a money down only past the sticks (the end zone on
+ *               the last play) until 2.0 s, then anyone; the spot he can reach, loft by distance (a lob over a man in the
+ *               lane); waits for green (3.2 yd), settles for gold (2.3) late, at 2.7 s or a noticed rusher (0.3–0.5 s)
+ *               throws the best he has or throws it away
+ *   EXPERT      the best-advice card; every read (0.08 s) he races the ball against the defence for every man × BULLET /
+ *               TOUCH / LOB × straight or bent around a man in the lane × on him or led away from the nearest defender
+ *               (his own eyes: the visible positions with a little noise, his arm's speed and arc, the hot ball); the
+ *               FIELD GENERAL's preview colour confirms GREEN or vetoes RED; a progression (the big play first, the
+ *               short one by 1.7 s; the sticks on a money down, only the end zone on the last play), settles as the
+ *               pocket shrinks, slides away from a free rusher (noticed in 0.15–0.3 s), throws it away rather than into
+ *               coverage
  *   CHECKDOWN   the back (the checkdown) every snap, as soon as he is reachable
  *   SCRAMBLER   (built for the DUAL THREAT) never throws: at the first moment the front shows a gap he draws a run
  *               through the widest one and up the field
  *   ROLLOUT     DECENT, plus: when a rusher is free he draws a rollout away from him and throws on the run
  *   LOB_ONLY / BULLET_ONLY   EXPERT restricted to one loft (1 / 0): the same reads, one touch
+ *   DECENT_GOOD / DECENT_BAD DECENT forced onto a play rated GOOD / BAD vs the REAL coverage (the call experiment only —
+ *               it reads ctx.real, which no player can; the probe uses it to measure what the call is worth)
  *   STATUE      never throws (the sack clock)
  *
  * Metrics: Bots.tally(records) → the box score plus sack %, tips, air yards, the decision rate (the share of pass
  * snaps that end in a pass the engine rated GREEN / GOLD at the release, a throw-away or a positive scramble — never a
- * RED ball, a sack or a pick) and EPA (Bots.epa: a linear first-and-ten expected-points curve, documented there).
+ * RED ball, a sack or a pick), the intended air yards (aydPerAtt: the landing's depth past the line on every pass, caught
+ * or not; deepPct: the share landing 20+ yd downfield) and EPA (Bots.epa: a linear first-and-ten expected-points curve, documented there).
  */
 'use strict';
 
@@ -69,38 +75,43 @@ function makeBots(RTG) {
   //   lofts/bends/leads   the lines he considers (bends in yd off the chord's middle; leads: 0 = on him, 1 = led
   //                away from the nearest defender by leadYd)
   //   settle/clock the time he wants a safe ball until / settles by · need: the safety he wants early / late
-  //   notice       s (a range, drawn per snap): how long after a rusher gets free (unblocked and closing) he notices him —
-  //                the reaction a human needs before the slow motion of a new stroke helps him
+  //   notice       s (a range, drawn per snap): how long after a rusher gets free (unblocked and closing) he acts on it —
+  //                seeing him, and the finger getting to the QB (full speed: the slow motion only starts with the stroke)
+  //   rollout      a rollout away from the pressure when the RUSH chip reaches rollAt or a free rusher is noticed; his
+  //                clock runs rollClock s longer after it
   //   rollout      true: a free rusher → a rollout away from him (then keep reading)
   const BRAINS = {
     NOVICE: {
-      card: 'RANDOM', every: 0.25, from: [1.2, 2.0], drawS: [0.04, 0.14], eye: 1.8, sepSd: 1.2, judge: 'SEP',
+      card: 'RANDOM', every: 0.25, from: [1.3, 2.3], drawS: [0.04, 0.14], eye: 1.8, sepSd: 1.2, judge: 'SEP',
       lofts: 'NOVICE', target: 'WHERE', openSep: 3.6, clock: [2.2, 3.2],
-      notice: [0.35, 0.6], away: false, sticks: false
+      notice: [0.45, 0.8], away: false, sticks: false
     },
     DECENT: {
-      card: 'BEST', every: 0.15, from: [0.9, 0.9], drawS: [0.03, 0.12], eye: 0.8, sepSd: 0.8, judge: 'SEP',
+      card: 'BEST', every: 0.15, from: [1.0, 1.2], drawS: [0.03, 0.12], eye: 0.8, sepSd: 0.8, judge: 'SEP',
       lofts: 'DECENT', target: 'AIM', openSep: 3.2, lateSep: 2.3, settle: 2.0, clock: [2.7, 2.7], awaySep: 1.8,
-      notice: [0.22, 0.4], away: true, sticks: true, laneCheck: true
+      notice: [0.3, 0.5], away: true, sticks: true, laneCheck: true
     },
     EXPERT: {
       card: 'BEST', every: 0.08, from: 0.55, drawS: [0.02, 0.1], eye: 0.35, sepSd: 0.4, judge: 'RACE',
       lofts: [0, 0.5, 0.95], bends: [0, -4, 4], leads: [0, 1], leadYd: 1.5,
-      need: [0.8, 0.55], settle: 1.7, clock: 2.7,
-      notice: [0.08, 0.18], away: true, sticks: true, slide: true
+      need: [0.8, 0.55], settle: 1.7, clock: 2.7, vWant: [14, 6],
+      notice: [0.15, 0.3], away: true, sticks: true, slide: true
     },
     CHECKDOWN: {
       card: 'BEST', every: 0.1, from: 0.6, drawS: [0.03, 0.1], eye: 0.8, sepSd: 0.8, judge: 'CHECKDOWN',
-      lofts: [0.4], notice: [0.22, 0.4], away: true
+      lofts: [0.4], notice: [0.3, 0.5], away: true
     },
     SCRAMBLER: {
-      card: 'BEST', every: 0.1, from: 0.7, drawS: [0.03, 0.1], eye: 0.8, sepSd: 0.8, judge: 'RUN', runBy: 1.5, notice: [0.22, 0.4]
+      card: 'BEST', every: 0.1, from: 0.7, drawS: [0.03, 0.1], eye: 0.8, sepSd: 0.8, judge: 'RUN', runBy: 1.5, notice: [0.3, 0.5]
     },
     STATUE: { card: 'BEST', judge: 'NONE' }
   };
-  BRAINS.ROLLOUT = Object.assign({}, BRAINS.DECENT, { rollout: true });
+  BRAINS.ROLLOUT = Object.assign({}, BRAINS.DECENT, { rollout: true, rollAt: 0.45, rollClock: 0.8 });
+  BRAINS.DECENT_GOOD = Object.assign({}, BRAINS.DECENT, { card: 'GOOD' });   // the call experiment: DECENT forced onto a GOOD / BAD play vs the real coverage
+  BRAINS.DECENT_BAD = Object.assign({}, BRAINS.DECENT, { card: 'BAD' });
   BRAINS.LOB_ONLY = Object.assign({}, BRAINS.EXPERT, { lofts: [1] });
   BRAINS.BULLET_ONLY = Object.assign({}, BRAINS.EXPERT, { lofts: [0] });
+  for (const k of Object.keys(BRAINS)) BRAINS[k].name = k;
   const BOTS = Object.keys(BRAINS);
 
   // ─────────────────────────── seeing ───────────────────────────
@@ -241,7 +252,7 @@ function makeBots(RTG) {
    * confidence the ball is safe), lane, spot} (0 draws on the game).
    */
   function eyeRace(live, sim, pts, loft, targetIdx, brain, rng) {
-    const attrs = attrsOf(sim), v = Field.ballSpeed(attrs, loft), len = lengthOf(pts), fl = len / v, apex = Field.apex(fl);
+    const attrs = attrsOf(sim), v = Field.ballSpeed(attrs, loft), len = lengthOf(pts), fl = len / v, apex = Field.apex(fl, loft);
     const end = pts[pts.length - 1], rec = live.receivers[targetIdx];
     // the spot: the ball's lead on the first defender who can get there (the target excluded)
     let spotLead = Infinity;
@@ -276,7 +287,9 @@ function makeBots(RTG) {
       }
     }
     const pSpot = clamp((spotLead - recLate + 0.05) / 0.45, 0, 1);
-    return { p: pSpot * (1 - 0.85 * lane), lane: lane, spot: spotLead - recLate, flight: fl };
+    // a hot ball: he has learned that a flat, fast ball over a short flight is hard to handle (the coach says so)
+    const C = F().catch, hot = (C.heat || 0) * clamp(1 - fl / Math.max(1e-9, C.heatT || 1), 0, 1) * clamp(1 - loft / Math.max(1e-9, C.heatLoft || 1), 0, 1);
+    return { p: pSpot * (1 - 0.85 * lane) * (1 - hot), lane: lane, spot: spotLead - recLate, flight: fl };
   }
 
   /** The value of a completion at the end of a line: air yards, the sticks on a money down, the end zone when only a TD counts. */
@@ -284,7 +297,7 @@ function makeBots(RTG) {
     const sit = sim.ctx.situation, goal = sim.field.goalY, y = Math.min(end.y, goal);
     const yac = clamp(room * 2.5, 0, 8);
     const gain = y + yac;
-    if (sit.lastPlay) return end.y >= goal - 0.3 ? 100 : (gain >= goal ? 30 : 1 + gain * 0.05);
+    if (sit.lastPlay) return end.y >= goal - 0.3 ? 100 : (gain >= goal ? 12 : 1 + gain * 0.05);   // only a TD counts; a run after the catch rarely gets there
     let v = Math.max(0.5, gain);
     if (end.y >= goal - 0.3) v += 25;
     if (sit.down >= 3) v = gain >= sit.toGo ? v + 12 : v * 0.35;
@@ -314,6 +327,13 @@ function makeBots(RTG) {
     return false;
   }
 
+  /** Where the pressure comes from (the RUSH chip's side): the nearest rusher still engaged or free, as a threat-like {x, y}. */
+  function pressureSide(live) {
+    const q = live.qb;
+    let best = null, bd = Infinity;
+    for (const d of live.defenders) { if (d.y > 2.5) continue; const dd = hyp(d.x - q.x, d.y - q.y); if (dd < bd) { bd = dd; best = d; } }
+    return best ? { x: best.x, y: best.y, ttc: 1, d: bd } : { x: q.x + 1, y: q.y, ttc: 1, d: 9 };
+  }
   /** A rollout / slide away from the free threat: lateral `yd` away from him, `back` yd deeper. */
   function rollAway(live, sim, th, yd, back) {
     const q = live.qb, dir = th.x > q.x ? -1 : 1, f = sim.field;
@@ -336,7 +356,8 @@ function makeBots(RTG) {
    * hit him (threatTtc) he throws the best he has — or throws it away when that is under awaySep and he knows to.
    */
   function ringReader(live, sim, brain, rng, note) {
-    const sit = sim.ctx.situation, from = rng.float(brain.from[0], brain.from[1]), clock = rng.float(brain.clock[0], brain.clock[1]);
+    const sit = sim.ctx.situation, from = rng.float(brain.from[0], brain.from[1]);
+    let clock = rng.float(brain.clock[0], brain.clock[1]);
     const st = watcher(brain, rng);
     let rolled = false;
     stepTo(live, brain.rollout ? Math.min(from, 0.6) : from);
@@ -344,9 +365,14 @@ function makeBots(RTG) {
       if (!canPass(live)) break;
       const th = aware(live, st);
       let forced = !!th || live.t >= clock;
-      if (brain.rollout && th && !rolled) { rollAway(live, sim, th, 10, 1); rolled = true; note.rolled = true; st.free = {}; forced = live.t >= clock; }
+      if (brain.rollout && !rolled && (th || (live.t >= 1.0 && live.pressure >= brain.rollAt))) {
+        rollAway(live, sim, th || pressureSide(live), 10, 1); rolled = true; note.rolled = true; st.free = {};
+        clock += brain.rollClock; forced = live.t >= clock;
+      }
       if (live.t >= from - 1e-9 || forced) {
         const need = brain.settle && live.t >= brain.settle ? brain.lateSep : brain.openSep;
+        // a money down: until he settles he only looks past the sticks (the end zone on the last play)
+        const sticksY = brain.sticks && brain.settle && live.t < brain.settle && !forced ? (sit.lastPlay ? sim.field.goalY - 1 : (sit.down >= 3 ? sit.toGo : -Infinity)) : -Infinity;
         let best = null;
         for (let i = 0; i < live.receivers.length; i++) {
           const sep = sepSeen(live, i, brain, rng);
@@ -354,14 +380,20 @@ function makeBots(RTG) {
           const dist = hyp(r.x - live.qb.x, r.y - live.qb.y);
           const loft = loftsOf(brain, dist, rng)[0];
           let pts;
-          if (brain.target === 'WHERE') pts = [{ x: live.qb.x, y: live.qb.y }, { x: r.x + rng.gauss(0, 0.8), y: r.y + rng.gauss(0, 0.8) }];
+          if (brain.target === 'WHERE' && sit.lastPlay) {   // the heave: a long line past the deepest man into the end zone
+            const f = sim.field, ey = clamp(Math.max(r.y + 6, f.goalY + 2), 0, f.endY - 1);
+            pts = [{ x: live.qb.x, y: live.qb.y }, { x: clamp(r.x + rng.gauss(0, 1.5), f.sideL + 1, f.sideR - 1), y: ey + rng.gauss(0, 1) }];
+          } else if (brain.target === 'WHERE') pts = [{ x: live.qb.x, y: live.qb.y }, { x: r.x + rng.gauss(0, 0.8), y: r.y + rng.gauss(0, 0.8) }];
           else { const a = live.aim(r.slot, loft); if (!a || a.tooLong) continue; pts = a.points; }
+          if (pts[pts.length - 1].y < sticksY) continue;
           let score = sep;
+          if (!brain.sticks && sit.lastPlay) score = r.y / 4 + Math.min(sep, 3);   // even a novice knows the last play is a shot at the end zone
           if (brain.sticks && sit.down >= 3 && !sit.lastPlay && pts[1].y >= sit.toGo) score += 1.2;
           if (brain.sticks && sit.lastPlay) score += pts[1].y >= sim.field.goalY - 1 ? 3 : -2;
           if (!best || score > best.score) best = { i, sep, loft, pts, score };
         }
-        const go = best && (best.sep >= need || forced);
+        if (best && !brain.sticks && sit.lastPlay) best.loft = rng.float(0.45, 1);   // a heave
+        const go = best && (best.sep >= need || forced || (!brain.sticks && sit.lastPlay && best.sep >= 2.2));
         if (go && forced && best.sep < need && brain.away && best.sep < brain.awaySep && !sit.lastPlay) {
           if (throwAway(live, brain)) { note.commit = 'AWAY'; break; }
         } else if (go) {
@@ -421,15 +453,10 @@ function makeBots(RTG) {
               if (m.end.y > sim.field.endY - 0.5) continue;
               let c = live.classify(m.pts, loft);
               if (c.kind !== 'PASS' || c.target !== r.slot || c.tooLong) continue;
-              let p, room;
-              if (live.previewShown && brain.judge === 'RACE') {
-                const e = eyeRace(live, sim, m.pts, loft, i, brain, rng);
-                p = c.preview === 'GREEN' ? 0.95 : (c.preview === 'GOLD' ? 0.62 : 0.2);
-                room = e.spot;
-              } else {
-                const e = eyeRace(live, sim, m.pts, loft, i, brain, rng);
-                p = e.p; room = e.spot;
-              }
+              const e = eyeRace(live, sim, m.pts, loft, i, brain, rng);
+              let p = e.p;
+              const room = e.spot;
+              if (live.previewShown) p = c.preview === 'GREEN' ? Math.max(p, 0.92) : (c.preview === 'RED' ? Math.min(p, 0.3) : p);   // the FIELD GENERAL: the colour confirms or vetoes his eyes
               const val = valueOf(sim, m.end, room);
               const cand = { i, loft, bend, lead, pts: m.pts, p, val, score: p * val - (1 - p) * 6 };
               if (!bestAny || cand.score > bestAny.score) bestAny = cand;
@@ -437,8 +464,30 @@ function makeBots(RTG) {
             }
           }
         }
+        if (sit.lastPlay) {                                   // the last play: a ball into the end zone he can run under
+          const f = sim.field;
+          for (const loft of brain.lofts) {
+            for (const dy of [2, 5]) {
+              const fl0 = (hyp(r.x - live.qb.x, f.goalY + dy - live.qb.y)) / Field.ballSpeed(attrsOf(sim), loft);
+              const p0 = routeAt(sim, i, live.t + fl0);
+              const pts = [{ x: live.qb.x, y: live.qb.y }, { x: clamp(p0.x, f.sideL + 1, f.sideR - 1), y: Math.min(f.endY - 1, f.goalY + dy) }];
+              const c = live.classify(pts, loft);
+              if (c.kind !== 'PASS' || c.target !== r.slot || c.tooLong) continue;
+              const e = eyeRace(live, sim, pts, loft, i, brain, rng);
+              let p = e.p;
+              if (live.previewShown) p = c.preview === 'GREEN' ? Math.max(p, 0.92) : (c.preview === 'RED' ? Math.min(p, 0.3) : p);
+              const cand = { i, loft, bend: 0, lead: 0, pts, p, val: 100, score: p * 100 - (1 - p) * 6 };
+              if (!bestAny || cand.score > bestAny.score) bestAny = cand;
+              if (p >= need && (!best || cand.score > best.score)) best = cand;
+            }
+          }
+        }
       }
-      const wantsMore = best && !panic && t < brain.settle && valueOf(sim, best.pts[best.pts.length - 1], 0) < (sit.lastPlay ? 50 : 6);
+      // a progression: early he wants the big play, then works down to the short one (vWant: the value he wants at the
+      // first read → at settle)
+      if (sit.lastPlay && best && best.val < 50) best = null;   // the last play: a ball short of the end zone is not an answer until he has to
+      const vWant = sit.lastPlay ? 50 : brain.vWant[0] + (brain.vWant[1] - brain.vWant[0]) * clamp((t - brain.from) / Math.max(0.05, brain.settle - brain.from), 0, 1);
+      const wantsMore = best && !panic && t < brain.settle && valueOf(sim, best.pts[best.pts.length - 1], 0) < vWant;
       if (best && !wantsMore) { if (fire(live, sim, best, brain, note)) break; }
       else if (panic || t >= brain.clock) {
         if (bestAny && bestAny.p >= 0.4 && !(sit.lastPlay && bestAny.val < 50)) { if (fire(live, sim, bestAny, brain, note)) break; }
@@ -600,7 +649,7 @@ function makeBots(RTG) {
   function lean(r) {
     return { outcome: r.outcome, kind: r.kind, yards: r.yards, airYards: r.airYards, yac: r.yac, td: r.td, firstDown: r.firstDown, turnover: r.turnover,
       text: r.text, ended: r.ended, preview: r.preview || null, loft: r.loft, target: r.target, t: r.t, endT: r.endT, escaped: r.escaped || 0,
-      running: r.release ? r.release.running : 0, sd: r.release ? r.release.sd : 0, miss: r.miss, tooLong: r.tooLong, placement: r.feedback ? r.feedback.placement : null, timing: r.feedback ? r.feedback.timing : null };
+      landingY: r.landing ? r.landing.y : 0, running: r.release ? r.release.running : 0, sd: r.release ? r.release.sd : 0, miss: r.miss, tooLong: r.tooLong, placement: r.feedback ? r.feedback.placement : null, timing: r.feedback ? r.feedback.timing : null };
   }
 
   // ─────────────────────────── the numbers ───────────────────────────
@@ -635,7 +684,7 @@ function makeBots(RTG) {
    */
   function counters() {
     return { snaps: 0, passSnaps: 0, att: 0, cmp: 0, int: 0, tip: 0, drop: 0, away: 0, sack: 0, scr: 0, scrYds: 0, runCards: 0, yds: 0, playYds: 0,
-      air: 0, airCmp: 0, fd: 0, td: 0, last: 0, lastWin: 0, good: 0, epa: 0, epaN: 0, rolled: 0, missSum: 0, missN: 0, sdSum: 0, sdN: 0 };
+      air: 0, airCmp: 0, ayd: 0, aydN: 0, deep: 0, fd: 0, td: 0, last: 0, lastWin: 0, good: 0, epa: 0, epaN: 0, rolled: 0, missSum: 0, missN: 0, sdSum: 0, sdN: 0 };
   }
   /** Add raw counters b into a (both from counters() / tally(…, acc)). */
   function merge(a, b) { for (const k of Object.keys(counters())) a[k] += b[k] || 0; return a; }
@@ -661,6 +710,7 @@ function makeBots(RTG) {
       if (r.sd) { c.sdSum += r.sd; c.sdN++; }
       if (typeof r.miss === 'number') { c.missSum += r.miss; c.missN++; }
       c.air += Math.max(0, r.airYards || 0);
+      if (r.kind === 'PASS') { c.ayd += r.landingY || 0; c.aydN++; if ((r.landingY || 0) >= 20) c.deep++; }
       if (o === 'CATCH') { c.cmp++; c.yds += r.yards || 0; c.airCmp += r.airYards || 0; }
       if (o === 'INT') c.int++;
       if (o === 'DROP') c.drop++;
@@ -675,7 +725,7 @@ function makeBots(RTG) {
     return Object.assign(c, {
       cmpPct: pct(c.cmp, c.att), intPct: pct(c.int, c.att), tipPct: pct(c.tip, c.att), sackPct: pct(c.sack, c.passSnaps), awayPct: pct(c.away, c.passSnaps),
       scrPct: pct(c.scr, c.passSnaps), ydsPerAtt: pct(c.yds, c.att), ydsPerPlay: pct(c.playYds, c.snaps), scrPerPlay: pct(c.scrYds, c.scr),
-      airPerAtt: pct(c.air, c.att - c.away), airPerCmp: pct(c.airCmp, c.cmp), fdPct: pct(c.fd, c.snaps), lastWinPct: pct(c.lastWin, c.last),
+      airPerAtt: pct(c.air, c.att - c.away), airPerCmp: pct(c.airCmp, c.cmp), aydPerAtt: pct(c.ayd, c.aydN), deepPct: pct(c.deep, c.aydN), fdPct: pct(c.fd, c.snaps), lastWinPct: pct(c.lastWin, c.last),
       decision: pct(c.good, c.passSnaps), epaPerPlay: pct(c.epa, c.epaN), rollPct: pct(c.rolled, c.passSnaps), missAvg: pct(c.missSum, c.missN), sdAvg: pct(c.sdSum, c.sdN)
     });
   }

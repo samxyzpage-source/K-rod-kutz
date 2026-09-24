@@ -92,19 +92,19 @@
 
         // The sack clock (seconds after the snap when the first rusher arrives).
         pressure: {
-          base: 2.85,              // s for an even line battle, neutral coverage, POI 50 (v2: the first rusher home on a QB who stands at the top of his drop)
+          base: 2.6,               // s for an even line battle, neutral coverage, POI 50 (the first rusher home on a QB who stands at the top of his drop; 2.6: a novice who waits for a wide-open man is sacked on ≈ 1 dropback in 6, a decent reader ≈ 1 in 14)
           olW: 0.025,              // s per point of (ol − 50) …
           dlW: 0.025,              // … minus s per point of (dl − 50); the sum is softened below
-          up: 0.30,                // soft cap of the line's GAIN (tanh): a great line buys at most ≈ +0.3 s
-          down: 1.30,              // soft cap of the line's LOSS: a bad line loses at most ≈ −1.3 s
+          up: 0.25,                // soft cap of the line's GAIN (tanh): a great line buys at most ≈ +0.25 s (GREAT 2.85 s pocket, AVERAGE 2.7)
+          down: 0.70,              // soft cap of the line's LOSS: a bad line loses at most ≈ −0.7 s (BAD 1.95 s: the bad line is the story — ≈ 3.5× the sacks of GREAT)
           poiW: 0.004,             // s per point of (POI − 50): poise buys a beat in the pocket
           mulExp: 0.4,             // the coverage's pressureMul enters as sackAt ÷ pressureMul^mulExp (BLITZ 1.6 → ×0.83 · PREVENT 0.7 → ×1.15)
           clutchMul: 0.30,         // in the clutch sackAt × (1 − clutchMul × (1 − POI/99)): the rush "feels" faster to a nervous QB (0.30: POI 56 loses ≈ 0.4 s on the last two snaps — the stakes reach the hand, not only the sky)
           clutchClock: 120,        // Q4 with the clock at or under this and the game within one score → clutch
           clutchMargin: 8,         // … "within one score"
-          sigma: 0.3,              // s: gauss jitter of sackAt in buildContext
+          sigma: 0.7,              // s: gauss jitter of sackAt in buildContext (0.7: the rush is a threat on every snap — a great line still gets beaten early now and then, a bad one sometimes holds)
           snapSigma: 0.10,         // s: a second, smaller jitter in snap (the same look never plays twice the same)
-          min: 1.2, max: 4.2       // s clamp (sackAt: when the first rusher gets home on a QB who stands at the top of his drop; field.rush turns it into beatAt)
+          min: 1.5, max: 4.2       // s clamp (sackAt: when the first rusher gets home on a QB who stands at the top of his drop; field.rush turns it into beatAt; min 1.5: even the worst snap leaves time for one quick throw)
         },
 
         // The scene's separation-ring colours for live.receivers[i].open (0..1 from the separation NOW, field.openSep).
@@ -154,13 +154,13 @@
           },
           qbDrop: { depth: -7, gunT: 0.6, underT: 1.1, paT: 0.35 },   // the default drop: to y = depth by gunT (gun) / underT (under centre), + paT on play action
           // speeds (yd/s)
-          qbSpeed: { base: 4.8, perMob: 3.4 },            // MOB 50 → 6.5 · 72 → 7.3 · 99 → 8.2
+          qbSpeed: { base: 4.9, perMob: 3.0 },            // MOB 50 → 6.4 · 72 → 7.1 · 99 → 7.9 (a Dual Threat who scrambles every snap makes ≈ 5 yd — viable, not better than passing)
           recSpeed: { base: 7.2, perSpeed: 2.8 },         // a receiver off his route (breaking to the ball, after the catch): speed 50 → 8.6 · 70 → 9.2 · 86 → 9.6
           defSpeed: { base: 7.6, perSkill: 2.6, pos: { CB: 1.0, NB: 0.98, S: 0.97, LB: 0.9, DL: 0.78 } },   // × by position group: a 56-skill corner 9.1 (a receiver's pace) · linebacker 8.2 · lineman 7.1
           shedSlow: 0.35,          // × speed while shed (a broken tackle / an escaped sack: he is on the ground for shedS)
           defSkillSd: 4,           // gauss sd of each defender's skill around the unit's rating (opp.db / opp.dl), drawn at the snap
           // the defence's reactions (s)
-          react: { base: 0.42, perSkill: -0.22, sd: 0.06, min: 0.12, robber: 0.6, spy: 0.4, manScramble: 1.3, chase: 0.25 },   // break on the ball after base + perSkill × skill/99 (+ jitter) · × robber / spy · × manScramble on a scramble (back to the QB) · chase: after a catch
+          react: { base: 0.42, perSkill: -0.22, sd: 0.06, min: 0.12, robber: 0.6, spy: 0.4, manScramble: 1.3, scramble: 0.15, chase: 0.25 },   // break on the ball after base + perSkill × skill/99 (+ jitter) · × robber / spy · on a scramble × manScramble (a man defender has his back to the QB) or × scramble (everyone else faces him: 0.15 — they see him go at once) · chase: after a catch
           // coverage technique
           man: { trail: 0.16, edgeW: 1.4, press: 0.4, off: 1.8, inside: 0.7, minTrail: 0.06, maxTrail: 0.6 },   // trail s × fit × (1 + edgeW × (rec skill − def skill)/99) · cushion yd pressed / off · inside leverage yd
           zone: { shade: 0.72, deepY: 14, deepCushion: 2.2, robberShade: 0.9 },   // move toward the nearest threat in the zone by shade · a landmark this deep stays deepCushion over the threat
@@ -189,14 +189,14 @@
           pressR: 4,               // yd: a rusher inside tackleR + pressR puts pressure on the throw (scatter) and the RUSH meter
           heldPressure: 0.5,       // × a still-blocked rusher's pressure
           // the ball
-          ballSpeed: { base: 21, perArm: 10, loftSlow: 0.48 },   // yd/s = (base + perArm × ARM/99) × (1 − loftSlow × loft): ARM 55 bullet 26.6 · lob 13.8 · ARM 99 bullet 31
-          maxLen: { base: 36, perArm: 24 },   // yd of flight the arm has (the line's arc length): ARM 55 → 49.3 · 72 → 53.5 · 99 → 60
-          height: { release: 2.0, catch: 1.6, apexMin: 0.15, gravity: 10.7 },   // yd: out of the hand · into the hands · the apex over the chord = max(apexMin, gravity × flight² / 8)
+          ballSpeed: { base: 18, perArm: 16, loftSlow: 0.48 },   // yd/s = (base + perArm × ARM/99) × (1 − loftSlow × loft): ARM 55 bullet 26.9 · lob 14.0 · ARM 72 bullet 29.6 · ARM 99 bullet 34
+          maxLen: { base: 30, perArm: 30 },   // yd of flight the arm has (the line's arc length): ARM 55 → 46.7 · 72 → 51.8 · 99 → 60 (the far-hash deep out and the last-play heave from the 40 need a gunslinger)
+          height: { release: 2.0, catch: 1.6, apexMin: 0.15, gravity: 10.7, lift: 0.8 },   // yd: out of the hand · into the hands · the apex over the chord = max(apexMin, gravity × flight² / 8) × (1 + lift × loft) (lift 0.8: a 15-yd lob peaks ≈ 4.4 yd, over a linebacker's hands; a touch pass ≈ 2.9)
           reach: { CB: 3.1, NB: 3.1, S: 3.1, LB: 3.2, DL: 3.3 },                  // yd: how high a defender's hands get with a jump (a ball above this sails over him)
           catchZone: 2.5,          // yd: the last stretch of the flight belongs to the catch contest, not the in-flight contact rolls
           laneStep: 1.5,           // yd: a defender looks for a spot on the ball's path he can beat it to (under his reach) every this — jumping the lane …
           laneR: 1.5,              // yd: … within this of him (farther off the lane he runs to the landing spot)
-          scatter: { base: 0.3, perYd: 0.032, perAcc: 0.6, pressure: 0.8, running: 0.7, setV: 2.5, weather: 6, lenMul: 1.25, minYd: 1 },   // lateral sd (yd, at the end) = (base + perYd × length) × (1 − perAcc × ACC/99) × (1 + pressure × p + running × r) + weather × penalty, r = (|v| − setV) / (qbSpeed − setV) (a drifting QB is set; a sprinting one is not) · the length sd × lenMul · a short ball never dies under minYd
+          scatter: { base: 0.4, perYd: 0.032, perAcc: 0.8, pressure: 0.8, running: 0.7, setV: 2.5, weather: 6, lenMul: 1.25, minYd: 1 },   // lateral sd (yd, at the end) = (base + perYd × length) × (1 − perAcc × ACC/99) × (1 + pressure × p + running × r) + weather × penalty, r = (|v| − setV) / (qbSpeed − setV) (a drifting QB is set; a sprinting one is not) · the length sd × lenMul · a short ball never dies under minYd (perAcc 0.8: ACC 72 scatters ≈ 20 % less than ACC 55)
           // contact, catch, tackle
           tackleR: 1.25,           // yd: a defender this close to the ball carrier gets a tackle (or sack) roll
           catchR: 1.3,             // yd: a receiver this close to the landing spot can catch it
@@ -207,12 +207,12 @@
           hopeless: -1.0,          // s: a line no receiver reaches, thrown anyway, is meant for the one with the best margin unless even he is this far off (then it is thrown to nobody)
           sack: { base: -0.06, perMob: 0.42, max: 0.6 },   // P(escape) = base + perMob × MOB/99: 50 → 15 % · 72 → 25 % · 99 → 36 %
           tip: { base: 0.5, perSkill: 0.3, near: 0.4, blind: 0.45, held: 0.08, hBand: 0.6, hMin: 0.1, max: 0.85 },   // P(a hand on it) = (base + perSkill × skill/99) × (near + (1 − near) × closeness) × clamp((reach − h) / hBand, hMin, 1) × (blind before his react) × (held: an engaged rusher)
-          int: { touch: 0.5, high: 0.35, blind: 0.4, chest: 0.7, held: 0.3, alone: 0.8, contest: 0.15 },   // P(pick | a hand on it in flight) = touch × (high when the ball is above chest height: h > reach − chest) × (blind) · at the landing: a defender alone → alone × closeness · a contested miss → contest × Σ contest
-          catch: { base: 0.93, perSkill: 0.08, reachPen: 0.12, contest: 0.55, first: 1.3, min: 0.05, max: 0.98 },   // P(catch) = base + perSkill × skill/99 − reachPen × (miss/catchR)² − contest × Σ contest (a defender closer to the ball than the catcher counts × first)
+          int: { touch: 0.5, high: 0.35, blind: 0.4, chest: 0.7, held: 0.3, alone: 0.65, contest: 0.1 },   // P(pick | a hand on it in flight) = touch × (high when the ball is above chest height: h > reach − chest) × (blind) · at the landing: a defender alone → alone × closeness · a contested miss → contest × Σ contest
+          catch: { base: 0.95, perSkill: 0.08, reachPen: 0.35, contest: 0.45, first: 1.3, heat: 0.3, heatT: 0.5, heatLoft: 0.5, min: 0.05, max: 0.98 },   // P(catch) = base + perSkill × skill/99 − reachPen × (miss/catchR)² (0.35: a ball he has to reach for at the edge of his radius is caught ≈ 1 time in 3 less — where the ball lands, the accuracy, counts) − contest × Σ contest (a defender closer to the ball than the catcher counts × first) − hot, hot = heat × (1 − flight/heatT) × (1 − loft/heatLoft) (a flat ball over a short flight is too hot to handle: a 5-yd bullet −0.19, a touch pass 0)
           drop: { base: 0.07, contest: 0.08 },   // P(drop | caught) = base × (1 − skill/99) + contest × Σ contest
-          tackle: { base: 0.08, perSkill: 0.14, perSpeed: 0.1, defSkill: 0.14, min: 0.03, max: 0.5 },   // P(broken tackle) = base + perSkill × skill/99 + perSpeed × speed/99 − defSkill × def skill/99
+          tackle: { base: 0.04, perSkill: 0.14, perSpeed: 0.1, defSkill: 0.14, min: 0.03, max: 0.5 },   // P(broken tackle) = base + perSkill × skill/99 + perSpeed × speed/99 − defSkill × def skill/99
           evade: { r: 6, w: 0.6, upW: 0.3, minUp: 0.35, sideR: 3, look: 5 },   // the ball carrier bends away from defenders inside r (weight w laterally, × upW along the field), never less than minUp upfield, off a sideline inside sideR, steering at a point look yd ahead
-          pursueBurst: 1.05,       // × a pursuer's speed after a catch / on a scramble (everybody runs to the ball)
+          pursueBurst: 1.1,        // × a pursuer's speed after a catch / on a scramble (everybody runs to the ball)
           pursueLead: 1.2,         // s: a pursuer aims at the point he meets the carrier, at most this far ahead (and this far ahead when he cannot meet him: the angle)
           intReturnS: 0.9,         // s: the interceptor's return after the pick (presentation; the result is already in)
           away: { out: 3, depth: 10, minY: 2, loft: 0.3 },   // live.throwAway(): this far past the nearer sideline, this far downfield of the QB (never short of minY), thrown with this loft
@@ -232,13 +232,14 @@
           minLen: 2,               // yd: a shorter line is nothing
           reachSlack: 0.2,         // s: a receiver this late to the line's end still makes it a PASS (he gets a hand to it)
           greenMargin: 0.3,        // s: the preview is GREEN when nobody can contest the spot until this long after the ball …
-          greenReach: 0.15,        // s: … and the target gets there at least this early (room for the scatter)
+          greenReach: 0.1,         // s: … and the target gets there at least this early (room for the scatter; 0.1: a man in stride on his route to the spot can be GREEN — catchR / his speed ≈ 0.14 s)
           redReach: -0.05,         // s: a target who gets there later than this after the ball makes the preview RED (he will not make it)
           previewLowBand: 0.5,     // yd: the line passing a defender this far under his reach is RED (a pick at chest height)
           previewPad: 0.3,         // yd: added to reachR for the preview's in-flight check (the defender will move)
+          previewHot: 0.1,         // a line whose hot-ball catch penalty (field.catch.heat) reaches this is never GREEN (take something off it)
           previewIq: 70,           // IQ at or above this sees the preview colour (the FIELD GENERAL's perk)
           loft: { fastHps: 2.4, slowHps: 0.5 },   // canvas-heights per second of drawing: this fast or faster → a bullet (loft 0), this slow or slower → a lob (1)
-          assistYd: 2.5,           // yd: a PASS line's end this close to the target's reachable spot snaps onto it (aim assist)
+          assistYd: 3.5,           // yd: a PASS line's end this close to the target's reachable spot snaps onto it (aim assist; 3.5: a new player's line at where the man IS snaps to where he is going on most short routes)
           resampleYd: 0.75,        // yd: the scene resamples the drawn points to this spacing
           maxPoints: 600           // points: longer polylines are thinned (classify stays cheap)
         },
@@ -275,7 +276,7 @@
         demo: {
           teams: {
             BAD: {
-              ol: 30, dl: 78, db: 62,   // db 62 and skills in the 40s–50s: the bad LINE is the story (2.1 s pocket), the secondary costs ≈ 5 points, not 10
+              ol: 30, dl: 78, db: 62,   // db 62 and skills in the 40s–50s: the bad LINE is the story (1.95 s pocket vs 2.85 behind the great line), the secondary costs ≈ 5 points, not 10
               wr: [
                 { slot: 'WR1', name: 'T. Vance', skill: 52, speed: 62 },
                 { slot: 'WR2', name: 'R. Okafor', skill: 46, speed: 55 },

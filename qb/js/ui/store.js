@@ -371,10 +371,12 @@
 
   // ─────────────────────────── the story ───────────────────────────
 
-  /** The receiver a result went to (name / route) from the sim. */
+  /** The receiver a result went to (name / route) from the sim: the man who caught it (res.catcher — the nearest man at
+      the landing, now and then not the one it was thrown to), else the target. */
   function targetInfo(res, sim) {
-    if (!res || !res.target || !sim || !sim.receivers) return null;
-    for (var i = 0; i < sim.receivers.length; i++) if (sim.receivers[i].slot === res.target) return { slot: res.target, name: sim.receivers[i].name, route: sim.receivers[i].route };
+    var slot = res && (res.catcher || res.target);
+    if (!slot || !sim || !sim.receivers) return null;
+    for (var i = 0; i < sim.receivers.length; i++) if (sim.receivers[i].slot === slot) return { slot: slot, name: sim.receivers[i].name, route: sim.receivers[i].route };
     return null;
   }
 

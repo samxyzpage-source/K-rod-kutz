@@ -97,6 +97,11 @@ async function readAndSnap(page, where, i, firstRead, phone) {
   const ph = await Q.pickPlay(page, card.idx);
   assert.equal(ph, 'PLAY', where + ': a pass card snaps into the live play (' + card.id + ')');
   await Q.waitCanDraw(page);
+  assert.match(await page.locator('.pv-hint').textContent(), /DRAW FROM THE QB — TO A RECEIVER TO PASS, INTO SPACE TO RUN/, where + ': the one-line hint');
+  if (i === 0) {
+    assert.ok(await page.locator('.pv-toast').isVisible(), where + ': the first moment says how to play over the field');
+    assert.match(await page.locator('.pv-toast').textContent(), /DRAW FROM THE QB/, where + ': the first-moment hint');
+  }
   return card;
 }
 

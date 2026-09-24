@@ -197,7 +197,7 @@ body.hc .pv-stage.is-slow canvas.rtg-canvas, html.hc .pv-stage.is-slow canvas.rt
   .pv-card-name { min-height: 0; }
   .pv-routes { height: 30px; }
   .pv-actions { flex-direction: column; }
-  .pv-drawhud { top: 4px; }
+  .pv-drawhud { top: 4px; justify-content: space-between; }   /* the chips to the corners: the sky is short, the scoreboard stays in view */
   .pv-draft { font-size: 8px; padding: 3px 6px; }
   .pv-banner { top: 46%; font-size: 12px; padding: 6px 10px; border-width: 2px; }
   .pv-sub { top: 18%; font-size: 9px; padding: 4px 8px; }

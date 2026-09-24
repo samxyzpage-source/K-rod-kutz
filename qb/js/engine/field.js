@@ -224,8 +224,15 @@
   };
   /** The arm's maximum flight length (yd of the line's arc). */
   Field.maxLen = function (attrs) { var M = F().maxLen; return M.base + M.perArm * ratio(attrs && attrs.ARM); };
-  /** The apex (yd over the release→catch chord) of a flight of `flight` seconds: max(apexMin, g·T²/8). */
-  Field.apex = function (flight) { var H = F().height; return Math.max(H.apexMin, H.gravity * flight * flight / 8); };
+  /**
+   * The apex (yd over the release→catch chord) of a flight of `flight` seconds at `loft` (0 bullet … 1 lob; omitted → 0):
+   * max(apexMin, g·T²/8) × (1 + lift × loft) — gravity sets the arc of the time in the air, and a lofted ball is put up
+   * steeper on top of that (the touch that floats it over a linebacker).
+   */
+  Field.apex = function (flight, loft) {
+    var H = F().height, f = num(flight, 0);
+    return Math.max(H.apexMin, H.gravity * f * f / 8) * (1 + num(H.lift, 0) * clamp(num(loft, 0), 0, 1));
+  };
   /** The ball's height (yd) at u ∈ [0, 1] along the path for an apex. */
   Field.heightAt = function (u, apex) {
     var H = F().height;
@@ -986,8 +993,10 @@
       if (ghost) { b.deadAt = rd(t); finish('INCOMPLETE', 'LANDED'); return; }
       if (ci >= 0 && cd <= T.catchR) {
         var skill = roster[ci].skill, miss = cd / T.catchR;
-        var pC = clamp(C.base + C.perSkill * ratio(skill) - C.reachPen * miss * miss - C.contest * contest, C.min, C.max);
-        endInfo.pCatch = pC;
+        // a hot ball: a flat, fast ball over a short flight gives the hands no time (touch takes it off)
+        var hot = num(C.heat, 0) * clamp(1 - (bArrive - b.releaseT) / Math.max(EPS, num(C.heatT, 1)), 0, 1) * clamp(1 - b.loft / Math.max(EPS, num(C.heatLoft, 1)), 0, 1);
+        var pC = clamp(C.base + C.perSkill * ratio(skill) - C.reachPen * miss * miss - C.contest * contest - hot, C.min, C.max);
+        endInfo.pCatch = pC; endInfo.hot = hot;
         if (rng.chance(pC)) {                                                                  // draw: catch
           var pD = DR.base * (1 - ratio(skill)) + DR.contest * contest;
           if (rng.chance(pD)) { b.deadAt = rd(t); addEvent('DROP', roster[ci].slot, b.x, b.y); finish('DROP', 'DROP'); return; }   // draw: drop
@@ -1038,7 +1047,7 @@
       if (q.y > fld.losY) {
         live.phase = 'SCRAMBLE'; live.carrier = 'QB';
         addEvent('SCRAMBLE', 'QB', q.x, q.y);
-        for (var d3 = 0; d3 < nD; d3++) dS[d3].chaseAt = t + dS[d3].react * (dS[d3].role === 'MAN' ? T.react.manScramble : 1);
+        for (var d3 = 0; d3 < nD; d3++) dS[d3].chaseAt = t + dS[d3].react * (dS[d3].role === 'MAN' ? T.react.manScramble : num(T.react.scramble, 1));   // a man defender has his back to the QB; the rest see him go
         return;
       }
       if (ghost) return;
@@ -1184,7 +1193,7 @@
         if (tc < contestAt) contestAt = tc;
         if (tf < firstDef) firstDef = tf;
       }
-      var low = false, risk = false, apex = Field.apex(flight);
+      var low = false, risk = false, apex = Field.apex(flight, loft);
       var cum = cumOf(pts), steps = Math.min(32, Math.max(4, Math.ceil(len / 1.5)));
       for (var si = 1; si <= steps; si++) {
         var sArc = len * si / steps;
@@ -1202,7 +1211,8 @@
       }
       lastMargin = Math.min(margin, contestAt - flight);
       if (firstDef < recArrive || low || margin < DW.redReach) return 'RED';
-      if (contestAt - flight >= DW.greenMargin && margin >= DW.greenReach && !risk) return 'GREEN';
+      var C = T.catch, hot = num(C.heat, 0) * clamp(1 - flight / Math.max(EPS, num(C.heatT, 1)), 0, 1) * clamp(1 - loft / Math.max(EPS, num(C.heatLoft, 1)), 0, 1);
+      if (contestAt - flight >= DW.greenMargin && margin >= DW.greenReach && !risk && hot < num(DW.previewHot, Infinity)) return 'GREEN';   // a hot ball is never GREEN
       return 'GOLD';
     }
 
@@ -1321,7 +1331,7 @@
         flown = scattered(pts, eLat, eLen);
       }
       bPts = flown; bCum = cumOf(flown); bLen = bCum[bCum.length - 1] || 0; bS = 0;
-      bSpeed = Field.ballSpeed(attrs, loft); bApex = Field.apex(bLen / bSpeed); bArrive = t + bLen / bSpeed;
+      bSpeed = Field.ballSpeed(attrs, loft); bApex = Field.apex(bLen / bSpeed, loft); bArrive = t + bLen / bSpeed;
       bTarget = targetSlot !== null && slotIdx[targetSlot] !== undefined ? slotIdx[targetSlot] : -1;
       var end = flown[flown.length - 1];
       live.ball = {
@@ -1419,10 +1429,18 @@
         contest: endInfo && typeof endInfo.contest === 'number' ? R(endInfo.contest) : null,
         nearest: endInfo && endInfo.nearDef >= 0 && isFinite(endInfo.nearBy) ? { id: defs[endInfo.nearDef].id, d: R(endInfo.nearBy) } : null,
         escaped: live.qb.escaped, ended: how, endT: R(live.t), tooLong: !!(b && b.tooLong), sackAt: sim.sackAt,
+        catcher: catcherSlot(outcome),
         text: text, banner: banner, feedback: null
       };
       res.feedback = feedbackFor(res, outcome, how, tIdx, FB);
       return res;
+    }
+
+    /** The receiver who caught it (CATCH) or had it in his hands (DROP) — the nearest man at the landing, not always the target. */
+    function catcherSlot(outcome) {
+      if (outcome === 'CATCH' && live.carrier !== null && slotIdx[live.carrier] !== undefined) return live.carrier;
+      if (outcome === 'DROP' && endInfo && endInfo.catcher >= 0) return roster[endInfo.catcher].slot;
+      return null;
     }
 
     function feedbackFor(res, outcome, how, tIdx, FB) {
@@ -1471,7 +1489,8 @@
 
     /** One short line in the kicker's voice: what the coach saw. */
     function coachSaw(res, outcome, how, tIdx, fb) {
-      var name = tIdx >= 0 ? roster[tIdx].name : 'nobody', b = live.ball;
+      var nIdx = res.catcher && slotIdx[res.catcher] !== undefined ? slotIdx[res.catcher] : tIdx;   // the man who caught (or dropped) it
+      var name = nIdx >= 0 ? roster[nIdx].name : 'nobody', b = live.ball;
       var who = function (d2) { return d2 >= 0 && d2 < nD ? defs[d2].pos : ''; };
       switch (outcome) {
         case 'CATCH':

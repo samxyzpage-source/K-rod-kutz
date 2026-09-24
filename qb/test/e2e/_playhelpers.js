@@ -180,6 +180,9 @@ async function touchTap(page, x, y) {
   await cdp.detach();
 }
 
+/** Two animation frames of the page: input that already arrived has been through the scene's update and draw. */
+function nextFrame(page) { return page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r())))); }
+
 /**
  * A timed stroke: press at css[0] (the mouse, or a CDP touch), move through css[1..] spreading the moves over
  * durationMs (0 = as fast as the harness moves), call onMid() half way and beforeUp() before the release, then let go
@@ -201,13 +204,14 @@ async function gesture(page, css, opts) {
       await moveTo(css[i]);
       if (opts.onMid && i === half) mid = await opts.onMid();
     }
-  } else if (cdp) {
-    // a burst: a CDP touch round trip is slow (tens of ms), so the moves go out back to back (CDP keeps their order)
-    await Promise.all(css.slice(1, half + 1).map(moveTo));
-    if (opts.onMid) mid = await opts.onMid();
-    await Promise.all(css.slice(half + 1).map(moveTo));
   } else {
-    for (let i = 1; i <= n; i++) { await moveTo(css[i]); if (opts.onMid && i === half) mid = await opts.onMid(); }
+    // a burst (a FAST stroke): an input round trip costs a few ms (tens under load — then a stroke awaited move by
+    // move reads as a slow one), so the moves go out back to back (CDP keeps their order); one animation frame half
+    // way lets the scene draw the draft (and switch to slow motion) before onMid looks at it
+    await Promise.all(css.slice(1, half + 1).map(moveTo));
+    if (opts.onMid) { await nextFrame(page); mid = await opts.onMid(); }
+    await Promise.all(css.slice(half + 1).map(moveTo));
+    await nextFrame(page);                                   // … and the whole line before beforeUp reads the draft (the release adds no time to the stroke)
   }
   const ms = Date.now() - t0;
   const before = opts.beforeUp ? await opts.beforeUp(async p => { await moveTo(p); }) : null;

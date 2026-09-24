@@ -102,7 +102,8 @@ syntax level and Tuning writes, and checks the namespaces of the delivered modul
 engine (draw counts, determinism, the read, the snap's cast, the run cards, the drive script, the passer rating);
 `test/field.test.js` pins the field simulation (live vs resolve equality, classify's PASS / RUN / THROWAWAY / INVALID
 rules, tips and picks on a bullet through a linebacker vs a lob over him, scatter, the rush and the rollout, the
-scramble / tackle / out-of-bounds / touchdown rules, a GOOD call's separation over a BAD one, garbage in → no NaN);
+scramble / tackle / out-of-bounds / touchdown rules, a GOOD call's separation over a BAD one, a ball led onto a
+receiver's route caught in stride, the catcher on the result, garbage in → no NaN);
 `test/plays_lint.test.js` lints the play book (every assignment names an existing route and slot, every coverage has
 a look and a pressureMul, every route's ideal lead / loft is in range and its window sits inside [0, 4]).
 
@@ -115,7 +116,7 @@ each spec is a plain Node script using `node:test` that opens the demo on **both
 /opt/node22/bin/node qb/test/e2e/run.js                 # every spec, both modes
 /opt/node22/bin/node qb/test/e2e/run.js boot moment     # only the specs whose name contains an argument
 /opt/node22/bin/node qb/test/e2e/boot.spec.js           # one spec on its own (starts its own server for the http mode)
-/opt/node22/bin/node qb/test/e2e/qa_shots.js            # screenshots of every beat (title, read, lines mid-draw, flight, sack … summary)
+/opt/node22/bin/node qb/test/e2e/qa_shots.js            # screenshots of every beat (title, read, lines mid-draw, flight, sack, pick, tip … summary)
 ```
 
 `boot.spec.js` boots with zero errors; `moment.spec.js` plays six moments through the real screens in every mode ×
@@ -126,7 +127,8 @@ results, pins the draw accounting (every moment costs the drive's rng 3 draws), 
 320 px and landscape; `controls.spec.js` covers THROW AWAY, the sack, invalid and cancelled drafts, slow motion and its
 budget, the FIELD GENERAL's preview colour, aim assist on / off, keyboard composing, reduced motion, seed → identical
 situations and cast, no horizontal scroll at 320 px in every phase, a frame p95 under 4 ms while drawing and in flight,
-and the SNEAK card. `_playhelpers.js` holds the shared hands (pick, wait for a window, draw a pass / a run / a
+the SNEAK card, and the core rule watched every frame (the scene's 22 actors are the live's positions; a press anywhere
+in the start circle starts the line on the quarterback). `_playhelpers.js` holds the shared hands (pick, wait for a window, draw a pass / a run / a
 throw-away with timed mouse or CDP-touch strokes, the keyboard pass and run, the interstitial).
 
 Never edit source while an e2e run is in progress (false failures). Screenshots land in `qb/test/e2e/shots/`.

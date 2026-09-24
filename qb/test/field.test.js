@@ -829,6 +829,41 @@ test('aim: the spot a receiver\'s route has him at the ball\'s arrival (a fixed 
   assert.equal(l2.aim('WR1', 0.5), null, 'no aim once the ball is gone');
 });
 
+test('a ball led onto a running receiver\'s route (the aim spot) is caught in stride: he paces to the landing, he does not pull up short of it', () => {
+  const misses = [], speeds = [];
+  let caught = 0;
+  for (let seed = 0; seed < 40; seed++) {
+    const sim = lab();
+    sim.receivers[0].path = [{ t: 0, x: 6, y: -0.8 }, { t: 4, x: 6, y: 36.8 }];     // a go route at full speed (9.4 yd/s)
+    const live = liveOf(sim, 500 + seed);
+    stepTo(live, 1.0);
+    const a = live.aim('WR1', 0.1);
+    assert.equal(live.classify(a.points, 0.1).target, 'WR1');
+    live.throwAlong(a.points, 0.1);
+    let v = 0;
+    while (live.phase === 'BALL_IN_AIR') { live.step(1 / 60); v = hyp(live.receivers[0].vx, live.receivers[0].vy); }
+    const res = finish(live);
+    misses.push(res.miss); speeds.push(v);
+    if (res.outcome === 'CATCH') caught++;
+  }
+  assert.ok(median(misses) <= 0.5, 'he is at the landing spot when the ball is (median miss ' + median(misses).toFixed(2) + ' yd)');
+  assert.ok(median(speeds) >= 7, 'on the run, not stopped (median speed at the catch ' + median(speeds).toFixed(2) + ' yd/s)');
+  assert.ok(caught >= 30, caught + '/40 caught');
+});
+
+test('result.catcher: the man who caught (or dropped) it — the CATCH / DROP event\'s receiver, null otherwise', () => {
+  let seen = 0;
+  for (let seed = 0; seed < 60; seed++) {
+    const { sim } = mk({ seed: 1400 + seed });
+    const live = liveOf(sim, seed);
+    const res = Field.replay(live, Play.autoPlan(sim));
+    const ev = live.events.find((e) => e.kind === 'CATCH' || e.kind === 'DROP');
+    if (res.outcome === 'CATCH' || res.outcome === 'DROP') { assert.equal(res.catcher, ev.who, 'seed ' + seed); seen++; }
+    else assert.equal(res.catcher, null, 'seed ' + seed + ' ' + res.outcome);
+  }
+  assert.ok(seen >= 20, seen + ' catches / drops seen');
+});
+
 // ═══════════════════════════════ THE RESULT ═══════════════════════════════
 
 test('result: null until DONE, then the same object; the shape, the text and banner rules, the feedback labels', () => {
