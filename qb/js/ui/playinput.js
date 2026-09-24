@@ -196,6 +196,10 @@
         call(opts.toField, rawX[convN], rawY[convN], tmp);
         fX[convN] = tmp.x; fY[convN] = tmp.y;
       }
+      // the line starts ON the quarterback (where he is now): the press was anywhere in the start circle (≥ 22 css
+      // px, feet to chest), which can be yards from him on a small screen or over his helmet — the engine wants the
+      // first point within draw.startR of him, so the draft is anchored on him, as a finger on him means
+      if (typeof opts.qbAt === 'function' && rawN > 0) { call(opts.qbAt, qbPt); fX[0] = qbPt.x; fY[0] = qbPt.y; }
       resample(rawN, PlayInput.draw().resampleYd);
       publish();
       // loft from the average draw speed (canvas-heights / s)

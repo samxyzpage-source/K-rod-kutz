@@ -69,31 +69,32 @@ function makeBots(RTG) {
   //   lofts/bends/leads   the lines he considers (bends in yd off the chord's middle; leads: 0 = on him, 1 = led
   //                away from the nearest defender by leadYd)
   //   settle/clock the time he wants a safe ball until / settles by · need: the safety he wants early / late
-  //   threatTtc    s: a free rusher this close (time to contact) makes him act · panic: what he does then
+  //   notice       s (a range, drawn per snap): how long after a rusher gets free (unblocked and closing) he notices him —
+  //                the reaction a human needs before the slow motion of a new stroke helps him
   //   rollout      true: a free rusher → a rollout away from him (then keep reading)
   const BRAINS = {
     NOVICE: {
-      card: 'RANDOM', every: 0.2, from: 1.3, fromMax: 2.4, drawS: [0.03, 0.12], eye: 1.8, sepSd: 1.2, judge: 'SEP',
-      lofts: 'NOVICE', target: 'WHERE', openSep: 2.4, lateSep: 1.2, clock: 3.2,
-      threatTtc: 0.2, panic: 'THROW', away: false, sticks: false
+      card: 'RANDOM', every: 0.25, from: [1.2, 2.0], drawS: [0.04, 0.14], eye: 1.8, sepSd: 1.2, judge: 'SEP',
+      lofts: 'NOVICE', target: 'WHERE', openSep: 3.6, clock: [2.2, 3.2],
+      notice: [0.35, 0.6], away: false, sticks: false
     },
     DECENT: {
-      card: 'BEST', every: 0.12, from: 0.9, drawS: [0.03, 0.12], eye: 0.8, sepSd: 0.8, judge: 'SEP',
-      lofts: 'DECENT', target: 'AIM', openSep: 3.2, lateSep: 2.3, settle: 2.0, clock: 2.6,
-      threatTtc: 0.45, panic: 'AWAY', away: true, sticks: true, laneCheck: true
+      card: 'BEST', every: 0.15, from: [0.9, 0.9], drawS: [0.03, 0.12], eye: 0.8, sepSd: 0.8, judge: 'SEP',
+      lofts: 'DECENT', target: 'AIM', openSep: 3.2, lateSep: 2.3, settle: 2.0, clock: [2.7, 2.7], awaySep: 1.8,
+      notice: [0.22, 0.4], away: true, sticks: true, laneCheck: true
     },
     EXPERT: {
       card: 'BEST', every: 0.08, from: 0.55, drawS: [0.02, 0.1], eye: 0.35, sepSd: 0.4, judge: 'RACE',
       lofts: [0, 0.5, 0.95], bends: [0, -4, 4], leads: [0, 1], leadYd: 1.5,
       need: [0.8, 0.55], settle: 1.7, clock: 2.7,
-      threatTtc: 0.55, panic: 'AWAY', away: true, sticks: true, slide: true
+      notice: [0.08, 0.18], away: true, sticks: true, slide: true
     },
     CHECKDOWN: {
       card: 'BEST', every: 0.1, from: 0.6, drawS: [0.03, 0.1], eye: 0.8, sepSd: 0.8, judge: 'CHECKDOWN',
-      lofts: [0.4], threatTtc: 0.4, panic: 'AWAY', away: true
+      lofts: [0.4], notice: [0.22, 0.4], away: true
     },
     SCRAMBLER: {
-      card: 'BEST', every: 0.1, from: 0.7, drawS: [0.03, 0.1], eye: 0.8, sepSd: 0.8, judge: 'RUN', runBy: 1.5
+      card: 'BEST', every: 0.1, from: 0.7, drawS: [0.03, 0.1], eye: 0.8, sepSd: 0.8, judge: 'RUN', runBy: 1.5, notice: [0.22, 0.4]
     },
     STATUE: { card: 'BEST', judge: 'NONE' }
   };
@@ -152,6 +153,26 @@ function makeBots(RTG) {
     }
     return best;
   }
+
+  /**
+   * The free rusher he has NOTICED: a defender seen unblocked, closing on the QB within 8 yd, for at least the snap's
+   * notice delay (st.notice). st keeps the first time each one was seen free. → threat() of the noticed ones or null.
+   */
+  function aware(live, st) {
+    const q = live.qb;
+    let noticed = false;
+    for (const d of live.defenders) {
+      if (d.blocked) continue;
+      const dx = q.x - d.x, dy = q.y - d.y, dist = hyp(dx, dy);
+      const closing = dist > 1e-6 ? ((d.vx - q.vx) * dx + (d.vy - q.vy) * dy) / dist : 0;
+      if (dist < 8 && (closing > 1 || dist < 3)) {
+        if (st.free[d.id] === undefined) st.free[d.id] = live.t;
+        if (live.t - st.free[d.id] >= st.notice) noticed = true;
+      }
+    }
+    return noticed ? threat(live) : null;
+  }
+  function watcher(brain, rng) { const n = brain.notice || [0.3, 0.3]; return { free: {}, notice: rng.float(n[0], n[1]) }; }
 
   /** A quadratic bend: QB → end with the middle bent `bend` yd off the chord (a drawn curve), 12 segments. */
   function bent(a, b, bend) {
@@ -308,20 +329,24 @@ function makeBots(RTG) {
     return brain.lofts;
   }
 
-  /** NOVICE / DECENT / ROLLOUT: the ring reader. */
+  /**
+   * NOVICE / DECENT / ROLLOUT: the ring reader. From `from` (a range: drawn per snap) he reads every `every` s: the man
+   * who looks most open (past the sticks on a money down when he knows the sticks); he throws when that man's seen
+   * separation reaches openSep (lateSep after `settle`), and at his clock (a range) or when a free rusher is about to
+   * hit him (threatTtc) he throws the best he has — or throws it away when that is under awaySep and he knows to.
+   */
   function ringReader(live, sim, brain, rng, note) {
-    const sit = sim.ctx.situation, from = brain.fromMax ? rng.float(brain.from, brain.fromMax) : brain.from;
+    const sit = sim.ctx.situation, from = rng.float(brain.from[0], brain.from[1]), clock = rng.float(brain.clock[0], brain.clock[1]);
+    const st = watcher(brain, rng);
     let rolled = false;
-    stepTo(live, Math.min(from, brain.rollout ? 0.6 : from));
+    stepTo(live, brain.rollout ? Math.min(from, 0.6) : from);
     while (live.phase === 'PRE_THROW') {
       if (!canPass(live)) break;
-      const th = threat(live);
-      if (brain.rollout && !rolled && th && th.ttc < 0.9) { rollAway(live, sim, th, 10, 1); rolled = true; note.rolled = true; }
-      if (live.t >= from - 1e-9) {
-        const late = live.t >= (brain.settle || from);
-        const need = (late ? brain.lateSep : brain.openSep);
-        const panic = th && th.ttc < brain.threatTtc;
-        const hopeless = live.t >= brain.clock;
+      const th = aware(live, st);
+      let forced = !!th || live.t >= clock;
+      if (brain.rollout && th && !rolled) { rollAway(live, sim, th, 10, 1); rolled = true; note.rolled = true; st.free = {}; forced = live.t >= clock; }
+      if (live.t >= from - 1e-9 || forced) {
+        const need = brain.settle && live.t >= brain.settle ? brain.lateSep : brain.openSep;
         let best = null;
         for (let i = 0; i < live.receivers.length; i++) {
           const sep = sepSeen(live, i, brain, rng);
@@ -332,24 +357,24 @@ function makeBots(RTG) {
           if (brain.target === 'WHERE') pts = [{ x: live.qb.x, y: live.qb.y }, { x: r.x + rng.gauss(0, 0.8), y: r.y + rng.gauss(0, 0.8) }];
           else { const a = live.aim(r.slot, loft); if (!a || a.tooLong) continue; pts = a.points; }
           let score = sep;
-          if (brain.sticks && sit.down >= 3 && pts[1].y >= sit.toGo) score += 1.2;
-          if (sit.lastPlay && brain.sticks) score += pts[1].y >= sim.field.goalY - 1 ? 3 : -2;
+          if (brain.sticks && sit.down >= 3 && !sit.lastPlay && pts[1].y >= sit.toGo) score += 1.2;
+          if (brain.sticks && sit.lastPlay) score += pts[1].y >= sim.field.goalY - 1 ? 3 : -2;
           if (!best || score > best.score) best = { i, sep, loft, pts, score };
         }
-        if (best && (best.sep >= need || panic || hopeless)) {
-          if (brain.laneCheck) {                               // a man in the lane: loft it over him (or pick another next read)
+        const go = best && (best.sep >= need || forced);
+        if (go && forced && best.sep < need && brain.away && best.sep < brain.awaySep && !sit.lastPlay) {
+          if (throwAway(live, brain)) { note.commit = 'AWAY'; break; }
+        } else if (go) {
+          if (brain.laneCheck) {                               // a man in the lane: loft it over him
             const e = eyeRace(live, sim, best.pts, best.loft, best.i, brain, rng);
             if (e.lane > 0.5) best.loft = Math.max(best.loft, 0.85);
           }
-          if (!panic && !hopeless || !brain.away || best.sep >= brain.lateSep * 0.8) {
-            let pts = best.pts;
-            if (brain.target === 'WHERE') pts = dragToPass(live, sim, pts, best.loft, best.i);
-            note.decision = { t: live.t, slot: live.receivers[best.i].slot, loft: best.loft };
-            const drawS = brain.drawS[0] + (brain.drawS[1] - brain.drawS[0]) * best.loft;
-            const k = commitAfter(live, sim, pts, best.loft, drawS, brain);
-            if (k) { note.commit = k; if (k !== 'RUN') break; }
-          } else if (brain.away && throwAway(live, brain)) { note.commit = 'AWAY'; break; }
-        } else if ((panic || hopeless) && brain.away) { if (throwAway(live, brain)) { note.commit = 'AWAY'; break; } }
+          let pts = best.pts;
+          if (brain.target === 'WHERE') pts = dragToPass(live, sim, pts, best.loft, best.i);
+          note.decision = { t: live.t, slot: live.receivers[best.i].slot, loft: best.loft, sep: best.sep };
+          const k = commitAfter(live, sim, pts, best.loft, brain.drawS[0] + (brain.drawS[1] - brain.drawS[0]) * best.loft, brain);
+          if (k) { note.commit = k; if (k !== 'RUN') break; }
+        }
       }
       stepTo(live, live.t + brain.every);
     }
@@ -371,14 +396,14 @@ function makeBots(RTG) {
 
   /** EXPERT (and the one-loft variants): the race for every line he can draw. */
   function racer(live, sim, brain, rng, note) {
-    const sit = sim.ctx.situation;
+    const sit = sim.ctx.situation, st = watcher(brain, rng);
     let slid = false;
     stepTo(live, brain.from);
     while (live.phase === 'PRE_THROW') {
       if (!canPass(live)) break;
-      const th = threat(live);
-      const panic = th && th.ttc < brain.threatTtc;
-      if (brain.slide && !slid && th && th.ttc < brain.threatTtc + 0.35 && th.ttc >= 0.2) { rollAway(live, sim, th, 6, 0.5); slid = true; note.rolled = true; }
+      const th = aware(live, st);
+      if (brain.slide && !slid && th && th.ttc >= 0.3) { rollAway(live, sim, th, 6, 0.5); slid = true; note.rolled = true; }
+      const panic = !!th && th.ttc < 0.3;
       const t = live.t, u = clamp((t - brain.settle) / Math.max(0.05, brain.clock - brain.settle), 0, 1);
       const need = brain.need[0] + (brain.need[1] - brain.need[0]) * u;
       let best = null, bestAny = null;
@@ -433,16 +458,16 @@ function makeBots(RTG) {
 
   /** CHECKDOWN: the checkdown man, as soon as the chip says PASS to him. */
   function checkdown(live, sim, brain, rng, note) {
-    const slot = sim.checkdown || 'RB', i = recIndex(sim, slot);
+    const slot = sim.checkdown || 'RB', i = recIndex(sim, slot), st = watcher(brain, rng);
     stepTo(live, brain.from);
     while (live.phase === 'PRE_THROW' && canPass(live)) {
       const a = live.aim(slot, brain.lofts[0]);
-      const th = threat(live);
+      const th = aware(live, st);
       if (a && !a.tooLong) {
         const c = live.classify(a.points, brain.lofts[0]);
         if (c.kind === 'PASS' && c.target === slot) { note.decision = { t: live.t, slot, loft: brain.lofts[0] }; if (commitAfter(live, sim, a.points, brain.lofts[0], brain.drawS[0], brain) === 'PASS') break; }
       }
-      if (th && th.ttc < brain.threatTtc && throwAway(live, brain)) { note.commit = 'AWAY'; break; }
+      if (th && throwAway(live, brain)) { note.commit = 'AWAY'; break; }
       stepTo(live, live.t + brain.every);
     }
     if (i < 0) note.noCheckdown = true;
@@ -455,7 +480,7 @@ function makeBots(RTG) {
    */
   function scrambler(live, sim, brain, rng, note) {
     stepTo(live, brain.from);
-    const f = sim.field;
+    const f = sim.field, st = watcher(brain, rng);
     let ran = false;
     while (live.phase === 'PRE_THROW' && !ran) {
       const q = live.qb, xs = [f.sideL + 1, f.sideR - 1];
@@ -467,8 +492,8 @@ function makeBots(RTG) {
         const score = w - Math.abs(mid - q.x) * 0.35;
         if (w >= 3 && (!best || score > best.score)) best = { mid, w, score };
       }
-      const th = threat(live);
-      if ((best && best.w >= 6) || live.t >= brain.runBy || (th && th.ttc < 0.5)) {
+      const th = aware(live, st);
+      if ((best && best.w >= 6) || live.t >= brain.runBy || th) {
         const gx = best ? best.mid : q.x;
         note.decision = { t: live.t, gap: best ? best.w : 0 };
         const pts = [{ x: q.x, y: q.y }, { x: gx, y: 1 }, { x: clamp(gx, f.sideL + 3, f.sideR - 3), y: 13 }];

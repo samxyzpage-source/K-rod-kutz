@@ -4,9 +4,10 @@
  * qb_<name>_<viewport>.png — title · situation · read · snap (the formation, ready to draw) · draw_bullet (a fast pass
  * line mid-draw, the finger still down, slow motion on) · flight · catch (or the landing) · result · story ·
  * draw_lob (a slow line mid-draw) · flight_lob (the ball at the top of its arc over the underneath defenders) ·
- * draw_run (a run line) · run (the QB running it) · sack (the QB who just stood there) · int (a forced interception)
- * · summary. A FIELD GENERAL is used so the preview colours show on the pass lines. Not a spec (no assertions, not run
- * by run.js): a QA tool.
+ * draw_run (a run line) · run (the QB running it) · sack (the QB who just stood there) · int (a real interception: the
+ * engine's contact odds tuned to certain for this one throw, so the scene's pick-and-return beat is the engine's) · tip
+ * (the same, batted) · summary. A FIELD GENERAL is used so the preview colours show on the pass lines. Not a spec (no
+ * assertions, not run by run.js): a QA tool.
  *
  *   /opt/node22/bin/node qb/test/e2e/qa_shots.js                 # phone + desktop, http mode (its own server)
  *   /opt/node22/bin/node qb/test/e2e/qa_shots.js phone file      # one viewport, one mode
@@ -47,6 +48,13 @@ async function finish(page, shot, names) {
   return sc;
 }
 
+/** Make every ball that passes a defender's hands a sure touch (INT: picked · TIP: batted) — RTG.debug.tune, reset after. */
+async function sureContact(page, kind) {
+  const knobs = [['reachR', 3], ['tip.base', 1], ['tip.near', 1], ['tip.hMin', 1], ['tip.blind', 1], ['tip.held', 1], ['tip.max', 1],
+    ['int.touch', kind === 'INT' ? 1 : 0], ['int.high', 1], ['int.blind', 1], ['int.held', 1], ['int.contest', kind === 'INT' ? 5 : 0], ['int.alone', kind === 'INT' ? 1 : 0]];
+  for (const [k, v] of knobs) await H.debug(page, 'tune', 'qb.field.' + k, v);
+}
+
 /** Wait (real time) until the live logged an event of `kind` (or the play is over). */
 function waitEvent(page, kind, timeout) {
   return page.waitForFunction(k => { const v = RTG.UI.PlayView.current(), l = v && v.live(); return !l || l.phase === 'DONE' || l.events.some(e => e.kind === k); }, kind, { timeout: timeout || 6000 }).catch(() => null);
@@ -71,7 +79,7 @@ async function shootViewport(vp) {
         const tgt = await Q.chooseTarget(page, { loft: 0.1 });
         if (tgt && tgt.slot) {
           const r = await Q.drawPass(page, tgt.slot, { speed: 'fast', touch, keepDown: true });
-          await shot('draw_bullet');
+          await settle(page, 60); await shot('draw_bullet');
           await r.up();
           await Q.waitReleased(page);
           await settle(page, 120); await shot('flight');
@@ -82,10 +90,10 @@ async function shootViewport(vp) {
       await finish(page, shot, ['result', 'story']);
     });
 
-    // moment 2 · a lob: the slow line mid-draw, the ball at the top of its arc
+    // moment 2 · a lob: the slow line mid-draw, the ball at the top of its arc (a deep receiver when there is one)
     await step('lob', async () => {
       if (await toPlay(page, shot)) {
-        const tgt = await Q.chooseTarget(page, { loft: 0.9 });
+        const tgt = await Q.chooseTarget(page, { loft: 0.9, minDepth: 15 });
         if (tgt && tgt.slot) {
           const r = await Q.drawPass(page, tgt.slot, { speed: 'slow', touch, keepDown: true });
           await shot('draw_lob');
@@ -102,7 +110,7 @@ async function shootViewport(vp) {
     await step('run', async () => {
       if (await toPlay(page, shot)) {
         const r = await Q.drawRun(page, 'scramble', { touch, keepDown: true });
-        await shot('draw_run');
+        await settle(page, 80); await shot('draw_run');                      // the finger is still down: the scene drew the whole line
         await r.up();
         await settle(page, 450); await shot('run');
       }
@@ -118,12 +126,35 @@ async function shootViewport(vp) {
       await finish(page, shot, ['result_sack']);
     });
 
-    // moment 5 · a forced interception (the debug path)
+    // moment 5 · an interception by the engine (contact made certain for this throw): the pick and the return
     await step('int', async () => {
-      await H.waitPhase(page, 'SITUATION');
-      await H.debug(page, 'forceResult', 'INT');
-      await Q.waitResult(page);
-      await settle(page, 250); await shot('int');
+      if (await toPlay(page, shot)) {
+        await Q.waitPlayTime(page, 1.0);
+        await sureContact(page, 'INT');
+        const tgt = await Q.chooseTarget(page, { loft: 0.1, minT: 0, maxT: 1.2 });
+        if (tgt && tgt.slot) {
+          await Q.drawPass(page, tgt.slot, { speed: 'fast', touch });
+          await waitEvent(page, 'INT', 4000);
+          await settle(page, 260); await shot('int');
+        }
+        await H.debug(page, 'tuningDefaults');
+      }
+      await finish(page, shot, ['result_int']);
+    });
+
+    // moment 6 · a tipped ball (the same, batted): the star at the defender's hands
+    await step('tip', async () => {
+      if (await toPlay(page, shot)) {
+        await Q.waitPlayTime(page, 1.0);
+        await sureContact(page, 'TIP');
+        const tgt = await Q.chooseTarget(page, { loft: 0.1, minT: 0, maxT: 1.2 });
+        if (tgt && tgt.slot) {
+          await Q.drawPass(page, tgt.slot, { speed: 'fast', touch });
+          await waitEvent(page, 'TIP', 4000);
+          await settle(page, 40); await shot('tip');
+        }
+        await H.debug(page, 'tuningDefaults');
+      }
       await finish(page, shot, []);
     });
 

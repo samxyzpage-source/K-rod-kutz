@@ -129,7 +129,7 @@ body.hc .pv-card, html.hc .pv-card { border-color: #fff; }
 .pv-actions .btn { font-size: 8px; padding: 6px 10px; min-height: 32px; }
 
 /* the draw HUD over the field (PLAY): the SLOW-MO chip + its budget bar, the draft chip (PASS → WR1 · BULLET …) */
-.pv-drawhud { position: absolute; top: 6px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 3; pointer-events: none; }
+.pv-drawhud { position: absolute; top: 6px; left: 0; right: 0; display: flex; flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 6px; padding: 0 6px; z-index: 3; pointer-events: none; }   /* one row: the chips stay in the sky, clear of the scoreboard */
 .pv-slowmo {
   display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; border: 2px solid var(--sky, #7fc7ff);
   background: var(--ink, #101226); color: var(--sky, #7fc7ff); font-size: 8px; letter-spacing: 1px; white-space: nowrap;
@@ -141,7 +141,7 @@ body.hc .pv-card, html.hc .pv-card { border-color: #fff; }
 .pv-slowmo.out .pv-slowmo-track { border-color: var(--grey, #8a8f9e); }
 .pv-draft {
   padding: 4px 8px; border: 2px solid var(--gold, #f6c445); background: var(--navy, #1b1f3a); color: var(--gold, #f6c445);
-  font-size: max(9px, 0.85em); letter-spacing: 1px; white-space: nowrap; box-shadow: 2px 2px 0 var(--ink, #101226); max-width: 94%; overflow: hidden; text-overflow: ellipsis;
+  font-size: max(9px, 0.85em); letter-spacing: 1px; white-space: nowrap; box-shadow: 2px 2px 0 var(--ink, #101226); max-width: 100%; overflow: hidden; text-overflow: ellipsis;
 }
 .pv-draft-run { border-color: var(--chalk, #f2f2e6); color: var(--chalk, #f2f2e6); }
 .pv-draft-throwaway { border-color: var(--grey, #8a8f9e); color: var(--cream, #f4e9d0); }

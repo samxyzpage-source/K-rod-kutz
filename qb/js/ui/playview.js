@@ -79,7 +79,7 @@
     startMinCss: 22,                     // the QB's start radius never under this many css px
     qbRefYd: -4,                         // the QB sprite is 1:1 at this depth and behind it, scaled with depth past it
     qbBodyVpx: 10,                       // the start radius is measured from the QB's feet up to his chest (virtual px)
-    passDotPx: 3, awayDotPx: 2, footYd: 1.4, footSide: 0.35,
+    passDotPx: 3, awayDotPx: 2, footYd: 1.1, footSide: 0.4,   // a run line's chalk prints: every footYd, a step either side
     rushRange: 8,                        // RUSH meter: a rusher this far (yd past tackleR) reads 0 %, at tackleR 100 % …
     rushHeld: 0.5,                       // … × this while he is still blocked (t < beatAt; Tuning.qb.field.heldPressure wins)
     moveEps: 0.25                        // (yd/s)² — slower than this a sprite stands
@@ -1663,7 +1663,7 @@
     /** The ring colours' thresholds on live.receivers[i].open: Tuning.qb.open.ring {open, closing} (the scene's FIELD values stand in). */
     function ringThresholds() { var R = (TQ().open && TQ().open.ring) || {}; ringOpen = num(R.open, FIELD.ringOpen); ringTight = num(R.closing, FIELD.ringTight); }
     function drawRing(i) {
-      if (phase !== 'PLAY' || !lv || alignU < 1) return;
+      if (phase !== 'PLAY' || !lv || alignU < 1 || lv.phase === 'AFTER_CATCH' || lv.phase === 'DONE') return;   // the race is over: no rings
       var r = lv.receivers[i];
       if (!r || !r.shown) return;
       var o = num(r.open, 0), spr = o >= ringOpen ? rings.open : (o >= ringTight ? rings.tight : rings.covered);
@@ -1712,7 +1712,7 @@
         var rs = recSpr[aFrame[a]] || recSpr[0];
         g.drawImage(rs, Math.round(x - w / 2), Math.round(y - h), w, h);
         if (hotSlot === i && phase === 'PLAY' && lv && num(lv.t, 0) < 1.5) g.drawImage(hotSpr, Math.round(x - 1), Math.round(y - h - 5));
-        if (carrier === i) g.drawImage(balls[3], Math.round(x - 1), Math.round(y - h + 2));
+        if (carrier === i) drawCarried(x, y, w, h, s);
         if (isTarget(i)) g.drawImage(pickSpr, Math.round(x - pickSpr.width / 2), Math.round(y - h - 1 - (pickSpr.height - h) / 2 - 2));
         return;
       }
@@ -1720,7 +1720,12 @@
       var role = phase === 'PLAY' && lv && lv.defenders[a] ? lv.defenders[a].role : '';
       var ds = role === 'RUSH' ? rusherSpr[aFrame[a] & 1] : (aFrame[a] === 2 ? defSpr[2] : defSpr[aFrame[a] & 1]);
       g.drawImage(ds, Math.round(x - w / 2), Math.round(y - h), w, h);
-      if (carrier === -3 - a) g.drawImage(balls[3], Math.round(x - 1), Math.round(y - h + 2));   // an interception (the engine runs him back)
+      if (carrier === -3 - a) drawCarried(x, y, w, h, s);   // an interception (the engine runs him back)
+    }
+    /** The ball tucked under a runner's arm (a caught ball, a pick being returned): at his side, a size that reads. */
+    function drawCarried(x, y, w, h, s) {
+      var spr = s >= 0.6 ? balls[5] : balls[3];
+      g.drawImage(spr, Math.round(x + w / 2 - spr.width / 2), Math.round(y - h * 0.55 - spr.height / 2));
     }
     function drawActors() {
       for (var k = 0; k < NACT; k++) drawActor(order[k]);
@@ -1767,8 +1772,8 @@
     /** Chalk footprints every footYd along a field polyline (alternating a step either side). */
     function drawFeet(arr, n, sx, sy, alpha, fromIdx) {
       if (n < 2) return;
-      g.globalAlpha = alpha; g.fillStyle = pal('chalk');
-      var fx0 = sx, fy0 = sy, carry = 0, side = 1;
+      g.globalAlpha = alpha;
+      var fx0 = sx, fy0 = sy, carry = 0, side = 1, ink = pal('ink'), chalk = pal('chalk');
       for (var k = Math.max(1, fromIdx); k < n; k++) {
         var fx1 = arr === null ? runBufX[k] : arr[k].x, fy1 = arr === null ? runBufY[k] : arr[k].y;
         var dx = fx1 - fx0, dy = fy1 - fy0, d = Math.sqrt(dx * dx + dy * dy);
@@ -1777,8 +1782,9 @@
           while (s <= d) {
             var u = s / d, nx = -dy / d * FIELD.footSide * side, ny = dx / d * FIELD.footSide * side;
             project(fx0 + dx * u + nx, fy0 + dy * u + ny);
-            var fw = pt.s > 0.7 ? 2 : 1;
-            g.fillRect(Math.round(pt.x), Math.round(pt.y) - 1, fw, 2);
+            var fw = pt.s > 0.7 ? 3 : 2, fh = pt.s > 0.7 ? 3 : 2, px = Math.round(pt.x) - (fw >> 1), py = Math.round(pt.y) - fh + 1;
+            g.fillStyle = ink; g.fillRect(px + 1, py + 1, fw, fh);      // a hard shadow: chalk on grass reads at phone size
+            g.fillStyle = chalk; g.fillRect(px, py, fw, fh);
             side = -side; s += FIELD.footYd;
           }
           carry = d - (s - FIELD.footYd);
@@ -1805,7 +1811,11 @@
     function drawDraft() {
       if (phase !== 'PLAY' || !lv || !cls || !dispArr || dispN < 2) return;
       var k = dkind, qx = num(lv.qb.x, 0), qy = num(lv.qb.y, 0);
-      if (k === 'RUN') { drawFeet(dispArr, dispN, qx, qy, 1, 1); return; }
+      if (k === 'RUN') {                                     // chalk prints to a chalk X: where he will run
+        drawFeet(dispArr, dispN, qx, qy, 1, 1);
+        var re = dispArr[dispN - 1]; project(num(re.x, 0), num(re.y, 0)); drawMark(marks.chalk, pt.x, pt.y, clamp(pt.s * 1.1, 0.6, 1.2));
+        return;
+      }
       if (k === 'THROWAWAY') {
         drawDots(dispArr, dispN, qx, qy, pal('grey'), FIELD.awayDotPx, 0, Infinity, 1, 0);
         var e = dispArr[dispN - 1]; drawLanding(e.x, e.y, 'THROWAWAY', null, false, false);
@@ -1828,7 +1838,7 @@
       for (var i = runBufI; i < runBufN; i++) { var dx = runBufX[i] - qx, dy = runBufY[i] - qy, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = i; } else if (d > bd + 16) break; }
       runBufI = best;
       if (runBufI >= runBufN - 1) return;
-      drawFeet(null, runBufN, qx, qy, 0.45, runBufI + 1);
+      drawFeet(null, runBufN, qx, qy, 0.6, runBufI + 1);
     }
     function drawBall() {
       if (phase !== 'PLAY' && phase !== 'RESULT' && phase !== 'DONE') return;
@@ -1851,9 +1861,11 @@
       if (b.tipped && tipReal && now() - tipReal < TIMING.tipMs * 0.4) drawMark(tipStar, pt.x, groundY - lift, 1);   // the hand on it
       // the shadow on the ground (narrower the higher the ball) and the ball above it (a tipped ball tumbles)
       var size = 3 + 5 * s * (1 + 0.04 * h);
-      g.fillStyle = 'rgba(16,18,38,0.5)';
-      var sw = Math.max(1, Math.round(size * 0.6 / (1 + h * 0.08)));
+      // the shadow on the ground: two rows (a flat oval), so the gap between it and the ball reads as height
+      g.fillStyle = 'rgba(16,18,38,0.55)';
+      var sw = Math.max(2, Math.round(size * 0.7 / (1 + h * 0.06)));
       g.fillRect(sx - (sw >> 1), groundY, sw, 1);
+      if (sw > 2) g.fillRect(sx - (sw >> 1) + 1, groundY + 1, sw - 2, 1);
       var spr = b.tipped && h > 0.05 ? spinSpr[(Math.floor(now() / 70) & 1)] : (size < 3.2 ? balls[2] : (size < 5 ? balls[3] : (size < 7.2 ? balls[5] : balls[8])));
       g.drawImage(spr, sx - (spr.width >> 1), Math.round(groundY - lift) - (spr.height >> 1));
     }

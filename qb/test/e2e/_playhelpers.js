@@ -131,13 +131,14 @@ function geometry(page) {
 /**
  * The receiver to throw to: polls (at full speed, every ~60 ms) every receiver's reachSpot and returns the best race
  * (GREEN > GOLD > RED, then the engine's margin) once one is GREEN at t ≥ minT, or the best there is at maxT
- * (default min(2.0, sackAt − 0.7)). → {slot, spot, preview, margin, t, sackAt}
+ * (default min(2.0, sackAt − 0.7)). `minDepth` (yd downfield) ranks the spots at least that deep first (a lob that
+ * has something to float over). → {slot, spot, preview, margin, t, sackAt}
  */
 async function chooseTarget(page, opts) {
   opts = opts || {};
   const loft = typeof opts.loft === 'number' ? opts.loft : 0.5;
   const minT = typeof opts.minT === 'number' ? opts.minT : 0.7;
-  return page.evaluate(([loft, minT, maxT0]) => new Promise(resolve => {
+  return page.evaluate(([loft, minT, maxT0, minDepth]) => new Promise(resolve => {
     const t0 = performance.now();
     (function poll() {
       const v = RTG.UI.PlayView.current(), l = v && v.live && v.live(), sim = v && v.sim && v.sim();
@@ -147,7 +148,7 @@ async function chooseTarget(page, opts) {
       for (const r of sim.receivers) {
         const sp = RTG.debug.reachSpot(r.slot, loft);
         if (!sp || sp.kind !== 'PASS' || sp.target !== r.slot || sp.tooLong) continue;
-        const score = (sp.preview === 'GREEN' ? 2 : (sp.preview === 'GOLD' ? 1 : 0)) * 100 + (sp.margin || 0);
+        const score = (sp.y >= minDepth ? 1000 : 0) + (sp.preview === 'GREEN' ? 2 : (sp.preview === 'GOLD' ? 1 : 0)) * 100 + (sp.margin || 0);
         if (score > bestScore) { bestScore = score; best = sp; }
       }
       const t = l.t;
@@ -156,7 +157,7 @@ async function chooseTarget(page, opts) {
       }
       setTimeout(poll, 60);
     })();
-  }), [loft, minT, typeof opts.maxT === 'number' ? opts.maxT : null]);
+  }), [loft, minT, typeof opts.maxT === 'number' ? opts.maxT : null, typeof opts.minDepth === 'number' ? opts.minDepth : -Infinity]);
 }
 
 /** Wait until the ball is out (the live has a ball) or the play ended / the QB went down; → the ball snapshot or null. */
