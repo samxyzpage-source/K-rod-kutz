@@ -48,12 +48,32 @@ async function finish(page, shot, names) {
   return sc;
 }
 
-/** Make every ball that passes a defender's hands a sure touch (INT: picked · TIP: batted; the defensive line and the
-    linebackers can't reach it, so the play is made downfield, by the secondary) — RTG.debug.tune, reset after. */
+/** Before the snap (a defender's reach is set at the snap): the defensive line and the linebackers can't get a hand
+    up, so the play on the ball is made downfield, by the secondary. */
+async function noFrontContact(page) {
+  for (const k of ['reach.DL', 'reach.LB']) await H.debug(page, 'tune', 'qb.field.' + k, 0);
+}
+/** Make every ball that passes a defender's hands a sure touch (INT: picked · TIP: batted) — RTG.debug.tune, reset after. */
 async function sureContact(page, kind) {
-  const knobs = [['reachR', 3], ['reach.DL', 0], ['reach.LB', 0], ['tip.base', 1], ['tip.near', 1], ['tip.hMin', 1], ['tip.blind', 1], ['tip.held', 1], ['tip.max', 1],
+  const knobs = [['reachR', 3], ['tip.base', 1], ['tip.near', 1], ['tip.hMin', 1], ['tip.blind', 1], ['tip.held', 1], ['tip.max', 1],
     ['int.touch', kind === 'INT' ? 1 : 0], ['int.high', 1], ['int.blind', 1], ['int.held', 1], ['int.contest', kind === 'INT' ? 5 : 0], ['int.alone', kind === 'INT' ? 1 : 0]];
   for (const [k, v] of knobs) await H.debug(page, 'tune', 'qb.field.' + k, v);
+}
+
+/** The most covered receiver a straight bullet still reaches (a RED race first, then the smallest margin), 6+ yd downfield. */
+function coveredTarget(page) {
+  return page.evaluate(() => {
+    const v = RTG.UI.PlayView.current(), sim = v && v.sim();
+    if (!sim || !sim.receivers) return null;
+    let best = null, bestScore = Infinity;
+    for (const r of sim.receivers) {
+      const sp = RTG.debug.reachSpot(r.slot, 0.1);
+      if (!sp || sp.kind !== 'PASS' || sp.target !== r.slot || sp.tooLong || sp.y < 6) continue;
+      const score = (sp.preview === 'RED' ? 0 : (sp.preview === 'GOLD' ? 100 : 200)) + (sp.margin || 0);
+      if (score < bestScore) { bestScore = score; best = r.slot; }
+    }
+    return best;
+  });
 }
 
 /** Wait (real time) until the live logged an event of `kind` (or the play is over). */
@@ -129,33 +149,37 @@ async function shootViewport(vp) {
 
     // moment 5 · an interception by the engine (contact made certain for this throw): the pick and the return
     await step('int', async () => {
-      if (await toPlay(page, shot)) {
-        await Q.waitPlayTime(page, 1.0);
-        await sureContact(page, 'INT');
-        const tgt = await Q.chooseTarget(page, { loft: 0.1, minT: 0, maxT: 1.2 });
-        if (tgt && tgt.slot) {
-          await Q.drawPass(page, tgt.slot, { speed: 'fast', touch });
-          await waitEvent(page, 'INT', 4000);
-          await settle(page, 260); await shot('int');
+      await noFrontContact(page);
+      try {
+        if (await toPlay(page, shot)) {
+          await Q.waitPlayTime(page, 1.0);
+          await sureContact(page, 'INT');
+          const slot = await coveredTarget(page) || ((await Q.chooseTarget(page, { loft: 0.1, minT: 0, maxT: 1.2 })) || {}).slot;
+          if (slot) {
+            await Q.drawPass(page, slot, { speed: 'fast', touch });
+            await waitEvent(page, 'INT', 4000);
+            await settle(page, 260); await shot('int');
+          }
         }
-        await H.debug(page, 'tuningDefaults');
-      }
+      } finally { await H.debug(page, 'tuningDefaults'); }
       await finish(page, shot, ['result_int']);
     });
 
     // moment 6 · a tipped ball (the same, batted): the star at the defender's hands
     await step('tip', async () => {
-      if (await toPlay(page, shot)) {
-        await Q.waitPlayTime(page, 1.0);
-        await sureContact(page, 'TIP');
-        const tgt = await Q.chooseTarget(page, { loft: 0.1, minT: 0, maxT: 1.2 });
-        if (tgt && tgt.slot) {
-          await Q.drawPass(page, tgt.slot, { speed: 'fast', touch });
-          await waitEvent(page, 'TIP', 4000);
-          await settle(page, 40); await shot('tip');
+      await noFrontContact(page);
+      try {
+        if (await toPlay(page, shot)) {
+          await Q.waitPlayTime(page, 1.0);
+          await sureContact(page, 'TIP');
+          const slot = await coveredTarget(page) || ((await Q.chooseTarget(page, { loft: 0.1, minT: 0, maxT: 1.2 })) || {}).slot;
+          if (slot) {
+            await Q.drawPass(page, slot, { speed: 'fast', touch });
+            await waitEvent(page, 'TIP', 4000);
+            await settle(page, 40); await shot('tip');
+          }
         }
-        await H.debug(page, 'tuningDefaults');
-      }
+      } finally { await H.debug(page, 'tuningDefaults'); }
       await finish(page, shot, []);
     });
 

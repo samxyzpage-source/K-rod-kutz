@@ -984,7 +984,7 @@
         var d = live.defenders[d2], dd = hyp(d.x - b.x, d.y - b.y);
         if (dd < nd) { nd = dd; nj = d2; }
         if (dd <= T.contestR) {
-          var cj = (1 - dd / T.contestR) * (0.5 + 0.5 * ratio(dS[d2].skill)) * (t >= dS[d2].ballAt ? 1 : T.tip.blind) * (dd < cd ? C.first : 1) * (dS[d2].held ? T.tip.held : 1);   // first to the ball counts more; an engaged rusher hardly at all
+          var cj = Math.pow(1 - dd / T.contestR, num(C.contestExp, 1)) * (0.5 + 0.5 * ratio(dS[d2].skill)) * (t >= dS[d2].ballAt ? 1 : T.tip.blind) * (dd < cd ? C.first : 1) * (dS[d2].held ? T.tip.held : 1);   // first to the ball counts more; an engaged rusher hardly at all
           contest += cj;
           if (cj > top) top = cj;
         }
