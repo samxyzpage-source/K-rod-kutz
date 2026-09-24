@@ -11,6 +11,7 @@
  *   await H.waitReady(page)                                     → resolves when RTG.UI.app.ready is true
  *   await H.waitForScreen(page, 'moment')                       → resolves when RTG.UI.app.screen() === id
  *   await H.waitPhase(page, 'READ', timeout)                    → resolves when RTG.UI.PlayView.current().phase() === phase
+ *   await H.sleep(ms)                                           → a plain real-time wait
  *   await H.debug(page, 'current')                              → page.evaluate on RTG.debug[fn](...args) (JSON-serialisable)
  *   await H.shot(page, 'read_phone')                            → test/e2e/shots/<name>.png
  *   await H.noHorizontalScroll(page)                            → asserts scrollWidth <= innerWidth
@@ -245,7 +246,7 @@ function screenId(page) {
   return page.evaluate(() => { const A = RTG.UI.app; return A && typeof A.screen === 'function' ? A.screen() : null; });
 }
 
-/** Resolves when the live PlayView's phase is `phase` (SITUATION · READ · SNAP · THROW · FLIGHT · RESULT · DONE). */
+/** Resolves when the live PlayView's phase is `phase` (v2: SITUATION · READ · PLAY · RUN · RESULT · DONE). */
 function waitPhase(page, phase, timeout) {
   return page.waitForFunction(p => {
     const PV = window.RTG && RTG.UI && RTG.UI.PlayView;
@@ -253,6 +254,9 @@ function waitPhase(page, phase, timeout) {
     return !!v && typeof v.phase === 'function' && v.phase() === p;
   }, phase, { timeout: timeout || 8000 });
 }
+
+/** A plain timer (real ms). */
+function sleep(ms) { return new Promise(r => setTimeout(r, Math.max(0, ms || 0))); }
 
 async function shot(page, name) {
   fs.mkdirSync(SHOTS, { recursive: true });
@@ -287,5 +291,5 @@ module.exports = {
   QB, ROOT, SHOTS, MODES, VIEWPORTS,
   get PORT() { return PORT; },
   startServer, ensureServer, urlFor, missingScripts, getBrowser, closeBrowser,
-  openApp, openDemo, waitReady, debug, waitForScreen, screenId, waitPhase, shot, noHorizontalScroll, clickButton, matrix, assert
+  openApp, openDemo, waitReady, debug, waitForScreen, screenId, waitPhase, shot, noHorizontalScroll, clickButton, matrix, assert, sleep
 };

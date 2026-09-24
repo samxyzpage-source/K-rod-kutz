@@ -65,6 +65,7 @@
 .drive-banner { margin-bottom: 8px; }
 .drive-sub { margin-bottom: 6px; line-height: 1.6; }
 .drive-coach { line-height: 1.7; color: var(--cream); opacity: 0.9; margin-bottom: 8px; }
+.drive-feedback { color: var(--gold); letter-spacing: 0.05em; line-height: 1.6; margin-bottom: 6px; overflow-wrap: anywhere; }
 .drive-story { line-height: 1.8; color: var(--gold); margin: 8px 0 12px; }
 .drive-line { justify-content: center; margin-bottom: 4px; }
 .drive-line .chip { font-size: 0.75em; }

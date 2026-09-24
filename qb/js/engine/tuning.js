@@ -12,9 +12,11 @@
  *   read        the pre-snap read: disguise odds, what IQ sees, the card advice, the reveal timing
  *   coverage    which coverage the defence really runs (base weights × situation multipliers)
  *   pressure    the sack clock: when the pocket collapses from the line battle, the coverage and poise
- *   open        the openness curves: how wide a window a route gets against a coverage
+ *   open        the scene's separation-ring thresholds
  *   route       receiver speed → route timing
- *   throw       the throw model: flight, the green band, accuracy, completion, interception, YAC, drops
+ *   field       the play on the field (engine/field.js): speeds, the rush, coverage technique, the ball's flight,
+ *               scatter, contact, the catch, the tackle, the separation → openness map
+ *   draw        drawing the pass / the run: slow motion, the draft's rules, the preview, the loft from the draw speed
  *   run         the two run options (SNEAK / DRAW)
  *   feedback    the label thresholds of PlayResult.feedback
  *   drive       the demo's six-snap drive script ranges
@@ -90,7 +92,7 @@
 
         // The sack clock (seconds after the snap when the first rusher arrives).
         pressure: {
-          base: 3.05,              // s for an even line battle, neutral coverage, POI 50
+          base: 2.85,              // s for an even line battle, neutral coverage, POI 50 (v2: the first rusher home on a QB who stands at the top of his drop)
           olW: 0.025,              // s per point of (ol − 50) …
           dlW: 0.025,              // … minus s per point of (dl − 50); the sum is softened below
           up: 0.30,                // soft cap of the line's GAIN (tanh): a great line buys at most ≈ +0.3 s
@@ -100,98 +102,145 @@
           clutchMul: 0.30,         // in the clutch sackAt × (1 − clutchMul × (1 − POI/99)): the rush "feels" faster to a nervous QB (0.30: POI 56 loses ≈ 0.4 s on the last two snaps — the stakes reach the hand, not only the sky)
           clutchClock: 120,        // Q4 with the clock at or under this and the game within one score → clutch
           clutchMargin: 8,         // … "within one score"
-          sigma: 0.25,             // s: gauss jitter of sackAt in buildContext
+          sigma: 0.3,              // s: gauss jitter of sackAt in buildContext
           snapSigma: 0.10,         // s: a second, smaller jitter in snap (the same look never plays twice the same)
-          min: 1.2, max: 4.2,      // s clamp
-          rushers: { base: 2, blitz: 3, laneGapMin: 0.25, laneGapMax: 0.9 }   // rush lanes: count · the later lanes arrive sackAt + [min, max] s
+          min: 1.2, max: 4.2       // s clamp (sackAt: when the first rusher gets home on a QB who stands at the top of his drop; field.rush turns it into beatAt)
         },
 
-        // Openness curves (0 = blanketed, 1 = wide open), per receiver, over the ARRIVAL time t ∈ [0, 4].
+        // The scene's separation-ring colours for live.receivers[i].open (0..1 from the separation NOW, field.openSep).
         open: {
-          sampleDt: 0.1,           // s between samples (41 samples over 0..4)
-          maxT: 4,                 // s: the last sample; later times hold the last value
-          base: 0.70,              // peak openness before the modifiers
-          tightW: 0.50,            // − tightW × coverage.tightness[family]
-          skillW: 0.17,            // + skillW × (receiver skill − opp.db)/99 … (0.17: the BAD / GREAT rosters are worth ≈ 10 points of completion, not 20)
-          manMul: 1.6,             // … × this against MAN (a matchup coverage)
-          vs: { GOOD: 0.20, OK: 0.02, BAD: -0.22 },   // + the play's rating vs the REAL coverage
-          noiseSd: 0.08,           // gauss on the peak per receiver
-          shiftSd: 0.15,           // s: gauss shift of the receiver's window
-          min: 0.05, max: 0.98,    // peak clamp
-          floor: 0.05,             // openness before the break and far after the window
-          rise: 0.5,               // s: the window opens linearly over this before window.open
-          fall: 0.6,               // s: … and closes over this after window.close (0.6 s: a ball 0.6 s late finds the window shut and is picked 25–40 % of the time)
-          lateFrac: 0.12,          // the openness left after the fall, as a fraction of the peak (a late ball is contested)
-          checkdownFloor: 0.35,    // the checkdown's peak is never below this (it is always a little open)
-          hotBonus: 0.20,          // the hot read's peak bonus under a real BLITZ …
-          hotEarlier: 0.15,        // … and how much earlier (s) its window opens
-          windowFrac: 0.75,        // the reported window {from, to} spans where open(t) ≥ windowFrac × peak
-          ring: { open: 0.70, closing: 0.25 }   // the scene's ring colours: green ≥ open (= throw.intWindow: never picked) · gold ≥ closing · red below (0.70: only a real window is green; a checkdown is gold)
+          ring: { open: 0.60, closing: 0.25 }   // green ≥ open · gold ≥ closing · red below (0.60 ≈ 3.2 yd of room with openSep 1.0–4.6)
         },
 
         // Receiver speed → route timing. A route's waypoints are timed for an average receiver; a fast one
         // runs them in less time: tRoute = tWaypoint × speedBase / (speedBase + speedPer × (speed − 50)).
         route: {
           speedBase: 1.0, speedPer: 0.004,   // speed 99 → ×0.836 of the waypoint times · speed 30 → ×1.087
-          qbDrop: 7,               // yd behind the LOS the QB throws from (the top of the drop)
-          endZoneCap: 10           // yd: a route never runs deeper than the back of the end zone (100 − yl + this)
+          endZoneCap: 10,          // yd: a route never runs deeper than the back of the end zone (100 − yl + this)
+          releaseT: 1.0,           // s: a man lined up behind the line (the gun back, −5) reaches his route's depth over this
+          jitterSd: 0.05           // s: gauss jitter of each receiver's route clock at the snap (a release off the line is never twice the same)
         },
 
-        // The throw.
-        throw: {
-          velocity: 24,            // yd/s reference ball speed (× arm × power below); a 30-yd throw ≈ 1.3 s
-          armBase: 0.7, armPer: 0.3,          // × (0.7 + 0.3 × ARM/99)
-          powerBase: 0.85, powerPer: 0.3,     // × (0.85 + 0.3 × power); power 0..1.15
-          powerMax: 1.15,
-          loftTime: 0.30,          // flight × (1 + loftTime × loft): touch hangs in the air
-          maxDist: 50,             // yd × (0.43 + 0.72 × ARM/99): the deep range; beyond it the ball dies (ARM 55 → 41.5 · 72 → 47.7 · 99 → 57.5: an average arm cannot reach the far GO at full depth, a gunslinger can)
-          rangeBase: 0.43, rangePer: 0.72,
-          beyondRangePen: 0.06,    // accuracy − this per yard beyond the range
-          // the green band: the on-time power for the throw's distance is need(dist) = needBase + dist / (range × arm);
-          // the band is [need, need + greenBand(ACC)] with greenBand = base + perAcc × ACC/99
-          needBase: 0.15, range: 50,
-          greenBand: { base: 0.12, perAcc: 0.18 },   // ACC's home is the band (52 → 0.215 · 72 → 0.251 · 99 → 0.30), not the completion roll
-          bandTopMargin: 0.06,     // the band stops this far under powerMax on the deepest ball: an over-hold parked at the top is always red, so a deep throw still needs a release
-          hotBallPen: 0.8,         // fit − hotBallPen × (power − (need + greenBand)) when the ball is thrown too hard to catch (0.8: a parked release costs the fit as well as the quality)
-          greenQuality: 0.88,      // an engine-verified `green` claim floors quality here (the UI's own rim value)
-          minCommit: 0.08,         // a release under this power is a stray tap (the UI never sends it; the engine treats it as a throwaway)
-          // fit = 1 − |lead − ideal.lead| × leadW − |loft − ideal.loft| × loftW
-          leadW: 0.35, loftW: 0.35,
-          // accuracy = ACC/99 × accW + quality × qualW + fit × fitW − pressure − weather
-          accW: 0.14, qualW: 0.35, fitW: 0.27,   // the hand (release + lead/loft) is 0.62 of the roll, the attribute 0.14: an expert release completes ≈ 84 % on time, a decent one ≈ 68 %, a sloppy one ≈ 40 %
-          pressPen: 0.15,          // full penalty at the sack …
-          pressWindow: 0.7,        // … tapering to 0 this many seconds before it
-          poiRelief: 0.6,          // × (1 − POI/99 × poiRelief)
-          // completion probability = sigmoid(k × (accuracy × accMul + window × windowMul − bias))
-          k: 7.5, accMul: 1.0, windowMul: 0.6, bias: 0.90,   // bias 0.90 with the weights above (1.13 belonged to accW 0.60)
-          // interception: only when the window is closed AND the ball is not perfect: intBase × (1 − window)
-          intWindow: 0.70, intAcc: 0.92, intBase: 0.42,   // intWindow 0.70 = open.ring.open: anything not green can be picked; intBase 0.42: a decent player throws 3 % picks, a novice 8–12 %
-          drop: 0.08,              // drop probability × (1 − skill/99)
-          yac: {
-            base: { SHORT: 7, MID: 4.5, DEEP: 26 },     // yd by route family … (DEEP 26 × the window factor below: a beaten corner is a footrace ≈ 11 yd, the game-winner from the 40)
-            speedBase: 0.6, speedPer: 0.4,               // … × (0.6 + 0.4 × speed/99)
-            windowBase: -0.39, windowPer: 1.4,           // … × (−0.39 + 1.4 × window): nothing under 0.28 openness (a contested catch is tackled at the spot), ×0.62 at 0.72, ×0.87 wide open
-            screenBonus: 4,                              // + this on a SCREEN
-            sd: 4.5, min: 0                              // gauss sd · floor (the raw value can go negative on a contested catch; the floor zeroes it)
+        // ═══ THE FIELD (engine/field.js): 22 players and the ball in field yards, stepped at a fixed dt ═══
+        // x = lateral yards from the ball (+ = the offence's right), y = yards downfield of the line (the backfield is < 0).
+        field: {
+          dt: 1 / 60,              // s: the fixed sub-step (live.step(dt) runs floor(dt / this) of them, the rest carries)
+          maxStep: 0.25,           // s: live.step(dt) never advances more than this per call (a stalled tab does not teleport the play)
+          maxT: 8,                 // s: a play that never resolves ends here (the pocket always folds long before)
+          halfWidth: 26.667,       // yd: half of the 53⅓-yard field
+          endZone: 10,             // yd: goal line to end line
+          hash: { HS: 6.667, COLLEGE: 6.667, NFL: 3.083 },   // yd from the field's centre to a hash (ctx.hash −1 left / 0 middle / 1 right; the scene's numbers)
+          sideMargin: 3,           // yd: no one lines up closer than this to a sideline (a 22-yd split on the short side is pulled in)
+          inbounds: 0.6,           // yd: a route runs along the sideline this far inside it, never out of bounds
+          arriveGain: 3.2,         // 1/s: a steered player wants min(vmax, gain × distance) — he slows into his spot
+          accel: 21,               // yd/s²: how fast anybody changes velocity (0 → 9 yd/s in under half a second)
+          recAccel: 11,            // yd/s²: a receiver breaking to the ball (a ball thrown behind him costs him the stop and the turn)
+          breakGain: 12,           // 1/s: … and slows into the landing spot only as late as his braking allows
+          brakeFrac: 0.85,         // an arriving player plans his stop on this share of his deceleration (√(2·a·frac·d) caps his speed)
+          carry: { speedMul: 0.86, pause: 0.3, pauseMul: 0.5, escortX: 3, escortY: 2, escortMul: 0.6 },   // the ball carrier runs at × speedMul of his speed, × pauseMul for pause s after the catch (secure it, turn upfield) · the other receivers drift to escortX / escortY off him at × escortMul (presentation: nobody blocks)
+          rotateS: 0.6,            // s: the defence holds the SHOWN picture and blends into the REAL roles over this (the disguise rotation)
+          // the pre-snap picture (ctx.alignment) and the offence's spots
+          align: {
+            qbGun: -5, qbUnder: -1.2,          // QB depth in the gun (SHOTGUN / TRIPS / EMPTY) and under centre
+            wrY: -0.8, slotY: -1.2, teY: -0.8, rbGun: -5, rbUnder: -6,   // receivers' depths
+            olX: 1.9, olY: -0.6,               // yd between linemen · their depth
+            dlX: [-5.2, -1.8, 1.8, 5.2], dlY: 0.9,   // DL1..DL4 (weak → strong, strong-relative) · depth
+            cbPress: 1.0, cbOff: 7, cbWayOff: 10, cbInside: 0.8,   // corner depth pressed / off / prevent-soft · inside shade
+            nbPress: 1.5, nbOff: 5, apexXs: 6.5, apexY: 4, creepY: 2,   // nickel over the slot · walked into the apex · creeping (the blitz tell)
+            safetyTwoXs: 10, safetyDeep: 13, safetyBackedUp: 18, safetyOneY: 14,   // two-high splits · depth · prevent depth · single-high depth
+            boxSafetyXs: 4, boxSafetyY: 6, rolledXs: 9, rolledY: 9,              // the rolled-down strong safety in the box / over the strong side
+            lbXs: 2.5, lbY: 5, lbDeepY: 11,     // linebackers · the fifth-man-out linebacker (a five-man box) plays deep
+            boxX: 7, boxY: 8                     // the box the look's count is measured in (|x| ≤ boxX, y ≤ boxY)
           },
-          sackYards: { mean: -7, sd: 2, min: -12, max: -1 },   // yards on a sack
-          // The tuck-and-run is a bail-out, not a play: MOB 72 means ≈ 4–5 yards once the pocket has been used, a
-          // stacked box stuffs it, it can lose yards and it is never fumble-free (a SCRAMBLE at the snap on every
-          // down out-gained an expert throw on 3rd and medium before this retune).
-          scramble: {
-            minMob: 55,            // the SCRAMBLE button appears at MOB ≥ this (the engine accepts it always)
-            base: 0, perMob: 0.06, // yd = base + perMob × MOB + look bonus + box + gauss (the yards come from the legs and the look: MOB 72 → 4.3 + look + box)
-            look: { COVER2: 1, COVER3: 1, COVER4: 2, MAN: 3, BLITZ: 2, PREVENT: 3 },
-            boxPer: -1.5, boxAnchor: 6,   // + boxPer × (box − 6): an 8-man box costs 3 yards, a 5-man box gives 1.5
-            sd: 3, sd2: 2.5, min: -4, max: 30,   // sd in snap · a second sd in throw · clamp (min −4: a tackle for loss is on the table)
-            useT: 1.2, useMin: 0.3,              // the yards × clamp(t / useT, useMin, 1): a tuck at the snap (t 0.35) is worth 30 % — the lanes open once the rush has committed
-            escape: 0.55, escapeMob: 0.5,        // P(escape a sack on SCRAMBLE) = escape × MOB/99 + … − escapeMob × (1 − MOB/99)
-            fumble: 0.06, fumbleMobFree: 60,     // P(fumble) = max(fumbleMin, fumble × max(0, 1 − MOB/fumbleMobFree))
-            fumbleMin: 0.03                      // … never under this: a scramble is never free
+          qbDrop: { depth: -7, gunT: 0.6, underT: 1.1, paT: 0.35 },   // the default drop: to y = depth by gunT (gun) / underT (under centre), + paT on play action
+          // speeds (yd/s)
+          qbSpeed: { base: 4.8, perMob: 3.4 },            // MOB 50 → 6.5 · 72 → 7.3 · 99 → 8.2
+          recSpeed: { base: 7.2, perSpeed: 2.8 },         // a receiver off his route (breaking to the ball, after the catch): speed 50 → 8.6 · 70 → 9.2 · 86 → 9.6
+          defSpeed: { base: 7.6, perSkill: 2.6, pos: { CB: 1.0, NB: 0.98, S: 0.97, LB: 0.9, DL: 0.78 } },   // × by position group: a 56-skill corner 9.1 (a receiver's pace) · linebacker 8.2 · lineman 7.1
+          shedSlow: 0.35,          // × speed while shed (a broken tackle / an escaped sack: he is on the ground for shedS)
+          defSkillSd: 4,           // gauss sd of each defender's skill around the unit's rating (opp.db / opp.dl), drawn at the snap
+          // the defence's reactions (s)
+          react: { base: 0.42, perSkill: -0.22, sd: 0.06, min: 0.12, robber: 0.6, spy: 0.4, manScramble: 1.3, chase: 0.25 },   // break on the ball after base + perSkill × skill/99 (+ jitter) · × robber / spy · × manScramble on a scramble (back to the QB) · chase: after a catch
+          // coverage technique
+          man: { trail: 0.16, edgeW: 1.4, press: 0.4, off: 1.8, inside: 0.7, minTrail: 0.06, maxTrail: 0.6 },   // trail s × fit × (1 + edgeW × (rec skill − def skill)/99) · cushion yd pressed / off · inside leverage yd
+          zone: { shade: 0.72, deepY: 14, deepCushion: 2.2, robberShade: 0.9 },   // move toward the nearest threat in the zone by shade · a landmark this deep stays deepCushion over the threat
+          // the call matters: the play's rating vs the REAL coverage shapes the defence (no dice: geometry)
+          fit: {
+            trail: { GOOD: 1.55, OK: 1.0, BAD: 0.6 },    // man coverage's lag × this
+            shade: { GOOD: -0.35, OK: 0, BAD: 0.5 },     // a zone landmark moves this fraction toward (+) / away from (−) the play's nearest route spot
+            react: { GOOD: 1.2, OK: 1.0, BAD: 0.85 },    // the break on the ball × this
+            keyR: 1.6                                    // a route spot within keyR × the zone's radius is the one it shades to
           },
-          scatter: { sd: 2.5, min: 0.3, leadYd: 3 },    // landing scatter (yd): sd × (1 − accuracy) + min; lead error × leadYd downfield
-          meterHoldMs: 1300,       // the velocity meter climbs 0 → powerMax over this (the scene reads it)
-          uiFlightScale: 0.75      // the scene animates the flight over flight × this
+          // the rush (the pocket)
+          rush: {
+            engageT: 0.3,          // s: a rusher is at the line (engaged) by this; no one beats his block earlier
+            lineY: 0.3,            // yd: where the rush meets the line
+            pocketGap: 2.6,        // yd: a held rusher is pushed back to this far in front of the drop spot by his beatAt
+            converge: 0.45,        // × his split: the lanes converge on the pocket
+            laneYd: 2.5,           // yd per lane number (rushers[].lane −2..2, for the scene)
+            approach: 0.42,        // s: beatAt = sackAt − approach (a free rusher needs about this long from the pocket's edge to the QB)
+            blitzFirst: 3,         // weight: a blitzer (not a lineman) is the first one free this much more often
+            gapMin: 0.25, gapMax: 0.6,   // s: each later rusher beats his block this long after the one before
+            pocketBack: 3.0,       // yd: an unblocked lineman settles this far in front of the drop
+            olGap: 0.9,            // yd: a blocker stands this far between his rusher and the QB
+            olNarrow: 0.85,        // × his split: an unblocked lineman's home narrows toward the pocket
+            olSettle: 2            // 1/s: how fast an unblocked lineman eases to his home
+          },
+          pressR: 4,               // yd: a rusher inside tackleR + pressR puts pressure on the throw (scatter) and the RUSH meter
+          heldPressure: 0.5,       // × a still-blocked rusher's pressure
+          // the ball
+          ballSpeed: { base: 21, perArm: 10, loftSlow: 0.48 },   // yd/s = (base + perArm × ARM/99) × (1 − loftSlow × loft): ARM 55 bullet 26.6 · lob 13.8 · ARM 99 bullet 31
+          maxLen: { base: 36, perArm: 24 },   // yd of flight the arm has (the line's arc length): ARM 55 → 49.3 · 72 → 53.5 · 99 → 60
+          height: { release: 2.0, catch: 1.6, apexMin: 0.15, gravity: 10.7 },   // yd: out of the hand · into the hands · the apex over the chord = max(apexMin, gravity × flight² / 8)
+          reach: { CB: 3.1, NB: 3.1, S: 3.1, LB: 3.2, DL: 3.3 },                  // yd: how high a defender's hands get with a jump (a ball above this sails over him)
+          catchZone: 2.5,          // yd: the last stretch of the flight belongs to the catch contest, not the in-flight contact rolls
+          laneStep: 1.5,           // yd: a defender looks for a spot on the ball's path he can beat it to (under his reach) every this — jumping the lane …
+          laneR: 1.5,              // yd: … within this of him (farther off the lane he runs to the landing spot)
+          scatter: { base: 0.3, perYd: 0.032, perAcc: 0.6, pressure: 0.8, running: 0.7, setV: 2.5, weather: 6, lenMul: 1.25, minYd: 1 },   // lateral sd (yd, at the end) = (base + perYd × length) × (1 − perAcc × ACC/99) × (1 + pressure × p + running × r) + weather × penalty, r = (|v| − setV) / (qbSpeed − setV) (a drifting QB is set; a sprinting one is not) · the length sd × lenMul · a short ball never dies under minYd
+          // contact, catch, tackle
+          tackleR: 1.25,           // yd: a defender this close to the ball carrier gets a tackle (or sack) roll
+          catchR: 1.3,             // yd: a receiver this close to the landing spot can catch it
+          contestR: 2.0,           // yd: a defender this close to the landing spot contests the catch
+          reachR: 0.9,             // yd: the ball passing this close to a defender (under his reach) is a contact roll
+          shedS: 0.6,              // s: an escaped or broken tackler is out of it for this long
+          targetReact: 0.15,       // s: the target breaks off his route toward the landing spot this long after the release
+          hopeless: -1.0,          // s: a line no receiver reaches, thrown anyway, is meant for the one with the best margin unless even he is this far off (then it is thrown to nobody)
+          sack: { base: -0.06, perMob: 0.42, max: 0.6 },   // P(escape) = base + perMob × MOB/99: 50 → 15 % · 72 → 25 % · 99 → 36 %
+          tip: { base: 0.5, perSkill: 0.3, near: 0.4, blind: 0.45, held: 0.08, hBand: 0.6, hMin: 0.1, max: 0.85 },   // P(a hand on it) = (base + perSkill × skill/99) × (near + (1 − near) × closeness) × clamp((reach − h) / hBand, hMin, 1) × (blind before his react) × (held: an engaged rusher)
+          int: { touch: 0.5, high: 0.35, blind: 0.4, chest: 0.7, held: 0.3, alone: 0.8, contest: 0.15 },   // P(pick | a hand on it in flight) = touch × (high when the ball is above chest height: h > reach − chest) × (blind) · at the landing: a defender alone → alone × closeness · a contested miss → contest × Σ contest
+          catch: { base: 0.93, perSkill: 0.08, reachPen: 0.12, contest: 0.55, first: 1.3, min: 0.05, max: 0.98 },   // P(catch) = base + perSkill × skill/99 − reachPen × (miss/catchR)² − contest × Σ contest (a defender closer to the ball than the catcher counts × first)
+          drop: { base: 0.07, contest: 0.08 },   // P(drop | caught) = base × (1 − skill/99) + contest × Σ contest
+          tackle: { base: 0.08, perSkill: 0.14, perSpeed: 0.1, defSkill: 0.14, min: 0.03, max: 0.5 },   // P(broken tackle) = base + perSkill × skill/99 + perSpeed × speed/99 − defSkill × def skill/99
+          evade: { r: 6, w: 0.6, upW: 0.3, minUp: 0.35, sideR: 3, look: 5 },   // the ball carrier bends away from defenders inside r (weight w laterally, × upW along the field), never less than minUp upfield, off a sideline inside sideR, steering at a point look yd ahead
+          pursueBurst: 1.05,       // × a pursuer's speed after a catch / on a scramble (everybody runs to the ball)
+          pursueLead: 1.2,         // s: a pursuer aims at the point he meets the carrier, at most this far ahead (and this far ahead when he cannot meet him: the angle)
+          intReturnS: 0.9,         // s: the interceptor's return after the pick (presentation; the result is already in)
+          away: { out: 3, depth: 10, minY: 2, loft: 0.3 },   // live.throwAway(): this far past the nearer sideline, this far downfield of the QB (never short of minY), thrown with this loft
+          present: { carryH: 1.2, popH: 2.2, popV: 3.2, popG: 9, fallV: 6 },   // presentation after DONE (no rules): the carried ball's height · a tipped ball's pop (h = popH + popV·u − popG·u²) · a dead ball falls at fallV yd/s
+          openSep: { lo: 1.0, hi: 4.6 },   // yd of separation → live.receivers[i].open 0 … 1
+          ghostT: 4,               // s: snap pre-runs the play this long (no QB, no rolls) to record each receiver's separation curve
+          ghostFrom: 0.8,          // s: … and looks for each curve's peak from here on (the snap and the rotation are not a window)
+          sampleDt: 0.1,           // s: … sampled every this
+          auto: { times: [1.2, 1.6, 2.0, 2.4], loft: 0.45, awayEarly: 0.4 }   // Play.autoPlan (the headless shell): the release times it tries · its touch · the throw-away this long before sackAt when nothing is on
+        },
+
+        // ═══ DRAWING (the scene reads these; live.classify applies the engine's share) ═══
+        draw: {
+          slowMo: 0.15,            // the play's speed while a finger is drawing
+          slowMoBudgetS: 4,        // REAL seconds of slow motion per play; then time returns to full speed
+          startR: 2.5,             // yd: a draft must start this close to the QB (the scene: never under 22 css px)
+          minLen: 2,               // yd: a shorter line is nothing
+          reachSlack: 0.2,         // s: a receiver this late to the line's end still makes it a PASS (he gets a hand to it)
+          greenMargin: 0.3,        // s: the preview is GREEN when nobody can contest the spot until this long after the ball …
+          greenReach: 0.15,        // s: … and the target gets there at least this early (room for the scatter)
+          redReach: -0.05,         // s: a target who gets there later than this after the ball makes the preview RED (he will not make it)
+          previewLowBand: 0.5,     // yd: the line passing a defender this far under his reach is RED (a pick at chest height)
+          previewPad: 0.3,         // yd: added to reachR for the preview's in-flight check (the defender will move)
+          previewIq: 70,           // IQ at or above this sees the preview colour (the FIELD GENERAL's perk)
+          loft: { fastHps: 2.4, slowHps: 0.5 },   // canvas-heights per second of drawing: this fast or faster → a bullet (loft 0), this slow or slower → a lob (1)
+          assistYd: 2.5,           // yd: a PASS line's end this close to the target's reachable spot snaps onto it (aim assist)
+          resampleYd: 0.75,        // yd: the scene resamples the drawn points to this spacing
+          maxPoints: 600           // points: longer polylines are thinned (classify stays cheap)
         },
 
         // The run options.
@@ -200,13 +249,14 @@
           draw: { mean: 2.5, sd: 4, lineW: 4, look: { BLITZ: 3, PREVENT: 2, COVER4: 1, MAN: 0, COVER2: 0, COVER3: 0 }, breakP: 0.06, breakMin: 10, breakMax: 25, min: -3, max: 40 }
         },
 
-        // PlayResult.feedback label thresholds.
+        // PlayResult.feedback label thresholds (timing: the arrival vs the target's separation plateau from the snap's pre-run).
         feedback: {
-          early: 0.15,             // s before window.from → EARLY
-          late: 0.15,              // s after window.to → LATE …
+          early: 0.15,             // s before the plateau → EARLY
+          late: 0.15,              // s after it → LATE …
           tooLate: 0.8,            // … and this far after → TOO LATE
-          leadOff: 0.35,           // |lead − ideal| above this → OVERTHROWN / UNDERTHROWN (deep) or LED / BEHIND (crossing)
-          loftOff: 0.30            // |loft − ideal| above this → BULLET / FLOATED
+          plateau: 0.75,           // the plateau spans where the separation ≥ this × its peak
+          bullet: 0.33, lob: 0.67, // loft under bullet → BULLET, at or over lob → LOB, between → TOUCH
+          money: 1.5               // yd: a caught ball this close to where the route had him → ON THE MONEY
         },
 
         // The demo's drive script (six snaps).

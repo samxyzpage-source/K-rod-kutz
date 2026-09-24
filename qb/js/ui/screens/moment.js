@@ -8,15 +8,22 @@
  *   var m = RTG.UI.Moment.mount(container, {
  *     ctx,                         PlayContext (Play.buildContext)
  *     Play, PlayView,              RTG.Play / RTG.UI.PlayView (defaults to the globals)
- *     rng,                         the rng the snap / throw forks draw from
+ *     rng,                         the rng the snap / live forks draw from (it never leaves the host)
  *     settings?, store?, reduced?, tints?, uiRng?,
- *     onSnap?(sim), onThrow?(result, input), onResult?(result, sim), onDone(result, sim), onSettings?()
- *   }) → { el, view, ctx(), sim(), result(), destroy() }
+ *     onSnap?(sim), onLive?(live, sim, rngState), onResult?(result, sim), onDone(result, sim, how), onSettings?()
+ *   }) → { el, view, ctx(), sim(), live(), plan(), result(), setSim(s), destroy() }
+ *
+ *   The host hands the scene onPick = Play.snap(ctx, playId, rng) and makeLive = Play.live(sim, rng): the engine
+ *   owns every position and the rng stays here. At the end, onDone(result, sim, how) with
+ *   how = { plan: live.plan() (the drawn runs / the pass / the throw-away at their sim times — Play.resolve(sim,
+ *   plan, rng at liveRng) replays the moment exactly) | null, liveRng (the parent state before the live fork),
+ *   liveForked: true, forced }. A run card (SNEAK / DRAW) never makes a Live: the host spends the live fork itself
+ *   at the end, so every moment costs the rng exactly 3 parent draws (buildContext · snap · live).
  *
  * The screen: RTG.UI.Screens.moment(store) → {el, destroy, onResize, onKey}. It reads store.pending():
- * 'PLAY' mounts the Moment for store.context(); onDone → store.record → the interstitial ('STORY') or, after the
- * sixth moment, RTG.UI.app.go('summary'). NEXT → store.next() → the next Moment in place (the screen id stays
- * 'moment' throughout; RTG.UI.PlayView.current() is the live scene while one is mounted).
+ * 'PLAY' mounts the Moment for store.context(); onDone → store.record(result, sim, how) → the interstitial
+ * ('STORY') or, after the sixth moment, RTG.UI.app.go('summary'). NEXT → store.next() → the next Moment in place (the
+ * screen id stays 'moment' throughout; RTG.UI.PlayView.current() is the live scene while one is mounted).
  */
 (function (root) {
   'use strict';
@@ -26,7 +33,7 @@
 
   function C() { return RTG.UI.C; }
   function app() { return RTG.UI.app; }
-  function num(v, d) { return typeof v === 'number' && v === v ? v : d; }
+  function logError(what, e) { if (root.console) root.console.error(what, e); }
 
   // ─────────────────────────── the reusable moment host ───────────────────────────
 
@@ -36,35 +43,64 @@
     o = o || {};
     var Play = o.Play || RTG.Play, PV = o.PlayView || RTG.UI.PlayView;
     if (!o.ctx) throw new Error('Moment.mount: a PlayContext is required');
-    if (!o.rng) throw new Error('Moment.mount: an rng is required');
-    if (!Play || typeof Play.snap !== 'function' || typeof Play.throw !== 'function') throw new Error('Moment.mount: RTG.Play is missing');
+    if (!o.rng || typeof o.rng.fork !== 'function') throw new Error('Moment.mount: an rng is required');
+    if (!Play || typeof Play.snap !== 'function' || typeof Play.live !== 'function') throw new Error('Moment.mount: RTG.Play (snap / live) is missing');
     if (!PV || typeof PV.mount !== 'function') throw new Error('Moment.mount: RTG.UI.PlayView is missing');
     var ctx = o.ctx, rng = o.rng;
-    var sim = null, result = null, destroyed = false;
+    var sim = null, live = null, liveRng = null, liveForked = false, result = null, destroyed = false, done = false;
     var wrap = C().el('div', { class: 'moment-host' });
     container.appendChild(wrap);
+
+    /** The live fork is spent exactly once per moment (by Play.live, or here for a run card / a result without a Live). */
+    function spendLive() {
+      if (liveForked) return;
+      liveRng = rng.state();
+      rng.fork('play:live');                                                            // 1 parent draw
+      liveForked = true;
+      if (o.onLive) { try { o.onLive(null, sim, liveRng); } catch (e) { logError('Moment onLive failed', e); } }
+    }
+    function planOf() {
+      if (!live || typeof live.plan !== 'function') return null;
+      try { return live.plan(); } catch (e) { logError('live.plan failed', e); return null; }
+    }
+
     var view = PV.mount(wrap, {
       ctx: ctx, settings: o.settings, store: o.store, reduced: o.reduced, tints: o.tints, uiRng: o.uiRng,
       onPick: function (playId) {
-        sim = Play.snap(ctx, playId, rng);
-        if (o.onSnap) { try { o.onSnap(sim); } catch (e) { if (root.console) root.console.error('Moment onSnap failed', e); } }
+        sim = Play.snap(ctx, playId, rng);                                               // 1 parent draw
+        if (o.onSnap) { try { o.onSnap(sim); } catch (e) { logError('Moment onSnap failed', e); } }
         return sim;
       },
-      onThrow: function (input) {
-        result = Play.throw(sim, input, rng);
-        if (o.onThrow) { try { o.onThrow(result, input); } catch (e) { if (root.console) root.console.error('Moment onThrow failed', e); } }
-        return result;
+      makeLive: function (s) {
+        if (s) sim = s;
+        if (liveForked && live) return live;                                              // one Live per moment
+        liveRng = rng.state();
+        live = Play.live(sim, rng);                                                        // 1 parent draw
+        liveForked = true;
+        if (o.onLive) { try { o.onLive(live, sim, liveRng); } catch (e) { logError('Moment onLive failed', e); } }
+        return live;
       },
       onResult: function (res) { result = res; if (o.onResult) o.onResult(res, sim); },
-      onDone: function (res) { result = res; if (destroyed) return; if (o.onDone) o.onDone(res, sim); },
+      onDone: function (res) {
+        result = res;
+        if (destroyed || done) return;
+        done = true;
+        spendLive();
+        var forced = !!(res && res.forced), run = !!(sim && sim.run);
+        var how = { plan: forced || run ? null : planOf(), liveRng: forced || run ? null : liveRng, liveForked: true, forced: forced };
+        if (o.onDone) o.onDone(res, sim, how);
+      },
       onSettings: o.onSettings
     });
     return {
       el: wrap, view: view,
       ctx: function () { return ctx; },
       sim: function () { return sim; },
+      live: function () { return live; },
+      /** The input log so far (live.plan()) or null before the snap / on a run card. */
+      plan: planOf,
       result: function () { return result; },
-      /** Tell the host about a sim / result produced outside the view (RTG.debug). */
+      /** Tell the host about a sim produced outside the view (RTG.debug). */
       setSim: function (s) { sim = s; },
       destroy: function () {
         if (destroyed) return;
@@ -87,6 +123,17 @@
     if (r.outcome === 'CATCH' || r.firstDown || ((r.outcome === 'SCRAMBLE' || r.outcome === 'RUN') && r.yards > 0)) return 'good';
     if (r.outcome === 'THROWAWAY') return '';
     return 'bad';
+  }
+
+  /** 'ON THE MONEY · ON TIME · BULLET' — what the pass looked like (placement · timing · touch); '' for a run / a sack. */
+  function feedbackLine(r) {
+    var f = r && r.feedback;
+    if (!f || r.outcome === 'RUN' || r.outcome === 'SACK' || r.outcome === 'SCRAMBLE') return '';
+    var parts = [];
+    if (f.placement && f.placement !== '—') parts.push(f.placement);
+    if (f.timing && f.timing !== '—') parts.push(f.timing);
+    if (f.touch && f.touch !== '—' && r.outcome !== 'THROWAWAY') parts.push(f.touch);
+    return parts.join(' · ');
   }
 
   /** The running line as chips: 12/18 · 141 YDS · 1 TD · 0 INT · 2 SACK · RATING 98.4 */
@@ -116,6 +163,8 @@
       if (last.targetName) sub.push('to ' + last.targetName);
       if (last.text && last.text !== last.banner) sub.push(last.text);
       if (sub.length) card.body.appendChild(c.el('p', { class: 'small txt-grey center drive-sub', text: sub.join(' · ') }));
+      var fl = feedbackLine(last);
+      if (fl) card.body.appendChild(c.el('p', { class: 'small drive-feedback center', 'data-feedback': '1', text: fl }));
       if (last.feedback && last.feedback.coachSaw) card.body.appendChild(c.el('p', { class: 'small drive-coach', text: last.feedback.coachSaw }));
     }
     card.body.appendChild(c.el('p', { class: 'drive-story', 'data-story': '1', text: story.text || '' }));
@@ -158,12 +207,12 @@
       host = Moment.mount(el, {
         ctx: ctx, rng: store.rng, Play: RTG.Play, PlayView: RTG.UI.PlayView,
         settings: store.settings, store: store, reduced: app().reducedMotion(), tints: store.tints(), uiRng: store.uiRng,
-        onSnap: function (sim) { store.drive.sim = sim; },
-        onThrow: function (res) { store.drive.lastResult = res; },
-        onDone: function (res, sim) {
+        onSnap: function (sim) { store.drive.sim = sim; store.drive.live = null; },
+        onLive: function (live, sim, rngState) { store.noteLive(live, rngState); },
+        onDone: function (res, sim, how) {
           if (destroyed) return;
-          try { store.record(res, sim); }
-          catch (e) { if (root.console) root.console.error('record failed', e); c.toast('Could not record the result: ' + (e.message || e), 'bad', 5000); return; }
+          try { store.record(res, sim, how); }
+          catch (e) { logError('record failed', e); c.toast('Could not record the result: ' + (e.message || e), 'bad', 5000); return; }
           if (store.isDone()) app().go('summary');
           else renderStory();
         },

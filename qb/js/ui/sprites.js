@@ -16,7 +16,9 @@
  *
  *   QB moment tiles (appended after the kicker's atlas, nothing above them changed): qb_back0/1/2 (set · drop · throw),
  *   receiver_run0/1 + receiver_catch, defender_run0/1 + defender_set, lineman_block, ball_2, ring_open / ring_closing /
- *   ring_closed (tint 'J' = the ring colour), yard0–yard9 (5×7 field digits), lead_ahead / lead_behind, hot_flag, target_pick.
+ *   ring_closed (tint 'J' = the ring colour), yard0–yard9 (5×7 field digits), lead_ahead / lead_behind, hot_flag, target_pick;
+ *   v2 "draw the pass": land_x (the landing marker, tint 'J'), aim_tick (the aim-assist magnet, tint 'J'), tip_star (the
+ *   tip pop), ball_spin0/1 (the tipped ball tumbling).
  *
  * Palette tokens (per sprite `pal`): '.' transparent · 'T1'/'T2' team tints · 'SK' skin · 'HR' hair ·
  * 'BT' boot colour; everything else is a fixed hex. Names are stable — the kick scene indexes by name.
@@ -698,6 +700,17 @@
   def('lead_behind', ['..w..', '..w..', 'wwwww', '.www.', '..w..']);
   def('hot_flag', ['rrr', 'rrr', 'rrr']);                               // the hot read against a blitz
   def('target_pick', ['g.....g', 'gg...gg', '.......', '.......', 'gg...gg', 'g.....g']);   // bracket corners on the chosen target
+
+  // ───────────────────────────── v2 "draw the pass" tiles (appended; the v1 tiles above stay for any host) ─────────────────────────────
+  // land_x: the landing marker at the end of a drawn pass / throw-away line ('J' = its colour via tint: chalk, or
+  // the preview's mint / gold / red for a FIELD GENERAL — the preview also swaps in the three ring SHAPES so cb / hc
+  // read it). aim_tick: the aim-assist magnet (a plus over the snapped end). tip_star: the pop where a defender gets a
+  // hand on the ball. ball_spin0/1: the tipped ball tumbling (two frames).
+  def('land_x', ['J...J', '.J.J.', '..J..', '.J.J.', 'J...J']);
+  def('aim_tick', ['.J.', 'JJJ', '.J.']);
+  def('tip_star', ['...w...', '.w.w.w.', '..ggg..', 'wwgWgww', '..ggg..', '.w.w.w.', '...w...']);
+  def('ball_spin0', ['.d.', 'dDd', '.d.']);
+  def('ball_spin1', ['d.d', '.D.', 'd.d']);
 
   // ───────────────────────────── digit font (3×5) ─────────────────────────────
   var FONT = {

@@ -1,10 +1,11 @@
 /**
  * Road to Glory: QB — the settings modal (the kicker's settings screen as a kit modal; SPEC §4.5 / §4.8).
  *
- * One input mode in the demo (tap + hold), so the modal keeps only what changes the feel and the access:
- * sound, "green = on time", haptics, reduced motion, colour-blind palette, high contrast, font scale, the
- * left-handed mirror, the confirm / lead / loft / throw-away / scramble keys, and RESET. Every change goes through
- * store.setSetting → app.applySettings (body classes) live, so the scene behind the modal updates at once.
+ * One input mode in the demo (draw the line from the quarterback), so the modal keeps only what changes the feel and
+ * the access: sound, aim assist (a pass line ending near its receiver's spot snaps onto it), haptics, the
+ * left-handed mirror, reduced motion, colour-blind palette, high contrast, font scale, tooltips, the keyboard hand's
+ * keys (throw, nudge, bend, loft, run, throw away, cancel) and RESET. Every change goes through store.setSetting →
+ * app.applySettings (body classes) live, so the scene behind the modal updates at once.
  *
  *   RTG.UI.Screens.settingsModal(store) → the C.modal handle ({el, close}); RTG.UI.app.openSettings() opens it once.
  */
@@ -73,27 +74,31 @@
     var body = c.el('div', { class: 'settings-body' });
     body.appendChild(c.card({ title: 'GAMEPLAY', kind: 'flat', body: [
       toggle('audio', 'Sound', 'WebAudio bleeps; never required to play'),
-      toggle('greenAssist', 'Green = on time', 'A release inside the green band claims the on-time velocity (the engine still checks it)'),
-      toggle('haptics', 'Haptics', 'Vibrate on the snap, the catch and the sack when the device supports it'),
+      toggle('aimAssist', 'Aim assist', 'A pass line that ends near the spot its receiver can reach snaps onto it (a small magnet tick)'),
+      toggle('haptics', 'Haptics', 'Vibrate on the snap, the release and the sack when the device supports it'),
       toggle('leftHanded', 'Left-handed mirror', 'Mirror the quarterback for a left-handed feel')
     ] }));
     body.appendChild(c.card({ title: 'ACCESSIBILITY', kind: 'flat', body: [
-      toggle('reducedMotion', 'Reduced motion', 'No shake, instant flight, no vignette'),
+      toggle('reducedMotion', 'Reduced motion', 'No align beat, no shake, no slow-motion vignette, a short result'),
       toggle('colorblind', 'Colour-blind palette', 'Okabe–Ito reds / greens / golds'),
       toggle('highContrast', 'High contrast', 'Black and white with four high-contrast accents'),
       pills('fontScale', 'Font scale', [{ value: 1, label: '100%' }, { value: 1.25, label: '125%' }, { value: 1.5, label: '150%' }]),
       toggle('tooltips', 'Tooltips', 'Hover / long-press explanations on numbers')
     ] }));
     body.appendChild(c.card({ title: 'KEYS', kind: 'flat', body: [
-      keyRow('confirm', 'Hold / throw'),
-      keyRow('confirmAlt', 'Hold / throw (alt)'),
-      keyRow('left', 'Lead behind'),
-      keyRow('right', 'Lead ahead'),
-      keyRow('up', 'More loft'),
-      keyRow('down', 'Less loft'),
+      keyRow('confirm', 'Throw / commit the line'),
+      keyRow('confirmAlt', 'Throw / commit (alt)'),
+      keyRow('left', 'Nudge the end left'),
+      keyRow('right', 'Nudge the end right'),
+      keyRow('up', 'Nudge the end deeper'),
+      keyRow('down', 'Nudge the end shorter'),
+      keyRow('bendLeft', 'Bend the line left'),
+      keyRow('bendRight', 'Bend the line right'),
+      keyRow('loft', 'Bullet / touch / lob'),
+      keyRow('run', 'Draw a run'),
       keyRow('throwAway', 'Throw away'),
-      keyRow('scramble', 'Scramble'),
-      c.el('p', { class: 'small txt-grey mt-1', text: '1–5 pick a receiver in slot order (WR1 WR2 SLOT TE RB); Tab cycles; Escape opens this panel.' })
+      keyRow('cancel', 'Cancel the line'),
+      c.el('p', { class: 'small txt-grey mt-1', text: '1–5 aim a straight pass at a receiver in slot order (WR1 WR2 SLOT TE RB); the play slows down while you compose; Escape opens this panel.' })
     ] }));
     body.appendChild(c.el('p', { class: 'small txt-grey', text: 'Settings live in ' + RTG.UI.Store.KEYS.settings + (RTG.UI.Storage && !RTG.UI.Storage.available ? ' (storage unavailable: memory only)' : '') + '. The demo keeps no save; ?seed= in the URL replays a drive.' }));
 

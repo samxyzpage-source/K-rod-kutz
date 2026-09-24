@@ -1,50 +1,53 @@
 /**
- * Road to Glory: QB — RTG.UI.PlayView (the QB moment scene; modelled on kicker/js/ui/kickview.js)
+ * Road to Glory: QB — RTG.UI.PlayView (the QB moment scene, v2 "DRAW THE PASS"; modelled on kicker/js/ui/kickview.js)
  *
  *   var view = RTG.UI.PlayView.mount(container, {
- *     ctx,                        PlayContext (Play.buildContext): situation, real, shown, options, pressure, receivers …
- *     settings, store?,           the shell settings (reducedMotion, colorblind, highContrast, leftHanded, keys, greenAssist, audio)
- *     onPick(playId) → PlaySim,   the shell calls Play.snap (a run option returns {run:true, yards, td, firstDown, text})
- *     onThrow(input) → PlayResult the shell calls Play.throw (input.kind: 'THROW' | 'THROWAWAY' | 'SCRAMBLE' | 'SACK')
- *     onDone(result),             fired after the result beat (a run option's result is built here: outcome 'RUN')
- *     onResult?(result),          fired when the banner appears
- *     onSettings?(),              Escape from the chromeless scene (§4.8); RTG.UI.app.openSettings is the fallback
- *     reduced?: bool, tints?: {home:[a,b], opp:[a,b]}, uiRng?
- *   }) → {el, canvas, cv, destroy(), phase(), skip(), layout(), current() → {sim, target, t}, ctx(), sim(), result(),
- *         pick(idx | playId), target(slot), holdStart(), holdEnd(), throwAway(), scramble(), playResult(result),
- *         input(), greenZone(), actors(), project(xYd, yYd), resize()}
+ *     ctx,                          PlayContext (Play.buildContext): situation, shown look, options, alignment …
+ *     settings, store?,             the shell settings (reducedMotion, colorblind, highContrast, leftHanded, keys, aimAssist, audio)
+ *     onPick(playId, option) → PlaySim   the shell calls Play.snap (a run card returns the resolved sim: run true)
+ *     makeLive(sim) → Live          the shell calls Play.live(sim, rng) (the rng stays in the shell)
+ *     onDone(result),               fired after the result beat (a run card's result is its sim)
+ *     onResult?(result),            fired when the banner appears
+ *     onSettings?(),                Escape from the chromeless scene; RTG.UI.app.openSettings is the fallback
+ *     reduced?: bool, tints?: {home:[a,b], opp:[a,b]}, uiRng?, rng? (only when makeLive is missing: Play.live(sim, rng))
+ *   }) → { el, canvas, cv, destroy(), phase(), skip(), layout(), resize(), ctx(), sim(), live(), result(), pick(idx | playId),
+ *          timeScale(), drawing(), fieldToCss(x, y) → {x, y}, cssToField(px, py) → {x, y}, commitPass(points, loft),
+ *          commitRun(points), throwAway(), project(x, y) → {x, y, s}, current(), actors(), read(), playResult(result) }
+ *   PlayView.current() → the live view (null after destroy).
  *
- * Phases: SITUATION (a DOM card over the dimmed field; TAP TO READ) → READ (the canvas shows the SHOWN look; the play
- * cards in the panel; tap one → onPick) → SNAP (t runs 0 → 4 s in real time: routes, rings from revealAt, rushers, the
- * pressure meter; tap / 1–5 / arrows / Tab pick a receiver) → THROW (the velocity bar climbs while the finger or key is
- * held, a drag sets lead / loft, the release throws; THROW AWAY after 1.2 s, SCRAMBLE with the mobility) → FLIGHT (the
- * ball arcs in perspective to result.landing over flight × 0.75 s, the target runs under it, then the catch / YAC /
- * pick / bounce beat) | SACK | RUN → RESULT (banner, feedback line, crowd; skippable after 300 ms) → DONE (onDone).
+ * THE CORE RULE: the engine owns every position. From the snap the scene calls live.step(realDt × timeScale) once a
+ * frame and draws exactly what the live says (22 players and the ball in field yards); nothing here computes where a
+ * player is — only sprite anchors and the offence's slide into the formation before t starts (alignMs, from the READ
+ * picture to the live's t = 0 spots). After the whistle the scene keeps stepping the live, which coasts (everyone slows
+ * down, an interceptor runs it back, a tipped ball pops and falls) under the banner. The gap you thread on screen is
+ * the gap the engine checks.
  *
- * Camera: fixed behind and above the quarterback. project(xYd, yYd) puts the line of scrimmage at 0.78 × H, the horizon
- * at 0.28 × H, 45 yards of depth in view and 53⅓ yards across the width at the line, narrowing with depth; every sprite
- * goes through it and shrinks with its scale (receivers 11 → 4 px). The stands above the horizon are the kicker's venues
- * in miniature (HS bleacher · college bowl · NFL decks), pre-rendered per layout into three crowd frames; the field with
- * its yard lines, hashes, numbers and the end zone is pre-rendered per layout + yard line. Per frame: two drawImages of
- * those layers, then ≤ 40 sprites / rects. No per-frame text on the canvas (the HUD is DOM), no allocations in the loop.
+ * Phases (.playview[data-phase]): SITUATION (a DOM card over the dimmed field; TAP TO READ) → READ (the canvas draws
+ * ctx.alignment — the SHOWN look; the play cards; tap one → onPick) → PLAY (the live runs; draw from the QB) | RUN (a
+ * run card's beat: SNEAK / DRAW, resolved at the snap) → RESULT (banner, feedback: placement · timing · touch, the
+ * coach, the crowd) → DONE (onDone). The live's own phase is mirrored on .playview[data-live] (PRE_THROW |
+ * BALL_IN_AIR | AFTER_CATCH | SCRAMBLE | DONE) and the draft on [data-draft] (PASS | RUN | THROWAWAY | INVALID | '').
  *
- * The engine's shapes (RTG.Play): ctx.look is the SHOWN look (ctx.shown the coverage id; ctx.real is never drawn),
- * ctx.receivers the READ picture (shotgun), sim.receivers[].path is absolute (x from the ball, y from the line, t
- * scaled by speed; extrapolated along the last segment and capped at capY exactly like Play.pathAt), open[] is the
- * openness over the ARRIVAL time (Play.openAt reads it, the ring colours come from Tuning.qb.open.ring), rushers
- * {lane −1|0|1, arriveAt}, sim.hot / checkdown slots, ctx.hash offsets the field. A run option's sim IS the result
- * (outcome 'RUN', no onThrow). The green band follows Play.need every frame of the hold (the arrival at full power and
- * the route's ideal loft, needFor, greenBand — computed here without allocating), so the band the player releases in
- * is the band the engine verifies for input.green. A scratch fixture with RELATIVE paths (x, y from the alignment,
- * no capY / family) still works: it is offset by x0 / y0 and the scene's own needFor stands in.
+ * DRAWING (RTG.UI.PlayInput): a press within Tuning.qb.draw.startR of the quarterback (css px at his depth, ≥ 22 px)
+ * starts a draft; while it lasts the play runs at Tuning.qb.draw.slowMo (until slowMoBudgetS of real time per play is
+ * spent — then 1.0 and the SLOW-MO chip says OUT); every frame (never per pointermove) the draft is classified by
+ * live.classify(points, loft) and drawn: PASS = gold dots, thin for a bullet, fat in the middle for a lob, the landing
+ * marker coloured by the preview when previewShown, the target bracketed; RUN = chalk footprints; THROWAWAY = grey
+ * dots out of bounds; the part past the arm (tooLong) in red; INVALID = nothing. The release commits: PASS →
+ * live.throwAlong, THROWAWAY → live.throwAway, RUN → live.setRun (the QB runs it; draw again for another run or the
+ * pass). Aim assist (settings.aimAssist, default on): a PASS line's end within Tuning.qb.draw.assistYd of the spot the
+ * target can reach snaps onto it (the magnet tick) — only when the snapped line still classifies as a PASS to him.
  *
- * Extra phases: SACK (the rusher arrives; ≈ 0.4 s) and RUN (a scramble / SNEAK / DRAW beat) sit between THROW and
- * RESULT. At the pick the offence slides from the READ picture into the play's formation over TIMING.alignMs (0 with
- * reduced motion) before t starts; a back / slot released from the backfield joins the engine's line-of-scrimmage
- * path over TIMING.releaseS.
+ * Camera: fixed behind and above the quarterback. project(xYd, yYd) puts the line of scrimmage at 0.73 × H, the
+ * horizon at 0.26 × H, 50 yards of depth in view (the longest arm's line stays on screen) and 53⅓ yards across the
+ * width at the line, narrowing with depth; cssToField is its exact inverse on the field (u in [−0.3, 1]). The stands
+ * above the horizon are the kicker's venues in miniature, pre-rendered per layout into three crowd frames; the field
+ * with its yard lines, hashes, numbers and the end zone is pre-rendered per layout + yard line. Per frame: two
+ * drawImages of those layers, ≤ 30 sprites and the draft's dots. No per-frame text on the canvas (the HUD is DOM), no
+ * allocations in the loop (the draft lives in pooled buffers; classify runs at most once a frame).
  *
  * Also exported: PlayView.TIMING, PlayView.FIELD, PlayView.VENUES, PlayView.OUTCOME_TEXT, PlayView.hudParts(ctx),
- * PlayView.needFor(distYd, ARM), PlayView.greenBandFor(ACC), PlayView.current(), PlayView.escapeToSettings(ev).
+ * PlayView.venueOf(ctx), PlayView.current(), PlayView.escapeToSettings(ev).
  */
 (function (root) {
   'use strict';
@@ -52,40 +55,42 @@
   RTG.UI = RTG.UI || {};
   var doc = root.document;
   var PlayView = {};
-  var live = null;
+  var current = null;
 
   var TIMING = {
-    alignMs: 420, dropMs: 450, rotateMs: 600, releaseS: 0.5, playMaxS: 4, throwAwayAfterS: 1.2, scrambleAfterS: 0.3,
-    flightScale: 0.75, reducedFlightMs: 80, minFlightMs: 260, throwPoseMs: 250,
-    catchHoldMs: 250, yacBaseMs: 140, yacPerYdMs: 55, yacMaxMs: 900, intReturnMs: 320, bounceMs: 220,
-    sackMs: 380, runMs: 720, resultMs: 1200, resultReducedMs: 400, skipAfterMs: 300, bannerFadeMs: 300, subBannerMs: 1400,
-    crowdIdleMs: 700, crowdCheerMs: 180, runFrameMs: 110, hintMs: 1600,
-    armMs: 200,                          // a phase ignores a confirm key / a field tap this long after it mounts (a double tap on NEXT, three quick Enters)
-    pausePollMs: 100                     // a beat's timer re-arms in these steps while a modal is open (the play clock freezes under Settings)
+    alignMs: 420,                        // the offence slides from the READ picture into the play's formation before t starts (0 reduced)
+    throwPoseS: 0.3, catchPoseS: 0.35,   // sim s: the QB's throw frame after the release · a receiver's catch frame
+    doneHoldMs: 650, doneHoldReducedMs: 150,   // the live is DONE: the last beat reads this long before the banner
+    tipMs: 480, sackShakeMs: 380,         // the tip's star shows for 0.4 × tipMs · the sack's shake decays over this
+    runMs: 720, runPerYdMs: 25, runMaxExtraMs: 600,   // a run card's beat (SNEAK / DRAW)
+    resultMs: 1200, resultReducedMs: 400, skipAfterMs: 300, bannerFadeMs: 300, subBannerMs: 1400,
+    crowdIdleMs: 700, crowdCheerMs: 180, runFrameMs: 110, hintMs: 1600, firstHintMs: 3600,
+    fastForwardS: 0.25, fastForwardMax: 80,    // skip after the release: step the live in these chunks until DONE
+    armMs: 200,                          // a phase ignores a confirm key / a field tap this long after it mounts (a double tap on NEXT)
+    pausePollMs: 100                     // a beat's timer re-arms in these steps while a modal is open (the play freezes under Settings)
   };
   PlayView.TIMING = TIMING;
 
-  /** The camera / field geometry (presentation only — nothing here reaches the engine). */
+  /** The camera / presentation geometry (nothing here reaches the engine). */
   var FIELD = {
-    widthYd: 53.33, depthYd: 45, losFrac: 0.78, horizonFrac: 0.28, farScale: 0.36, k: 1.2,
-    hitRadius: 28,                       // virtual px: the nearest receiver within this radius takes a tap
-    ringW: 12, ringMinW: 6,
+    widthYd: 53.33, depthYd: 50, losFrac: 0.73, horizonFrac: 0.26, farScale: 0.36, k: 1.2, kv: 0.8, uMin: -0.3,
     hashNfl: 3.083, hashCollege: 6.667, numbersIn: 8.5,
-    qbUnderCentre: -1.6, qbShotgun: -5, qbDrop: -6, qbGunDrop: -6.5, ballHandYd: 1.8,
-    arcMin: 1.5, arcPerLoft: 10          // the flight's apex (yards) = arcMin + arcPerLoft × loft
+    ringW: 12, ringMinW: 6, ringOpen: 0.6, ringTight: 0.25,  // ring thresholds on live.receivers[i].open (Tuning.qb.open.ring {open, closing} wins)
+    startMinCss: 22,                     // the QB's start radius never under this many css px
+    qbRefYd: -4,                         // the QB sprite is 1:1 at this depth and behind it, scaled with depth past it
+    qbBodyVpx: 10,                       // the start radius is measured from the QB's feet up to his chest (virtual px)
+    passDotPx: 3, awayDotPx: 2, footYd: 1.4, footSide: 0.35,
+    rushRange: 8,                        // RUSH meter: a rusher this far (yd past tackleR) reads 0 %, at tackleR 100 % …
+    rushHeld: 0.5,                       // … × this while he is still blocked (t < beatAt; Tuning.qb.field.heldPressure wins)
+    moveEps: 0.25                        // (yd/s)² — slower than this a sprite stands
   };
   PlayView.FIELD = FIELD;
 
-  /** Where the eleven defenders line up for a LOOK {safeties, press, box, showBlitz} and where roles send them after the snap. */
+  /** The READ picture's fallback when a context carries no ctx.alignment (an older engine): the v1 LOOK table. */
   var LOOK = {
     dlX: [-4.5, -1.5, 1.5, 4.5], dlY: 1, lbY: 4.5, lbX: { 1: [0], 2: [-3, 3], 3: [-4, 0, 4] }, blitzY: 1.5,
     cbPressY: 1.5, cbOffY: 7, cbShade: 1, nickelY: 5, nickelPressY: 2, safeties2: [[-9, 12], [9, 12]], safeties1: [[0, 13]]
   };
-  var DEEP = {
-    COVER2: [[-9, 14], [9, 14]], COVER3: [[0, 17], [9, 7]], COVER4: [[-7, 15], [7, 15]],
-    MAN: [[0, 15], [0, 8]], BLITZ: [[0, 14], [-9, 6]], PREVENT: [[-8, 20], [8, 20]]
-  };
-  var CUSHION = { base: 0.8, perOpen: 6.5, inside: 0.35, converge: 9 };   // a shadow stands base + perOpen × open(t) yards off its man
   var ALIGN = { WR1: [-22, 0], WR2: [22, 0], SLOT: [-12, -1], TE: [6, 0], RB: [2, -5] };
   var SLOT_ORDER = ['WR1', 'WR2', 'SLOT', 'TE', 'RB'];
 
@@ -99,12 +104,12 @@
   function C() { return RTG.UI.C; }
   function Sprites() { return RTG.UI.Sprites; }
   function Audio() { return RTG.UI.Audio || {}; }
-  function T() { return RTG.Tuning || {}; }
   function TQ() { return (RTG.Tuning && RTG.Tuning.qb) || {}; }
+  function TF() { return TQ().field || {}; }
   function clamp(x, lo, hi) { return x < lo ? lo : (x > hi ? hi : x); }
   function lerp(a, b, t) { return a + (b - a) * t; }
   function ease(u) { u = clamp(u, 0, 1); return u * u * (3 - 2 * u); }
-  function num(v, d) { return typeof v === 'number' && v === v ? v : d; }
+  function num(v, d) { return typeof v === 'number' && v === v && v !== Infinity && v !== -Infinity ? v : d; }
   function now() { return (root.performance && root.performance.now) ? root.performance.now() : Date.now(); }
   function cue(name, a) { var A = Audio(); if (typeof A[name] === 'function') { try { A[name](a); } catch (e) { /* audio is optional */ } } }
   function pal(tok) {
@@ -128,15 +133,11 @@
     return e;
   }
   function announce(text) { var c = C(); if (c && c.announce) c.announce(text); }
-  /** A kit modal (Settings) is open: the scene freezes its clocks and takes no input. */
+  /** A kit modal (Settings) is open: the scene freezes the play and takes no input. */
   function paused() { var c = C(); return !!(c && typeof c.modalOpen === 'function' && c.modalOpen()); }
   function icon(name, size) { var c = C(); return c && c.icon ? c.icon(name, size) : doc.createTextNode(''); }
   function coarsePointerNow() {
     try { return !!(root.matchMedia && root.matchMedia('(pointer: coarse)').matches); } catch (e) { return false; }
-  }
-  function keyLabelOf(k) {
-    if (k === ' ' || k === 'Spacebar' || k === 'Space' || !k) return 'SPACE';
-    return String(k).replace('Arrow', '').toUpperCase();
   }
   /** Deterministic 0..1 for a seat or a star (the crowd frames agree and nothing here touches the rng). */
   function noise(i, j, k) {
@@ -147,7 +148,12 @@
   function ordinal(n) { return n === 1 ? '1ST' : n === 2 ? '2ND' : n === 3 ? '3RD' : n + 'TH'; }
   function clockText(sec) { sec = Math.max(0, Math.round(num(sec, 0))); var m = Math.floor(sec / 60), s = sec % 60; return m + ':' + (s < 10 ? '0' : '') + s; }
   function ylText(yl) { yl = Math.round(num(yl, 50)); if (yl === 50) return 'THE 50'; return yl < 50 ? 'OWN ' + yl : 'OPP ' + (100 - yl); }
-  function fx1(v) { return (Math.round(v * 100) / 100).toFixed(2); }
+  function copyPts(arr) {
+    var out = [];
+    if (!arr) return out;
+    for (var i = 0; i < arr.length; i++) if (arr[i]) out.push({ x: Math.round(num(arr[i].x, 0) * 1000) / 1000, y: Math.round(num(arr[i].y, 0) * 1000) / 1000 });
+    return out;
+  }
 
   /** HUD strip parts: ['3RD & 7', 'OWN 34', 'Q4 0:48', '21-24', 'WIND ← 8', 'RAIN']. */
   PlayView.hudParts = function (ctx) {
@@ -169,26 +175,6 @@
       if (kind === 'rain' || kind === 'snow' || kind === 'fog' || kind === 'cold' || kind === 'heat') parts.push(kind.toUpperCase());
     }
     return parts;
-  };
-
-  /**
-   * The on-time velocity for a throw of `distYd` yards with an ARM rating: the bottom of the green band. Reads
-   * Tuning.qb.throw.need {base, span, rangeBase, rangePerArm} when the engine provides it; the fallback is the same
-   * shape (a 99-ARM arm reaches 65 yards at full power, a 50-ARM arm 52).
-   */
-  PlayView.needFor = function (distYd, ARM) {
-    var th = TQ().throw || {};
-    var N = th.need || {};
-    var rangeBase = num(N.rangeBase, 40), rangePerArm = num(N.rangePerArm, 25), base = num(N.base, 0.2), span = num(N.span, 0.8);
-    var range = rangeBase + rangePerArm * clamp(num(ARM, 50), 0, 99) / 99;
-    return clamp(base + span * Math.max(0, num(distYd, 10)) / range, 0.15, 1.0);
-  };
-  /** Width of the green band by ACC: Tuning.qb.throw.greenBand ({base, perAcc} or a number); fallback 0.16 + 0.10 × ACC/99. */
-  PlayView.greenBandFor = function (ACC) {
-    var gb = (TQ().throw || {}).greenBand;
-    if (typeof gb === 'number') return gb;
-    var base = num(gb && gb.base, 0.16), per = num(gb && gb.perAcc, 0.10);
-    return base + per * clamp(num(ACC, 50), 0, 99) / 99;
   };
 
   // ═══════════════════════════════ the stands (the kicker's venues in miniature) ═══════════════════════════════
@@ -219,16 +205,14 @@
     var sit = ctx.situation || {};
     var reduced = opts.reduced !== undefined ? !!opts.reduced : reducedMotion(settings);
     var mirror = !!(settings.leftHanded || settings.leftFooted || settings.mirror);
-    var qb = ctx.qb || sit.qb || {};
-    var attrs = qb.attrs || {};
-    var ARM = num(attrs.ARM, 50), ACC = num(attrs.ACC, 50), MOB = num(attrs.MOB, 50);
-    var qbAttrs = { ARM: ARM, ACC: ACC, IQ: num(attrs.IQ, 50), MOB: MOB, POI: num(attrs.POI, 50) };   // what the green band is computed with
+    var qbInfo = ctx.qb || sit.qb || {};
+    var attrs = qbInfo.attrs || {};
+    var ARM = num(attrs.ARM, 50);
 
     function liveSettings() { return (store && store.settings) || settings || {}; }
-    function pressLabel() { return coarsePointerNow() ? 'TAP' : keyLabelOf(Inp.resolveKeys(liveSettings().keys).confirm); }
 
     // ── DOM ──
-    var elRoot = el('div', { class: 'playview', 'data-phase': 'SITUATION' });
+    var elRoot = el('div', { class: 'playview', 'data-phase': 'SITUATION', 'data-live': '', 'data-draft': '', 'data-can-draw': '0' });
     var hud = el('div', { class: 'pv-hud', role: 'group', 'aria-label': 'Situation' });
     var stage = el('div', { class: 'pv-stage' });
     var overlay = el('div', { class: 'pv-overlay', 'aria-hidden': 'true' });
@@ -236,15 +220,23 @@
     var subBanner = el('div', { class: 'pv-sub', hidden: true });
     var toastLine = el('div', { class: 'pv-toast', hidden: true });
     var skipHint = el('div', { class: 'pv-skip', text: 'TAP TO SKIP', hidden: true });
+    // the draw HUD over the field: the SLOW-MO chip + its budget bar, the draft chip
+    var drawHud = el('div', { class: 'pv-drawhud', hidden: true });
+    var slowEl = el('div', { class: 'pv-slowmo', role: 'meter', 'aria-label': 'Slow motion left', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '100', 'data-active': '0', hidden: true });
+    var slowLabel = el('span', { class: 'pv-slowmo-label', text: 'SLOW-MO' });
+    var slowFill = el('span', { class: 'pv-slowmo-fill' });
+    slowEl.appendChild(slowLabel); slowEl.appendChild(el('span', { class: 'pv-slowmo-track', 'aria-hidden': 'true' }, slowFill));
+    var draftChip = el('div', { class: 'pv-draft', 'data-kind': '', hidden: true });
+    drawHud.appendChild(slowEl); drawHud.appendChild(draftChip);
     var situationCard = el('div', { class: 'pv-situation', role: 'group', 'aria-label': 'The situation' });
     var panel = el('div', { class: 'pv-panel' });
     var lookLine = el('div', { class: 'pv-look', role: 'status', hidden: true });
     var cards = el('div', { class: 'pv-cards', role: 'group', 'aria-label': 'Pick a play', hidden: true });
-    var throwBox = el('div', { class: 'pv-throwbox', hidden: true });
+    var drawBox = el('div', { class: 'pv-drawbox', hidden: true });
     var feedback = el('div', { class: 'pv-feedback', hidden: true });
-    overlay.appendChild(subBanner); overlay.appendChild(banner); overlay.appendChild(toastLine); overlay.appendChild(skipHint);
+    overlay.appendChild(drawHud); overlay.appendChild(subBanner); overlay.appendChild(banner); overlay.appendChild(toastLine); overlay.appendChild(skipHint);
     stage.appendChild(overlay); stage.appendChild(situationCard);
-    panel.appendChild(lookLine); panel.appendChild(cards); panel.appendChild(throwBox); panel.appendChild(feedback);
+    panel.appendChild(lookLine); panel.appendChild(cards); panel.appendChild(drawBox); panel.appendChild(feedback);
     elRoot.appendChild(hud); elRoot.appendChild(stage); elRoot.appendChild(panel);
     container.appendChild(elRoot);
 
@@ -266,7 +258,7 @@
       if (away && away[0]) oppTint = [away[0], away[1] || pal('cream')];
       else if (P && sit.opp && sit.opp.id) oppTint = P.teamTint(sit.opp);
     } catch (e) { /* cosmetic */ }
-    var look = (qb.look) || (store && store.state && store.state.player && store.state.player.look) || null;
+    var look = (qbInfo.look) || (store && store.state && store.state.player && store.state.player.look) || null;
 
     // ── sprites ──
     var qbSpr = [Sp.get('qb_back0', { tint: teamTint, look: look }), Sp.get('qb_back1', { tint: teamTint, look: look }), Sp.get('qb_back2', { tint: teamTint, look: look })];
@@ -274,32 +266,33 @@
     var defSpr = [Sp.get('defender_run0', { tint: oppTint }), Sp.get('defender_run1', { tint: oppTint }), Sp.get('defender_set', { tint: oppTint })];
     var rusherSpr = [Sp.get('rusher', { tint: oppTint }), Sp.get('defender_run1', { tint: oppTint })];
     var olSpr = Sp.get('lineman_block', { tint: teamTint });
-    var balls = { 2: Sp.get('ball_2'), 3: Sp.get('ball_3'), 5: Sp.get('ball_5'), 8: Sp.get('ball_8'), 11: Sp.get('ball_11') };
-    var rings = {};
+    var balls = { 2: Sp.get('ball_2'), 3: Sp.get('ball_3'), 5: Sp.get('ball_5'), 8: Sp.get('ball_8') };
+    var spinSpr = [Sp.get('ball_spin0'), Sp.get('ball_spin1')], tipStar = Sp.get('tip_star');
+    var rings = {}, marks = {};
     /** The palette-tinted tiles (re-read on every arm and on a settings change, so a palette toggled mid-moment shows at once). */
-    function loadRings() {
-      rings.open = Sp.get('ring_open', { tint: [pal('mint'), pal('mint')] }); rings.closing = Sp.get('ring_closing', { tint: [pal('gold'), pal('gold')] });
-      rings.closed = Sp.get('ring_closed', { tint: [pal('red'), pal('red')] }); rings.pick = Sp.get('ring_closing', { tint: [pal('chalk'), pal('chalk')] });
-      rings.range = Sp.get('ring_closed', { tint: [pal('grey'), pal('grey')] });   // beyond the arm: grey (the closed shape, so cb / hc read it as "no")
+    function loadTinted() {
+      rings.open = Sp.get('ring_open', { tint: [pal('mint'), pal('mint')] }); rings.tight = Sp.get('ring_closing', { tint: [pal('gold'), pal('gold')] });
+      rings.covered = Sp.get('ring_closed', { tint: [pal('red'), pal('red')] });
+      marks.pass = Sp.get('land_x', { tint: [pal('gold'), pal('gold')] }); marks.away = Sp.get('land_x', { tint: [pal('grey'), pal('grey')] });
+      marks.chalk = Sp.get('land_x', { tint: [pal('chalk'), pal('chalk')] }); marks.tick = Sp.get('aim_tick', { tint: [pal('chalk'), pal('chalk')] });
+      marks.red = Sp.get('land_x', { tint: [pal('red'), pal('red')] });
     }
-    loadRings();
-    var pickSpr = Sp.get('target_pick'), hotSpr = Sp.get('hot_flag'), leadAhead = Sp.get('lead_ahead'), leadBehind = Sp.get('lead_behind');
+    loadTinted();
+    var pickSpr = Sp.get('target_pick'), hotSpr = Sp.get('hot_flag');
     var rainSpr = Sp.get('rain'), snowSpr = Sp.get('snow');
 
     // ── scene state ──
     var L = {};
     var phase = 'SITUATION', tPhase = 0;
-    var sim = null, result = null, pickedId = null, pickedOpt = null;
-    var input = null;
-    var tSnap = 0, tPlay = 0, tThrow = 0, thrown = false, sacked = false;
-    var target = -1, hold = false, meterP = 0, lead = 0, loft = 0.5, zone = null, lastTick = -1;
-    var lastInput = null;
-    var flightMs = 0, flightS = 0, landBeat = null, landAt = 0, landMs = 0;
-    var ballX = 0, ballY = 0, ballH = 0, ballSize = 0, ballShown = false, ballGround = 0, ballCarrier = -1;
-    var qbX = 0, qbY = FIELD.qbUnderCentre, qbPose = 0, qbDown = 0, qbFace = 1;
+    var sim = null, lv = null, result = null, pickedId = null, pickedOpt = null, frozen = false;
+    var input = null, evIdx = 0, livePhase = '', draftAttr = '';
+    var alignMs = 0, alignU = 1, tAlign0 = 0;
+    var slowUsed = 0, slowBudget = 4, curScale = 1, lastSlowPct = -1, slowOut = false;
+    var cls = null, dkind = '', clsAssist = false, dispArr = null, dispN = 0, firstHintShown = false;
+    var releaseReal = 0, releaseT = -1, doneAt = 0, resultAt = 0, tipReal = 0, catchT = -1, catchSlot = -1;
     var shakeAmp = 0, camX = 0, camY = 0, flashAlpha = 0, flashColor = null;
     var crowdFrame = 0, crowdAt = 0, crowdMode = 'idle';
-    var stadium = null, fieldLayer = null, vignette = null, posts = null;
+    var stadium = null, fieldLayer = null, posts = null, slowBands = false;
     var destroyed = false, timers = [];
     var venue = venueOf(ctx);
     var clutch = !!(ctx.clutch || (ctx.pressure && ctx.pressure.clutch) || sit.clutch);
@@ -307,30 +300,27 @@
     if (pressure >= 0.6) clutch = true;
     var particles = null, pCount = 0, pKind = null, pSeed = 1;
     var lastAria = '';
-    var hudPressureFill = null, hudPressureVal = -1, velFill = null, velGreen = null, velRed = null, velLabel = null, aimLead = null, aimLoft = null, hintEl = null, btnAway = null, btnScr = null, playChip = null;
-    var lastLeadTxt = '', lastLoftTxt = '';
+    var hudPressureFill = null, hudPressureVal = -1, hintEl = null, keysEl = null, btnAway = null, playChip = null, clockChip = null, clockShown = -1, unsubSettings = null;
     var runYards = 0, runFrom = 0, runActor = -1, runX = 0, runT0 = 0;
-    var hotSlot = -1, rotateMs = TIMING.rotateMs;
-    var gun = false, alignMs = 0, alignU = 1, qbFromY = 0, zoneLive = { lo: 0, hi: 0, dist: 0 }, zoneStatic = false, lastZoneLo = -1;
 
     // actors: 0..10 defenders · 11..15 receivers · 16..20 O-line · 21 QB
     var NDEF = 11, NREC = 5, NOL = 5, NACT = 22, IREC = 11, IOL = 16, IQB = 21;
     var aX = new Float64Array(NACT), aY = new Float64Array(NACT), aSX = new Float64Array(NACT), aSY = new Float64Array(NACT), aS = new Float64Array(NACT);
+    var fromX = new Float64Array(NACT), fromY = new Float64Array(NACT), baseX = new Float64Array(NACT), baseY = new Float64Array(NACT);
     var aFrame = new Int8Array(NACT), aShow = new Int8Array(NACT), order = new Int16Array(NACT);
-    var recOpen = new Float64Array(NREC), recRing = new Int8Array(NREC), recVX = new Float64Array(NREC), recVY = new Float64Array(NREC);
-    // recOpen is the openness a ball RELEASED NOW would find (Play.openIfThrown: the arrival at full power and the
-    // route's ideal loft) — what the rings show and what the INT gate judges; recOpenNow is the openness at this
-    // instant (the shadow's cushion); recDist the arrival distance (yd), recLoft the route's ideal loft.
-    var recOpenNow = new Float64Array(NREC), recDist = new Float64Array(NREC), recLoft = new Float64Array(NREC);
-    var arrDist = 0, maxDistYd = Infinity, rushFirst = -1, clockChip = null, clockShown = -1, unsubSettings = null;
-    var recX0 = new Float64Array(NREC), recY0 = new Float64Array(NREC), recReveal = new Float64Array(NREC), recSlot = [], recPathFn = [], recPathArr = [], recOpenFn = [], recOpenArr = [], recOpenDt = new Float64Array(NREC), recSpeed = new Float64Array(NREC), recLastX = new Float64Array(NREC), recLastY = new Float64Array(NREC);
-    var recAbs = new Int8Array(NREC), recCap = new Float64Array(NREC), recFromX = new Float64Array(NREC), recFromY = new Float64Array(NREC), recRoute = [], recObj = [];
-    var defPreX = new Float64Array(NDEF), defPreY = new Float64Array(NDEF), defRole = new Int8Array(NDEF), defArg = new Int16Array(NDEF), defZX = new Float64Array(NDEF), defZY = new Float64Array(NDEF), defArrive = new Float64Array(NDEF), defLaneX = new Float64Array(NDEF), defRush = new Int8Array(NDEF);
-    var olX0 = [-4, -2, 0, 2, 4], olPush = new Int8Array(NOL);
-    var ROLE_SHADOW = 1, ROLE_DEEP = 2, ROLE_RUSH = 3, ROLE_BLITZ = 4, ROLE_HOLD = 5;
-    var recCount = 0, defCount = 0;
-    var pt = { x: 0, y: 0, s: 1 }, pt2 = { x: 0, y: 0 };
-    var converge = -1, convergeX = 0, convergeY = 0, intMan = -1, dropMan = -1, tThrowPlay = 0;
+    var recSlot = [], defId = [], defPos = [], recCount = 0, defCount = 0, olCount = 0;
+    var recIdx = {}, defIdx = {};                         // slot → receiver index · defender id → actor index (built at the snap)
+    var carrier = -1;                                     // −1 nobody / in the air · −2 the QB · 0..4 a receiver · −3 − j defender j
+    var hotSlot = -1, qbFace = 1;
+    var pt = { x: 0, y: 0, s: 1 }, pt2 = { x: 0, y: 0, s: 1 }, fpt = { x: 0, y: 0 };
+    var ringOpen = FIELD.ringOpen, ringTight = FIELD.ringTight;
+    // the committed run (field yd), drawn ahead of the QB as faint footprints while he runs it
+    var RUNMAX = 256, runBufX = new Float64Array(RUNMAX), runBufY = new Float64Array(RUNMAX), runBufN = 0, runBufI = 0;
+    // aim assist: the snapped copy of the draft (pooled)
+    var AMAX = 256, assistPool = [], assistArr = [];
+    for (var ai = 0; ai < AMAX; ai++) assistPool.push({ x: 0, y: 0 });
+    // canvas rect cache for the css ↔ field mapping during a stroke
+    var rectL = 0, rectT = 0;
 
     /** A beat's timer; while a modal is open it re-arms in pausePollMs steps instead of firing (the beat waits for the player). */
     function setTimer(fn, ms) {
@@ -345,7 +335,10 @@
     function clearTimers() { for (var i = 0; i < timers.length; i++) root.clearTimeout(timers[i]); timers.length = 0; }
     function setPhase(p) { phase = p; tPhase = now(); elRoot.setAttribute('data-phase', p); }
     function elapsed() { return now() - tPhase; }
-    function inPlay() { return phase === 'SNAP' || phase === 'THROW'; }
+    function setLiveAttr(p) { if (p !== livePhase) { livePhase = p; elRoot.setAttribute('data-live', p); } }
+    var canDrawAttr = '0';
+    function setCanDrawAttr(v) { if (v !== canDrawAttr) { canDrawAttr = v; elRoot.setAttribute('data-can-draw', v); } }
+    function setDraftAttr(k) { if (k !== draftAttr) { draftAttr = k; elRoot.setAttribute('data-draft', k); } }
 
     // ───────────────────────────── the camera ─────────────────────────────
     function relayout() {
@@ -355,22 +348,24 @@
       L.yLOS = Math.round(H * FIELD.losFrac);
       L.xC = Math.round(W / 2);
       L.pxPerYd = W / FIELD.widthYd;
-      L.kv = 0.8;
+      L.kv = FIELD.kv;
       L.hashYd = venue === 'NFL' ? FIELD.hashNfl : FIELD.hashCollege;
-      L.hashShift = -clamp(num(ctx.hash, 0), -1, 1) * L.hashYd;   // the ball sits on a hash: the field's centre is offset from the camera
+      // the ball sits on a hash: the field's centre is offset from the camera (the engine's sidelines win once it has them)
+      var fd = (sim && sim.field) || ctx.field || null;
+      L.hashShift = fd && typeof fd.sideL === 'number' && typeof fd.sideR === 'number' ? (fd.sideL + fd.sideR) / 2 : -clamp(num(ctx.hash, 0), -1, 1) * L.hashYd;
       L.yl = num(sit.yl, 50);
       L.goalD = 100 - L.yl;                       // yards from the line to the goal line
       L.endZone = L.goalD <= FIELD.depthYd;
-      buildVignette();
+      L.qbRefS = project(0, FIELD.qbRefYd).s;     // the depth scale at which the QB sprite is drawn 1:1
       buildStadium();
       buildField();
       buildPosts();
     }
-    /** Field yards (x lateral from the centre, y downfield from the line) → virtual px + sprite scale (shared object). */
+    /** Field yards (x lateral from the ball, y downfield from the line) → virtual px + sprite scale (shared object). */
     function project(xYd, yYd, out) {
       out = out || pt;
       var u = yYd / FIELD.depthYd;
-      if (u < -0.3) u = -0.3; else if (u > 1) u = 1;
+      if (u < FIELD.uMin) u = FIELD.uMin; else if (u > 1) u = 1;
       var p = u * (1 + FIELD.k) / (1 + FIELD.k * u);
       var s = 1 - p * (1 - FIELD.farScale);
       out.x = L.xC + xYd * L.pxPerYd * s;
@@ -378,15 +373,22 @@
       out.s = s;
       return out;
     }
-    function buildVignette() {
-      if (reduced || !clutch) { vignette = null; return; }
-      var c = doc.createElement('canvas'); c.width = L.W; c.height = L.H;
-      var vc = c.getContext('2d');
-      var grd = vc.createRadialGradient(L.W / 2, L.H * 0.6, L.H * 0.25, L.W / 2, L.H * 0.6, L.H * 0.8);
-      grd.addColorStop(0, 'rgba(16,18,38,0)'); grd.addColorStop(1, 'rgba(16,18,38,0.85)');
-      vc.fillStyle = grd; vc.fillRect(0, 0, L.W, L.H);
-      vignette = c;
+    /** Virtual px → field yards: the exact inverse of project inside u ∈ [uMin, 1] (above the horizon reads as the deepest yard). */
+    function unproject(vx, vy, out) {
+      var pMin = FIELD.uMin * (1 + FIELD.k) / (1 + FIELD.k * FIELD.uMin);
+      var p = (L.yLOS - vy) / (L.yLOS - L.yHor);
+      if (p > 1) p = 1; else if (p < pMin) p = pMin;
+      var u = p / (1 + FIELD.k - FIELD.k * p);
+      var s = 1 - p * (1 - FIELD.farScale);
+      out.x = (vx - L.xC) / (L.pxPerYd * s);
+      out.y = u * FIELD.depthYd;
+      return out;
     }
+    function refreshRect() { var r = canvas.getBoundingClientRect(); rectL = r.left; rectT = r.top; }
+    /** Client (css px) → field yards, with the rect cached at the stroke's start (pointer samples). */
+    function cssToFieldCached(px, py, out) { var s = cv.scale || 1; return unproject((px - rectL) / s, (py - rectT) / s, out); }
+    function fieldToCss(x, y) { refreshRect(); project(num(x, 0), num(y, 0)); var s = cv.scale || 1; return { x: rectL + pt.x * s, y: rectT + pt.y * s }; }
+    function cssToField(px, py) { refreshRect(); cssToFieldCached(num(px, 0), num(py, 0), fpt); return { x: fpt.x, y: fpt.y }; }
 
     // ───────────────────────────── the field (pre-rendered per layout + yard line) ─────────────────────────────
     function sidelineX(y, side) {
@@ -406,7 +408,7 @@
       f.save(); f.beginPath();
       f.moveTo(sidelineX(y0, -1), y0); f.lineTo(sidelineX(y0, 1), y0); f.lineTo(sidelineX(H, 1), H); f.lineTo(sidelineX(H, -1), H); f.closePath(); f.clip();
       f.fillStyle = pal('grass'); f.fillRect(0, y0, W, H - y0);
-      var k0 = Math.floor((yl - 10) / 5), k1 = Math.ceil((yl + FIELD.depthYd) / 5), k, A, y1, y2;
+      var k0 = Math.floor((yl - 12) / 5), k1 = Math.ceil((yl + FIELD.depthYd) / 5), k, A, y1, y2;
       f.fillStyle = pal('grass2');
       for (k = k0; k <= k1; k++) {
         if (k % 2 === 0) continue;
@@ -431,7 +433,7 @@
         f.fillRect(Math.round(sidelineX(y, -1)), y, Math.round(sidelineX(y, 1)) - Math.round(sidelineX(y, -1)), th);
       }
       f.globalAlpha = 0.8;
-      for (A = Math.max(1, Math.floor(yl - 8)); A < Math.min(100, yl + FIELD.depthYd); A++) {
+      for (A = Math.max(1, Math.floor(yl - 10)); A < Math.min(100, yl + FIELD.depthYd); A++) {
         if (A % 5 === 0) continue;
         project(L.hashShift - L.hashYd, A - yl); f.fillRect(Math.round(pt.x), Math.round(pt.y), 1, 1);
         project(L.hashShift + L.hashYd, A - yl); f.fillRect(Math.round(pt.x), Math.round(pt.y), 1, 1);
@@ -441,7 +443,7 @@
       var numX = FIELD.widthYd / 2 - FIELD.numbersIn;
       for (A = 10; A <= 90; A += 10) {
         var dd = A - yl;
-        if (dd < -7 || dd > FIELD.depthYd) continue;
+        if (dd < -9 || dd > FIELD.depthYd) continue;
         var label = A <= 50 ? A : 100 - A;
         var digits = String(label);
         for (var side = -1; side <= 1; side += 2) {
@@ -563,8 +565,8 @@
     }
     function scoreLine(labelHome, labelGuest) {
       var sc = sit.score || {}, us = num(sc.us, 0), them = num(sc.them, 0);
-      var home = sit.away ? them : us, guest = sit.away ? us : them;
-      return { home: home, guest: guest, text: labelHome + ' ' + home + '  ' + labelGuest + ' ' + guest };
+      var homeS = sit.away ? them : us, guest = sit.away ? us : them;
+      return { home: homeS, guest: guest, text: labelHome + ' ' + homeS + '  ' + labelGuest + ' ' + guest };
     }
     function periodText() { var q = num(sit.quarter, 1); return q > 4 ? 'OT' : 'Q' + q; }
     function paintBoard(s, cx, yBot, text, bh, frame, fillCol, textCol, W) {
@@ -699,95 +701,15 @@
       particles[i * 4 + 3] = pKind === 'rain' ? 0.22 + rnd() * 0.08 : 0.035 + rnd() * 0.02;
     }
     function updateParticles(dt) {
+      var k = curScale;                                        // the weather slows down with the play
       for (var i = 0; i < pCount; i++) {
-        particles[i * 4] += particles[i * 4 + 2] * dt;
-        particles[i * 4 + 1] += particles[i * 4 + 3] * dt;
+        particles[i * 4] += particles[i * 4 + 2] * dt * k;
+        particles[i * 4 + 1] += particles[i * 4 + 3] * dt * k;
         if (particles[i * 4 + 1] > L.H || particles[i * 4] < -4 || particles[i * 4] > L.W + 4) seedParticle(i, false);
       }
     }
 
-    // ───────────────────────────── the sim's shapes (paths, openness, windows) ─────────────────────────────
-    function slotOf(r, i) { return (r && (r.slot || r.id)) || SLOT_ORDER[i] || ('R' + i); }
-    function ctxReceiver(slot) {
-      var list = ctx.receivers || [];
-      for (var i = 0; i < list.length; i++) if (slotOf(list[i], i) === slot) return list[i];
-      return null;
-    }
-    /** The receiver's alignment (yards): the sim's x0/y0, the context's, or the slot default. */
-    function alignmentOf(r, i) {
-      var slot = slotOf(r, i), cr = ctxReceiver(slot), d = ALIGN[slot] || [0, 0];
-      var x0 = num(r && r.x0, num(cr && cr.x0, d[0]));
-      var side = (r && r.side) || (cr && cr.side);
-      if (side === 'L' && x0 > 0) x0 = -x0; else if (side === 'R' && x0 < 0) x0 = -x0; else if (typeof side === 'number' && side !== 0 && (x0 < 0) !== (side < 0)) x0 = -x0;
-      var y0 = num(r && r.y0, num(cr && cr.y0, d[1]));
-      return { x: x0, y: y0 };
-    }
-    /**
-     * Route position at play time t (yards, field frame: x from the ball, y from the line) → out {x, y}.
-     * The engine's paths are absolute (x0 folded in, y from the line; detected by capY / family / absolute) and
-     * are extrapolated along the last segment with y capped at capY, exactly like Play.pathAt; a relative path
-     * (x, y from the alignment) is offset by x0 / y0. `raw` skips the visual backfield release (the engine starts
-     * every receiver on the line; the scene shows a back / slot leaving his spot over releaseS).
-     */
-    function pathAt(i, t, out, raw) {
-      var fn = recPathFn[i], arr = recPathArr[i];
-      var px = 0, py = 0;
-      if (fn) { var p = fn(t); if (p) { px = num(p.x, 0); py = num(p.y, 0); } }
-      else if (arr && arr.length) {
-        var n = arr.length, a = arr[0];
-        if (t <= num(a.t, 0)) { px = num(a.x, 0); py = num(a.y, 0); }
-        else {
-          var found = false;
-          for (var k = 1; k < n; k++) {
-            var w1 = arr[k];
-            if (t <= num(w1.t, 0)) { var w0 = arr[k - 1], t0 = num(w0.t, 0), t1 = num(w1.t, t0); var u = t1 > t0 ? (t - t0) / (t1 - t0) : 1; px = lerp(num(w0.x, 0), num(w1.x, 0), u); py = lerp(num(w0.y, 0), num(w1.y, 0), u); found = true; break; }
-          }
-          if (!found) {
-            var l = arr[n - 1], k2 = n > 1 ? arr[n - 2] : l, dt = num(l.t, 0) - num(k2.t, 0);
-            if (dt <= 0) { px = num(l.x, 0); py = num(l.y, 0); }
-            else { var over = (t - num(l.t, 0)) / dt; px = num(l.x, 0) + (num(l.x, 0) - num(k2.x, 0)) * over; py = Math.min(recCap[i], num(l.y, 0) + (num(l.y, 0) - num(k2.y, 0)) * over); }
-          }
-        }
-      }
-      if (recAbs[i]) { out.x = px; out.y = py + (raw ? 0 : recY0[i] * Math.max(0, 1 - t / TIMING.releaseS)); }
-      else { out.x = recX0[i] + px; out.y = recY0[i] + py; }
-      return out;
-    }
-    /** Openness 0..1 at play time t. */
-    function openAt(i, t) {
-      var fn = recOpenFn[i], arr = recOpenArr[i], Pl = RTG.Play;
-      if (fn) return clamp(num(fn(t), 0), 0, 1);
-      if (arr && Pl && typeof Pl.openAt === 'function' && recObj[i] && recObj[i].open === arr) return clamp(num(Pl.openAt(recObj[i], t), 0), 0, 1);
-      if (arr && arr.length) {
-        var dt = recOpenDt[i] || 0.1, u = t / dt, k = Math.floor(u), n = arr.length;
-        if (k < 0) return clamp(num(arr[0], 0), 0, 1);
-        if (k >= n - 1) return clamp(num(arr[n - 1], 0), 0, 1);
-        return clamp(lerp(num(arr[k], 0), num(arr[k + 1], 0), u - k), 0, 1);
-      }
-      if (sim && typeof sim.open === 'function') return clamp(num(sim.open(recSlot[i], t), 0), 0, 1);
-      return 0.5;
-    }
-    function ringKind(open) { var R = (TQ().open || {}).ring || {}; return open >= num(R.open, 0.45) ? 0 : (open >= num(R.closing, 0.25) ? 1 : 2); }
-    /**
-     * The flight (s) of a ball released NOW (play time t) at full power and the route's ideal loft to receiver i,
-     * solved exactly like Play.arrival (fixed-point rounds until it settles: Play.ARRIVAL, mirrored here so the
-     * band and the rings agree with the engine to the same tolerance) without allocating; arrDist holds the
-     * distance (yd) of the arrival spot. Without the engine: a flat 0.7 s.
-     */
-    function arrivalFlight(i, t) {
-      var Pl = RTG.Play;
-      if (!Pl || typeof Pl.flightTime !== 'function') { pathAt(i, t + 0.7, pt2, true); var dx = pt2.x - qbX, dy = pt2.y - qbY; arrDist = Math.sqrt(dx * dx + dy * dy); return 0.7; }
-      var A = Pl.ARRIVAL || {}, eps = num(A.eps, 1e-4), rounds = num(A.maxRounds, 24);
-      var drop = num((TQ().route || {}).qbDrop, 7), flight = 0, loft = recLoft[i];
-      for (var k = 0; k < rounds; k++) {
-        pathAt(i, t + flight, pt2, true);
-        arrDist = Math.sqrt(pt2.x * pt2.x + (pt2.y + drop) * (pt2.y + drop));
-        var next = Pl.flightTime(arrDist, qbAttrs, 1, loft), done = Math.abs(next - flight) < eps;
-        flight = next;
-        if (done) break;
-      }
-      return flight;
-    }
+    // ───────────────────────────── the READ picture (ctx.alignment) ─────────────────────────────
     function isLook(o) { return !!(o && typeof o === 'object' && (o.safeties !== undefined || o.press !== undefined || o.box !== undefined)); }
     function lookOf() {
       if (isLook(ctx.look)) return ctx.look;
@@ -798,217 +720,105 @@
       var cov = D && id && D[id];
       return (cov && cov.look) || { safeties: 2, press: false, box: 7, showBlitz: false };
     }
-    function realId() { var r = ctx.real; return typeof r === 'string' ? r : (r && r.id) || 'COVER3'; }
     function shownId() { var r = ctx.shown; return typeof r === 'string' ? r : (r && r.id) || ''; }
     function coverageNameOf(id) { var D = RTG.Data && RTG.Data.plays && RTG.Data.plays.coverages; var c = D && D[id]; return (c && c.name) || String(id); }
-
-    // ───────────────────────────── the actors ─────────────────────────────
-    /** Receivers from the sim (SNAP) or the context (READ): alignments, paths, openness. */
-    function buildReceivers(src) {
-      var list = (src && src.receivers) || ctx.receivers || [];
-      recCount = Math.min(NREC, list.length);
-      for (var i = 0; i < NREC; i++) {
-        var r = i < recCount ? list[i] : null;
-        aShow[IREC + i] = r ? 1 : 0;
-        recSlot[i] = r ? slotOf(r, i) : SLOT_ORDER[i];
-        var al = alignmentOf(r, i);
-        recX0[i] = al.x; recY0[i] = al.y;
-        var path = r && (r.path || r.waypoints || (typeof r.route === 'object' ? r.route : null));
-        recPathFn[i] = typeof path === 'function' ? path : null;
-        recPathArr[i] = Array.isArray(path) ? path : (path && Array.isArray(path.path) ? path.path : null);
-        recAbs[i] = r && (r.absolute === true || typeof r.capY === 'number' || typeof r.family === 'string') ? 1 : 0;
-        recCap[i] = num(r && r.capY, Infinity);
-        recRoute[i] = r && typeof r.route === 'string' ? r.route : (r && r.route && r.route.id) || null;
-        recObj[i] = r;
-        var op = r && (r.open !== undefined ? r.open : r.openness);
-        recOpenFn[i] = typeof op === 'function' ? op : null;
-        recOpenArr[i] = Array.isArray(op) ? op : (op && Array.isArray(op.samples) ? op.samples : null);
-        recOpenDt[i] = num(op && op.dt, num(r && r.openDt, 0.1));
-        recReveal[i] = num(r && r.revealAt, num(src && src.revealAt, 0.6));
-        recSpeed[i] = num(r && r.speed, 50);
-        var RR = RTG.Data && RTG.Data.plays && RTG.Data.plays.routes, rt = RR && recRoute[i] ? RR[recRoute[i]] : null;
-        recLoft[i] = rt && rt.ideal ? num(rt.ideal.loft, 0) : 0;
-        aX[IREC + i] = al.x; aY[IREC + i] = al.y; recLastX[i] = al.x; recLastY[i] = al.y;
-        recOpen[i] = 0; recOpenNow[i] = 0; recDist[i] = 0; recRing[i] = -1; aFrame[IREC + i] = 0;
+    /** ctx.alignment, or (an engine without it) the v1 LOOK table's picture of the shown look. */
+    function alignmentOf() {
+      var a = ctx.alignment;
+      if (a && a.defenders && a.defenders.length && a.receivers && a.receivers.length) return a;
+      var lk = lookOf(), recs = [], defs = [], id = 0, i;
+      var list = ctx.receivers || [];
+      for (i = 0; i < list.length && i < NREC; i++) {
+        var r = list[i], slot = r.slot || SLOT_ORDER[i], d = ALIGN[slot] || [0, 0];
+        recs.push({ slot: slot, x: num(r.x0, num(r.x, d[0])), y: num(r.y0, d[1]) });
       }
-      maxDistYd = RTG.Play && typeof RTG.Play.maxDist === 'function' ? RTG.Play.maxDist(qbAttrs) : Infinity;
-      hotSlot = -1;
-      var hot = src && src.hot;
-      if (hot) for (var h = 0; h < recCount; h++) if (recSlot[h] === hot || recSlot[h] === (hot.slot || hot)) hotSlot = h;
-    }
-    function recIndexOf(slot) { for (var i = 0; i < recCount; i++) if (recSlot[i] === slot) return i; return -1; }
-    function outsideReceivers() {
-      // the two widest receivers (the corners' men), by |x0| with opposite signs when possible
-      var l = -1, r = -1;
-      for (var i = 0; i < recCount; i++) {
-        if (recX0[i] < 0 && (l < 0 || recX0[i] < recX0[l])) l = i;
-        if (recX0[i] > 0 && (r < 0 || recX0[i] > recX0[r])) r = i;
-      }
-      return [l, r];
-    }
-    /** The pre-snap look: eleven defenders placed from ctx.shown, roles from ctx.real for the snap. */
-    function buildDefence() {
-      var lk = lookOf(), i, j;
-      var S = clamp(num(lk.safeties, 2), 1, 2), press = !!lk.press, box = clamp(num(lk.box, 7), 5, 8), blitz = !!lk.showBlitz;
-      var nLB = clamp(box - 4, 1, 3), nCB = 2, nN = Math.max(0, 7 - S - nCB - nLB);
-      defCount = 11;
-      var out = outsideReceivers(), assigned = [];
-      for (i = 0; i < NREC; i++) assigned[i] = false;
-      var d = 0;
-      // 0..3 the line
-      for (i = 0; i < 4; i++, d++) { defPreX[d] = LOOK.dlX[i]; defPreY[d] = LOOK.dlY; defRole[d] = ROLE_HOLD; defArg[d] = -1; defRush[d] = 0; }
-      // linebackers
-      var lbx = LOOK.lbX[nLB] || LOOK.lbX[3];
-      var lbs = [];
-      for (i = 0; i < nLB; i++, d++) { defPreX[d] = lbx[i]; defPreY[d] = LOOK.lbY; defRole[d] = ROLE_SHADOW; defArg[d] = -1; defRush[d] = 0; lbs.push(d); }
-      if (blitz && lbs.length) { var creep = lbs[Math.floor(lbs.length / 2)]; defPreY[creep] = LOOK.blitzY; defPreX[creep] = defPreX[creep] < 0 ? -1 : 1; }
-      // corners over the outside receivers
-      var cbs = [];
-      for (i = 0; i < nCB; i++, d++) {
-        var ri = out[i];
-        var x0 = ri >= 0 ? recX0[ri] : (i === 0 ? -22 : 22);
-        defPreX[d] = x0 - (x0 < 0 ? -LOOK.cbShade : LOOK.cbShade); defPreY[d] = press ? LOOK.cbPressY : LOOK.cbOffY;
-        defRole[d] = ROLE_SHADOW; defArg[d] = ri; if (ri >= 0) assigned[ri] = true; cbs.push(d); defRush[d] = 0;
-      }
-      // nickels over the inside receivers
-      var inside = [];
-      for (i = 0; i < recCount; i++) if (!assigned[i] && recY0[i] >= -2) inside.push(i);
-      inside.sort(function (a, b) { return Math.abs(recX0[b]) - Math.abs(recX0[a]); });
-      for (i = 0; i < nN; i++, d++) {
-        var ni = i < inside.length ? inside[i] : -1;
-        defPreX[d] = ni >= 0 ? recX0[ni] + (recX0[ni] < 0 ? 1.5 : -1.5) : (i === 0 ? -8 : 8); defPreY[d] = press ? LOOK.nickelPressY : LOOK.nickelY;
-        defRole[d] = ROLE_SHADOW; defArg[d] = ni; if (ni >= 0) assigned[ni] = true; defRush[d] = 0;
-      }
-      // safeties
+      function add(pos, x, y) { defs.push({ id: 'D' + (id++), pos: pos, x: x, y: y }); }
+      for (i = 0; i < 4; i++) add('DL', LOOK.dlX[i], LOOK.dlY);
+      var nLB = clamp(num(lk.box, 7) - 4, 1, 3), lbx = LOOK.lbX[nLB];
+      for (i = 0; i < nLB; i++) { var creep = lk.showBlitz && i === (nLB >> 1); add('LB', creep ? (lbx[i] < 0 ? -1 : 1) : lbx[i], creep ? LOOK.blitzY : LOOK.lbY); }
+      var minX = 0, maxX = 0;
+      for (i = 0; i < recs.length; i++) { if (recs[i].x < minX) minX = recs[i].x; if (recs[i].x > maxX) maxX = recs[i].x; }
+      add('CB', (minX || -22) + LOOK.cbShade, lk.press ? LOOK.cbPressY : LOOK.cbOffY);
+      add('CB', (maxX || 22) - LOOK.cbShade, lk.press ? LOOK.cbPressY : LOOK.cbOffY);
+      var S = clamp(num(lk.safeties, 2), 1, 2), nN = Math.max(0, 7 - S - 2 - nLB);
+      for (i = 0; i < nN; i++) add('NB', i === 0 ? 10 : -10, lk.press ? LOOK.nickelPressY : LOOK.nickelY);
       var sp = S === 2 ? LOOK.safeties2 : LOOK.safeties1;
-      var safeties = [];
-      for (i = 0; i < S && d < defCount; i++, d++) { defPreX[d] = sp[i][0]; defPreY[d] = sp[i][1]; defRole[d] = ROLE_DEEP; defArg[d] = i; safeties.push(d); defRush[d] = 0; }
-      while (d < defCount) { defPreX[d] = 0; defPreY[d] = 8; defRole[d] = ROLE_DEEP; defArg[d] = 1; d++; }
-      // the linebackers shadow the receivers nobody has yet (nearest by x), the rest hold the middle
-      for (j = 0; j < lbs.length; j++) {
-        var best = -1, bd = 1e9;
-        for (i = 0; i < recCount; i++) if (!assigned[i]) { var dx = Math.abs(recX0[i] - defPreX[lbs[j]]); if (dx < bd) { bd = dx; best = i; } }
-        if (best >= 0) { defArg[lbs[j]] = best; assigned[best] = true; } else { defRole[lbs[j]] = ROLE_DEEP; defArg[lbs[j]] = 1; }
-      }
-      // any receiver still free (more receivers than coverage men) is watched by the last safety
-      for (i = 0; i < recCount; i++) if (!assigned[i] && safeties.length) { var sd = safeties[safeties.length - 1]; defRole[sd] = ROLE_SHADOW; defArg[sd] = i; assigned[i] = true; }
-      // the real coverage's deep landmarks
-      var deep = DEEP[realId()] || DEEP.COVER3;
-      var di = 0;
-      for (j = 0; j < defCount; j++) if (defRole[j] === ROLE_DEEP) { var z = deep[Math.min(di, deep.length - 1)]; defZX[j] = z[0]; defZY[j] = z[1]; di++; }
-      // a real blitz sends the linebacker on the back (the hot read is his man)
-      if (realId() === 'BLITZ') {
-        var sent = -1;
-        for (j = 0; j < lbs.length; j++) if (defArg[lbs[j]] >= 0 && recY0[defArg[lbs[j]]] < -2) sent = lbs[j];
-        if (sent < 0 && lbs.length) sent = lbs[0];
-        if (sent >= 0) { defRole[sent] = ROLE_BLITZ; defArg[sent] = -1; defLaneX[sent] = defPreX[sent] < 0 ? -2.5 : 2.5; defArrive[sent] = num(sim && sim.sackAt, 3.2) * 1.05; }
-      }
-      for (j = 0; j < defCount; j++) { aX[j] = defPreX[j]; aY[j] = defPreY[j]; aShow[j] = 1; aFrame[j] = 2; }
+      for (i = 0; i < S; i++) add('S', sp[i][0], sp[i][1]);
+      while (defs.length < NDEF) add('S', 0, 9);
+      return { qb: { x: 0, y: -5 }, receivers: recs, linemen: [{ x: -4, y: -1 }, { x: -2, y: -1 }, { x: 0, y: -1 }, { x: 2, y: -1 }, { x: 4, y: -1 }], defenders: defs };
     }
-    /** The sim's rushers take lanes through the line; each lane's blocker is pushed back in front of him. */
-    function buildRush() {
-      var list = (sim && sim.rushers) || [];
-      var i, j, used = [0, 0, 0, 0];
-      for (j = 0; j < NOL; j++) olPush[j] = -1;
-      for (i = 0; i < 4; i++) { defRole[i] = ROLE_HOLD; defRush[i] = 0; }
-      var n = Math.min(3, list.length);
-      if (!n) { n = 2; }
-      rushFirst = -1;
-      var firstAt = Infinity;
-      for (i = 0; i < n; i++) {
-        var r = list[i] || {};
-        var laneX = num(r.x, typeof r.lane === 'number' ? (Math.abs(r.lane) <= 2 ? r.lane * 3 : r.lane) : (i === 0 ? -1.5 : (i === 1 ? 4.5 : -4.5)));
-        var arrive = num(r.arriveAt, num(r.arrival, num(r.at, num(r.t, num(sim && sim.sackAt, 3.2)))));
-        var best = -1, bd = 1e9;
-        for (j = 0; j < 4; j++) if (!used[j]) { var dx = Math.abs(LOOK.dlX[j] - laneX); if (dx < bd) { bd = dx; best = j; } }
-        if (best < 0) continue;
-        used[best] = 1;
-        defRole[best] = ROLE_RUSH; defRush[best] = 1; defLaneX[best] = laneX; defArrive[best] = Math.max(0.6, arrive);
-        if (defArrive[best] < firstAt) { firstAt = defArrive[best]; rushFirst = best; }   // the first to arrive IS the sack: he ends on the quarterback
-        var bo = -1, bdo = 1e9;
-        for (j = 0; j < NOL; j++) if (olPush[j] < 0) { var dxo = Math.abs(olX0[j] - laneX); if (dxo < bdo) { bdo = dxo; bo = j; } }
-        if (bo >= 0) olPush[bo] = best;
-      }
-    }
-    function placeLine() {
-      for (var j = 0; j < NOL; j++) { aX[IOL + j] = olX0[j]; aY[IOL + j] = -1; aShow[IOL + j] = 1; aFrame[IOL + j] = 0; }
-      aShow[IQB] = 1; aFrame[IQB] = 0;
-      qbX = 0; qbY = gun ? FIELD.qbShotgun : FIELD.qbUnderCentre; qbPose = 0; qbDown = 0;
-      if (alignU < 1) qbY = qbFromY;                   // the slide from the READ picture starts where he stood
-      aX[IQB] = qbX; aY[IQB] = qbY;
+    /** Place the READ picture (static until the snap). */
+    function placeAlignment() {
+      var a = alignmentOf(), i;
+      recCount = Math.min(NREC, a.receivers.length); defCount = Math.min(NDEF, a.defenders.length); olCount = Math.min(NOL, (a.linemen || []).length);
+      for (i = 0; i < NACT; i++) { aShow[i] = 0; aFrame[i] = 0; }
+      for (i = 0; i < defCount; i++) { var d = a.defenders[i]; aX[i] = num(d.x, 0); aY[i] = num(d.y, 1); aShow[i] = 1; aFrame[i] = 2; defId[i] = String(d.id); defPos[i] = String(d.pos || ''); }
+      for (i = 0; i < recCount; i++) { var r = a.receivers[i]; aX[IREC + i] = num(r.x, 0); aY[IREC + i] = num(r.y, 0); aShow[IREC + i] = 1; recSlot[i] = r.slot || SLOT_ORDER[i]; }
+      for (i = 0; i < olCount; i++) { var o = a.linemen[i]; aX[IOL + i] = num(o.x, 0); aY[IOL + i] = num(o.y, -1); aShow[IOL + i] = 1; }
+      var q = a.qb || { x: 0, y: -5 };
+      aX[IQB] = num(q.x, 0); aY[IQB] = num(q.y, -5); aShow[IQB] = 1; aFrame[IQB] = 0;
+      carrier = -2;
     }
 
-    /** Everyone's field position at play time t (seconds since the snap). */
-    function positionsAt(t) {
-      var i, j, u;
-      // the quarterback: the drop, then set
-      var dropS = reduced ? 0 : TIMING.dropMs / 1000;
-      var dropTo = gun ? FIELD.qbGunDrop : FIELD.qbDrop, dropFrom = gun ? FIELD.qbShotgun : FIELD.qbUnderCentre;
-      if (phase === 'RUN') { /* placed by the run beat */ }
-      else if (alignU < 1) { qbY = lerp(qbFromY, dropFrom, ease(alignU)); qbPose = 0; }
-      else if (t < dropS) { u = t / dropS; qbY = lerp(dropFrom, dropTo, ease(u)); qbPose = (Math.floor(t * 1000 / 110) & 1); }
-      else { qbY = dropTo; qbPose = 1; }
-      if (sacked) qbPose = 0;
-      else if (thrown && phase !== 'RUN') { qbPose = (now() - tThrow) < TIMING.throwPoseMs ? 2 : 0; }
-      aX[IQB] = qbX; aY[IQB] = qbY;
-      // receivers
+    // ───────────────────────────── the live → the actors ─────────────────────────────
+    /** At the snap: index the live's receivers / defenders and remember where the READ picture had them (the slide). */
+    function bindLive() {
+      var i, j;
+      for (i = 0; i < NACT; i++) { fromX[i] = aX[i]; fromY[i] = aY[i]; }
+      var fromBySlot = {}, fromById = {};
+      for (i = 0; i < recCount; i++) fromBySlot[recSlot[i]] = i;
+      for (j = 0; j < defCount; j++) fromById[defId[j]] = j;
+      var fx = [], fy = [];
+      for (i = 0; i < NACT; i++) { fx.push(fromX[i]); fy.push(fromY[i]); }
+      recIdx = {}; defIdx = {};
+      recCount = Math.min(NREC, lv.receivers.length);
       for (i = 0; i < recCount; i++) {
-        if ((ballCarrier === i || dropMan === i) && landBeat) continue;    // the man at the ball is placed by the landing beat
-        pathAt(i, t, pt2);
-        if (alignU < 1) { pt2.x = lerp(recFromX[i], pt2.x, ease(alignU)); pt2.y = lerp(recFromY[i], pt2.y, ease(alignU)); }
-        recVX[i] = pt2.x - recLastX[i]; recVY[i] = pt2.y - recLastY[i];
-        recLastX[i] = pt2.x; recLastY[i] = pt2.y;
-        aX[IREC + i] = pt2.x; aY[IREC + i] = pt2.y;
-        // the ring is coloured by the openness a ball released NOW would find at its arrival (the engine's INT gate
-        // judges open(t + flight), so a green ring means "cannot be picked"); grey when the arrival is beyond the arm
-        recOpenNow[i] = openAt(i, t);
-        recOpen[i] = openAt(i, t + arrivalFlight(i, t));
-        recDist[i] = arrDist;
-        recRing[i] = t >= recReveal[i] ? (recDist[i] > maxDistYd ? 3 : ringKind(recOpen[i])) : -1;
-        aFrame[IREC + i] = (Math.abs(recVX[i]) > 0.01 || Math.abs(recVY[i]) > 0.01) ? (Math.floor((t + alignU) * 1000 / TIMING.runFrameMs) & 1) : 0;
+        var r = lv.receivers[i]; recSlot[i] = r.slot || SLOT_ORDER[i]; recIdx[recSlot[i]] = i; aShow[IREC + i] = 1;
+        var fi = fromBySlot[recSlot[i]];
+        if (fi !== undefined) { fromX[IREC + i] = fx[IREC + fi]; fromY[IREC + i] = fy[IREC + fi]; } else { fromX[IREC + i] = num(r.x, 0); fromY[IREC + i] = num(r.y, 0); }
       }
-      // the rush and the line: the first rusher ends on the quarterback's near side (drawn over him: the sack reads
-      // as a tackle), the others land a step wide of him
-      var rot = ease(rotateMs > 0 ? t / (rotateMs / 1000) : 1);
-      for (j = 0; j < 4; j++) {
-        if (defRole[j] === ROLE_RUSH) {
-          var p = clamp(t / defArrive[j], 0, 1);
-          var first = j === rushFirst || rushFirst < 0;
-          var yEnd = first ? qbY - 0.4 : qbY + 0.4, xEnd = first ? qbX : qbX + (defLaneX[j] < 0 ? -0.8 : 0.8);
-          var yR = p < 0.25 ? lerp(LOOK.dlY, -0.6, p * 4) : lerp(-0.6, yEnd, (p - 0.25) / 0.75);
-          aX[j] = lerp(defLaneX[j], xEnd, p * 0.9); aY[j] = yR; aFrame[j] = (Math.floor(t * 1000 / TIMING.runFrameMs) & 1);
-        } else { aX[j] = LOOK.dlX[j]; aY[j] = 0.3 - 0.2 * Math.sin(t * 6 + j); aFrame[j] = 0; }
+      for (i = recCount; i < NREC; i++) aShow[IREC + i] = 0;
+      defCount = Math.min(NDEF, lv.defenders.length);
+      for (j = 0; j < defCount; j++) {
+        var d = lv.defenders[j]; defId[j] = String(d.id); defPos[j] = String(d.pos || ''); defIdx[defId[j]] = j; aShow[j] = 1;
+        var fj = fromById[defId[j]];
+        if (fj !== undefined) { fromX[j] = fx[fj]; fromY[j] = fy[fj]; } else { fromX[j] = num(d.x, 0); fromY[j] = num(d.y, 1); }
       }
-      for (j = 0; j < NOL; j++) {
-        var r = olPush[j];
-        if (r >= 0) { aY[IOL + j] = Math.min(-1, Math.max(qbY + 0.5, aY[r] - 1.0)); aX[IOL + j] = lerp(olX0[j], aX[r], 0.6); }
-        else { aY[IOL + j] = -1 - 0.15 * Math.sin(t * 5 + j); aX[IOL + j] = olX0[j]; }
+      for (j = defCount; j < NDEF; j++) aShow[j] = 0;
+      olCount = Math.min(NOL, (lv.linemen || []).length);
+      for (j = 0; j < NOL; j++) aShow[IOL + j] = j < olCount ? 1 : 0;
+      hotSlot = sim && sim.hot ? (recIdx[sim.hot] !== undefined ? recIdx[sim.hot] : -1) : -1;
+    }
+    function moving(vx, vy) { return num(vx, 0) * num(vx, 0) + num(vy, 0) * num(vy, 0) > FIELD.moveEps; }
+    /** Copy the live's positions into the actor arrays (every frame; no allocation), blended from the READ picture during the slide. */
+    function readLive() {
+      var i, t = num(lv.t, 0), step = (Math.floor(t * 1000 / TIMING.runFrameMs) & 1);
+      var q = lv.qb;
+      aX[IQB] = num(q.x, 0); aY[IQB] = num(q.y, -5);
+      for (i = 0; i < recCount; i++) {
+        var r = lv.receivers[i];
+        aX[IREC + i] = num(r.x, 0); aY[IREC + i] = num(r.y, 0);
+        aFrame[IREC + i] = catchSlot === i && catchT >= 0 && t - catchT < TIMING.catchPoseS ? 2 : (moving(r.vx, r.vy) ? step : 0);
       }
-      // coverage: roles blend in from the pre-snap spots over rotateMs
-      for (j = 4; j < defCount; j++) {
-        var tx, ty, role = defRole[j];
-        if (j === intMan && landBeat) continue;      // the interceptor is placed by the landing beat once the ball is his
-        if (role === ROLE_SHADOW && defArg[j] >= 0) {
-          var k = defArg[j], op = recOpenNow[k], cushion = CUSHION.base + CUSHION.perOpen * op;
-          var rx = aX[IREC + k], ry = aY[IREC + k];
-          var dxn = (rx < 0 ? 1 : -1) * CUSHION.inside, dyn = 1, nn = Math.sqrt(dxn * dxn + dyn * dyn);
-          tx = rx + dxn / nn * cushion; ty = ry + dyn / nn * cushion;
-        } else if (role === ROLE_BLITZ) {
-          var pb = clamp(t / defArrive[j], 0, 1);
-          tx = lerp(defLaneX[j], qbX, pb); ty = lerp(defPreY[j], qbY + 0.8, pb);
-          aX[j] = tx; aY[j] = ty; aFrame[j] = (Math.floor(t * 1000 / TIMING.runFrameMs) & 1);
-          continue;
-        } else { tx = defZX[j]; ty = defZY[j]; }
-        if (converge >= 0 && (j === intMan || role === ROLE_DEEP || defArg[j] === converge)) {
-          // the flight: the man on the target and the deep help close on the landing spot; the interceptor (chosen
-          // at the throw) runs all the way, so he arrives with the ball instead of popping onto it
-          var cu = clamp((t - tThrowPlay) / Math.max(0.3, flightS), 0, 1);
-          if (j !== intMan) cu *= 0.8;
-          tx = lerp(tx, convergeX, cu); ty = lerp(ty, convergeY, cu);
-        }
-        aX[j] = lerp(defPreX[j], tx, rot); aY[j] = lerp(defPreY[j], ty, rot);
-        aFrame[j] = t < 0.05 ? 2 : (Math.floor(t * 1000 / TIMING.runFrameMs) & 1);
+      for (i = 0; i < defCount; i++) {
+        var d = lv.defenders[i];
+        aX[i] = num(d.x, 0); aY[i] = num(d.y, 1);
+        aFrame[i] = t < 0.05 ? 2 : (moving(d.vx, d.vy) ? step : 2);
       }
+      for (i = 0; i < olCount; i++) { var o = lv.linemen[i]; aX[IOL + i] = num(o.x, 0); aY[IOL + i] = num(o.y, -1); }
+      if (alignU < 1) {
+        var e = ease(alignU);
+        for (i = 0; i < NACT; i++) if (aShow[i]) { aX[i] = lerp(fromX[i], aX[i], e); aY[i] = lerp(fromY[i], aY[i], e); }
+      }
+      // who has the ball
+      var c = lv.carrier;
+      if (c === 'QB') carrier = -2;
+      else if (c === null || c === undefined || c === '') carrier = -1;
+      else if (recIdx[c] !== undefined) carrier = recIdx[c];
+      else if (defIdx[c] !== undefined) carrier = -3 - defIdx[c];
+      else carrier = -1;
+      if (lv.ball && !lv.ball.caught && lv.phase === 'BALL_IN_AIR') carrier = -1;
+      if (q.hasBall) carrier = -2;
     }
     /** Project every actor and sort far → near (insertion sort: the order barely changes between frames). */
     function projectAll() {
@@ -1024,6 +834,51 @@
         order[j + 1] = k;
       }
     }
+    /** The sim's route position of receiver i at play time t (the engine's receivers run their sim paths) → out. */
+    function routeAt(i, t, out) {
+      var rs = sim && sim.receivers, r = rs && rs[i], p = r && r.path;
+      if (!p || !p.length) { out.x = aX[IREC + i]; out.y = aY[IREC + i]; return out; }
+      var n = p.length;
+      if (t <= p[0].t) { out.x = p[0].x; out.y = p[0].y; return clampRoute(r, out); }
+      for (var k = 1; k < n; k++) if (t <= p[k].t) {
+        var a = p[k - 1], b = p[k], u = b.t > a.t ? (t - a.t) / (b.t - a.t) : 1;
+        out.x = a.x + (b.x - a.x) * u; out.y = a.y + (b.y - a.y) * u; return clampRoute(r, out);
+      }
+      var l = p[n - 1], m = n > 1 ? p[n - 2] : l, dt = l.t - m.t;
+      if (dt <= 0) { out.x = l.x; out.y = l.y; return clampRoute(r, out); }
+      var over = (t - l.t) / dt;
+      out.x = l.x + (l.x - m.x) * over; out.y = Math.min(num(r.capY, Infinity), l.y + (l.y - m.y) * over);
+      return clampRoute(r, out);
+    }
+    /** The engine's pathInto holds x inside [xMin, xMax] and y under capY. */
+    function clampRoute(r, out) {
+      out.x = clamp(out.x, num(r.xMin, -Infinity), num(r.xMax, Infinity));
+      out.y = Math.min(num(r.capY, Infinity), out.y);
+      return out;
+    }
+    /**
+     * The ball's flight (s) over `len` yards at `loft` — for the aim assist on a BENT line only (a straight line asks
+     * live.aim). RTG.Field.ballSpeed(attrs, loft) when the engine has it; else Tuning.qb.field.ballSpeed {base, perArm,
+     * loftSlow}: (base + perArm × ARM/99) × (1 − loftSlow × loft) yd/s. Every spot is re-checked with live.classify.
+     */
+    function flightEst(len, loftV) {
+      var Fd = RTG.Field;
+      if (Fd && typeof Fd.ballSpeed === 'function') { var bs = num(Fd.ballSpeed(attrs, loftV), 0); if (bs > 0) return len / bs; }
+      var B = TF().ballSpeed || {};
+      var v = (num(B.base, 21) + num(B.perArm, 10) * ARM / 99) * (1 - num(B.loftSlow, 0.48) * clamp(loftV, 0, 1));
+      return len / Math.max(4, v);
+    }
+    /** Where receiver i and a ball of `loftV` thrown from the QB now over a line of `stretch` × the straight distance meet (fixed point) → out. */
+    function meetSpot(i, loftV, stretch, out) {
+      var t = num(lv.t, 0), qx = num(lv.qb.x, 0), qy = num(lv.qb.y, 0);
+      out.x = aX[IREC + i]; out.y = aY[IREC + i];
+      for (var k = 0; k < 6; k++) {
+        var dx = out.x - qx, dy = out.y - qy;
+        routeAt(i, t + flightEst(Math.sqrt(dx * dx + dy * dy) * stretch, loftV), out);
+      }
+      return out;
+    }
+    function nearestSideline(x) { var sL = sim && sim.field ? num(sim.field.sideL, -26.7) : L.hashShift - FIELD.widthYd / 2, sR = sim && sim.field ? num(sim.field.sideR, 26.7) : L.hashShift + FIELD.widthYd / 2; return x - sL < sR - x ? sL : sR; }
 
     // ───────────────────────────── HUD (DOM) ─────────────────────────────
     function buildHud() {
@@ -1040,7 +895,7 @@
       strip.appendChild(playChip);
       hud.appendChild(strip);
       var right = el('div', { class: 'pv-hud-right' });
-      var pm = el('div', { class: 'pv-pressure' + (clutch ? ' clutch' : ''), role: 'meter', 'aria-label': 'Pressure', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '0' });
+      var pm = el('div', { class: 'pv-pressure' + (clutch ? ' clutch' : ''), role: 'meter', 'aria-label': 'Rush', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '0' });
       pm.appendChild(el('span', { class: 'pv-pressure-label', text: 'RUSH' }));
       hudPressureFill = el('span', { class: 'pv-pressure-fill' });
       pm.appendChild(el('span', { class: 'pv-pressure-track', 'aria-hidden': 'true' }, hudPressureFill));
@@ -1049,10 +904,10 @@
       hudPressureVal = -1;
       setPressure(0);
     }
-    /** The HUD clock during a two-minute snap: the situation's clock minus the play time (whole seconds, DOM text only when it changes). */
-    function runClock() {
+    /** The HUD clock during a two-minute snap: the situation's clock minus the play time (whole seconds; DOM text only when it changes). */
+    function runClock(t) {
       if (!clockChip || !sit.twoMinute) return;
-      var left = Math.max(0, Math.round(num(sit.clock, 0)) - Math.floor(tPlay));
+      var left = Math.max(0, Math.round(num(sit.clock, 0)) - Math.floor(t));
       if (left === clockShown) return;
       clockShown = left;
       clockChip.textContent = periodText() + ' ' + clockText(left);
@@ -1065,61 +920,47 @@
       hudPressureFill.parentNode.parentNode.setAttribute('aria-valuenow', String(pct));
       hudPressureFill.parentNode.parentNode.classList.toggle('hot', pct >= 70);
     }
-    function buildThrowBox() {
-      while (throwBox.firstChild) throwBox.removeChild(throwBox.firstChild);
+    /** RUSH: the nearest unblocked rusher's closeness (sim.rushers' beatAt holds a blocked man under rushHeldCap). */
+    function rushLevel() {
+      if (typeof lv.pressure === 'number' && lv.pressure === lv.pressure) return clamp(lv.pressure, 0, 1);   // the engine's own (the throw's scatter reads the same)
+      var q = lv.qb, t = num(lv.t, 0), best = 0, tackleR = num(TF().tackleR, 1), i, v, d, dx, dy;
+      var rs = sim && sim.rushers;
+      var useList = rs && rs.length && rs[0] && rs[0].defId !== undefined;
+      for (i = 0; i < defCount; i++) {
+        var df = lv.defenders[i];
+        var beatAt = -1;
+        if (useList) {
+          beatAt = -2;
+          for (var k = 0; k < rs.length; k++) if (String(rs[k].defId) === defId[i]) { beatAt = num(rs[k].beatAt, 0); break; }
+          if (beatAt === -2) continue;
+        } else if (df.role !== 'RUSH') continue;
+        dx = num(df.x, 0) - num(q.x, 0); dy = num(df.y, 0) - num(q.y, 0); d = Math.sqrt(dx * dx + dy * dy);
+        v = clamp(1 - (d - tackleR) / FIELD.rushRange, 0, 1);
+        if (beatAt > 0 && t < beatAt) v *= num(TF().heldPressure, FIELD.rushHeld);
+        if (v > best) best = v;
+      }
+      return best;
+    }
+    function buildDrawBox() {
+      while (drawBox.firstChild) drawBox.removeChild(drawBox.firstChild);
       hintEl = el('div', { class: 'pv-hint', role: 'status' });
-      throwBox.appendChild(hintEl);
-      var vb = el('div', { class: 'pv-vbar', role: 'meter', 'aria-label': 'Velocity', 'aria-valuemin': '0', 'aria-valuemax': '115', 'aria-valuenow': '0' });
-      velLabel = el('span', { class: 'pv-vbar-label', text: 'VEL' });
-      vb.appendChild(velLabel);
-      var track = el('span', { class: 'pv-vbar-track', 'aria-hidden': 'true' });
-      velGreen = el('span', { class: 'pv-vbar-green', hidden: true });
-      velRed = el('span', { class: 'pv-vbar-red', style: { left: (100 / 1.15).toFixed(1) + '%' } });
-      velFill = el('span', { class: 'pv-vbar-fill' });
-      track.appendChild(velRed); track.appendChild(velGreen); track.appendChild(velFill);
-      for (var i = 1; i < 11; i++) track.appendChild(el('span', { class: 'pv-vbar-tick' + (i === 5 || i === 10 ? ' big' : ''), style: { left: (i * 10 / 1.15).toFixed(1) + '%' } }));
-      vb.appendChild(track);
-      throwBox.appendChild(vb);
-      var row = el('div', { class: 'pv-throwrow' });
-      var aim = el('div', { class: 'pv-aim', role: 'group', 'aria-label': 'Lead and loft' });
-      aimLead = el('span', { class: 'chip pv-chip pv-aim-lead num', text: 'LEAD 0' });
-      aimLoft = el('span', { class: 'chip pv-chip pv-aim-loft num', text: 'LOFT 0.5' });
-      aim.appendChild(aimLead); aim.appendChild(aimLoft);
-      row.appendChild(aim);
+      drawBox.appendChild(hintEl);
+      keysEl = el('div', { class: 'pv-keys', text: keysLegend() });
+      drawBox.appendChild(keysEl);
       var actions = el('div', { class: 'pv-actions' });
-      btnAway = el('button', { class: 'btn btn-ghost btn-sm pv-btn-away', type: 'button', text: 'THROW AWAY', 'data-action': 'throwaway', hidden: true, onClick: function () { if (input) input.throwAway(); } });
-      btnScr = el('button', { class: 'btn btn-secondary btn-sm pv-btn-scramble', type: 'button', text: 'SCRAMBLE', 'data-action': 'scramble', hidden: true, onClick: function () { if (input) input.scramble(); } });
-      actions.appendChild(btnAway); actions.appendChild(btnScr);
-      row.appendChild(actions);
-      throwBox.appendChild(row);
-      lastLeadTxt = ''; lastLoftTxt = '';
-      setVel(0); setAimReadout(0, 0.5);
+      btnAway = el('button', { class: 'btn btn-ghost btn-sm pv-btn-away', type: 'button', text: 'THROW AWAY', 'data-action': 'throwaway', hidden: true, onClick: function () { doThrowAway(); } });
+      actions.appendChild(btnAway);
+      drawBox.appendChild(actions);
     }
-    function setVel(p) {
-      velFill.style.width = (clamp(p, 0, 1.15) / 1.15 * 100).toFixed(1) + '%';
-      velFill.parentNode.parentNode.setAttribute('aria-valuenow', String(Math.round(p * 100)));
-      var inG = zone && p >= zone.lo && p <= zone.hi;
-      velFill.classList.toggle('in-green', !!inG);
+    function keyName(k) { return k === ' ' || k === 'Spacebar' || k === 'Space' ? 'SPACE' : String(k || '').replace('Arrow', '').toUpperCase(); }
+    /** The keyboard legend from the live bindings (Settings ▸ KEYS remaps show here). */
+    function keysLegend() {
+      var K = Inp.resolveKeys(liveSettings().keys);
+      return '1-5 AIM · ARROWS NUDGE · ' + keyName(K.bendLeft) + '/' + keyName(K.bendRight) + ' BEND · ' + keyName(K.loft) + ' LOFT · ' +
+        keyName(K.confirmAlt) + '/' + keyName(K.confirm) + ' THROW · ' + keyName(K.run) + ' RUN · ' + keyName(K.throwAway) + ' AWAY · ' + keyName(K.cancel) + ' UNDO';
     }
-    function setZone(z) {
-      zone = z;
-      if (!z) { velGreen.hidden = true; lastZoneLo = -1; return; }
-      if (Math.abs(z.lo - lastZoneLo) < 0.004) return;
-      lastZoneLo = z.lo;
-      velGreen.hidden = false;
-      velGreen.style.left = (z.lo / 1.15 * 100).toFixed(1) + '%';
-      velGreen.style.width = ((z.hi - z.lo) / 1.15 * 100).toFixed(1) + '%';
-    }
-    function setAimReadout(ld, lf) {
-      var lt = 'LEAD ' + (ld > 0.05 ? '►' : (ld < -0.05 ? '◄' : '')) + Math.abs(Math.round(ld * 10) / 10);
-      var ft = 'LOFT ' + (Math.round(lf * 10) / 10);
-      if (lt !== lastLeadTxt) { lastLeadTxt = lt; aimLead.textContent = lt; }
-      if (ft !== lastLoftTxt) { lastLoftTxt = ft; aimLoft.textContent = ft; }
-    }
-    function setHint(text) { if (hintEl) { hintEl.textContent = text || ''; hintEl.hidden = !text; } }
-    function snapHint() {
-      return coarsePointerNow() ? 'TAP A RECEIVER · HOLD · DRAG TO LEAD & LOFT · LET GO' : '1-5 PICK · HOLD ' + pressLabel() + ' · ARROWS LEAD & LOFT · LET GO IN THE GREEN';
-    }
+    function setHint(text) { if (hintEl && hintEl.textContent !== (text || '')) { hintEl.textContent = text || ''; hintEl.hidden = !text; } }
+    function playHint() { return coarsePointerNow() ? 'DRAW FROM THE QB — TO A RECEIVER TO PASS, INTO SPACE TO RUN' : 'DRAW FROM THE QB — TO A RECEIVER TO PASS, INTO SPACE TO RUN · OR 1-5'; }
     function showBanner(text, kind) {
       banner.textContent = '';
       banner.className = 'pv-banner pv-banner-' + kind;
@@ -1133,9 +974,9 @@
       subBanner.textContent = text; subBanner.className = 'pv-sub pv-sub-' + (kind || 'info'); subBanner.hidden = false;
       setTimer(function () { subBanner.hidden = true; }, ms || TIMING.subBannerMs);
     }
-    function showToast(text) {
+    function showToast(text, ms) {
       toastLine.textContent = text; toastLine.hidden = false;
-      setTimer(function () { toastLine.hidden = true; }, TIMING.hintMs);
+      setTimer(function () { toastLine.hidden = true; }, ms || TIMING.hintMs);
     }
     function setAria(text) { if (text !== lastAria) { lastAria = text; canvas.setAttribute('aria-label', text); } }
     function lookText() {
@@ -1153,6 +994,46 @@
       if (sit.stakes || sit.text) s += '. ' + (sit.stakes || sit.text);
       return s;
     }
+    /** The draw HUD: the SLOW-MO chip (active while drafting; OUT once the budget is spent) and the draft chip. */
+    function setSlowHud(drafting) {
+      var left = slowBudget > 0 ? clamp(1 - slowUsed / slowBudget, 0, 1) : 0;
+      var pct = Math.round(left * 100);
+      var active = drafting ? '1' : '0';
+      if (slowEl.getAttribute('data-active') !== active) { slowEl.setAttribute('data-active', active); slowEl.hidden = !drafting; }
+      if (pct !== lastSlowPct) {
+        lastSlowPct = pct;
+        slowFill.style.width = pct + '%';
+        slowEl.setAttribute('aria-valuenow', String(pct));
+      }
+      var out = left <= 0;
+      if (out !== slowOut) { slowOut = out; slowEl.classList.toggle('out', out); slowLabel.textContent = out ? 'SLOW-MO OUT' : 'SLOW-MO'; }
+      var stageSlow = drafting && !out;
+      if (stageSlow !== slowBands) { slowBands = stageSlow; stage.classList.toggle('is-slow', stageSlow); }
+    }
+    /** The draft chip: PASS → WR1 · BULLET · RUN · THROW AWAY · TOO LONG (DOM writes only when something changed; no per-frame strings). */
+    var chipK = null, chipTarget = null, chipTouch = null, chipLong = false, chipPrev = null, chipAssist = false;
+    function setDraftChip() {
+      var k = cls ? dkind : '';
+      var target = k === 'PASS' && cls.target ? cls.target : '';
+      var touch = k === 'PASS' ? Inp.touchName(input ? input.loft() : 0.5) : '';
+      var tooLong = !!(k === 'PASS' && cls.tooLong);
+      var prev = k === 'PASS' && cls.previewShown && cls.preview ? cls.preview : '';
+      if (k === chipK && target === chipTarget && touch === chipTouch && tooLong === chipLong && prev === chipPrev && clsAssist === chipAssist) return;
+      chipK = k; chipTarget = target; chipTouch = touch; chipLong = tooLong; chipPrev = prev; chipAssist = clsAssist;
+      var text = '';
+      if (k === 'PASS') text = tooLong ? 'TOO LONG' : 'PASS → ' + (target || '?') + ' · ' + touch;
+      else if (k === 'RUN') text = 'RUN';
+      else if (k === 'THROWAWAY') text = 'THROW AWAY';
+      draftChip.textContent = text;
+      draftChip.hidden = !text;
+      draftChip.setAttribute('data-kind', k || '');
+      draftChip.setAttribute('data-target', target);
+      draftChip.setAttribute('data-touch', touch);
+      if (prev) draftChip.setAttribute('data-preview', String(prev)); else draftChip.removeAttribute('data-preview');
+      draftChip.setAttribute('data-assist', clsAssist ? '1' : '0');
+      draftChip.className = 'pv-draft pv-draft-' + (k ? k.toLowerCase() : 'none') + (tooLong ? ' too-long' : '') + (prev ? ' pv-preview-' + String(prev).toLowerCase() : '');
+    }
+    function setHidden(e, h) { if (e.hidden !== h) e.hidden = h; }
 
     // ───────────────────────────── the situation card (SITUATION) ─────────────────────────────
     /** A keyboard-made click (detail 0) inside armMs of the phase mounting is the tail of an earlier Enter: ignored. */
@@ -1185,6 +1066,11 @@
     }
 
     // ───────────────────────────── the play cards (READ) ─────────────────────────────
+    function ctxReceiver(slot) {
+      var list = ctx.receivers || [];
+      for (var i = 0; i < list.length; i++) if ((list[i].slot || SLOT_ORDER[i]) === slot) return list[i];
+      return null;
+    }
     function routePathFor(assignment) {
       if (!assignment) return null;
       if (Array.isArray(assignment.path)) return assignment.path;
@@ -1278,7 +1164,7 @@
     function startSituation() {
       setPhase('SITUATION');
       buildSituation();
-      cards.hidden = true; lookLine.hidden = true; throwBox.hidden = true; feedback.hidden = true;
+      cards.hidden = true; lookLine.hidden = true; drawBox.hidden = true; feedback.hidden = true;
       setAria(situationLabel());
       announce(situationLabel());
     }
@@ -1288,12 +1174,17 @@
       setPhase('READ');
       buildLookLine();
       buildCards();
-      throwBox.hidden = true; feedback.hidden = true;
+      drawBox.hidden = true; feedback.hidden = true;
       var lt = 'The defence shows ' + lookText() + (ctx.pressure && ctx.pressure.hot ? ' The pocket will be short.' : '') + ' Pick a play.';
       setAria(lt);
       announce(lt);
       if (ctx.options && ctx.options.length) setTimer(function () { var b = cards.querySelector('button'); if (b) { try { b.focus(); } catch (e) { /* ignore */ } } }, 0);
       showSub('READ THE LOOK', 'info', 900);
+    }
+    function makeLiveFor(s) {
+      if (typeof opts.makeLive === 'function') return opts.makeLive(s);
+      if (RTG.Play && typeof RTG.Play.live === 'function' && opts.rng) return RTG.Play.live(s, opts.rng);
+      throw new Error('PlayView: no makeLive (the shell must pass makeLive(sim) → Play.live(sim, rng))');
     }
     function pick(idxOrId) {
       if (destroyed || phase !== 'READ') return false;
@@ -1303,346 +1194,355 @@
       if (idx < 0 || idx >= options.length) return false;
       var opt = options[idx];
       setCardsEnabled(false);
-      var s = null;
+      var s = null, l = null;
       try { s = opts.onPick ? opts.onPick(opt.id, opt) : null; }
       catch (e) { if (root.console) root.console.error('PlayView onPick failed', e); }
       if (!s || typeof s !== 'object') { setCardsEnabled(true); return false; }
       pickedId = opt.id; pickedOpt = opt;
       cue('click');
-      if (s.run) { startRun(s, opt); return true; }
-      startSnap(s, opt);
+      if (s.run) { startRunCard(s, opt); return true; }
+      try { l = makeLiveFor(s); }
+      catch (e2) { if (root.console) root.console.error('PlayView makeLive failed', e2); }
+      if (!l || typeof l.step !== 'function' || !l.qb || !l.receivers || !l.defenders) { setCardsEnabled(true); return false; }
+      startPlay(s, l, opt);
       return true;
     }
-    function formationOf(s, opt) { return String((s && s.play && s.play.formation) || (s && s.formation) || (opt && opt.formation) || ''); }
-    function isGun(formation) { return !/SINGLEBACK|I_FORM|UNDER|CENTRE|CENTER/i.test(formation); }
-    /** Remember where everyone stands (the READ picture) so the snap can slide them into the play's formation. */
-    function captureFrom() {
-      var i, j;
-      for (i = 0; i < NREC; i++) { recFromX[i] = aX[IREC + i]; recFromY[i] = aY[IREC + i]; }
-      qbFromY = qbY;
-      // by slot: the READ picture and the play's formation list the same slots in the same order, but be safe
-      var fromBySlot = {};
-      for (j = 0; j < recCount; j++) fromBySlot[recSlot[j]] = j;
-      return fromBySlot;
-    }
-    function startSnap(s, opt) {
-      sim = s; result = null; thrown = false; sacked = false; target = -1; hold = false; meterP = 0; lead = 0; loft = 0.5; lastTick = -1;
-      ballCarrier = -1; landBeat = null; converge = -1; ballShown = false; intMan = -1; dropMan = -1;
-      var fromBySlot = captureFrom();
-      gun = isGun(formationOf(s, opt));
-      rotateMs = reduced ? 0 : TIMING.rotateMs;
-      alignMs = reduced ? 0 : TIMING.alignMs; alignU = alignMs ? 0 : 1;
-      buildReceivers(s);
-      for (var i = 0; i < recCount; i++) { var fi = fromBySlot[recSlot[i]]; if (fi === undefined) fi = i; if (fi !== i) { var fx = recFromX[fi], fy = recFromY[fi]; recFromX[i] = fx; recFromY[i] = fy; } }
-      buildDefence();
-      buildRush();
-      placeLine();
+    function startPlay(s, l, opt) {
+      sim = s; lv = l; result = null; frozen = false; evIdx = 0;
+      slowUsed = 0; slowBudget = Inp.draw().slowMoBudgetS; curScale = 1; lastSlowPct = -1; slowOut = false;
+      cls = null; clsAssist = false; dispArr = null; dispN = 0; chipK = null;
+      releaseReal = 0; releaseT = -1; doneAt = 0; resultAt = 0; tipReal = 0; catchT = -1; catchSlot = -1; runBufN = 0; runBufI = 0;
+      if (s.field && typeof s.field.sideL === 'number' && Math.abs((s.field.sideL + s.field.sideR) / 2 - L.hashShift) > 0.25) relayout();
+      bindLive();
+      alignMs = reduced ? 0 : TIMING.alignMs; alignU = alignMs ? 0 : 1; tAlign0 = now();
+      readLive();
       cards.hidden = true; lookLine.hidden = true; subBanner.hidden = true; toastLine.hidden = true;
-      buildThrowBox();
-      throwBox.hidden = false;
+      buildDrawBox();
+      drawBox.hidden = false;
+      drawHud.hidden = false; draftChip.hidden = true; slowEl.hidden = true; slowEl.setAttribute('data-active', '0');
       if (playChip) { playChip.textContent = (opt && (opt.name || opt.id)) || ''; playChip.hidden = false; }
-      setZone(null);
-      setHint(snapHint());
+      setHint(playHint());
+      keysEl.hidden = coarsePointerNow();
       setupInput();
-      tSnap = now() + alignMs; tPlay = 0; clockShown = -1;
-      setPhase('SNAP');
-      // a disguised look rotates into the real coverage at the snap: say so, so the fool is visible
-      var shownNow = s && typeof s.shown === 'string' ? s.shown : shownId(), realNow = s && typeof s.real === 'string' ? s.real : realId();
-      if (shownNow && realNow && shownNow !== realNow) showSub('ROTATION · ' + coverageNameOf(realNow), 'clutch', alignMs + rotateMs + 400);
-      setAria('Snap. ' + (recCount ? 'Receivers running.' : ''));
+      setPhase('PLAY');
+      setLiveAttr(String(lv.phase || 'PRE_THROW')); setDraftAttr('');
+      clockShown = -1;
+      var shownNow = s && typeof s.shown === 'string' ? s.shown : shownId(), realNow = s && typeof s.real === 'string' ? s.real : (typeof ctx.real === 'string' ? ctx.real : '');
+      if (shownNow && realNow && shownNow !== realNow) showSub('ROTATION · ' + coverageNameOf(realNow), 'clutch', alignMs + 1400);
+      if (!firstHintShown && num(sit.idx, -1) === 0) { firstHintShown = true; showToast('DRAW FROM THE QB — TO A RECEIVER TO PASS, INTO SPACE TO RUN', TIMING.firstHintMs); }
+      setAria('Snap. Draw from the quarterback: to a receiver to pass, into space to run.');
       cue('click'); cue('haptic', 15);
       try { canvas.focus({ preventScroll: true }); } catch (e) { try { canvas.focus(); } catch (e2) { /* ignore */ } }
-      if (btnScr) btnScr.hidden = true;
-      if (btnAway) btnAway.hidden = true;
     }
-    function canScramble() { var sc = (TQ().throw || {}).scramble || {}; return MOB >= num(sc.minMob, 55) && tPlay >= TIMING.scrambleAfterS; }
-    function canThrowAway() { return tPlay >= TIMING.throwAwayAfterS; }
-    function hitTest(clientX, clientY) {
-      var v = cv.toVirtual(clientX, clientY), vx = v.x, vy = v.y;
-      var best = -1, bd = FIELD.hitRadius * FIELD.hitRadius;
-      for (var i = 0; i < recCount; i++) {
-        if (!aShow[IREC + i]) continue;
-        var h = Math.max(4, Math.round(12 * aS[IREC + i]));
-        var cx = aSX[IREC + i], cy = aSY[IREC + i] - h / 2;
-        var d = (vx - cx) * (vx - cx) + (vy - cy) * (vy - cy);
-        if (d < bd) { bd = d; best = i; }
-      }
-      return best >= 0 ? recSlot[best] : null;
+
+    // ── the draw input ──
+    /** The QB's start radius in css px at his depth (Tuning.qb.draw.startR yd), never under startMinCss. */
+    function startRadiusCss() {
+      var s = cv.scale || 1, r = Inp.draw().startR * L.pxPerYd * aS[IQB] * s;
+      return Math.max(FIELD.startMinCss, r);
     }
-    /**
-     * The green band for a throw to receiver i released at t, written into zoneLive: the engine's Play.need rule
-     * (the arrival at full power and the route's ideal loft — arrivalFlight — then needFor / greenBand),
-     * computed here without allocating so it can follow the receiver every frame of the hold — the band the
-     * player sees at the release is the band the engine verifies. Without the engine: the scene's own needFor.
-     */
-    function greenZoneFor(i, t) {
-      if (i < 0) return null;
-      var Pl = RTG.Play;
-      var need, band, dist;
-      if (Pl && typeof Pl.flightTime === 'function' && typeof Pl.needFor === 'function' && typeof Pl.greenBand === 'function') {
-        arrivalFlight(i, t);
-        dist = arrDist;
-        need = Pl.needFor(dist, qbAttrs); band = Pl.greenBand(ACC);
-        zoneStatic = false;
-      } else {
-        pathAt(i, t + 0.7, pt2, true);
-        var dx = pt2.x - qbX, dy = pt2.y - qbY;
-        dist = Math.sqrt(dx * dx + dy * dy);
-        need = PlayView.needFor(dist, ARM); band = PlayView.greenBandFor(ACC);
-        zoneStatic = true;
-      }
-      var pm = num((TQ().throw || {}).powerMax, 1.15);
-      zoneLive.hi = Math.min(pm, need + band); zoneLive.lo = Math.max(0.05, zoneLive.hi - band); zoneLive.dist = dist;
-      return zoneLive;
+    /** A press counts when it is within the start radius of the QB's feet-to-chest segment (css px). */
+    function qbHit(cx, cy) {
+      refreshRect();
+      var s = cv.scale || 1, fx = rectL + aSX[IQB] * s, fy = rectT + aSY[IQB] * s, top = fy - FIELD.qbBodyVpx * s;
+      var y = cy < top ? top : (cy > fy ? fy : cy);
+      var dx = cx - fx, dy = cy - y, r = startRadiusCss();
+      return dx * dx + dy * dy <= r * r;
     }
-    /** The hold's hint: the band, or the range warning when the target's arrival is beyond the arm. */
-    function holdHint() { return target >= 0 && recDist[target] > maxDistYd ? 'OUT OF RANGE · ' + Math.round(maxDistYd) + ' YD ARM' : 'RELEASE IN THE GREEN'; }
+    function canDraw() { return phase === 'PLAY' && !!lv && !frozen && alignU >= 1 && !paused() && !!lv.qb.hasBall && !lv.qb.down && lv.phase !== 'DONE'; }
+    function canPass() { return canDraw() && lv.phase === 'PRE_THROW' && num(lv.qb.y, -1) < 0; }
     function setupInput() {
       teardownInput();
       input = Inp.create({
         canvasEl: canvas,
-        hitTest: hitTest,
-        active: function () { return inPlay() && !paused(); },
-        holdMs: function () { return num((TQ().throw || {}).meterHoldMs, 1300); },
-        greenZone: function () { return zone; },
-        assist: function () { return liveSettings().greenAssist !== false; },
+        active: canDraw,
+        qbHit: qbHit,
+        toField: cssToFieldCached,
+        cssHeight: function () { return cv.h * (cv.scale || 1); },
+        qbAt: function (out) { out.x = num(lv.qb.x, 0); out.y = num(lv.qb.y, 0); return out; },
+        propose: proposeSpot,
         keys: function () { return liveSettings().keys; },
-        canThrowAway: canThrowAway,
-        canScramble: canScramble,
-        playTime: function () { return tPlay; },
-        onTarget: function (slot) {
-          target = recIndexOf(slot);
-          if (target < 0) return;
-          setPhase('THROW');
-          setAria('Target ' + slot + '.');
-          cue('click');
-        },
-        onHoldStart: function () {
-          hold = true; meterP = 0; lastTick = -1; lastZoneLo = -1;
-          setZone(greenZoneFor(target, tPlay));
-          setHint(holdHint());
-          cue('click');
-        },
-        onHold: function (p) {
-          meterP = p; setVel(p);
-          var tick = Math.floor(p * 10);
-          if (tick !== lastTick) { lastTick = tick; cue('click'); }
-        },
-        onAim: function (ld, lf) { lead = ld; loft = lf; setAimReadout(ld, lf); },
-        onHoldCancel: function () { hold = false; meterP = 0; setVel(0); setHint(snapHint()); },
-        onRelease: function (inp) { hold = false; onRelease(inp); },
-        onThrowAway: function () { resolve({ kind: 'THROWAWAY', target: target >= 0 ? recSlot[target] : null, t: tPlay, lead: 0, loft: 0.5, power: 0.6, quality: 0.5, green: false }); },
-        onScramble: function () { resolve({ kind: 'SCRAMBLE', target: null, t: tPlay, lead: 0, loft: 0, power: 0, quality: 0.5, green: false }); },
-        onStray: function () { showToast(coarsePointerNow() ? 'TAP A RECEIVER FIRST' : 'PICK A RECEIVER: 1-5'); }
+        onDraftStart: function (src) { if (src === 'pointer') refreshRect(); cls = null; clsAssist = false; toastLine.hidden = true; },
+        onDraftEnd: function () { cls = null; dkind = ''; clsAssist = false; dispArr = null; dispN = 0; setDraftChip(); setDraftAttr(''); },
+        onCommit: onCommit,
+        onThrowAway: doThrowAway,
+        onStray: function (reason) {
+          if (reason === 'START ON THE QB') showToast('START ON THE QB');
+          else showToast(coarsePointerNow() ? 'DRAW FROM THE QB' : '1-5 AIM · R RUN · OR DRAW FROM THE QB');
+        }
       });
-      input.slots(recSlot.slice(0, recCount));
     }
     function teardownInput() { if (input) { input.destroy(); input = null; } }
-    function onRelease(inp) {
-      if (destroyed || !inPlay()) return;
-      var t = inp.target !== null && inp.target !== undefined ? inp.target : (target >= 0 ? recSlot[target] : null);
-      resolve({ kind: 'THROW', target: t, t: tPlay, lead: inp.lead, loft: inp.loft, power: inp.power, quality: inp.quality, green: !!inp.green });
-    }
-    /** Hand the input to the shell (Play.throw) and start the resolution beat for the result that comes back. */
-    function resolve(inp) {
-      if (destroyed || thrown || !inPlay()) return;
-      thrown = true; tThrow = now(); tThrowPlay = tPlay;
-      lastInput = inp;
-      teardownInput();
-      if (btnAway) btnAway.hidden = true;
-      if (btnScr) btnScr.hidden = true;
-      var res = null;
-      try { res = opts.onThrow ? opts.onThrow(inp, sim) : null; }
-      catch (e) { if (root.console) root.console.error('PlayView onThrow failed', e); }
-      if (!res || typeof res.outcome !== 'string') {
-        if (inp.kind === 'SACK') res = { outcome: 'SACK', target: null, yards: -num((TQ().throw || {}).sackYards, 7), td: false, firstDown: false, turnover: false, feedback: { coachSaw: 'Held it too long.' } };
-        else { thrown = false; setupInput(); setPhase('SNAP'); target = -1; hold = false; return; }   // the shell refused: re-arm
+    /**
+     * Keyboard: the spot receiver `slot` can reach for a straight line at `loftV`: the engine's live.aim (fast: that
+     * alone — the keyboard line follows it every frame), else checked with classify, else the middle of the run of ends
+     * along his route that classify as a pass to him.
+     */
+    function proposeSpot(slot, loftV, out, fast) {
+      if (!lv) return null;
+      var i = recIdx[slot];
+      if (i === undefined) return null;
+      var qx = num(lv.qb.x, 0), qy = num(lv.qb.y, 0), c;
+      var aim = typeof lv.aim === 'function' ? lv.aim(slot, loftV) : null;     // the engine's spot for a straight ball
+      if (fast) {
+        if (aim && typeof aim.x === 'number') { out.x = aim.x; out.y = aim.y; return out; }
+        return meetSpot(i, loftV, 1, out);
       }
-      beginResolution(res, inp);
+      if (aim && typeof aim.x === 'number') {
+        out.x = aim.x; out.y = aim.y;
+        c = lv.classify([{ x: qx, y: qy }, { x: out.x, y: out.y }], loftV);
+        if (c && c.kind === 'PASS' && c.target === slot) return out;
+      }
+      meetSpot(i, loftV, 1, out);
+      c = lv.classify([{ x: qx, y: qy }, { x: out.x, y: out.y }], loftV);
+      if (c && c.kind === 'PASS' && c.target === slot) return out;
+      // search his route for the ends that classify as a pass to him; take the middle of the first run of them
+      var t0 = num(lv.t, 0), first = -1, last = -1;
+      for (var k = 1; k <= 20; k++) {
+        routeAt(i, t0 + k * 0.2, pt2);
+        var ck = lv.classify([{ x: qx, y: qy }, { x: pt2.x, y: pt2.y }], loftV);
+        if (ck && ck.kind === 'PASS' && ck.target === slot) { if (first < 0) first = k; last = k; }
+        else if (first >= 0) break;
+      }
+      if (first >= 0) { routeAt(i, t0 + (first + last) / 2 * 0.2, out); return out; }
+      return out;
     }
-    function beginResolution(res, inp) {
-      result = res;
-      setHint('');
-      hideBanner(); feedback.hidden = true; subBanner.hidden = true; skipHint.hidden = true;
-      var out = res.outcome;
-      if (out === 'SACK') { startSack(); return; }
-      if (out === 'SCRAMBLE' || out === 'RUN') { startRunBeat(res); return; }
-      startFlight(res, inp);
+    /**
+     * Aim assist: when the draft is a PASS to a target and its end is within assistYd of the spot he can reach, shift
+     * the line's tail onto that spot (the offset grows linearly along the line, so the start stays on the QB) into the
+     * pooled assistArr; kept only when the snapped line still classifies as a PASS to him. → the classify of the
+     * snapped line or null.
+     */
+    function assistFor(src, n, c, loftV) {
+      if (liveSettings().aimAssist === false || !c || c.kind !== 'PASS' || !c.target || n < 2 || n > AMAX) return null;
+      var i = recIdx[c.target];
+      if (i === undefined) return null;
+      var qx = num(lv.qb.x, 0), qy = num(lv.qb.y, 0), ex = src[n - 1].x, ey = src[n - 1].y;
+      var straight = Math.sqrt((ex - qx) * (ex - qx) + (ey - qy) * (ey - qy)) || 1, len = 0, k;
+      for (k = 1; k < n; k++) { var dx = src[k].x - src[k - 1].x, dy = src[k].y - src[k - 1].y; len += Math.sqrt(dx * dx + dy * dy); }
+      var stretch = Math.max(1, len / straight), aim = stretch < 1.04 && typeof lv.aim === 'function' ? lv.aim(c.target, loftV) : null;
+      if (aim && typeof aim.x === 'number') { pt2.x = aim.x; pt2.y = aim.y; }
+      else meetSpot(i, loftV, stretch, pt2);
+      var ox = pt2.x - ex, oy = pt2.y - ey, R = Inp.draw().assistYd;
+      if (ox * ox + oy * oy > R * R || (ox * ox + oy * oy) < 0.0025) return null;
+      assistArr.length = n;
+      var acc = 0;
+      for (k = 0; k < n; k++) {
+        if (k > 0) { var ddx = src[k].x - src[k - 1].x, ddy = src[k].y - src[k - 1].y; acc += Math.sqrt(ddx * ddx + ddy * ddy); }
+        var w = len > 0 ? acc / len : 1, p = assistPool[k];
+        p.x = src[k].x + ox * w; p.y = src[k].y + oy * w;
+        assistArr[k] = p;
+      }
+      var c2 = lv.classify(assistArr, loftV);
+      return c2 && c2.kind === 'PASS' && c2.target === c.target ? c2 : null;
     }
-    function startSack() {
-      sacked = true;
-      setPhase('SACK');
-      shakeAmp = reduced ? 0 : 2 + Math.min(4, Math.abs(num(result && result.yards, 7)) * 0.4);   // the shake scales with the yards lost
-      flashAlpha = reduced ? 0 : 0.4; flashColor = pal('red');
-      qbDown = 1;
-      cue('thunk', 1.0); cue('haptic', 60);
-      setAria('Sacked.');
-      setTimer(startResult, reduced ? 120 : TIMING.sackMs);
+    /** Once a frame while a draft exists: classify it (and the aim assist's snapped copy) — never per pointermove. */
+    function classifyDraft() {
+      var arr = input.points(), n = input.count(), lf = input.loft();
+      if (n < 1) { cls = null; clsAssist = false; dispArr = null; dispN = 0; return; }
+      var c = lv.classify(arr, lf);
+      var a = input.source() === 'pointer' ? assistFor(arr, n, c, lf) : null;   // a keyboard line is built on the engine's spot already (and its nudges must stick)
+      if (a) { if (!clsAssist) cue('click'); cls = a; clsAssist = true; dispArr = assistArr; }
+      else { cls = c; clsAssist = false; dispArr = arr; }
+      dispN = n;
+      dkind = cls ? String(cls.kind || '') : '';
+      // a keyboard RUN draft is a run whatever it crosses (the classify still says what a finger's line would be)
+      if (dkind && dkind !== 'INVALID' && input.source() === 'key' && input.mode() === 'RUN') dkind = 'RUN';
+      setDraftAttr(dkind);
     }
-    function startRunBeat(res) {
-      setPhase('RUN');
-      runYards = num(res.yards, 0);
-      runFrom = qbY; runX = qbX; runT0 = tPlay;
-      runActor = IQB;
-      qbFace = 1;
-      cue('whoosh');
-      setAria(res.outcome === 'SCRAMBLE' ? 'Scramble.' : 'Run.');
+    /** The draft was released (a finger lifted, Enter): classify the final line and hand it to the engine. */
+    function onCommit(info) {
+      if (!canDraw()) return;
+      var pts = info.points, lf = info.loft;
+      var c = lv.classify(pts, lf);
+      var a = info.source === 'pointer' ? assistFor(pts, pts.length, c, lf) : null;
+      if (a) { pts = copyPts(assistArr); c = a; }
+      var kind = c ? c.kind : 'INVALID';
+      if (info.source === 'key' && info.mode === 'RUN' && kind !== 'INVALID') kind = 'RUN';   // a keyboard RUN draft is a run whatever it crosses
+      if (info.source === 'key' && info.mode === 'PASS' && kind === 'RUN') { showToast('NOBODY GETS THERE'); return; }   // … and a keyboard PASS never turns into a run
+      applyCommit(kind, pts, lf);
     }
-    function startRun(s, opt) {
-      // a run option (SNEAK / DRAW) resolves straight from the snap: no throw, the result is built here
-      sim = s; thrown = true; tThrow = now();
+    function keepRun(points) {
+      runBufN = Math.min(RUNMAX, points.length); runBufI = 0;
+      for (var i = 0; i < runBufN; i++) { runBufX[i] = num(points[i].x, 0); runBufY[i] = num(points[i].y, 0); }
+    }
+    /** → the engine's answer ({ok, …}); INVALID does nothing. */
+    function applyCommit(kind, points, lf) {
+      if (!lv) return { ok: false, reason: 'NO PLAY' };
+      var r = null;
+      try {
+        if (kind === 'PASS') r = lv.throwAlong(points, lf);
+        else if (kind === 'THROWAWAY') r = lv.throwAway();
+        else if (kind === 'RUN') { r = lv.setRun(points); if (r && r.ok) { keepRun(points); cue('whoosh'); } }
+        else r = { ok: false, reason: 'INVALID' };
+      } catch (e) { if (root.console) root.console.error('PlayView commit failed', e); r = { ok: false, reason: 'ERROR' }; }
+      if (r && !r.ok && r.reason && kind !== 'INVALID') showToast(String(r.reason).toUpperCase());
+      return r || { ok: false };
+    }
+    function doThrowAway() {
+      if (!canPass()) return { ok: false, reason: 'NOT NOW' };
+      if (input) input.cancel();
+      return applyCommit('THROWAWAY', null, 0.5);
+    }
+
+    // ── the live's events → the beats ──
+    function onEvent(e) {
+      var k = e && e.kind;
+      switch (k) {
+        case 'RELEASE':
+          releaseReal = now(); releaseT = num(e.t, num(lv.t, 0));
+          cue('whoosh'); cue('haptic', 20);
+          setAria('Ball in the air.');
+          if (input) input.cancel();
+          setHint('');
+          break;
+        case 'TIP':
+          tipReal = now();
+          cue('thunk', 0.4); showSub('TIPPED!', 'clutch', 900);
+          break;
+        case 'INT':
+          cue('thunk', 0.6); cue('stingerBad');
+          flashAlpha = reduced ? 0 : 0.35; flashColor = pal('red');
+          break;
+        case 'CATCH':
+          catchT = num(e.t, num(lv.t, 0)); catchSlot = recIdx[e.who] !== undefined ? recIdx[e.who] : -1;
+          cue('thunk', 0.6); setAria('Caught.');
+          break;
+        case 'DROP': case 'INCOMPLETE': case 'OUT_OF_BOUNDS': case 'THROWAWAY':
+          cue('whistle');
+          break;
+        case 'SACK':
+          shakeAmp = reduced ? 0 : 3; flashAlpha = reduced ? 0 : 0.4; flashColor = pal('red');
+          cue('thunk', 1.0); cue('haptic', 60); setAria('Sacked.');
+          if (input) input.cancel();
+          break;
+        case 'ESCAPE':
+          showSub('SLIPPED IT!', 'good', 900); cue('whoosh');
+          break;
+        case 'SCRAMBLE':
+          showSub('SCRAMBLE!', 'good', 900); cue('whoosh'); setAria('Scramble.');
+          break;
+        case 'TACKLE':
+          cue('thunk', 0.8);
+          break;
+        case 'BROKEN_TACKLE':
+          showSub('BROKE A TACKLE!', 'good', 900); cue('thunk', 0.5);
+          break;
+        case 'TD':
+          flashAlpha = reduced ? 0 : 0.3; flashColor = pal('gold'); cue('crowd', 0.6);   // the banner and the roar follow at the result
+          break;
+        default: break;
+      }
+    }
+    function drainEvents() {
+      var evs = lv.events;
+      if (!evs) return;
+      while (evIdx < evs.length) onEvent(evs[evIdx++]);
+    }
+    function timeScaleNow(drafting) {
+      if (!drafting) return 1;
+      return slowUsed < slowBudget ? Inp.draw().slowMo : 1;
+    }
+    function updatePlay(dt, t) {
+      var q = lv.qb;
+      if (alignU < 1) {
+        alignU = alignMs > 0 ? clamp((t - tAlign0) / alignMs, 0, 1) : 1;
+        readLive();
+        return;
+      }
+      if (input) input.update(t);
+      var drafting = !!(input && input.drafting());
+      var ts = frozen ? 0 : timeScaleNow(drafting);
+      if (drafting && ts < 1) slowUsed += dt / 1000;
+      curScale = ts;
+      if (!frozen) {
+        try { lv.step(dt / 1000 * ts); }                       // after DONE the live coasts (presentation only)
+        catch (e) { if (root.console) root.console.error('PlayView live.step failed', e); frozen = true; }
+      }
+      drainEvents();
+      readLive();
+      if (drafting && input && input.drafting()) classifyDraft();
+      else if (cls) { cls = null; dkind = ''; clsAssist = false; dispArr = null; dispN = 0; setDraftAttr(''); }
+      setDraftChip();
+      setSlowHud(!!(input && input.drafting()));
+      setLiveAttr(String(lv.phase || ''));
+      setCanDrawAttr(canDraw() ? '1' : '0');
+      runClock(num(lv.t, 0));
+      if (q.hasBall && !frozen) setPressure(rushLevel());
+      var showAway = canPass();
+      if (btnAway && btnAway.hidden === showAway) btnAway.hidden = !showAway;
+      if (!q.hasBall && hintEl && hintEl.textContent) setHint('');
+      setHidden(skipHint, !(canSkipPlay() && !reduced));
+      if (lv.phase === 'DONE' && !doneAt) {
+        doneAt = t;
+        if (input) input.cancel();
+        var res = null;
+        try { res = lv.result(); } catch (e2) { if (root.console) root.console.error('PlayView live.result failed', e2); }
+        result = res && typeof res === 'object' ? res : fallbackResult();
+        if (lv.qb.down && result.outcome === 'SACK') setAria('Sacked.');
+      }
+      if (doneAt && !resultAt && t - doneAt >= (reduced ? TIMING.doneHoldReducedMs : TIMING.doneHoldMs)) startResult();
+    }
+    /** RESULT / DONE: the live keeps coasting under the banner (everyone slows down; the engine runs an interception back). */
+    function coastLive(dt) {
+      try { lv.step(dt / 1000); } catch (e) { frozen = true; return; }
+      drainEvents();
+      readLive();
+    }
+    function fallbackResult() {
+      return { run: false, playId: pickedId, outcome: 'INCOMPLETE', kind: 'PASS', target: null, yards: 0, airYards: 0, yac: 0, td: false, firstDown: false, turnover: false, fumble: false, text: 'INCOMPLETE', banner: 'INCOMPLETE', feedback: { timing: '—', touch: '—', placement: '—', coachSaw: '' } };
+    }
+    function canSkipPlay() { return phase === 'PLAY' && !!lv && alignU >= 1 && (lv.phase === 'DONE' || (!lv.qb.hasBall && releaseReal > 0 && now() - releaseReal >= TIMING.skipAfterMs)); }
+    /** Skip after the release: step the live to its end in fixed chunks (the same sim, only faster), then the result. */
+    function fastForward() {
+      if (!lv || frozen) return;
+      for (var i = 0; i < TIMING.fastForwardMax && lv.phase !== 'DONE'; i++) {
+        try { lv.step(TIMING.fastForwardS); } catch (e) { frozen = true; break; }
+      }
+      drainEvents();
+      readLive();
+      if (lv.phase === 'DONE' && !doneAt) {
+        doneAt = now();
+        try { result = lv.result(); } catch (e2) { result = null; }
+        if (!result || typeof result !== 'object') result = fallbackResult();
+      }
+    }
+
+    // ── a run card (SNEAK / DRAW): resolved at the snap, the v1 RUN beat ──
+    function startRunCard(s, opt) {
+      sim = s; lv = null; frozen = true;
       var yards = num(s.yards, 0);
       if (typeof s.outcome === 'string') { result = s; if (!result.playId) result.playId = opt.id; }
-      else result = { outcome: 'RUN', playId: opt.id, play: { id: opt.id, name: opt.name }, target: null, yards: yards, airYards: 0, yac: 0, td: !!s.td, firstDown: !!s.firstDown, turnover: !!s.turnover, flight: 0, landing: null, text: s.text || '', feedback: s.feedback || { coachSaw: s.text || '' }, run: true };
-      var fromBySlot = captureFrom();
-      gun = isGun(formationOf(s, opt));
-      alignMs = reduced ? 0 : TIMING.alignMs; alignU = alignMs ? 0 : 1;
-      buildReceivers(s.receivers && s.receivers.length ? s : null); buildDefence(); buildRush(); placeLine();
-      for (var ri = 0; ri < recCount; ri++) { var fri = fromBySlot[recSlot[ri]]; if (fri !== undefined && fri !== ri) { recFromX[ri] = recFromX[fri]; recFromY[ri] = recFromY[fri]; } }
-      cards.hidden = true; throwBox.hidden = true;
+      else result = { outcome: 'RUN', playId: opt.id, play: { id: opt.id, name: opt.name }, target: null, yards: yards, airYards: 0, yac: 0, td: !!s.td, firstDown: !!s.firstDown, turnover: !!s.turnover, text: s.text || '', feedback: s.feedback || { coachSaw: s.text || '' }, run: true };
+      for (var i = 0; i < NACT; i++) { baseX[i] = aX[i]; baseY[i] = aY[i]; }
+      cards.hidden = true; lookLine.hidden = true; drawBox.hidden = true;
       if (playChip) { playChip.textContent = opt.name || opt.id; playChip.hidden = false; }
-      tSnap = now() + alignMs; tPlay = 0; runT0 = 0;
       setPhase('RUN');
-      runYards = yards; runFrom = gun ? FIELD.qbShotgun : FIELD.qbUnderCentre; runX = qbX;
+      runYards = yards; runT0 = now();
       var runId = (result.playId || (result.play && result.play.id) || opt.id);
-      runActor = runId === 'DRAW' && recIndexOf('RB') >= 0 ? IREC + recIndexOf('RB') : IQB;
-      if (runActor !== IQB) { runFrom = aY[runActor]; runX = aX[runActor]; }
+      var rb = -1;
+      for (var r = 0; r < recCount; r++) if (recSlot[r] === 'RB') rb = r;
+      runActor = runId === 'DRAW' && rb >= 0 ? IREC + rb : IQB;
+      runFrom = aY[runActor]; runX = aX[runActor];
+      carrier = runActor === IQB ? -2 : runActor - IREC;
       cue('thunk', 0.8);
       setAria(opt.id === 'SNEAK' ? 'Quarterback sneak.' : 'Draw play.');
     }
-    function updateRun() {
-      var ms = reduced ? 120 : TIMING.runMs + Math.min(600, Math.abs(runYards) * 25);
-      if (alignU < 1) {                                  // a run option from READ: the offence slides into the formation first
-        if (runActor === IQB) { qbY = lerp(qbFromY, runFrom, ease(alignU)); aX[IQB] = qbX; aY[IQB] = qbY; qbPose = 0; }
-        return;
-      }
-      var e = (tPlay - runT0) * 1000;
-      var u = ease(clamp(e / ms, 0, 1));
+    function updateRunCard(t) {
+      var ms = reduced ? 120 : TIMING.runMs + Math.min(TIMING.runMaxExtraMs, Math.abs(runYards) * TIMING.runPerYdMs);
+      var e = t - runT0, u = ease(clamp(e / ms, 0, 1));
       var y = lerp(runFrom, runYards, u);
       var maxY = Math.max(runFrom, L.goalD);
       if (y > maxY) y = maxY;
-      if (runActor === IQB) { qbY = y; qbX = runX + (runYards > 0 ? Math.sin(u * Math.PI) * 2 : 0); aX[IQB] = qbX; aY[IQB] = qbY; qbPose = (Math.floor(e / TIMING.runFrameMs) & 1); }
-      else { aY[runActor] = y; aX[runActor] = runX; aFrame[runActor] = (Math.floor(e / TIMING.runFrameMs) & 1); }
-      ballCarrier = runActor === IQB ? -2 : runActor - IREC;
-      if (u >= 1) startResult();
+      aY[runActor] = y; aX[runActor] = runX + (runYards > 0 ? Math.sin(u * Math.PI) * 1.5 : 0);
+      aFrame[runActor] = (Math.floor(e / TIMING.runFrameMs) & 1);
+      // presentation of a resolved run: the defence closes on the runner, the line fires out a yard
+      for (var j = 0; j < defCount; j++) { aX[j] = lerp(baseX[j], aX[runActor], u * 0.35); aY[j] = lerp(baseY[j], y + 1, u * 0.35); aFrame[j] = u > 0 && u < 1 ? (Math.floor(e / TIMING.runFrameMs) & 1) : 2; }
+      for (var o = 0; o < olCount; o++) aY[IOL + o] = baseY[IOL + o] + u;
+      if (u >= 1 && !resultAt) startResult();
     }
-    function startFlight(res, inp) {
-      setPhase('FLIGHT');
-      var ft = num(res.flight, 0.9);
-      flightS = ft;
-      flightMs = reduced ? TIMING.reducedFlightMs : Math.max(TIMING.minFlightMs, Math.round(ft * TIMING.flightScale * 1000));
-      var land = res.landing;
-      var ti = res.target ? recIndexOf(res.target) : (inp && inp.target ? recIndexOf(inp.target) : target);
-      if (!land || typeof land.x !== 'number') {
-        // no landing from the engine: aim where the target will be at the catch, or the sideline for a throwaway
-        if (res.outcome === 'THROWAWAY' || ti < 0) land = { x: (lead < 0 ? -1 : 1) * 32, y: 12 };
-        else { pathAt(ti, tPlay + ft, pt2); land = { x: pt2.x, y: pt2.y }; }
-      }
-      convergeX = land.x; convergeY = land.y; converge = ti;
-      ballShown = true; ballCarrier = -1; landBeat = null;
-      intMan = -1;
-      if (res.outcome === 'INT') {
-        // the interceptor is chosen at the throw (the deep help or the man on the target, else the nearest) and runs
-        // to the landing spot under the ball — nobody teleports onto it
-        var best = -1, bs = Infinity;
-        for (var j = 4; j < defCount; j++) {
-          var dx = aX[j] - land.x, dy = aY[j] - land.y, d = dx * dx + dy * dy;
-          if (defRole[j] === ROLE_DEEP || (ti >= 0 && defArg[j] === ti)) d *= 0.5;
-          if (d < bs) { bs = d; best = j; }
-        }
-        intMan = best;
-      }
-      qbPose = 2;
-      cue('whoosh'); cue('haptic', 20);
-      skipHint.hidden = reduced;
-      setAria('Ball in the air.');
-      result.landing = land;
-    }
-    function flightProgress() { return clamp(elapsed() / flightMs, 0, 1); }
-    function placeBall(s) {
-      var land = result.landing;
-      var x0 = qbX + (mirror ? -0.6 : 0.6), y0 = qbY + 0.5;
-      var gx = lerp(x0, land.x, s), gy = lerp(y0, land.y, s);
-      var apex = FIELD.arcMin + FIELD.arcPerLoft * clamp(num(lastInput && lastInput.loft, 0.5), 0, 1);
-      var h = FIELD.ballHandYd * (1 - s) + 4 * apex * s * (1 - s);
-      project(gx, gy);
-      ballGround = Math.round(pt.y);
-      ballX = Math.round(pt.x);
-      ballY = Math.round(pt.y - h * L.pxPerYd * pt.s * L.kv);
-      ballH = h;
-      ballSize = lerp(8, 3, 1 - pt.s) * (1 + 0.35 * 4 * s * (1 - s));
-      camY = reduced ? 0 : -Math.round(3 * Math.sin(Math.PI * s));
-    }
-    function updateFlight() {
-      var s = flightProgress();
-      tPlay = tThrow === 0 ? tPlay : Math.max(0, (tThrow - tSnap) / 1000) + s * flightS;
-      if (landBeat) { updateLanding(); return; }
-      placeBall(s);
-      if (s >= 1) land();
-    }
-    function land() {
-      placeBall(1);
-      camY = 0;
-      var out = result.outcome, ti = converge;
-      landAt = now();
-      if (out === 'CATCH') {
-        if (ti >= 0) { ballCarrier = ti; aX[IREC + ti] = result.landing.x; aY[IREC + ti] = result.landing.y; aFrame[IREC + ti] = 2; }
-        landBeat = 'catch';
-        landMs = reduced ? 60 : TIMING.catchHoldMs;
-        cue('thunk', 0.6);
-        return;
-      }
-      if (out === 'DROP') {
-        if (ti >= 0) { dropMan = ti; aX[IREC + ti] = result.landing.x; aY[IREC + ti] = result.landing.y; aFrame[IREC + ti] = 2; }
-        landBeat = 'bounce'; landMs = reduced ? 40 : TIMING.bounceMs;
-        cue('whistle');
-        return;
-      }
-      if (out === 'INT') {
-        // the interceptor chosen at the throw (startFlight) is under the ball; the nearest man stands in otherwise
-        var best = intMan, bd = 1e9;
-        if (best < 0) for (var j = 4; j < defCount; j++) { var dx = aX[j] - result.landing.x, dy = aY[j] - result.landing.y, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = j; } }
-        if (best >= 0) { aX[best] = result.landing.x; aY[best] = result.landing.y; aFrame[best] = 2; ballCarrier = -3 - best; intMan = best; }
-        landBeat = 'int'; landMs = reduced ? 60 : TIMING.intReturnMs;
-        cue('thunk', 0.6); cue('stingerBad');
-        return;
-      }
-      landBeat = out === 'THROWAWAY' ? 'away' : 'bounce';
-      landMs = reduced ? 40 : TIMING.bounceMs;
-      if (out === 'THROWAWAY') cue('whistle');
-    }
-    function updateLanding() {
-      var e = now() - landAt, u = clamp(e / Math.max(1, landMs), 0, 1);
-      if (landBeat === 'catch') {
-        if (u >= 1) {
-          var yac = num(result.yac, 0);
-          if (yac > 0.5 && ballCarrier >= 0) {
-            landBeat = 'yac'; landAt = now(); landMs = reduced ? 80 : clamp(TIMING.yacBaseMs + TIMING.yacPerYdMs * yac, 0, TIMING.yacMaxMs);
-            runFrom = aY[IREC + ballCarrier]; runX = aX[IREC + ballCarrier]; runYards = Math.min(yac, Math.max(0, L.goalD - runFrom));
-            return;
-          }
-          startResult();
-        }
-        return;
-      }
-      if (landBeat === 'yac') {
-        var i = ballCarrier;
-        aY[IREC + i] = lerp(runFrom, runFrom + runYards, ease(u)); aX[IREC + i] = runX;
-        aFrame[IREC + i] = (Math.floor(e / TIMING.runFrameMs) & 1);
-        if (u >= 1) startResult();
-        return;
-      }
-      if (landBeat === 'int') {
-        var j = -3 - ballCarrier;
-        if (j >= 0 && j < defCount) { aY[j] = result.landing.y - 3 * ease(u); aFrame[j] = (Math.floor(e / TIMING.runFrameMs) & 1); }
-        if (u >= 1) startResult();
-        return;
-      }
-      // a bounce / a throwaway: the ball hops
-      ballY = ballGround - Math.round(3 * Math.abs(Math.sin(u * Math.PI * 2)) * (1 - u));
-      ballSize = 3;
-      if (u >= 1) startResult();
-    }
+
+    // ───────────────────────────── the result ─────────────────────────────
     function bannerFor(res) {
       var b = ownBanner(res);
       // the engine's copy wins when it speaks: banner ('TOUCHDOWN!' · 'FIRST DOWN' · else text) and text ('CATCH +14' …);
@@ -1664,12 +1564,13 @@
       if (o === 'RUN') { var pid = res.playId || (res.play && res.play.id) || res.play; var nm = pid === 'SNEAK' ? 'SNEAK' : (pid === 'DRAW' ? 'DRAW' : 'RUN'); return fd ? { text: 'FIRST DOWN', kind: 'good', sub: nm + ' ' + sign + y } : { text: nm + ' ' + sign + y, kind: y > 0 && !sit.lastPlay ? 'good' : 'bad', sub: '' }; }
       return { text: 'INCOMPLETE', kind: 'bad', sub: '' };
     }
+    /** The feedback strip: placement · timing · touch (+ AIR / YAC on a catch), then the coach's line. */
     function showFeedback(res) {
-      var fb = res.feedback || {}, parts = [];
-      if (fb.timing) parts.push(fb.timing);
-      if (fb.touch) parts.push(fb.touch);
-      if (typeof res.window === 'number') parts.push('WINDOW ' + Math.round(res.window * 100) + '%');
-      if (typeof res.accuracy === 'number') parts.push('ACC ' + Math.round(res.accuracy * 100) + '%');
+      var fb = res.feedback || {}, parts = [], o = res.outcome;
+      var thrown = !(res.run || o === 'RUN' || o === 'SACK' || o === 'SCRAMBLE');   // placement / timing / touch describe a throw
+      if (thrown && fb.placement && fb.placement !== '—') parts.push(fb.placement);
+      if (thrown && fb.timing && fb.timing !== '—') parts.push(fb.timing);
+      if (thrown && fb.touch && fb.touch !== '—') parts.push(fb.touch);
       if (typeof res.airYards === 'number' && res.outcome === 'CATCH') parts.push('AIR ' + Math.round(res.airYards) + ' · YAC ' + Math.round(num(res.yac, 0)));
       feedback.textContent = '';
       if (parts.length) feedback.appendChild(el('div', { class: 'pv-feedback-line', text: parts.join(' · ') }));
@@ -1678,9 +1579,13 @@
       feedback.hidden = !parts.length && !coach;
     }
     function startResult() {
-      if (destroyed || phase === 'RESULT' || phase === 'DONE') return;
+      if (destroyed || phase === 'RESULT' || phase === 'DONE' || !result) return;
+      resultAt = now();
+      if (input) input.cancel();
+      teardownInput();
+      setCanDrawAttr('0');
       setPhase('RESULT');
-      landBeat = null;
+      drawHud.hidden = true; stage.classList.remove('is-slow'); slowBands = false; curScale = 1;
       var b = bannerFor(result);
       showBanner(b.text, b.kind);
       if (b.sub) showSub(b.sub, b.kind === 'gold' ? 'clutch' : 'info', TIMING.subBannerMs);
@@ -1692,7 +1597,7 @@
       else if (good) { cue('stingerGood'); cue('crowd', 0.35); }
       else if (bad) { cue('stingerBad'); cue('crowd', 0.08); }
       else cue('crowd', 0.15);
-      throwBox.hidden = true;
+      drawBox.hidden = true;
       showFeedback(result);
       skipHint.hidden = reduced;
       var ariaText = b.text + (b.sub ? '. ' + b.sub : '') + (result.feedback && result.feedback.coachSaw ? '. ' + result.feedback.coachSaw : '');
@@ -1708,29 +1613,32 @@
       if (opts.onDone) { try { opts.onDone(result); } catch (e) { if (root.console) root.console.error('onDone failed', e); } }
     }
     function skip() {
-      if (phase === 'FLIGHT' && elapsed() >= TIMING.skipAfterMs) {
-        if (!landBeat) land();
-        startResult();
+      if (phase === 'PLAY') {
+        if (!canSkipPlay()) return false;
+        fastForward();
+        if (result) startResult();
         return true;
       }
-      if (phase === 'RUN' || phase === 'SACK') { clearTimers(); startResult(); return true; }
+      if (phase === 'RUN') { if (!resultAt) startResult(); return true; }
       if (phase === 'RESULT') { clearTimers(); finish(); return true; }
       return false;
     }
     function onStagePointer(e) {
       // the field around the card reads too — but not inside armMs of the card mounting (a double tap on NEXT lands here)
       if (phase === 'SITUATION') { if (e.target === canvas && elapsed() >= TIMING.armMs) { e.preventDefault(); startRead(); } return; }
-      if (phase === 'FLIGHT' || phase === 'RESULT' || phase === 'RUN' || phase === 'SACK') { if (skip()) e.preventDefault(); }
+      if (phase === 'PLAY') { if (canSkipPlay() && skip()) e.preventDefault(); return; }
+      if (phase === 'RESULT' || phase === 'RUN') { if (skip()) e.preventDefault(); }
     }
     function onKey(e) {
       if (destroyed || e.repeat) return;
       if (e.key === 'Escape' && !e.altKey && !e.ctrlKey && !e.metaKey) {
-        if (opts.onSettings) { e.preventDefault(); opts.onSettings(); return; }
-        if (PlayView.escapeToSettings(e)) e.preventDefault();
+        if (opts.onSettings) { e.preventDefault(); if (input) input.cancel(); opts.onSettings(); return; }
+        if (PlayView.escapeToSettings(e)) { e.preventDefault(); if (input) input.cancel(); }
         return;
       }
       var t = e.target, tag = t && t.tagName;
-      var confirmKey = e.key === ' ' || e.key === 'Enter' || Inp.keyMatches(e, Inp.resolveKeys(liveSettings().keys).confirm);
+      var K = Inp.resolveKeys(liveSettings().keys);
+      var confirmKey = e.key === ' ' || e.key === 'Enter' || Inp.keyMatches(e, K.confirm) || Inp.keyMatches(e, K.confirmAlt);
       var soon = elapsed() < TIMING.armMs;             // a key inside armMs of the phase mounting is the tail of an earlier press
       if (phase === 'READ') {
         if (e.key >= '1' && e.key <= '9' && e.key.length === 1 && tag !== 'INPUT' && tag !== 'TEXTAREA') { e.preventDefault(); if (!soon) pick(e.key.charCodeAt(0) - 49); }
@@ -1739,7 +1647,8 @@
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' || (t && t.isContentEditable)) return;
       if (!confirmKey) return;
       if (phase === 'SITUATION') { e.preventDefault(); if (!soon) startRead(); return; }
-      if (phase === 'FLIGHT' || phase === 'RESULT' || phase === 'RUN' || phase === 'SACK') { if (skip()) e.preventDefault(); }
+      if (phase === 'PLAY') { if (!canDraw() && canSkipPlay() && skip()) e.preventDefault(); return; }   // while the QB has the ball the confirm key is the draw input's
+      if (phase === 'RESULT' || phase === 'RUN') { if (skip()) e.preventDefault(); }
     }
 
     // ───────────────────────────── drawing ─────────────────────────────
@@ -1751,31 +1660,48 @@
       g.drawImage(fieldLayer, 0, L.yHor);
       if (posts) g.drawImage(posts.img, posts.x, posts.y);
     }
+    /** The ring colours' thresholds on live.receivers[i].open: Tuning.qb.open.ring {open, closing} (the scene's FIELD values stand in). */
+    function ringThresholds() { var R = (TQ().open && TQ().open.ring) || {}; ringOpen = num(R.open, FIELD.ringOpen); ringTight = num(R.closing, FIELD.ringTight); }
     function drawRing(i) {
-      var k = recRing[i], spr = null;
-      if (k === 0) spr = rings.open; else if (k === 1) spr = rings.closing; else if (k === 2) spr = rings.closed; else if (k === 3) spr = rings.range;
-      if (!spr && i === target && inPlay()) spr = rings.pick;
-      if (!spr) return;
+      if (phase !== 'PLAY' || !lv || alignU < 1) return;
+      var r = lv.receivers[i];
+      if (!r || !r.shown) return;
+      var o = num(r.open, 0), spr = o >= ringOpen ? rings.open : (o >= ringTight ? rings.tight : rings.covered);
       var s = aS[IREC + i], w = Math.max(FIELD.ringMinW, Math.round(FIELD.ringW * s)), h = Math.max(3, Math.round(5 * s));
       g.drawImage(spr, Math.round(aSX[IREC + i] - w / 2), Math.round(aSY[IREC + i] - h / 2), w, h);
+    }
+    function isTarget(i) {
+      if (phase !== 'PLAY' || !lv) return false;
+      if (cls && dkind === 'PASS' && cls.target === recSlot[i]) return true;
+      var r = lv.receivers[i];
+      return !!(r && r.target && lv.ball && !lv.ball.caught && lv.phase === 'BALL_IN_AIR');
+    }
+    function qbPose() {
+      if (phase !== 'PLAY' || !lv) return 0;
+      var t = num(lv.t, 0), q = lv.qb;
+      if (releaseT >= 0 && t - releaseT < TIMING.throwPoseS) return 2;
+      if (moving(q.vx, q.vy)) return (Math.floor(t * 1000 / TIMING.runFrameMs) & 1);
+      return q.hasBall ? 1 : 0;
     }
     function drawActor(a) {
       if (!aShow[a]) return;
       var s = aS[a], x = aSX[a], y = aSY[a];
       if (a === IQB) {
-        var spr = qbSpr[qbPose] || qbSpr[0];
-        if (qbDown) {
-          // sacked: the set pose on its side (rotated a quarter turn, the tackler drawn over him) and the ball loose
+        var spr = qbSpr[phase === 'RUN' && runActor === IQB ? aFrame[IQB] : qbPose()] || qbSpr[0];
+        if (lv && lv.qb.down) {
+          // sacked / tackled: the set pose on his side (rotated a quarter turn, the tackler drawn over him) and the ball loose
           g.save(); g.translate(Math.round(x), Math.round(y)); g.rotate(Math.PI / 2);
           g.drawImage(spr, -spr.width, -(spr.height >> 1));
           g.restore();
-          g.drawImage(balls[3], Math.round(x) + (spr.height >> 1) + 2, Math.round(y) - 3);
+          if (!lv.ball) g.drawImage(balls[3], Math.round(x) + (spr.height >> 1) + 2, Math.round(y) - 3);
           return;
         }
-        var qx = Math.round(x - spr.width / 2), qy = Math.round(y - spr.height);
-        if (mirror) { g.save(); g.translate(qx + spr.width, qy); g.scale(-1, 1); g.drawImage(spr, 0, 0); g.restore(); }
-        else g.drawImage(spr, qx, qy);
-        if (ballCarrier === -2) g.drawImage(balls[3], qx + (mirror ? 1 : spr.width - 4), qy + 9);
+        // full size in the backfield (his sprite is drawn for the drop), shrinking with depth once he scrambles upfield
+        var qs = s < L.qbRefS ? s / L.qbRefS : 1, qw = qs < 1 ? Math.max(4, Math.round(spr.width * qs)) : spr.width, qh = qs < 1 ? Math.max(6, Math.round(spr.height * qs)) : spr.height;
+        var qx = Math.round(x - qw / 2), qy = Math.round(y - qh);
+        if (mirror) { g.save(); g.translate(qx + qw, qy); g.scale(-1, 1); g.drawImage(spr, 0, 0, qw, qh); g.restore(); }
+        else g.drawImage(spr, qx, qy, qw, qh);
+        if (carrier === -2 && lv && (lv.phase === 'SCRAMBLE' || moving(lv.qb.vx, lv.qb.vy))) g.drawImage(balls[3], qx + (mirror ? 1 : qw - 4), qy + Math.round(9 * qh / spr.height));
         return;
       }
       if (a >= IOL) { g.drawImage(olSpr, Math.round(x - olSpr.width / 2), Math.round(y - olSpr.height)); return; }
@@ -1785,52 +1711,151 @@
         drawRing(i);
         var rs = recSpr[aFrame[a]] || recSpr[0];
         g.drawImage(rs, Math.round(x - w / 2), Math.round(y - h), w, h);
-        if (hotSlot === i && inPlay() && tPlay < 1.5) g.drawImage(hotSpr, Math.round(x - 1), Math.round(y - h - 5));
-        if (ballCarrier === i && (phase !== 'FLIGHT' || landBeat)) g.drawImage(balls[3], Math.round(x - 1), Math.round(y - h + 2));
-        if (i === target && inPlay()) {
-          g.drawImage(pickSpr, Math.round(x - pickSpr.width / 2), Math.round(y - h - 1 - (pickSpr.height - h) / 2 - 2));
-          if (hold) {
-            // the lead arrow ahead of / behind the receiver along its run
-            var vx = recVX[i], vy = recVY[i], n = Math.sqrt(vx * vx + vy * vy) || 1;
-            var ux = vy === 0 && vx === 0 ? 0 : vx / n, uy = vy === 0 && vx === 0 ? 1 : vy / n;
-            var off = 3 + 6 * Math.abs(lead), sign = lead >= 0 ? 1 : -1;
-            var ax = Math.round(x + ux * off * sign), ay = Math.round(y - h / 2 - uy * off * sign);
-            if (Math.abs(lead) > 0.05) g.drawImage(lead >= 0 ? leadAhead : leadBehind, ax - 2, ay - 2);
-          }
-        }
+        if (hotSlot === i && phase === 'PLAY' && lv && num(lv.t, 0) < 1.5) g.drawImage(hotSpr, Math.round(x - 1), Math.round(y - h - 5));
+        if (carrier === i) g.drawImage(balls[3], Math.round(x - 1), Math.round(y - h + 2));
+        if (isTarget(i)) g.drawImage(pickSpr, Math.round(x - pickSpr.width / 2), Math.round(y - h - 1 - (pickSpr.height - h) / 2 - 2));
         return;
       }
-      // a defender
-      var ds = defRole[a] === ROLE_RUSH || defRole[a] === ROLE_BLITZ ? rusherSpr[aFrame[a] & 1] : (aFrame[a] === 2 ? defSpr[2] : defSpr[aFrame[a] & 1]);
+      // a defender: the rush tile for a rusher (the READ crouch for the line), run frames once he moves
+      var role = phase === 'PLAY' && lv && lv.defenders[a] ? lv.defenders[a].role : '';
+      var ds = role === 'RUSH' ? rusherSpr[aFrame[a] & 1] : (aFrame[a] === 2 ? defSpr[2] : defSpr[aFrame[a] & 1]);
       g.drawImage(ds, Math.round(x - w / 2), Math.round(y - h), w, h);
-      if (ballCarrier <= -3 && (-3 - ballCarrier) === a) g.drawImage(balls[3], Math.round(x - 1), Math.round(y - h + 2));
+      if (carrier === -3 - a) g.drawImage(balls[3], Math.round(x - 1), Math.round(y - h + 2));   // an interception (the engine runs him back)
     }
     function drawActors() {
       for (var k = 0; k < NACT; k++) drawActor(order[k]);
     }
-    function drawAim() {
-      if (!hold || target < 0) return;
-      // the loft arc: dots from the hand to the target, rising with the loft
-      var i = target, tx = aSX[IREC + i], ty = aSY[IREC + i] - Math.max(4, Math.round(12 * aS[IREC + i])) / 2;
-      var qx = aSX[IQB], qy = aSY[IQB] - 14;
-      var apex = (FIELD.arcMin + FIELD.arcPerLoft * loft) * L.pxPerYd * L.kv * 0.6;
-      g.fillStyle = pal('chalk'); g.globalAlpha = 0.85;
-      for (var j = 0; j < 12; j++) {
-        var u = 0.1 + 0.85 * j / 11;
-        g.fillRect(Math.round(lerp(qx, tx, u)), Math.round(lerp(qy, ty, u) - 4 * apex * u * (1 - u)), 1, 1);
+    /**
+     * Dots along a field polyline arr[0..n) whose first point is drawn from (sx, sy) (the QB now): every `gap` virtual
+     * px, `color`, turning red past `maxLen` yd; `arcLoft` > 0 fattens the middle (1 → 3 px) to show the arc.
+     */
+    function drawDots(arr, n, sx, sy, color, gap, arcLoft, maxLen, alpha, fromLen) {
+      if (n < 2) return;
+      var total = 0, k, ax, ay, bx, by;
+      ax = sx; ay = sy;
+      for (k = 1; k < n; k++) { bx = arr[k].x; by = arr[k].y; total += Math.sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay)); ax = bx; ay = by; }
+      if (!(total > 0)) return;
+      g.globalAlpha = alpha;
+      var red = false, cur = '';
+      g.fillStyle = color; cur = color;
+      var cum = 0, fx0 = sx, fy0 = sy;
+      project(fx0, fy0); var px0 = pt.x, py0 = pt.y, carry = 0;
+      for (k = 1; k < n; k++) {
+        var fx1 = arr[k].x, fy1 = arr[k].y;
+        var segYd = Math.sqrt((fx1 - fx0) * (fx1 - fx0) + (fy1 - fy0) * (fy1 - fy0));
+        project(fx1, fy1); var px1 = pt.x, py1 = pt.y;
+        var segPx = Math.sqrt((px1 - px0) * (px1 - px0) + (py1 - py0) * (py1 - py0));
+        if (segPx > 0) {
+          var d = gap - carry;
+          while (d <= segPx) {
+            var u = d / segPx, yd = cum + segYd * u;
+            if (yd >= fromLen) {
+              red = yd > maxLen;
+              var want = red ? pal('red') : color;
+              if (want !== cur) { g.fillStyle = want; cur = want; }
+              var tu = yd / total, th = arcLoft > 0 ? 1 + Math.round(2 * arcLoft * 4 * tu * (1 - tu)) : 1;
+              g.fillRect(Math.round(px0 + (px1 - px0) * u - (th >> 1)), Math.round(py0 + (py1 - py0) * u - (th >> 1)), th, th);
+            }
+            d += gap;
+          }
+          carry = segPx - (d - gap);
+        }
+        cum += segYd; fx0 = fx1; fy0 = fy1; px0 = px1; py0 = py1;
       }
       g.globalAlpha = 1;
     }
-    function drawBall() {
-      if (!ballShown) return;
-      if (phase === 'FLIGHT' && !landBeat) {
-        g.fillStyle = 'rgba(16,18,38,0.45)';
-        var sw = Math.max(2, Math.round(ballSize * 0.6));
-        g.fillRect(ballX - (sw >> 1), ballGround, sw, 1);
+    /** Chalk footprints every footYd along a field polyline (alternating a step either side). */
+    function drawFeet(arr, n, sx, sy, alpha, fromIdx) {
+      if (n < 2) return;
+      g.globalAlpha = alpha; g.fillStyle = pal('chalk');
+      var fx0 = sx, fy0 = sy, carry = 0, side = 1;
+      for (var k = Math.max(1, fromIdx); k < n; k++) {
+        var fx1 = arr === null ? runBufX[k] : arr[k].x, fy1 = arr === null ? runBufY[k] : arr[k].y;
+        var dx = fx1 - fx0, dy = fy1 - fy0, d = Math.sqrt(dx * dx + dy * dy);
+        if (d > 0) {
+          var s = FIELD.footYd - carry;
+          while (s <= d) {
+            var u = s / d, nx = -dy / d * FIELD.footSide * side, ny = dx / d * FIELD.footSide * side;
+            project(fx0 + dx * u + nx, fy0 + dy * u + ny);
+            var fw = pt.s > 0.7 ? 2 : 1;
+            g.fillRect(Math.round(pt.x), Math.round(pt.y) - 1, fw, 2);
+            side = -side; s += FIELD.footYd;
+          }
+          carry = d - (s - FIELD.footYd);
+        }
+        fx0 = fx1; fy0 = fy1;
       }
-      if (ballCarrier !== -1) return;   // in someone's hands
-      var spr = ballSize < 2.5 ? balls[2] : (ballSize < 4.5 ? balls[3] : (ballSize < 7 ? balls[5] : balls[8]));
-      g.drawImage(spr, ballX - (spr.width >> 1), ballY - (spr.height >> 1));
+      g.globalAlpha = 1;
+    }
+    function drawMark(spr, x, y, sc) {
+      var w = Math.max(3, Math.round(spr.width * sc)), h = Math.max(3, Math.round(spr.height * sc));
+      g.drawImage(spr, Math.round(x - w / 2), Math.round(y - h / 2), w, h);
+    }
+    /** The landing marker at a field point (the preview's ring shapes for a FIELD GENERAL, else the X). */
+    function drawLanding(x, y, kind, preview, previewShown, assisted) {
+      project(x, y);
+      var sc = clamp(pt.s * 1.1, 0.6, 1.2);
+      if (kind === 'PASS' && previewShown && preview) {
+        var spr = preview === 'GREEN' ? rings.open : (preview === 'GOLD' ? rings.tight : rings.covered);
+        var w = Math.max(7, Math.round(FIELD.ringW * pt.s * 1.2)), h = Math.max(4, Math.round(5 * pt.s * 1.2));
+        g.drawImage(spr, Math.round(pt.x - w / 2), Math.round(pt.y - h / 2), w, h);
+      } else drawMark(kind === 'THROWAWAY' ? marks.away : marks.pass, pt.x, pt.y, sc);
+      if (assisted) drawMark(marks.tick, pt.x, pt.y - 5, 1);
+    }
+    function drawDraft() {
+      if (phase !== 'PLAY' || !lv || !cls || !dispArr || dispN < 2) return;
+      var k = dkind, qx = num(lv.qb.x, 0), qy = num(lv.qb.y, 0);
+      if (k === 'RUN') { drawFeet(dispArr, dispN, qx, qy, 1, 1); return; }
+      if (k === 'THROWAWAY') {
+        drawDots(dispArr, dispN, qx, qy, pal('grey'), FIELD.awayDotPx, 0, Infinity, 1, 0);
+        var e = dispArr[dispN - 1]; drawLanding(e.x, e.y, 'THROWAWAY', null, false, false);
+        return;
+      }
+      if (k !== 'PASS') return;
+      var maxLen = num(cls.maxLen, Infinity);
+      drawDots(dispArr, dispN, qx, qy, pal('gold'), FIELD.passDotPx, input ? input.loft() : 0.5, maxLen, 1, 0);
+      // the landing: the end of the engine's (truncated) line
+      var cp = cls.points && cls.points.length ? cls.points[cls.points.length - 1] : dispArr[dispN - 1];
+      drawLanding(num(cp.x, 0), num(cp.y, 0), 'PASS', cls.preview, !!cls.previewShown, clsAssist);
+      if (cls.tooLong) { var last = dispArr[dispN - 1]; project(last.x, last.y); drawMark(marks.red, pt.x, pt.y, 0.8); }
+    }
+    /** The committed run: faint footprints from the QB along what is left of it. */
+    function drawRunPath() {
+      if (phase !== 'PLAY' || !lv || runBufN < 2 || !lv.qb.hasBall || (cls && input && input.drafting())) return;
+      var qx = num(lv.qb.x, 0), qy = num(lv.qb.y, 0);
+      // the nearest point ahead of the QB (monotonic: he only moves along it)
+      var best = runBufI, bd = Infinity;
+      for (var i = runBufI; i < runBufN; i++) { var dx = runBufX[i] - qx, dy = runBufY[i] - qy, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = i; } else if (d > bd + 16) break; }
+      runBufI = best;
+      if (runBufI >= runBufN - 1) return;
+      drawFeet(null, runBufN, qx, qy, 0.45, runBufI + 1);
+    }
+    function drawBall() {
+      if (phase !== 'PLAY' && phase !== 'RESULT' && phase !== 'DONE') return;
+      if (!lv || !lv.ball) return;
+      var b = lv.ball;
+      if (b.caught && carrier !== -1) return;                     // in someone's hands (drawn on him)
+      var dead = num(b.deadAt, -1) >= 0;
+      var bx = num(b.x, 0), by = num(b.y, 0), h = Math.max(0, num(b.h, 0));
+      if (!dead && lv.phase === 'BALL_IN_AIR') {
+        // the rest of the flown path, faint, and where it lands
+        if (b.path && b.path.length > 1) {
+          var tot = 0;
+          for (var k = 1; k < b.path.length; k++) { var ddx = b.path[k].x - b.path[k - 1].x, ddy = b.path[k].y - b.path[k - 1].y; tot += Math.sqrt(ddx * ddx + ddy * ddy); }
+          drawDots(b.path, b.path.length, num(b.path[0].x, 0), num(b.path[0].y, 0), pal('gold'), 4, 0, Infinity, 0.45, num(b.u, 0) * tot);
+        }
+        if (b.landing) drawLanding(num(b.landing.x, 0), num(b.landing.y, 0), b.kind === 'THROWAWAY' ? 'THROWAWAY' : 'PASS', null, false, false);
+      }
+      project(bx, by);
+      var groundY = Math.round(pt.y), sx = Math.round(pt.x), s = pt.s, lift = h * L.pxPerYd * s * L.kv;
+      if (b.tipped && tipReal && now() - tipReal < TIMING.tipMs * 0.4) drawMark(tipStar, pt.x, groundY - lift, 1);   // the hand on it
+      // the shadow on the ground (narrower the higher the ball) and the ball above it (a tipped ball tumbles)
+      var size = 3 + 5 * s * (1 + 0.04 * h);
+      g.fillStyle = 'rgba(16,18,38,0.5)';
+      var sw = Math.max(1, Math.round(size * 0.6 / (1 + h * 0.08)));
+      g.fillRect(sx - (sw >> 1), groundY, sw, 1);
+      var spr = b.tipped && h > 0.05 ? spinSpr[(Math.floor(now() / 70) & 1)] : (size < 3.2 ? balls[2] : (size < 5 ? balls[3] : (size < 7.2 ? balls[5] : balls[8])));
+      g.drawImage(spr, sx - (spr.width >> 1), Math.round(groundY - lift) - (spr.height >> 1));
     }
     function drawParticles() {
       if (!pCount) return;
@@ -1839,7 +1864,12 @@
     }
     function drawOverlays() {
       if (weatherKind() === 'fog') { g.fillStyle = pal('chalk'); g.globalAlpha = 0.18; g.fillRect(0, L.yHor - 12, L.W, Math.round((L.yLOS - L.yHor) * 0.6)); g.globalAlpha = 1; }
-      if (vignette && (inPlay() || phase === 'FLIGHT')) g.drawImage(vignette, 0, 0);
+      if (slowBands) {
+        // slow motion: letterbox bands (the stage's CSS also desaturates the canvas)
+        var bh = Math.max(6, Math.round(L.H * 0.035));
+        g.fillStyle = pal('ink'); g.globalAlpha = 0.55; g.fillRect(0, 0, L.W, bh); g.fillRect(0, L.H - bh, L.W, bh); g.globalAlpha = 1;
+        g.fillStyle = pal('gold'); g.fillRect(0, bh, L.W, 1); g.fillRect(0, L.H - bh - 1, L.W, 1);
+      }
       if (phase === 'SITUATION') { g.fillStyle = pal('ink'); g.globalAlpha = 0.55; g.fillRect(0, 0, L.W, L.H); g.globalAlpha = 1; }
       if (flashAlpha > 0) { g.fillStyle = flashColor; g.globalAlpha = flashAlpha; g.fillRect(0, 0, L.W, L.H); g.globalAlpha = 1; flashAlpha = Math.max(0, flashAlpha - 0.05); }
     }
@@ -1848,26 +1878,26 @@
       g.translate(camX, camY);
       drawStadium();
       drawField();
+      drawRunPath();
+      drawDraft();
       drawActors();
-      drawAim();
       drawBall();
       drawParticles();
       g.restore();
       drawOverlays();
     }
 
-    /** A modal is open: freeze every clock (the play clock, the flight, the landing beat, the skip timer) and cancel a live hold. */
+    /** A modal is open: freeze the play (no step), the slide and the beats' clocks; a finger's draft is dropped. */
     function holdPaused(dt) {
-      if (inPlay()) {
-        tSnap += dt;
-        if (hold && input) {
-          input.reset();
-          if (target >= 0) input.setTarget(recSlot[target], 'key');   // the target stays, the climb starts over on resume
-          hold = false; meterP = 0; setVel(0); setZone(null); setHint(snapHint());
-        }
-      } else if (phase === 'RUN') tSnap += dt;
-      else if (phase === 'FLIGHT') { tPhase += dt; landAt += dt; }
-      else if (phase === 'SACK' || phase === 'RESULT') tPhase += dt;
+      if (phase === 'PLAY') {
+        if (alignU < 1) tAlign0 += dt;
+        if (doneAt) doneAt += dt;
+        if (releaseReal) releaseReal += dt;
+        if (input && input.drafting() && input.source() === 'pointer') input.cancel();
+        if (slowBands) { slowBands = false; stage.classList.remove('is-slow'); }
+        curScale = 0;
+      } else if (phase === 'RUN') runT0 += dt;
+      else if (phase === 'RESULT') tPhase += dt;
       projectAll();
     }
     function update(dt, t) {
@@ -1875,29 +1905,12 @@
       var period = crowdMode === 'cheer' ? TIMING.crowdCheerMs : TIMING.crowdIdleMs;
       if (t - crowdAt > period) { crowdAt = t; crowdFrame = crowdMode === 'groan' ? 0 : 1 - crowdFrame; }
       var amp = 0;
-      if (!reduced && shakeAmp > 0) { amp = shakeAmp; shakeAmp = Math.max(0, shakeAmp - dt / 80); }
+      if (!reduced && shakeAmp > 0) { amp = shakeAmp; shakeAmp = Math.max(0, shakeAmp - dt / (TIMING.sackShakeMs / 3)); }
       camX = amp ? Math.round((rnd() - 0.5) * 2 * amp) : 0;
-      if (phase !== 'FLIGHT') camY = amp ? Math.round((rnd() - 0.5) * 2 * amp) : 0;
-      if (input) input.update(t);
-      if (inPlay()) {
-        var raw = tSnap === 0 ? 0 : (t - tSnap) / 1000;
-        tPlay = Math.max(0, raw);
-        alignU = alignMs > 0 ? clamp(1 + raw * 1000 / alignMs, 0, 1) : 1;
-        positionsAt(tPlay);
-        if (hold && target >= 0 && !zoneStatic) { setZone(greenZoneFor(target, tPlay)); setHint(holdHint()); }
-        runClock();
-        var sackAt = num(sim && sim.sackAt, TIMING.playMaxS);
-        setPressure(sackAt > 0 ? tPlay / sackAt : 0);
-        if (btnAway && btnAway.hidden && canThrowAway()) btnAway.hidden = false;
-        if (btnScr && btnScr.hidden && canScramble()) btnScr.hidden = false;
-        var limit = Math.max(TIMING.playMaxS, sackAt);
-        if (tPlay >= sackAt || tPlay >= limit) {
-          resolve({ kind: 'SACK', target: target >= 0 ? recSlot[target] : null, t: tPlay, lead: lead, loft: loft, power: meterP, quality: 0.3, green: false });
-        }
-      } else if (phase === 'FLIGHT') { updateFlight(); positionsAt(tPlay); }
-      else if (phase === 'RUN') { var rr = (t - tSnap) / 1000; tPlay = Math.max(0, rr); alignU = alignMs > 0 ? clamp(1 + rr * 1000 / alignMs, 0, 1) : 1; positionsAt(tPlay); updateRun(); }
-      else if (phase === 'SACK') { positionsAt(num(sim && sim.sackAt, tPlay)); }
-      else if (phase === 'RESULT' || phase === 'DONE') { /* frozen */ }
+      camY = amp ? Math.round((rnd() - 0.5) * 2 * amp) : 0;
+      if (phase === 'PLAY' && lv) updatePlay(dt, t);
+      else if (phase === 'RUN') updateRunCard(t);
+      else if ((phase === 'RESULT' || phase === 'DONE') && lv && !frozen) coastLive(dt);
       projectAll();
       if (pCount) updateParticles(dt);
     }
@@ -1912,19 +1925,18 @@
       clutch = !!(ctx.clutch || (ctx.pressure && ctx.pressure.clutch) || sit.clutch);
       pressure = clamp(num(sit.pressure, num(ctx.pressureLevel, clutch ? 0.7 : 0.35)), 0, 1);
       if (pressure >= 0.6) clutch = true;
-      sim = null; result = null; pickedId = null; pickedOpt = null; thrown = false; sacked = false; target = -1; hold = false; meterP = 0; zone = null;
-      ballShown = false; ballCarrier = -1; landBeat = null; converge = -1; intMan = -1; dropMan = -1; crowdMode = 'idle'; flashAlpha = 0; shakeAmp = 0; camX = 0; camY = 0; qbDown = 0;
-      for (var i = 0; i < NACT; i++) { order[i] = i; aShow[i] = 0; }
-      gun = true; alignMs = 0; alignU = 1;             // the READ picture is the shotgun (the engine's default alignment)
-      buildReceivers(null);
-      buildDefence();
-      placeLine();
+      sim = null; lv = null; result = null; pickedId = null; pickedOpt = null; frozen = false; cls = null;
+      crowdMode = 'idle'; flashAlpha = 0; shakeAmp = 0; camX = 0; camY = 0; resultAt = 0; doneAt = 0;
+      for (var i = 0; i < NACT; i++) order[i] = i;
+      alignMs = 0; alignU = 1;
+      placeAlignment();
       hotSlot = -1;
-      loadRings();
+      loadTinted();
+      ringThresholds();
       relayout();
       initParticles();
       buildHud();
-      hideBanner(); subBanner.hidden = true; toastLine.hidden = true; skipHint.hidden = true; feedback.hidden = true; throwBox.hidden = true; cards.hidden = true;
+      hideBanner(); subBanner.hidden = true; toastLine.hidden = true; skipHint.hidden = true; feedback.hidden = true; drawBox.hidden = true; cards.hidden = true; drawHud.hidden = true;
       startSituation();
       if (clutch) { showSub('CLUTCH', 'clutch', 900); cue('crowd', 0.12); }
       else cue('crowd', 0.2 + 0.4 * pressure);
@@ -1941,12 +1953,28 @@
         var s = liveSettings();
         reduced = reducedMotion(s);
         mirror = !!(s.leftHanded || s.leftFooted || s.mirror);
-        loadRings();
+        loadTinted();
         relayout();
       });
     }
     arm();
     cv.start(loop);
+
+    /** A JSON copy of the draft (RTG.debug / the e2e): {mode, kind, target, preview, previewShown, points, loft, tooLong, …} or null. */
+    function drawing() {
+      if (!input || !input.drafting()) return null;
+      var k = cls ? dkind : null;
+      var mode = input.mode() || (k === 'PASS' || k === 'THROWAWAY' ? 'PASS' : (k === 'RUN' ? 'RUN' : null));
+      return {
+        mode: mode, source: input.source(), kind: k, target: cls ? (cls.target || null) : null,
+        preview: cls ? (cls.preview || null) : null, previewShown: !!(cls && cls.previewShown),
+        points: copyPts(cls && cls.points ? cls.points : input.points()), raw: copyPts(input.points()),
+        loft: Math.round(input.loft() * 1000) / 1000, touch: Inp.touchName(input.loft()), speedHps: Math.round(input.speedHps() * 100) / 100,
+        tooLong: !!(cls && cls.tooLong), length: cls ? num(cls.length, 0) : 0, maxLen: cls ? num(cls.maxLen, 0) : 0,
+        assisted: clsAssist, reason: cls ? (cls.reason || '') : ''
+      };
+    }
+    function timeScale() { return paused() && phase === 'PLAY' ? 0 : (phase === 'PLAY' && lv && !frozen ? curScale : 1); }
 
     var view = {
       el: elRoot, canvas: canvas, cv: cv,
@@ -1954,41 +1982,79 @@
       layout: function () { return L; },
       ctx: function () { return ctx; },
       sim: function () { return sim; },
+      live: function () { return lv; },
       result: function () { return result; },
-      /** {sim, target, t}: what the scene is playing right now (RTG.debug / the e2e harness). */
-      current: function () { return { sim: sim, target: target >= 0 ? recSlot[target] : null, t: tPlay, phase: phase, play: pickedId, hold: hold, power: meterP, lead: lead, loft: loft }; },
-      lastInput: function () { return lastInput; },
-      greenZone: function () { return zone; },
-      input: function () { return input; },
-      /** Field yards → virtual px (a copy). */
-      project: function (x, y) { project(x, y); return { x: pt.x, y: pt.y, s: pt.s }; },
-      /** Receivers and the QB in css px relative to the canvas element (tapReceiver in the e2e helpers). */
+      timeScale: timeScale,
+      drawing: drawing,
+      /** {sim, t, phase, livePhase, play, timeScale, drafting, target}: what the scene is playing right now (RTG.debug). */
+      current: function () { return { sim: sim, t: lv ? num(lv.t, 0) : 0, phase: phase, livePhase: lv ? lv.phase : null, play: pickedId, timeScale: timeScale(), drafting: !!(input && input.drafting()), target: cls && cls.kind === 'PASS' ? cls.target : null, slowLeftS: Math.max(0, slowBudget - slowUsed) }; },
+      /** Field yards → client css px (the viewport coordinates a pointer event carries). */
+      fieldToCss: fieldToCss,
+      /** True while a draft may start: PLAY, the slide done, the QB has the ball, no modal (also .playview[data-can-draw="1"]). */
+      canDraw: function () { return canDraw(); },
+      /** Where to press to start a draft: the QB's feet in client css px, his chest (10 virtual px up) and the start radius (css px). */
+      qbPoint: function () {
+        refreshRect();
+        var s = cv.scale || 1, fx = rectL + aSX[IQB] * s, fy = rectT + aSY[IQB] * s;
+        return { x: fx, y: fy, chestY: fy - FIELD.qbBodyVpx * s, r: startRadiusCss(), fieldX: aX[IQB], fieldY: aY[IQB] };
+      },
+      /** Client css px → field yards (the exact inverse of fieldToCss on the field). */
+      cssToField: cssToField,
+      /** Field yards → virtual px + scale (a copy). */
+      project: function (x, y) { project(num(x, 0), num(y, 0)); return { x: pt.x, y: pt.y, s: pt.s }; },
+      /** Receivers and the QB in css px relative to the canvas element (sprite centres) + field yards. */
       actors: function () {
-        var out = { receivers: [], qb: null, scale: cv.scale };
+        var out = { receivers: [], defenders: [], qb: null, scale: cv.scale };
         for (var i = 0; i < recCount; i++) {
-          var h = Math.max(4, Math.round(12 * aS[IREC + i]));
-          out.receivers.push({ slot: recSlot[i], x: aSX[IREC + i] * cv.scale, y: (aSY[IREC + i] - h / 2) * cv.scale, fieldX: aX[IREC + i], fieldY: aY[IREC + i], open: recOpen[i], openNow: recOpenNow[i], dist: recDist[i], ring: recRing[i] });
+          var h = Math.max(4, Math.round(12 * aS[IREC + i])), r = lv ? lv.receivers[i] : null;
+          out.receivers.push({ slot: recSlot[i], x: aSX[IREC + i] * cv.scale, y: (aSY[IREC + i] - h / 2) * cv.scale, fieldX: aX[IREC + i], fieldY: aY[IREC + i], open: r ? num(r.open, 0) : null, sep: r ? num(r.sep, 0) : null, shown: !!(r && r.shown) });
         }
-        out.qb = { x: aSX[IQB] * cv.scale, y: (aSY[IQB] - 10) * cv.scale };
+        for (var j = 0; j < defCount; j++) out.defenders.push({ id: defId[j], pos: defPos[j], fieldX: aX[j], fieldY: aY[j], x: aSX[j] * cv.scale, y: aSY[j] * cv.scale });
+        out.qb = { x: aSX[IQB] * cv.scale, y: (aSY[IQB] - 10) * cv.scale, fieldX: aX[IQB], fieldY: aY[IQB], startR: startRadiusCss() };
         return out;
       },
       read: startRead,
       pick: pick,
-      target: function (slot) { return input ? input.setTarget(slot, 'key') : false; },
-      holdStart: function () { return input ? input.holdStart() : false; },
-      holdEnd: function () { return input ? input.holdEnd() : false; },
-      throwAway: function () { return input ? input.throwAway() : false; },
-      scramble: function () { return input ? input.scramble() : false; },
-      /** Animate an externally resolved result (RTG.debug.forceResult): from READ it snaps the first option first. */
+      /** Programmatic pass along field points (tests / RTG.debug.drawPass): straight to live.throwAlong. */
+      commitPass: function (points, loft) {
+        if (!canPass()) return { ok: false, reason: 'NOT NOW' };
+        if (input) input.cancel();
+        return applyCommit('PASS', copyPts(points), clamp(num(loft, 0.5), 0, 1));
+      },
+      /** Programmatic run along field points: live.setRun. */
+      commitRun: function (points) {
+        if (!canDraw()) return { ok: false, reason: 'NOT NOW' };
+        if (input) input.cancel();
+        return applyCommit('RUN', copyPts(points), 0.5);
+      },
+      throwAway: doThrowAway,
+      /**
+       * The spot receiver `slot` can reach for a straight line from the QB at `loft` (the keyboard's proposal: his route
+       * at the ball's estimated arrival, re-checked with live.classify, else the middle of the ends that classify as a
+       * pass to him) → {x, y, kind, target} (the classify of that straight line) or null.
+       */
+      reachSpot: function (slot, loft) {
+        if (phase !== 'PLAY' || !lv) return null;
+        var lf = clamp(num(loft, 0.5), 0, 1), o = { x: 0, y: 0 };
+        if (!proposeSpot(String(slot), lf, o, false)) return null;
+        var c = lv.classify([{ x: num(lv.qb.x, 0), y: num(lv.qb.y, 0) }, { x: o.x, y: o.y }], lf);
+        return { x: Math.round(o.x * 1000) / 1000, y: Math.round(o.y * 1000) / 1000, kind: c ? c.kind : null, target: c ? (c.target || null) : null };
+      },
+      /** Animate an externally resolved result (RTG.debug.forceResult): from SITUATION / READ it snaps the first card first; the live freezes. */
       playResult: function (res) {
         if (!res || typeof res.outcome !== 'string') return view;
         if (phase === 'SITUATION') startRead();
         if (phase === 'READ') {
-          var s = null;
-          try { s = opts.onPick && ctx.options && ctx.options.length ? opts.onPick(ctx.options[0].id, ctx.options[0]) : null; } catch (e) { s = null; }
-          if (s && !s.run) startSnap(s, ctx.options[0]); else startSnap(s || { receivers: ctx.receivers, sackAt: 3 }, ctx.options && ctx.options[0]);
+          var opts0 = ctx.options || [], k = 0;
+          for (var i = 0; i < opts0.length; i++) if (!opts0[i].run) { k = i; break; }
+          pick(k);
         }
-        if (inPlay()) { thrown = true; tThrow = now(); teardownInput(); if (btnAway) btnAway.hidden = true; if (btnScr) btnScr.hidden = true; beginResolution(res, lastInput || { target: res.target, lead: 0, loft: 0.5 }); }
+        if (phase === 'PLAY' || phase === 'READ') {
+          frozen = true; if (input) input.cancel();
+          result = res; alignU = 1;
+          if (res.outcome === 'SACK' && lv) shakeAmp = reduced ? 0 : 3;
+          startResult();
+        } else if (phase === 'RUN') { result = res; startResult(); }
         return view;
       },
       skip: skip,
@@ -2005,17 +2071,17 @@
         cue('crowdStop'); cue('heartbeatStop');
         cv.destroy();
         if (elRoot.parentNode) elRoot.parentNode.removeChild(elRoot);
-        if (live === view) live = null;
+        if (current === view) current = null;
       }
     };
-    live = view;
+    current = view;
     return view;
   };
 
-  PlayView.current = function () { return live; };
+  PlayView.current = function () { return current; };
 
   /**
-   * §4.8: the moment screen is chromeless, so Escape is its route to Settings. The shell provides
+   * The moment screen is chromeless, so Escape is its route to Settings. The shell provides
    * RTG.UI.app.openSettings() (or passes onSettings to mount); without either the key is not handled.
    * @returns {boolean} true when the key was handled
    */

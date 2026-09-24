@@ -28,6 +28,7 @@ const ORDER = [
   '00_namespace',
   'engine/tuning', 'engine/util', 'engine/rng', 'engine/weather',
   'data/plays',
+  'engine/field',
   'engine/play',
 ];
 

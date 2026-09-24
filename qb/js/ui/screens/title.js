@@ -20,12 +20,12 @@
   var ARCH_ORDER = ['GUNSLINGER', 'SURGEON', 'FIELD_GENERAL', 'DUAL_THREAT'];
   var ARCH_NAME = { GUNSLINGER: 'GUNSLINGER', SURGEON: 'SURGEON', FIELD_GENERAL: 'FIELD GENERAL', DUAL_THREAT: 'DUAL THREAT' };
   var ARCH_TEXT = {
-    GUNSLINGER: 'A cannon and a short memory. Throws it deep and asks later.',
-    SURGEON: 'Puts it on the numbers. Lives in the green.',
-    FIELD_GENERAL: 'Sees the disguise before the snap. Knows where the window is.',
-    DUAL_THREAT: 'When it breaks down, he leaves. The legs buy time.'
+    GUNSLINGER: 'A cannon and a short memory. The longest line on the field and the hottest bullet.',
+    SURGEON: 'The ball goes where the line goes. Threads it past a linebacker\'s ear.',
+    FIELD_GENERAL: 'Sees the disguise before the snap, and sees his line turn green, gold or red before he lets it go.',
+    DUAL_THREAT: 'Draw a run and he is gone: rolls out, slips the rush, takes the sticks himself.'
   };
-  var ATTR_TEXT = { ARM: 'Velocity and deep range', ACC: 'The green band and the scatter', IQ: 'Reads the look, sees windows early', MOB: 'Scramble yards, sack escapes', POI: 'Poise: the rush feels slower' };
+  var ATTR_TEXT = { ARM: 'Ball speed and how long a line you can throw', ACC: 'How close the ball stays to the line you draw', IQ: 'Reads the look, sees windows early; 70+ sees the pass preview', MOB: 'Run speed on a drawn run, sack escapes', POI: 'Pocket time: the rush takes longer to get home' };
   var ATTRS = ['ARM', 'ACC', 'IQ', 'MOB', 'POI'];
   var TEAM_ORDER = ['BAD', 'AVERAGE', 'GREAT'];
   var TEAM_LABEL = { BAD: 'BAD LINE', AVERAGE: 'AVERAGE', GREAT: 'GREAT LINE' };
@@ -145,7 +145,7 @@
     var col = C.el('div', { class: 'title-col' });
     el.appendChild(col);
 
-    col.appendChild(C.el('p', { class: 'title-blurb small', text: 'Read the look. Pick the play. Tap a receiver, hold for velocity, drag for lead and loft, let go in the green. Six snaps decide the night.' }));
+    col.appendChild(C.el('p', { class: 'title-blurb small', text: 'Read the look. Pick the play. Then draw it: a line from the QB to a receiver is the ball\'s path — fast for a bullet, slow for a lob over the linebacker — and a line into space is your run. The play slows down while your finger draws. Six snaps decide the night.' }));
 
     // ── archetypes ──
     var archGrid = C.el('div', { class: 'grid-2 arch-grid', role: 'radiogroup', 'aria-label': 'Archetype' });

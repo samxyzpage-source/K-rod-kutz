@@ -16,7 +16,17 @@
  *                 { id: 'SNEAK' | 'DRAW', run: true, tags: ['RUN', 'SHORT_YDG'], vs, line }
  *   coverages  { COVER2, COVER3, COVER4, MAN, BLITZ, PREVENT }
  *              each { id, name, look: { safeties: 1|2, press, box, showBlitz }, disguises: [coverageId],
- *                     pressureMul, tightness: { SHORT, MID, DEEP } (0 soft … 1 blanketed), text (what you see), tell }
+ *                     pressureMul, tightness: { SHORT, MID, DEEP } (0 soft … 1 blanketed; the v1 openness model's —
+ *                     the field simulation does not read it), text (what you see), tell,
+ *                     roles: { <defender id>: { role: 'MAN'|'ZONE'|'RUSH'|'SPY'|'ROBBER', man: slot|null,
+ *                              zone: { xs, y, r, fw }|null } } — what each of the eleven does at the snap when this
+ *                              is the REAL coverage (engine/field.js). xs is lateral yards on the STRONG-relative
+ *                              axis (+ = the strong side, ctx.sign's side), y yards downfield of the line, r the zone's
+ *                              radius; fw 1 = measured from the field's centre (deep thirds, the flats), 0 = from the
+ *                              ball (the hooks). The ids: CB1 (over WR1, the weak side), CB2 (over WR2), NB (the
+ *                              nickel, over the slot), S1 (the weak / single-high safety), S2 (the strong safety),
+ *                              LB1 (strong), LB2 (weak), DL1..DL4 (weak end → strong end).
+ *   defenders  the eleven ids in a fixed order, and their position group {id: 'CB'|'NB'|'S'|'LB'|'DL'}
  *   order      the six coverage ids in a fixed order (weighted picks iterate it)
  *   slots      ['WR1', 'WR2', 'SLOT', 'TE', 'RB']
  *
@@ -140,29 +150,62 @@
   ];
 
   /** Shorthand: a coverage. */
-  function coverage(id, name, safeties, press, box, showBlitz, disguises, pressureMul, tShort, tMid, tDeep, text, tell) {
+  function coverage(id, name, safeties, press, box, showBlitz, disguises, pressureMul, tShort, tMid, tDeep, text, tell, roles) {
     return {
       id: id, name: name,
       look: { safeties: safeties, press: press, box: box, showBlitz: showBlitz },
       disguises: disguises, pressureMul: pressureMul,
       tightness: { SHORT: tShort, MID: tMid, DEEP: tDeep },
-      text: text, tell: tell
+      text: text, tell: tell, roles: roles
     };
   }
 
+  // The eleven and their position groups (engine/field.js aligns and moves them; the scene draws them).
+  var defenders = ['CB1', 'CB2', 'NB', 'S1', 'S2', 'LB1', 'LB2', 'DL1', 'DL2', 'DL3', 'DL4'];
+  var defenderPos = { CB1: 'CB', CB2: 'CB', NB: 'NB', S1: 'S', S2: 'S', LB1: 'LB', LB2: 'LB', DL1: 'DL', DL2: 'DL', DL3: 'DL', DL4: 'DL' };
+
+  /** Role shorthands: man on a slot · a zone landmark (xs strong-relative, y downfield, radius, field- or ball-relative) · the rush · the spy · the robber. */
+  function man(slot) { return { role: 'MAN', man: slot, zone: null }; }
+  function zone(xs, y, r, fieldRel) { return { role: 'ZONE', man: null, zone: { xs: xs, y: y, r: r, fw: fieldRel ? 1 : 0 } }; }
+  function rush() { return { role: 'RUSH', man: null, zone: null }; }
+  function spy() { return { role: 'SPY', man: null, zone: { xs: 0, y: 5, r: 6, fw: 0 } }; }
+  function robber(xs, y, r) { return { role: 'ROBBER', man: null, zone: { xs: xs, y: y, r: r, fw: 0 } }; }
+  var F = true, B = false;   // field- or ball-relative landmarks
+  /** Four down linemen rushing (the base). */
+  function fourDown(o) { o.DL1 = rush(); o.DL2 = rush(); o.DL3 = rush(); o.DL4 = rush(); return o; }
+
   var coverages = {
+    // two deep halves, the corners squat in the flats, three underneath hooks/curls
     COVER2:  coverage('COVER2', 'COVER 2', 2, true, 7, false, ['COVER4', 'MAN'], 1.0, 0.60, 0.40, 0.35,
-      'Two high, corners pressed, seven in the box.', 'The corners are squatting on the flats. The hole is behind them.'),
+      'Two high, corners pressed, seven in the box.', 'The corners are squatting on the flats. The hole is behind them.',
+      fourDown({ CB1: zone(-17, 5, 7, F), CB2: zone(17, 5, 7, F), S1: zone(-11, 20, 12, F), S2: zone(11, 20, 12, F),
+        NB: zone(10, 10, 6, B), LB1: zone(3, 10, 6, B), LB2: zone(-8, 10, 6, B) })),
+    // three deep (the corners and the free safety), four underneath (the strong safety rolls down)
     COVER3:  coverage('COVER3', 'COVER 3', 1, false, 8, false, ['MAN', 'BLITZ'], 1.0, 0.35, 0.50, 0.50,   // deep 0.50: one high safety cannot cover two seams — the last play is winnable against it
-      'One high, corners off, eight in the box.', 'Three deep and soft underneath. Take the curls all day.'),
+      'One high, corners off, eight in the box.', 'Three deep and soft underneath. Take the curls all day.',
+      fourDown({ CB1: zone(-18, 16, 9, F), CB2: zone(18, 16, 9, F), S1: zone(0, 18, 10, F), S2: zone(5, 9, 6, B),
+        NB: zone(14, 6, 7, F), LB1: zone(-4, 9, 6, B), LB2: zone(-14, 6, 7, F) })),
+    // quarters: four deep, three underneath
     COVER4:  coverage('COVER4', 'COVER 4', 2, false, 6, false, ['COVER2'], 0.9, 0.30, 0.50, 0.70,        // deep 0.70: quarters takes the deep ball away, not the game
-      'Two high and deep, corners off, six in the box.', 'Four deep. Nothing over the top — everything under it.'),
+      'Two high and deep, corners off, six in the box.', 'Four deep. Nothing over the top — everything under it.',
+      fourDown({ CB1: zone(-17, 16, 8, F), CB2: zone(17, 16, 8, F), S1: zone(-6, 17, 8, F), S2: zone(6, 17, 8, F),
+        NB: zone(13, 6, 7, F), LB1: zone(4, 8, 6, B), LB2: zone(-9, 7, 7, B) })),
+    // cover 1 robber: man across, the free safety in the middle of the field, a linebacker in the hole
     MAN:     coverage('MAN', 'MAN', 1, true, 7, false, ['COVER3', 'BLITZ'], 1.1, 0.55, 0.55, 0.50,
-      'One high, everybody pressed, seven in the box.', 'They are in their faces. Your best guy against their guy.'),
+      'One high, everybody pressed, seven in the box.', 'They are in their faces. Your best guy against their guy.',
+      fourDown({ CB1: man('WR1'), CB2: man('WR2'), NB: man('SLOT'), S2: man('TE'), LB2: man('RB'),
+        S1: zone(0, 17, 14, F), LB1: robber(0, 8, 7) })),
+    // cover 1 with the nickel coming: five rush, man across, one high
     BLITZ:   coverage('BLITZ', 'BLITZ', 1, true, 8, true, ['COVER3', 'MAN'], 1.6, 0.30, 0.45, 0.55,
-      'One high, pressed, eight in the box and the nickel is creeping.', 'They are bringing the house. Hot read, now.'),
+      'One high, pressed, eight in the box and the nickel is creeping.', 'They are bringing the house. Hot read, now.',
+      fourDown({ CB1: man('WR1'), CB2: man('WR2'), S2: man('SLOT'), LB1: man('TE'), LB2: man('RB'),
+        S1: zone(0, 17, 14, F), NB: rush() })),
+    // three rush and a spy, everybody else deep
     PREVENT: coverage('PREVENT', 'PREVENT', 2, false, 5, false, ['COVER4'], 0.7, 0.15, 0.40, 0.80,       // deep 0.80: they will not give you thirty — a gunslinger still takes it 1 time in 10
-      'Two high and backing up, corners way off, five in the box.', 'They will give you ten yards all day. They will not give you thirty.')
+      'Two high and backing up, corners way off, five in the box.', 'They will give you ten yards all day. They will not give you thirty.',
+      { CB1: zone(-18, 20, 10, F), CB2: zone(18, 20, 10, F), S1: zone(-8, 27, 12, F), S2: zone(8, 27, 12, F),
+        LB1: zone(0, 14, 9, F), NB: zone(12, 9, 8, F), LB2: zone(-8, 8, 8, B),
+        DL1: rush(), DL2: rush(), DL3: rush(), DL4: spy() })
   };
 
   RTG.Data.plays = {
@@ -172,6 +215,8 @@
     coverages: coverages,
     order: ['COVER2', 'COVER3', 'COVER4', 'MAN', 'BLITZ', 'PREVENT'],
     slots: ['WR1', 'WR2', 'SLOT', 'TE', 'RB'],
+    defenders: defenders,
+    defenderPos: defenderPos,
     families: ['SHORT', 'MID', 'DEEP']
   };
 })(typeof window !== 'undefined' ? window : globalThis);

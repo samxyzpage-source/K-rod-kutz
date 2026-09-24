@@ -51,7 +51,8 @@
       t.classList.toggle('left-handed', !!s.leftHanded);
       t.classList.toggle('no-tooltips', s.tooltips === false);
     }
-    if (doc.body) doc.body.setAttribute('data-input-mode', 'hold');
+    if (doc.body) doc.body.setAttribute('data-input-mode', 'draw');
+    if (doc.body) doc.body.setAttribute('data-aim-assist', s.aimAssist === false ? '0' : '1');
   };
 
   /** Reduced motion is on when the setting says so or the OS asks for it. */
@@ -92,9 +93,10 @@
   app.engineStatus = function () {
     var missing = [];
     var P = RTG.Play, PV = RTG.UI.PlayView, D = RTG.Data && RTG.Data.plays;
-    var fns = ['buildContext', 'snap', 'throw', 'driveScript', 'rating'];
+    var fns = ['buildContext', 'snap', 'live', 'resolve', 'driveScript', 'rating'];
     if (!P) missing.push('RTG.Play');
     else for (var i = 0; i < fns.length; i++) if (typeof P[fns[i]] !== 'function') missing.push('Play.' + fns[i]);
+    if (!RTG.Field || typeof RTG.Field.create !== 'function') missing.push('RTG.Field');
     if (!D || !Array.isArray(D.plays) || !D.plays.length || !D.routes || !D.coverages) missing.push('Data.plays');
     if (!RTG.Tuning || !RTG.Tuning.qb || !RTG.Tuning.qb.archetypes || !RTG.Tuning.qb.demo) missing.push('Tuning.qb');
     if (!PV || typeof PV.mount !== 'function' || typeof PV.current !== 'function') missing.push('PlayView');
@@ -115,7 +117,7 @@
     var body = c.el('div', { class: 'stack' },
       c.el('p', { class: 'txt-red', text: 'ENGINE NOT LOADED' }),
       c.el('p', { class: 'small', text: 'The moment cannot start: ' + status.missing.join(', ') + ' — the play engine or the scene is missing or still a stub.' }),
-      c.el('p', { class: 'small txt-grey', text: 'Check the script order in index.html (js/data/plays.js, js/engine/play.js, js/ui/playinput.js, js/ui/playview.js) and the browser console.' }));
+      c.el('p', { class: 'small txt-grey', text: 'Check the script order in index.html (js/data/plays.js, js/engine/field.js, js/engine/play.js, js/ui/playinput.js, js/ui/playview.js) and the browser console.' }));
     var card = c.card({ title: 'ROAD TO GLORY: QB', kind: 'red', class: 'engine-missing', body: body });
     return c.el('div', { class: 'screen', 'data-error': 'engine' }, card);
   }

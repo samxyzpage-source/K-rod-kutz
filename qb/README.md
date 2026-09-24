@@ -2,16 +2,49 @@
 
 The quarterback sibling of *Road to Glory: Kicker* (`../kicker/`), built in the same idiom: a Retro Bowl-style
 pixel game where **you only play the moments**. In a moment you make a **pre-snap read** (the defence shows a look;
-pick one of 2–3 plays) and then **the throw** (pick the receiver, aim-then-hold the velocity meter, drag for lead
-and loft, let go). Only the key snaps of a game are played; the camera sits behind and above the quarterback like the
-kicker's scene. This build is the playable demo of the moment: a six-snap drive (3rd-and-medium, 3rd-and-long, a
-red-zone snap, short yardage, a two-minute drill, a last-play game-winner) with a box score and a passer rating at the
-end. The full career comes later and will host the moment screen unchanged.
+pick one of 2–3 plays) and then **you draw the play**, like Soccer Superstar: a line from the quarterback to a
+receiver is the ball's exact path, a line into space is where the quarterback runs. Only the key snaps of a game are
+played; the camera sits behind and above the quarterback like the kicker's scene. This build is the playable demo of
+the moment: a six-snap drive (3rd-and-medium, 3rd-and-long, a red-zone snap, short yardage, a two-minute drill, a
+last-play game-winner) with a box score and a passer rating at the end. The full career comes later and will host the
+moment screen unchanged.
 
 Everything is a static site: plain HTML, CSS and vanilla JavaScript (ES2017, no build step, no npm dependencies, no
 modules, no images — every sprite is drawn procedurally). It runs from `file://` as well as from any static host, on
 phones (390 px, and 320 px still works) and desktops. `kicker/` is never edited — it is the style guide and the source
 of every kit file copied here.
+
+## How to play
+
+1. **The situation** — down, distance, the spot, the clock, the score. Tap to read.
+2. **The read** — the defence shows a look (safeties deep or rolled down, corners pressed or off, the box, a blitz
+   tell). Pick one of the 2–3 play cards; each carries the coach's advice (GOOD / OK / BAD, or `?` when the look may
+   be lying — a smarter quarterback sees through more disguises). A SNEAK or a DRAW card on short yardage is resolved
+   at the snap.
+3. **The snap — draw it.** Put your finger (or the mouse) on the quarterback and draw:
+   - **To a receiver → a pass.** The line is the ball's exact path: it flies along it and lands where the line ends.
+     Bend it around a linebacker. A defender near the line can get a hand on it (a tip, or a pick).
+   - **Fast for a bullet, slow for a lob.** The speed of your stroke is the touch: a quick flick is a bullet on a
+     rope (a linebacker at chest height is where interceptions come from); a slow, patient line floats over the
+     underneath defenders and is contested at the end. A longer line needs more arm — past your arm's range the line
+     turns red and the ball dies there.
+   - **Into space → a run.** Roll out, step up, scramble: the quarterback runs the line you drew (draw again for a new
+     run, or draw the pass from wherever he got to). Cross the line of scrimmage with the ball and it is a scramble —
+     no more passing, and the yards are rushing yards.
+   - **Out of bounds → a throw-away** (or the THROW AWAY button / the X key). Never a turnover.
+   - **While your finger is down the play runs in slow motion** (about 15 % speed — the rush still creeps). The slow
+     motion budget is about four real seconds per play; after that time runs at full speed.
+   - The HUD says what your line is (`PASS → WR1 · BULLET`, `RUN`, `THROW AWAY`, `TOO LONG`). A **FIELD GENERAL**
+     also sees the landing spot coloured by the race to it — green, gold or red — before he lets go. Aim assist
+     (Settings, on by default) snaps a pass line's end onto the spot its receiver can reach when you end close to it.
+   - Stand there holding it and the pocket collapses: sacked.
+4. **The result** — the banner, what the throw looked like (on the money / led him / behind him · on time / late ·
+   bullet / touch / lob) and what the coach saw. Then the story of the drive and the next snap.
+
+**Keyboard (a complete path):** `1`–`5` aim a straight pass at a receiver (WR1 WR2 SLOT TE RB — the play slows
+down while you compose) · arrows nudge the end 1 yd · `Q` / `E` bend the line · `L` cycles BULLET / TOUCH / LOB ·
+`Enter` or `Space` throws · `Backspace` cancels · `R` starts a run (arrows steer, `Enter` commits) · `X` throws it
+away · `Escape` opens Settings. Keys are remappable in Settings.
 
 ## Play it
 
@@ -33,14 +66,15 @@ qb/
   js/engine/util.js       RTG.Util (copied)         js/engine/rng.js  RTG.RNG, seeded mulberry32 (copied)
   js/engine/weather.js    RTG.Weather (copied; reads Tuning.weather and Tuning.difficulty.pro.windCap)
   js/data/plays.js        RTG.Data.plays — routes, plays, coverages (engine agent)
-  js/engine/play.js       RTG.Play — buildContext / snap / throw / driveScript / rating (engine agent)
+  js/engine/field.js      RTG.Field — the play on the field: 22 players and the ball in yards, stepped at a fixed dt (engine agent)
+  js/engine/play.js       RTG.Play — buildContext / snap / live / resolve / driveScript / rating (engine agent)
   js/ui/storage.js, palette.js, components.js, canvas.js, audio.js   the kit (copied)
   js/ui/sprites.js        the kicker's atlas, extended with the QB, receivers, defenders, ball, rings (scene agent)
-  js/ui/playinput.js      RTG.UI.PlayInput — target selection, the hold meter, drag → lead/loft (scene agent)
-  js/ui/playview.js       RTG.UI.PlayView — the scene: SITUATION → READ → SNAP → THROW → FLIGHT → RESULT → DONE (scene agent)
-  js/ui/store.js          the demo's tiny store: drive script, index, line, seed, rng (shell agent)
+  js/ui/playinput.js      RTG.UI.PlayInput — the draw hand: a line from the QB (pointer or keyboard) → a draft + loft (scene agent)
+  js/ui/playview.js       RTG.UI.PlayView — the scene: SITUATION → READ → PLAY (the live, drawn on) | RUN → RESULT → DONE (scene agent)
+  js/ui/store.js          the demo's tiny store: drive script, index, line, seed, rng, each moment's plan (shell agent)
   js/ui/screens/*.js      title, moment, summary, settings (shell agent)
-  js/debug.js             RTG.debug — forceResult / current / seed / state / skipTo (shell agent)
+  js/debug.js             RTG.debug — current / forceResult / drawPass / drawRun / reachSpot / replay / skipTo (shell agent)
   js/ui/app.js            boot: screens, settings classes, resize / key routing (shell agent)
   test/*.test.js          Node engine tests (node:test, no dependencies); test/load.js loads the engine into a vm
   test/e2e/*.spec.js      Playwright specs (dev-only) + _harness.js, _playhelpers.js, run.js, qa_shots.js
@@ -65,7 +99,10 @@ node qb/test/run.js play                     # only the files whose name contain
 
 `test/purity.test.js` scans every engine / data file for DOM, clock and `Math.random` references, the wrapper, the
 syntax level and Tuning writes, and checks the namespaces of the delivered modules. `test/play.test.js` pins the
-engine (draw counts, determinism, the read, the sack clock, the throw rules, the drive script, the passer rating);
+engine (draw counts, determinism, the read, the snap's cast, the run cards, the drive script, the passer rating);
+`test/field.test.js` pins the field simulation (live vs resolve equality, classify's PASS / RUN / THROWAWAY / INVALID
+rules, tips and picks on a bullet through a linebacker vs a lob over him, scatter, the rush and the rollout, the
+scramble / tackle / out-of-bounds / touchdown rules, a GOOD call's separation over a BAD one, garbage in → no NaN);
 `test/plays_lint.test.js` lints the play book (every assignment names an existing route and slot, every coverage has
 a look and a pressureMul, every route's ideal lead / loft is in range and its window sits inside [0, 4]).
 
@@ -78,19 +115,24 @@ each spec is a plain Node script using `node:test` that opens the demo on **both
 /opt/node22/bin/node qb/test/e2e/run.js                 # every spec, both modes
 /opt/node22/bin/node qb/test/e2e/run.js boot moment     # only the specs whose name contains an argument
 /opt/node22/bin/node qb/test/e2e/boot.spec.js           # one spec on its own (starts its own server for the http mode)
-/opt/node22/bin/node qb/test/e2e/qa_shots.js            # screenshots of every beat (title … summary) at phone + desktop
+/opt/node22/bin/node qb/test/e2e/qa_shots.js            # screenshots of every beat (title, read, lines mid-draw, flight, sack … summary)
 ```
 
 `boot.spec.js` boots with zero errors; `moment.spec.js` plays six moments through the real screens in every mode ×
-viewport (mouse, keyboard and CDP touch), replays a seed, forces results, opens settings with Escape and checks 320 px
-and landscape; `controls.spec.js` covers THROW AWAY / SCRAMBLE (button, swipe, X / Z keys), the sack, the keyboard-only
-path with target cycling, reduced motion, seed → identical sim, the run card, no horizontal scroll at 320 px in every
-phase and a frame p95 under 4 ms on the desktop. `_playhelpers.js` holds the shared hands (pick, tap a receiver,
-hold / release with a computed hold time, the interstitial).
+viewport with REAL drawn gestures (a fast bullet, a slow lob, a keyboard-only pass on the desktop / a bent line by
+CDP touch on the phone, a drawn rollout then a pass, a drawn scramble past the line, a throw-away line out of bounds),
+replays each recorded plan with `Play.resolve`, checks the box score (scrambles are rushes), replays a seed, forces
+results, pins the draw accounting (every moment costs the drive's rng 3 draws), opens settings with Escape and checks
+320 px and landscape; `controls.spec.js` covers THROW AWAY, the sack, invalid and cancelled drafts, slow motion and its
+budget, the FIELD GENERAL's preview colour, aim assist on / off, keyboard composing, reduced motion, seed → identical
+situations and cast, no horizontal scroll at 320 px in every phase, a frame p95 under 4 ms while drawing and in flight,
+and the SNEAK card. `_playhelpers.js` holds the shared hands (pick, wait for a window, draw a pass / a run / a
+throw-away with timed mouse or CDP-touch strokes, the keyboard pass and run, the interstitial).
 
 Never edit source while an e2e run is in progress (false failures). Screenshots land in `qb/test/e2e/shots/`.
 In the browser, `RTG.debug.*` drives the demo from the console (`RTG.debug.forceResult('INT')`,
-`RTG.debug.current()`, `RTG.debug.seed()`, `RTG.debug.skipTo('summary')`).
+`RTG.debug.current()` (the live snapshot and the draft), `RTG.debug.drawPass('WR1', {loft: 1})`,
+`RTG.debug.drawRun('rollout')`, `RTG.debug.replay(0)`, `RTG.debug.seed()`, `RTG.debug.skipTo('summary')`).
 
 ## The single-file bundle
 

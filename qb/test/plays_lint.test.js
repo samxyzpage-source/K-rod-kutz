@@ -3,8 +3,9 @@
  * in a moment: every play's assignments name existing routes and slots (each slot exactly once), every coverage
  * carries a look and a pressureMul, every route's ideal lead / loft is in range and its window sits inside [0, 4],
  * every formation places all five slots, tags come from the known set, ids are unique, and the run options are
- * SNEAK and DRAW. Also cross-checks the tables the engine reads by name (Tuning.qb.open.vs keys, the coverage
- * order, the tightness families) so the data and the tuning cannot drift apart.
+ * SNEAK and DRAW, and every coverage gives each of the eleven defenders a role (man on a real slot, a zone landmark, the
+ * rush). Also cross-checks the tables the engine reads by name (Tuning.qb.field.fit keys, the coverage order, the
+ * position groups) so the data and the tuning cannot drift apart.
  *   node qb/test/plays_lint.test.js
  */
 'use strict';
@@ -130,18 +131,57 @@ test('lint: every coverage has a look {safeties 1|2, press, box, showBlitz}, a p
   assert.ok(Dp.coverages.BLITZ.pressureMul > Dp.coverages.PREVENT.pressureMul, 'a blitz brings more pressure than a prevent');
 });
 
-test('lint: the tables the engine reads by name agree with the data — Tuning.qb.open.vs / coverage.base / scramble.look / draw.look keys, the yac families', () => {
-  assert.deepEqual(J(Object.keys(T.open.vs)).sort(), ADVICE.slice().sort(), 'open.vs keyed by advice');
+test('lint: the tables the engine reads by name agree with the data — field.fit keyed by advice, coverage.base / draw.look by coverage, field.reach / defSpeed.pos by position group', () => {
+  for (const k of ['trail', 'shade', 'react']) assert.deepEqual(J(Object.keys(T.field.fit[k])).sort(), ADVICE.slice().sort(), 'field.fit.' + k + ' keyed by advice');
   assert.deepEqual(J(Object.keys(T.coverage.base)).sort(), COVERAGES.slice().sort(), 'coverage.base keyed by the six coverages');
-  assert.deepEqual(J(Object.keys(T.throw.scramble.look)).sort(), COVERAGES.slice().sort(), 'scramble.look keyed by the six coverages');
   assert.deepEqual(J(Object.keys(T.run.draw.look)).sort(), COVERAGES.slice().sort(), 'draw.look keyed by the six coverages');
-  assert.deepEqual(J(Object.keys(T.throw.yac.base)).sort(), FAMILIES.slice().sort(), 'yac.base keyed by family');
+  const groups = ['CB', 'NB', 'S', 'LB', 'DL'];
+  assert.deepEqual(J(Object.keys(T.field.reach)).sort(), groups.slice().sort(), 'field.reach keyed by position group');
+  assert.deepEqual(J(Object.keys(T.field.defSpeed.pos)).sort(), groups.slice().sort(), 'field.defSpeed.pos keyed by position group');
   for (const k of ['short', 'long', 'redZone', 'lastPlay']) for (const tag of Object.keys(T.read.weights[k])) assert.ok(TAGS.includes(tag), 'read.weights.' + k + ' tag ' + tag);
   for (const k of ['long', 'short', 'redZone', 'late']) for (const c of Object.keys(T.coverage[k])) assert.ok(COVERAGES.includes(c), 'coverage.' + k + ' key ' + c);
   for (const id of Object.keys(T.demo.teams)) {
     const wr = T.demo.teams[id].wr;
     assert.deepEqual(J(wr.map((r) => r.slot)), SLOTS, 'demo roster ' + id + ' in slot order');
   }
+});
+
+test('lint: the eleven — Data.plays.defenders lists eleven unique ids with a position group each (2 CB, NB, 2 S, 2 LB, 4 DL)', () => {
+  const ids = J(Dp.defenders);
+  assert.equal(ids.length, 11);
+  assert.equal(new Set(ids).size, 11, 'unique ids');
+  const count = {};
+  for (const id of ids) { const g = Dp.defenderPos[id]; assert.ok(['CB', 'NB', 'S', 'LB', 'DL'].includes(g), id + ': group ' + g); count[g] = (count[g] || 0) + 1; }
+  assert.deepEqual(count, { CB: 2, NB: 1, S: 2, LB: 2, DL: 4 });
+});
+
+test('lint: every coverage assigns all eleven a role — MAN names a real slot (each slot at most once), ZONE / ROBBER / SPY carry a landmark {xs, y, r, fw}, three to five rush', () => {
+  const ROLES = ['MAN', 'ZONE', 'RUSH', 'SPY', 'ROBBER'];
+  for (const id of COVERAGES) {
+    const roles = Dp.coverages[id].roles;
+    assert.ok(roles && typeof roles === 'object', id + ': roles');
+    assert.deepEqual(J(Object.keys(roles)).sort(), J(Dp.defenders).sort(), id + ': roles for exactly the eleven');
+    const manned = {};
+    let rush = 0;
+    for (const d of Object.keys(roles)) {
+      const r = roles[d];
+      assert.ok(ROLES.includes(r.role), id + '.' + d + ': role ' + r.role);
+      if (r.role === 'MAN') {
+        assert.ok(SLOTS.includes(r.man), id + '.' + d + ': man ' + r.man);
+        assert.ok(!manned[r.man], id + ': ' + r.man + ' manned twice');
+        manned[r.man] = true;
+      } else assert.equal(r.man, null, id + '.' + d + ': man only on MAN');
+      if (r.role === 'RUSH') { rush++; assert.equal(r.zone, null, id + '.' + d + ': a rusher has no zone'); }
+      if (r.role === 'ZONE' || r.role === 'ROBBER' || r.role === 'SPY') {
+        const z = r.zone;
+        assert.ok(z && num(z.xs) && num(z.y) && num(z.r) && (z.fw === 0 || z.fw === 1), id + '.' + d + ': zone ' + JSON.stringify(z));
+        assert.ok(z.y > 0 && z.y <= 30 && z.r > 0 && z.r <= 15 && Math.abs(z.xs) <= 26, id + '.' + d + ': zone in range ' + JSON.stringify(z));
+      }
+    }
+    assert.ok(rush >= 3 && rush <= 5, id + ': ' + rush + ' rushers');
+  }
+  assert.ok(Object.values(Dp.coverages.BLITZ.roles).filter((r) => r.role === 'RUSH').length > Object.values(Dp.coverages.COVER3.roles).filter((r) => r.role === 'RUSH').length, 'a blitz rushes more');
+  assert.ok(Object.values(Dp.coverages.MAN.roles).some((r) => r.role === 'MAN') && !Object.values(Dp.coverages.COVER3.roles).some((r) => r.role === 'MAN'), 'MAN is man, COVER 3 is zone');
 });
 
 test('lint: the play book gives every coverage at least one GOOD and one BAD answer, and short yardage has a SHORT_YDG pass', () => {

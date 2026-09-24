@@ -165,7 +165,8 @@ const CONTRACT = {
   'engine/rng': { ns: 'RNG', fns: ['create'] },
   'engine/weather': { ns: 'Weather', fns: ['forGame', 'perKick', 'monthFor'] },
   'data/plays': { ns: 'Data.plays', type: 'object', keys: ['routes', 'plays', 'coverages'] },
-  'engine/play': { ns: 'Play', fns: ['buildContext', 'snap', 'throw', 'driveScript', 'rating'] }
+  'engine/field': { ns: 'Field', fns: ['create', 'replay', 'setup', 'ghost', 'frame', 'alignment', 'alignReceivers', 'pathAt', 'clean', 'length', 'truncate', 'resample', 'smooth', 'qbSpeed', 'recSpeed', 'defSpeed', 'ballSpeed', 'maxLen', 'apex', 'heightAt', 'loftFor', 'weatherPenalty'] },
+  'engine/play': { ns: 'Play', fns: ['buildContext', 'snap', 'live', 'resolve', 'autoPlan', 'forcedResult', 'driveScript', 'rating', 'pathAt', 'pocketTime', 'isClutch', 'downText', 'spotText'] }
 };
 
 const RTG = load();

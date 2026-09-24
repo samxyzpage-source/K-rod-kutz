@@ -1,9 +1,15 @@
 /**
- * Road to Glory: QB — RTG.Play (the play engine: the pre-snap read, the snap, the throw, the demo's drive script)
+ * Road to Glory: QB — RTG.Play (the play engine: the pre-snap read, the snap, the live play, the demo's drive script)
  *
  * DOM-free and pure over plain JSON: every random number comes from the rng passed in (int / float / chance /
  * gauss / pick / weighted / shuffle / fork). The parent rng only ever sees FORKS — one draw per call — and every
- * child draw below is in a FIXED order, so a moment replays exactly from {situation, playId, input, rngState}.
+ * child draw is in a fixed order (or, inside a Live, in event order), so a moment replays exactly from
+ * {situation, playId, plan, rngState}.
+ *
+ * v2 — "DRAW THE PASS": the throw is a line the player draws and the ball flies along it. The play after the snap is a
+ * deterministic field simulation (engine/field.js, RTG.Field): 22 players and the ball in field yards, stepped at a
+ * fixed dt; the scene draws what the Live says. Play.throw and the velocity meter (need / needFor / greenBand /
+ * inGreen / the openness curves) are gone.
  *
  * RNG draw accounting (binding):
  *   buildContext : 1 parent draw — rng.fork('play:ctx'). Child, in order:
@@ -11,21 +17,20 @@
  *                  · card count int 1 · goodOffered roll 1 · pass-card picks weighted 1 each (2–3) · pass-card shuffle (pass cards − 1)
  *                  · card clarity roll 1 per pass card (always drawn; it only matters under iqExact on an ambiguous card)
  *                  = 8 + 3 × pass cards (a run card on short yardage draws nothing)
- *                  · sackAt gauss 2 · hash int 1 · strong-side roll 1.
+ *                  · sackAt gauss 2 · hash int 1 · strong-side roll 1. The alignment (ctx.alignment) draws nothing.
  *   snap         : 1 parent draw — rng.fork('play:snap'). Child, in order:
- *                  pass play → per receiver in slot order (WR1, WR2, SLOT, TE, RB): peak gauss 2 · window shift gauss 2
- *                  (20) · sackAt jitter gauss 2 · rush lanes shuffle 2 · lane gaps float 2 · scramble gauss 2 = 28.
+ *                  pass play → RTG.Field.setup: per receiver a route-clock gauss 2 (10) · per defender a skill gauss 2 +
+ *                  a reaction gauss 2 (44) · the sack clock's jitter gauss 2 · the first rusher weighted 1 · six beat
+ *                  gaps float 1 = 63; then the pre-run for the separation curves (0).
  *                  SNEAK → success roll 1 · gain int 1 · loss int 1 = 3.   DRAW → yards gauss 2 · break roll 1 · break int 1 = 4.
- *   throw        : 1 parent draw — rng.fork('play:throw'). Child:
- *                  THROW → catch roll 1 · int roll 1 · drop roll 1 · yac gauss 2 · scatter gauss 2 + 2 = 9 (always).
- *                  SACK (t ≥ sackAt, or kind SACK) → yards gauss 2.   THROWAWAY (or no target) → 0.
- *                  SCRAMBLE → [escape roll 1 when t ≥ sackAt; a failed escape is a SACK: + yards gauss 2] · yards gauss 2 · fumble roll 1.
- *                  A run sim (snap already resolved it) → 0 child draws; the sim is returned as the result.
+ *   live         : 1 parent draw — rng.fork('play:live'); the child lives in the Live and is drawn by in-play events in
+ *                  event order (engine/field.js header). A run sim → a finished Live, 0 child draws.
+ *   resolve      : 1 parent draw (Play.live's fork); the plan's inputs replay the live play's child draws exactly.
  *   driveScript  : 1 parent draw — rng.fork('play:drive'). Child: 25 draws in a fixed order (24 ints + the opening-score pick; see the function).
- *   rating, need, greenBand, inGreen, flightTime, pathAt, openAt, arrival, openIfThrown, isClutch, downText, spotText, forcedResult : 0.
+ *   rating, pathAt, pocketTime, isClutch, downText, spotText, forcedResult, autoPlan : 0.
  *
  * Shapes (the binding contract with the scene and the shell) are documented on each function.
- * Dependencies (load order): Tuning, Util, RNG (only through the rng passed in), Data.plays.
+ * Dependencies (load order): Tuning, Util, RNG (only through the rng passed in), Data.plays, Field.
  */
 (function (root) {
   'use strict';
@@ -37,17 +42,10 @@
   var FIELD_YARDS = 100;                 // goal line to goal line
   var RESULT_DECIMALS = 3;               // formatting precision of PlayResult numbers (not a balance constant)
   var PLATEAU_EPS = 0.02;                // openness within this of the peak counts as the plateau (peakAt = its centre)
-  // The arrival solver (the receiver keeps running while the ball flies): fixed-point rounds until the flight moves
-  // under eps, capped. A slow, lofted ball contracts by receiverSpeed / ballSpeed ≈ 0.8 per round, so a fixed four
-  // rounds left up to 0.36 s of error; the cap is numerical, not a balance constant. The scene mirrors it.
-  var ARRIVAL = { eps: 1e-4, maxRounds: 24 };
-  var T_MAX = 1e6;                       // s: the largest release time accepted (Infinity / 1e308 clamp here and still sack)
   var ATTRS = ['ARM', 'ACC', 'IQ', 'MOB', 'POI'];
-  var KINDS = ['THROW', 'THROWAWAY', 'SCRAMBLE', 'SACK'];
+  var KINDS = ['PASS', 'THROWAWAY', 'SCRAMBLE', 'SACK'];
   var OUTCOMES = ['CATCH', 'INCOMPLETE', 'INT', 'SACK', 'THROWAWAY', 'SCRAMBLE', 'RUN', 'DROP'];
   var ADVICE = ['GOOD', 'OK', 'BAD'];
-  var WINDOW = 'window';               // the contract's field name on routes, receivers and results (the purity scan forbids the bare identifier)
-  var CROSSING = { SLANT: true, DRAG: true, IN: true, OUT: true, FLAT: true, SCREEN: true, CHECKDOWN: true, CURL: true, COMEBACK: true };
   // NFL passer rating: a definition, not a balance constant
   var RATING = { cmpSub: 0.3, cmpMul: 5, ydsSub: 3, ydsMul: 0.25, tdMul: 20, intMul: 25, cap: 2.375, div: 6, scale: 100 };
 
@@ -60,7 +58,6 @@
   function rd(x) { return Util.roundN(x, RESULT_DECIMALS); }
   /** Normalise −0 to +0 (so zero results compare equal with Object.is / assert.equal). */
   function nz(x) { return x === 0 ? 0 : x; }
-  function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
   /** attribute → 0..1 */
   function ratio(a) { return clamp(num(a, 0), 0, P().attrMax) / P().attrMax; }
   function fail(fn, msg) { throw new Error('Play.' + fn + ': ' + msg); }
@@ -72,7 +69,6 @@
   Play.KINDS = KINDS;
   Play.OUTCOMES = OUTCOMES;
   Play.ADVICE = ADVICE;
-  Play.ARRIVAL = ARRIVAL;
 
   // ═══════════════════════════════ NORMALISATION ═══════════════════════════════
 
@@ -327,19 +323,11 @@
     return cards;
   }
 
-  /** The five receivers aligned in a formation (x0 in yards from the ball, mirrored by sign). */
-  function alignReceivers(roster, formationId, sign) {
-    var f = D().formations[formationId] || D().formations.SHOTGUN;
-    return roster.map(function (wr) {
-      var x0 = num(f[wr.slot], 0) * sign;
-      return { slot: wr.slot, name: wr.name, skill: wr.skill, speed: wr.speed, x0: nz(x0), side: x0 < 0 ? -1 : (x0 > 0 ? 1 : sign) };
-    });
-  }
-
   // ═══════════════════════════════ CONTEXT ═══════════════════════════════
 
   /**
-   * Build a PlayContext for a situation (the pre-snap read). ONE fork rng.fork('play:ctx') = 1 parent draw.
+   * Build a PlayContext for a situation (the pre-snap read). ONE fork rng.fork('play:ctx') = 1 parent draw (the child's
+   * draws in the file header; the field and the alignment draw nothing).
    *   situation = { down, toGo, yl, quarter, clock (s), score: {us, them}, weather?: {weather, wind: {speed, dir}, tempF},
    *                 venue?: 'HS'|'COLLEGE'|'NFL', qb?: {attrs: {ARM, ACC, IQ, MOB, POI}, archetype, foot}, team?: {ol, wr: [5]},
    *                 opp?: {dl, db, tendency?: {coverageId: weight}}, lastPlay?, twoMinute?, clutch?, stakes?, kind?, idx? }
@@ -353,8 +341,13 @@
    *               (sure false: the advice was read off the shown look and this play rates differently against what
    *               that look can hide — the scene dims the chip with a '?')
    *   adviceFrom  'REAL' at IQ ≥ read.iqExact, else 'SHOWN' (what the advice was computed against)
-   *   pressure    { sackAt (s, jittered), pocket (s, before the jitter), hot, clutch, meterMul }
-   *   receivers   the roster aligned in the default formation (the READ picture); snap re-aligns per play
+   *   pressure    { sackAt (s, jittered: when the first rusher gets home on a QB who stays in the pocket), pocket (s, before the jitter), hot, clutch }
+   *   receivers   the roster aligned in the shotgun (the READ picture): [{slot, name, skill, speed, x0, y0, side}] (x0 held
+   *               sideMargin inside the field); snap re-aligns per play
+   *   field       { sideL, sideR, centerX, goalY, endY, losY: 0 } (RTG.Field.frame)
+   *   alignment   the PRE-SNAP picture of the SHOWN look, so the READ screen draws the engine's alignment:
+   *               { qb: {x, y}, receivers: [{slot, x, y}], linemen: [{x, y}] (5), defenders: [{id, x, y, pos}] (11) }
+   *               (safeties deep or rolled down, press or off, the box count exact, the creeping nickel of a blitz tell)
    *   hash        −1 | 0 | 1 (ball on the left hash / middle / right)   sign  +1 strong right · −1 strong left
    *   revealAt    s after the snap from which the scene may show openness rings   clarity  IQ/99
    *   weather     the situation's weather copy or null   venue   'HS'|'COLLEGE'|'NFL'   clutch  bool
@@ -390,19 +383,23 @@
     var sign = r.chance(0.5) ? 1 : -1;
 
     var look = covs[shown].look;
+    var field = RTG.Field.frame(sit.yl, hash, sit.venue);
+    var receivers = RTG.Field.alignReceivers(team.wr, 'SHOTGUN', sign, field);
+    var lookOut = { safeties: look.safeties, press: look.press, box: look.box, showBlitz: look.showBlitz, name: covs[shown].name, text: covs[shown].text, tell: covs[shown].tell };
     return {
       situation: sit, qb: qb, team: team, opp: opp,
       real: real, shown: shown, disguised: disguised,
-      look: { safeties: look.safeties, press: look.press, box: look.box, showBlitz: look.showBlitz, name: covs[shown].name, text: covs[shown].text, tell: covs[shown].tell },
+      look: lookOut,
       options: options,
       adviceFrom: iq >= T.read.iqExact ? 'REAL' : 'SHOWN',
       pressure: {
         sackAt: rd(sackAt), pocket: rd(pocket),
         hot: real === 'BLITZ' || sackAt < T.read.hotBelow,
-        clutch: clutch,
-        meterMul: rd(clutch ? 1 - T.pressure.clutchMul * (1 - ratio(qb.attrs.POI)) : 1)
+        clutch: clutch
       },
-      receivers: alignReceivers(team.wr, 'SHOTGUN', sign),
+      receivers: receivers,
+      field: field,
+      alignment: RTG.Field.alignment(lookOut, receivers, sign, field),
       hash: hash, sign: sign,
       revealAt: rd(Math.max(0, T.read.revealBase - ratio(iq) * T.read.revealIq)),
       clarity: rd(ratio(iq)),
@@ -412,147 +409,12 @@
 
   // ═══════════════════════════════ GEOMETRY ═══════════════════════════════
 
-  /** Route-time scale for a receiver speed: waypoint times × this (fast → < 1). */
-  function speedScale(speed) {
-    var R = P().route;
-    return R.speedBase / (R.speedBase + R.speedPer * (num(speed, 50) - 50));
-  }
-
   /**
-   * Position {x, y} (yards from the ball: x lateral, y downfield) of a receiver at time t along its path
-   * (piecewise linear through the waypoints; extrapolated along the last segment, y capped at the end zone).
+   * Position {x, y} (field yards) of a sim receiver at time t along his path (RTG.Field.pathAt: piecewise linear
+   * through the waypoints, extrapolated along the last segment, y capped at the end zone, x held inside the field).
    * @param {{path: Array<{t:number, x:number, y:number}>, capY?: number}} rec @param {number} t @returns {{x:number, y:number}}
    */
-  Play.pathAt = function (rec, t) {
-    var p = rec.path, n = p.length;
-    if (!n) return { x: 0, y: 0 };
-    if (t <= p[0].t) return { x: p[0].x, y: p[0].y };
-    for (var i = 1; i < n; i++) {
-      if (t <= p[i].t) {
-        var a = p[i - 1], b = p[i], u = b.t > a.t ? (t - a.t) / (b.t - a.t) : 1;
-        return { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u };
-      }
-    }
-    var l = p[n - 1], k = n > 1 ? p[n - 2] : l, dt = l.t - k.t;
-    if (dt <= 0) return { x: l.x, y: l.y };
-    var over = (t - l.t) / dt;
-    var cap = num(rec.capY, Infinity);
-    return { x: l.x + (l.x - k.x) * over, y: Math.min(cap, l.y + (l.y - k.y) * over) };
-  };
-
-  /**
-   * Openness 0..1 of a receiver at ARRIVAL time t: linear between the 0.1 s samples over [0, 4]; before 0 the
-   * first sample; after 4 s the same envelope continued analytically from rec.env {wo, wc, peak} (a deep ball
-   * released late lands after the sampled range and must still find the window closed).
-   * @param {{open: number[], env?: {wo:number, wc:number, peak:number}}} rec @param {number} t @returns {number}
-   */
-  Play.openAt = function (rec, t) {
-    var O = P().open, s = rec.open;
-    if (!s || !s.length) return 0;
-    t = num(t, 0);
-    if (t > O.maxT && rec.env) return O.floor + (rec.env.peak - O.floor) * envelope(t, rec.env.wo, rec.env.wc);
-    var x = clamp(t, 0, O.maxT) / O.sampleDt;
-    var i = Math.floor(x), f = x - i;
-    if (i >= s.length - 1) return s[s.length - 1];
-    return s[i] + (s[i + 1] - s[i]) * f;
-  };
-
-  /**
-   * Flight time (s) of a throw over `dist` yards: dist / (velocity × arm × power) × (1 + loftTime × loft).
-   * @param {number} dist @param {Object} attrs @param {number} power 0..1.15 @param {number} loft 0..1 @returns {number}
-   */
-  Play.flightTime = function (dist, attrs, power, loft) {
-    var T = P().throw;
-    var v = T.velocity * (T.armBase + T.armPer * ratio(attrs && attrs.ARM)) * (T.powerBase + T.powerPer * clamp(num(power, 1), 0, T.powerMax));
-    return Math.max(0, dist) / v * (1 + T.loftTime * clamp(num(loft, 0), 0, 1));
-  };
-
-  /** The deep range (yd) for an arm. */
-  Play.maxDist = function (attrs) {
-    var T = P().throw;
-    return T.maxDist * (T.rangeBase + T.rangePer * ratio(attrs && attrs.ARM));
-  };
-
-  /**
-   * Where the ball meets the receiver for a release at t: the receiver keeps running while the ball flies,
-   * so the flight is solved by fixed-point iteration until it settles (Play.ARRIVAL: eps 1e-4 s, at most 24
-   * rounds; a lofted ball for a weak arm needs a dozen). 0 draws.
-   * @param {Object} rec sim receiver @param {Object} attrs @param {number} t release (s) @param {number} power @param {number} loft
-   * @returns {{flight:number, arrive:number, pos:{x:number, y:number}, dist:number}}
-   */
-  Play.arrival = function (rec, attrs, t, power, loft) {
-    var drop = P().route.qbDrop, flight = 0, pos, dist = 0;
-    for (var i = 0; i < ARRIVAL.maxRounds; i++) {
-      pos = Play.pathAt(rec, t + flight);
-      dist = Math.sqrt(pos.x * pos.x + (pos.y + drop) * (pos.y + drop));
-      var next = Play.flightTime(dist, attrs, power, loft), done = Math.abs(next - flight) < ARRIVAL.eps;
-      flight = next;
-      if (done) break;
-    }
-    return { flight: flight, arrive: t + flight, pos: pos, dist: dist };
-  };
-
-  /**
-   * The openness a ball released at t would find: Play.openAt at the arrival (full power and the route's ideal
-   * loft unless given). What the scene's rings show. 0 draws.
-   * @param {Object} rec sim receiver @param {Object} attrs @param {number} t release (s) @param {number} [power] @param {number} [loft]
-   * @returns {number} 0..1
-   */
-  Play.openIfThrown = function (rec, attrs, t, power, loft) {
-    if (!rec) return 0;
-    var route = D().routes[rec.route];
-    var a = Play.arrival(rec, attrs, num(t, 0), num(power, 1), num(loft, route ? route.ideal.loft : 0));
-    return Play.openAt(rec, a.arrive);
-  };
-
-  /** The green band width on the meter for an ACC: base + perAcc × ACC/99. */
-  Play.greenBand = function (ACC) {
-    var G = P().throw.greenBand;
-    return G.base + G.perAcc * ratio(ACC);
-  };
-
-  /**
-   * The on-time power for a throw of `dist` yards: needBase + dist / (range × arm), clamped so the band
-   * [need, need + greenBand] always fits under powerMax − bandTopMargin (the deepest ball still needs a release:
-   * a bar parked at the top is outside the band).
-   * @param {number} dist @param {Object} attrs @returns {number}
-   */
-  Play.needFor = function (dist, attrs) {
-    var T = P().throw;
-    var arm = T.armBase + T.armPer * ratio(attrs && attrs.ARM);
-    return clamp(T.needBase + Math.max(0, dist) / (T.range * arm), T.minCommit * 2, T.powerMax - Play.greenBand(attrs && attrs.ACC) - num(T.bandTopMargin, 0));
-  };
-
-  /**
-   * The green band {need, band, top} of a throw to `slot` released at t (the distance is the arrival at the
-   * route's ideal loft and full power). The scene draws [need, top] on the meter. 0 draws.
-   * @param {Object} sim @param {string} slot @param {number} t @returns {{need:number, band:number, top:number, dist:number}|null}
-   */
-  Play.need = function (sim, slot, t) {
-    var rec = receiverOf(sim, slot);
-    if (!rec) return null;
-    var attrs = sim.ctx.qb.attrs, route = D().routes[rec.route];
-    var a = Play.arrival(rec, attrs, num(t, 0), 1, route ? route.ideal.loft : 0);
-    var need = Play.needFor(a.dist, attrs), band = Play.greenBand(attrs.ACC);
-    return { need: rd(need), band: rd(band), top: rd(Math.min(P().throw.powerMax, need + band)), dist: rd(a.dist) };
-  };
-
-  /**
-   * Is `power` inside the green band [need, need + band]? The engine re-checks the UI's `input.green` claim
-   * with its own numbers so a UI bug can never hand out free accuracy.
-   * @param {number} power @param {number} need @param {number} band @returns {boolean}
-   */
-  Play.inGreen = function (power, need, band) {
-    var eps = 1e-6;
-    return num(power, -1) >= need - eps && power <= Math.min(P().throw.powerMax, need + band) + eps;
-  };
-
-  /** The sim's receiver for a slot (null when unknown). */
-  function receiverOf(sim, slot) {
-    if (!sim || !sim.receivers) return null;
-    for (var i = 0; i < sim.receivers.length; i++) if (sim.receivers[i].slot === slot) return sim.receivers[i];
-    return null;
-  }
+  Play.pathAt = function (rec, t) { return RTG.Field.pathAt(rec, t); };
 
   /** The play for an id (or an option / play object). */
   function playFor(playId) {
@@ -562,86 +424,14 @@
     return null;
   }
 
-  /** Attach the convenience closures to a sim (they only delegate to the pure helpers; JSON drops them). */
-  function attachHelpers(sim) {
-    sim.open = function (slot, t) { var rec = receiverOf(sim, slot); return rec ? Play.openAt(rec, t) : 0; };
-    sim.path = function (slot, t) { var rec = receiverOf(sim, slot); return rec ? Play.pathAt(rec, t) : { x: 0, y: 0 }; };
-    sim.arrival = function (slot, t, power, loft) {
-      var rec = receiverOf(sim, slot);
-      if (!rec) return null;
-      var route = D().routes[rec.route];
-      return Play.arrival(rec, sim.ctx.qb.attrs, num(t, 0), num(power, 1), num(loft, route ? route.ideal.loft : 0));
-    };
-    sim.openIfThrown = function (slot, t, power, loft) { return Play.openIfThrown(receiverOf(sim, slot), sim.ctx.qb.attrs, t, power, loft); };
-    sim.need = function (slot, t) { return Play.need(sim, slot, t); };
-    return sim;
+  /** The sim's receiver for a slot (null when unknown). */
+  function receiverOf(sim, slot) {
+    if (!sim || !sim.receivers) return null;
+    for (var i = 0; i < sim.receivers.length; i++) if (sim.receivers[i].slot === slot) return sim.receivers[i];
+    return null;
   }
 
   // ═══════════════════════════════ SNAP ═══════════════════════════════
-
-  /** The openness envelope 0..1 at arrival time t for a window [wo, wc]. */
-  function envelope(t, wo, wc) {
-    var O = P().open;
-    if (t < wo - O.rise) return 0;
-    if (t < wo) return (t - (wo - O.rise)) / O.rise;
-    if (t <= wc) return 1;
-    if (t < wc + O.fall) return 1 - (1 - O.lateFrac) * (t - wc) / O.fall;
-    return O.lateFrac;
-  }
-
-  /**
-   * The reported window of a sampled curve: {from, to} the run around the peak where open ≥ windowFrac × peak,
-   * peak, and peakAt the CENTRE of the plateau (the run within 2 % of the peak) — the best moment to arrive.
-   * `plateauFrom` (s, internal) is where that plateau starts; releaseWindow uses it to respect the arm.
-   */
-  function windowOf(samples) {
-    var O = P().open, n = samples.length, best = 0, i;
-    for (i = 1; i < n; i++) if (samples[i] > samples[best]) best = i;
-    var thr = O.windowFrac * samples[best], from = best, to = best;
-    while (from > 0 && samples[from - 1] >= thr) from--;
-    while (to < n - 1 && samples[to + 1] >= thr) to++;
-    var top = samples[best] - PLATEAU_EPS, pFrom = best, pTo = best;
-    while (pFrom > 0 && samples[pFrom - 1] >= top) pFrom--;
-    while (pTo < n - 1 && samples[pTo + 1] >= top) pTo++;
-    return { win: { from: rd(from * O.sampleDt), to: rd(to * O.sampleDt), peak: rd(samples[best]), peakAt: rd(Math.round((pFrom + pTo) / 2) * O.sampleDt) }, plateauFrom: pFrom * O.sampleDt };
-  }
-
-  /** The last sampled arrival time (s) at which the receiver is still inside the arm's range (Infinity: always is). */
-  function lastInRange(rec, attrs) {
-    var O = P().open, drop = P().route.qbDrop, maxD = Play.maxDist(attrs), n = Math.round(O.maxT / O.sampleDt);
-    for (var k = 0; k <= n; k++) {
-      var pos = Play.pathAt(rec, k * O.sampleDt);
-      if (Math.sqrt(pos.x * pos.x + (pos.y + drop) * (pos.y + drop)) > maxD) return k === 0 ? -Infinity : (k - 1) * O.sampleDt;
-    }
-    return Infinity;
-  }
-
-  /**
-   * The release-time window: the arrival window minus the flight at full power and the route's loft. `peakAt`
-   * (the best moment) respects the arm: when the plateau runs past the range it moves back to the last in-range
-   * plateau point (one sample short of the edge, so a ball a shade under full power still lands on the plateau),
-   * so the engine's own best release is one the arm can hit ({from, to} stay the window's edges).
-   */
-  function releaseWindow(rec, attrs, win, loft, plateauFrom) {
-    function releaseFor(arrive) {                      // t with t + flight(dist at the arrival spot) = arrive
-      var pos = Play.pathAt(rec, arrive), drop = P().route.qbDrop;
-      var dist = Math.sqrt(pos.x * pos.x + (pos.y + drop) * (pos.y + drop));
-      return Math.max(0, arrive - Play.flightTime(dist, attrs, 1, loft));
-    }
-    var peakAt = win.peakAt, reach = lastInRange(rec, attrs) - P().open.sampleDt;
-    if (reach < peakAt && reach >= num(plateauFrom, 0)) peakAt = reach;
-    return { from: rd(releaseFor(win.from)), to: rd(releaseFor(win.to)), peakAt: rd(releaseFor(peakAt)) };
-  }
-
-  /** The slot with the quickest route (smallest base window.open) among a play's assignments. */
-  function quickestSlot(play) {
-    var routes = D().routes, best = null, bestT = Infinity;
-    for (var i = 0; i < play.assignments.length; i++) {
-      var a = play.assignments[i], rt = routes[a.route];
-      if (rt && rt[WINDOW].open < bestT) { bestT = rt[WINDOW].open; best = a.slot; }
-    }
-    return best;
-  }
 
   /** Resolve a run option inside snap (SNEAK 3 draws · DRAW 4 draws). The sim IS the result (run: true). */
   function runPlay(ctx, play, r) {
@@ -670,36 +460,40 @@
     var saw;
     if (play.id === 'SNEAK') saw = ok ? 'Coach saw you get under the pile. A yard is a yard.' : 'Coach saw the pile move the wrong way. They knew it was coming.';
     else saw = big ? 'Coach saw the draw split them. Nobody home.' : (yards <= 0 ? 'Coach saw the draw stuffed. They were not fooled.' : 'Coach saw a draw for a few. Quiet, but it counts.');
-    var sim = {
+    return {
       run: true, playId: play.id, play: { id: play.id, name: play.name, formation: play.formation, tags: play.tags.slice(), line: play.line },
       kind: 'RUN', outcome: 'RUN', target: null, yards: nz(yards), airYards: 0, yac: 0,
       td: td, firstDown: firstDown, turnover: false, fumble: false, big: big,
-      flight: 0, arrive: null, need: null, dist: null, landing: { x: 0, y: nz(yards) }, accuracy: null, fit: null, quality: null, t: 0,
+      t: 0, loft: 0, length: 0, flight: 0, arrive: null, landing: { x: 0, y: nz(yards) },
       text: text, banner: td ? 'TOUCHDOWN!' : (firstDown && !sit.lastPlay ? 'FIRST DOWN' : text),
-      feedback: { timing: 'ON TIME', touch: 'GOOD', coachSaw: saw },
-      receivers: [], sackAt: null, revealAt: null, rushers: [], scrambleYards: 0, hot: null, checkdown: null,
+      feedback: { timing: 'ON TIME', touch: 'TOUCH', placement: '—', coachSaw: saw },
+      receivers: [], defenders: [], rushers: [], sackAt: null, revealAt: null, hot: null, checkdown: null,
       ctx: ctx
     };
-    sim[WINDOW] = null;
-    return sim;
   }
 
   /**
    * Snap the ball on a play. ONE fork rng.fork('play:snap') = 1 parent draw.
    * A run option (SNEAK / DRAW) is resolved here: the returned sim has run: true and IS the PlayResult
-   * ({ run, outcome: 'RUN', yards, td, firstDown, text, banner, feedback, … } — no throw follows).
-   * A pass play returns a PlaySim = {
-   *   run: false, playId, play: {id, name, formation, tags, line},
-   *   receivers: [{ slot, name, skill, speed, x0, side, route, family,
-   *                 path: [{t, x, y}] (field yards from the ball, t scaled by speed, y capped at the end zone), capY,
-   *                 open: [41 samples every 0.1 s over the ARRIVAL time 0..4], peak, env: {wo, wc, peak} (the envelope past 4 s),
-   *                 window: {from, to, peak, peakAt} (arrival time), release: {from, to, peakAt} (release time at full power),
-   *                 hot, checkdown }],
-   *   sackAt (s), revealAt (s), clarity, rushers: [{lane: −1|0|1, arriveAt}] (the first arrives at sackAt),
-   *   scrambleYards, hot: slot|null (the hot read when the real coverage is BLITZ), checkdown: slot|null,
-   *   real, shown, look, ctx, and the closures open(slot, t) · path(slot, t) · arrival(slot, t, power?, loft?)
-   *   · openIfThrown(slot, t, power?, loft?) · need(slot, t) (JSON drops them; Play.openAt / pathAt / arrival / need are the pure forms)
+   * ({ run, outcome: 'RUN', yards, td, firstDown, text, banner, feedback, … } — no live play follows).
+   * A pass play returns a PlaySim — everything the field simulation needs, as JSON:
+   * {
+   *   run: false, playId, play: {id, name, formation, tags, line}, ctx, real, shown, look,
+   *   fit        the play's rating vs the REAL coverage ('GOOD' | 'OK' | 'BAD') — it shapes the defence (Tuning.qb.field.fit)
+   *   field      { sideL, sideR, centerX, goalY, endY, losY: 0 }
+   *   receivers  [{ slot, name, skill, speed, x0, y0, side, route, family, path: [{t, x, y}] (absolute field yards,
+   *                speed-scaled, the snap's clock jitter in), capY, xMin, xMax, key: {t, x, y} (where the route is "there"),
+   *                hot, checkdown, ghost: {sep: [41 samples, 0.1 s], peak, peakAt, from, to} (the separation with nobody
+   *                throwing) }]
+   *   defenders  [{ id, pos: 'CB'|'NB'|'S'|'LB'|'DL', role: 'MAN'|'ZONE'|'RUSH'|'SPY'|'ROBBER', man: slot|null,
+   *                zone: {x, y, r}|null (the landmark), speed (yd/s), skill, reach (yd), react (s, the break on the
+   *                ball; the snap's jitter in), trail (s, man), cushion (yd, man), x0, y0 (= ctx.alignment), deep }]
+   *   rushers    [{ defId, lane, beatAt (s: he gets off his block), line: {x, y}, pocket: {x, y} }] in beat order
+   *   linemen    [{x, y}] (5 starting spots)   qbStart {x, y}   qbDrop {y, t} (the default drop)
+   *   sackAt     s: when the first rusher gets home on a QB who stands at the top of his drop (the pocket's clock)
+   *   revealAt   s (IQ: the rings may show from here)   clarity   hot slot|null   checkdown slot|null
    * }
+   * Child draws: RTG.Field.setup's 63 (the file header of engine/field.js), then the pre-run (0).
    * @param {Object} ctx PlayContext @param {string|Object} playId @param {RNG} rng @returns {Object} PlaySim
    */
   Play.snap = function (ctx, playId, rng) {
@@ -709,370 +503,157 @@
     if (!play) fail('snap', 'unknown play ' + (playId && playId.id ? playId.id : playId));
     var r = rng.fork('play:snap');                                                       // 1 parent draw
     if (play.run) return runPlay(ctx, play, r);
-
-    var T = P(), O = T.open, routes = D().routes, cov = D().coverages[ctx.real];
-    var sit = ctx.situation, attrs = ctx.qb.attrs;
-    var aligned = alignReceivers(ctx.team.wr, play.formation, ctx.sign);
-    var bySlot = Util.indexBy(play.assignments, 'slot');
-    var hotSlot = ctx.real === 'BLITZ' ? quickestSlot(play) : null;
-    var capY = FIELD_YARDS - sit.yl + T.route.endZoneCap;
-    var nSamples = Math.round(O.maxT / O.sampleDt) + 1;
-    var receivers = [], checkdown = null, i, k;
-
-    for (i = 0; i < aligned.length; i++) {
-      var wr = aligned[i], a = bySlot[wr.slot], route = a && routes[a.route];
-      if (!route) fail('snap', play.id + ' has no route for ' + wr.slot);
-      var scale = speedScale(wr.speed);
-      var path = route.path.map(function (p) { return { t: rd(p.t * scale), x: nz(rd(wr.x0 + wr.side * p.x)), y: nz(rd(Math.min(capY, p.y))) }; });
-      var noise = r.gauss(0, O.noiseSd);                                                 // draws 1, 2 per receiver
-      var shift = r.gauss(0, O.shiftSd);                                                 // draws 3, 4 per receiver
-      var hot = wr.slot === hotSlot;
-      var isCheckdown = wr.slot === 'RB' && route.family === 'SHORT';
-      var edge = (wr.skill - ctx.opp.db) / T.attrMax * O.skillW * (ctx.real === 'MAN' ? O.manMul : 1);
-      var peak = O.base - O.tightW * num(cov.tightness[route.family], 0.5) + edge + add(O.vs, play.vs[ctx.real]) + noise + (hot ? O.hotBonus : 0);
-      if (isCheckdown) peak = Math.max(peak, O.checkdownFloor);
-      peak = clamp(peak, O.min, O.max);
-      var wo = route[WINDOW].open * scale + shift - (hot ? O.hotEarlier : 0), wc = route[WINDOW].close * scale + shift;
-      var samples = new Array(nSamples);
-      for (k = 0; k < nSamples; k++) samples[k] = rd(O.floor + (peak - O.floor) * envelope(k * O.sampleDt, wo, wc));
-      var rec = {
-        slot: wr.slot, name: wr.name, skill: wr.skill, speed: wr.speed, x0: wr.x0, side: wr.side,
-        route: route.id, family: route.family, path: path, capY: capY,
-        open: samples, peak: rd(peak), env: { wo: rd(wo), wc: rd(wc), peak: rd(peak) }, release: null, hot: hot, checkdown: isCheckdown
-      };
-      var w = windowOf(samples);
-      rec[WINDOW] = w.win;
-      rec.release = releaseWindow(rec, attrs, rec[WINDOW], route.ideal.loft, w.plateauFrom);
-      receivers.push(rec);
-      if (isCheckdown) checkdown = wr.slot;
-    }
-    if (!checkdown) {                                    // no back on a short route: the earliest short route stands in
-      var earliest = Infinity;
-      for (i = 0; i < receivers.length; i++) if (receivers[i].family === 'SHORT' && receivers[i][WINDOW].from < earliest) { earliest = receivers[i][WINDOW].from; checkdown = receivers[i].slot; }
-    }
-
-    var PR = T.pressure;
-    var sackAt = clamp(ctx.pressure.sackAt + r.gauss(0, PR.snapSigma), PR.min, PR.max);   // draws 21, 22
-    var lanes = r.shuffle([-1, 0, 1]);                                                   // draws 23, 24
-    var gap1 = r.float(PR.rushers.laneGapMin, PR.rushers.laneGapMax);                    // draw 25
-    var gap2 = r.float(PR.rushers.laneGapMin, PR.rushers.laneGapMax);                    // draw 26
-    var nRush = ctx.real === 'BLITZ' ? PR.rushers.blitz : PR.rushers.base;
-    var rushers = [{ lane: lanes[0], arriveAt: rd(sackAt) }, { lane: lanes[1], arriveAt: rd(sackAt + gap1) }, { lane: lanes[2], arriveAt: rd(sackAt + gap1 + gap2) }].slice(0, nRush);
-    var SC = T.throw.scramble, look = cov.look;
-    var scramble = SC.base + SC.perMob * attrs.MOB + add(SC.look, ctx.real) + SC.boxPer * (look.box - SC.boxAnchor) + r.gauss(0, SC.sd);   // draws 27, 28
-    scramble = clamp(scramble, SC.min, SC.max);
-
+    var cast = RTG.Field.setup(ctx, play, r);                                            // 63 child draws
     var sim = {
       run: false, playId: play.id, play: { id: play.id, name: play.name, formation: play.formation, tags: play.tags.slice(), line: play.line },
-      receivers: receivers,
-      sackAt: rd(sackAt), revealAt: ctx.revealAt, clarity: ctx.clarity,
-      rushers: rushers, scrambleYards: rd(scramble),
-      hot: hotSlot, checkdown: checkdown,
+      fit: cast.fit, field: cast.field,
+      receivers: cast.receivers, defenders: cast.defenders, rushers: cast.rushers, linemen: cast.linemen,
+      qbStart: cast.qbStart, qbDrop: cast.qbDrop, sackAt: cast.sackAt,
+      revealAt: ctx.revealAt, clarity: ctx.clarity, hot: cast.hot, checkdown: cast.checkdown,
       real: ctx.real, shown: ctx.shown, look: ctx.look,
       ctx: ctx
     };
-    return attachHelpers(sim);
+    var ghost = RTG.Field.ghost(sim);                                                    // 0 draws
+    for (var i = 0; i < sim.receivers.length; i++) sim.receivers[i].ghost = ghost[i];
+    return sim;
   };
 
-  // ═══════════════════════════════ THROW ═══════════════════════════════
+  // ═══════════════════════════════ THE LIVE PLAY ═══════════════════════════════
 
-  /** Normalise a PlayInput. */
-  function normInput(input, sim) {
-    var T = P().throw;
-    input = input || {};
-    var kind = has(KINDS, input.kind) ? input.kind : 'THROW';
-    var target = typeof input.target === 'string' && receiverOf(sim, input.target) ? input.target : null;
+  /** A finished Live for a run sim (the sim IS the result): nothing moves, every input is refused. */
+  function runLive(sim) {
+    var no = { ok: false, kind: null, target: null, reason: 'a run play: nothing to draw' };
     return {
-      target: target, kind: kind,
-      t: clamp(input.t === Infinity ? T_MAX : num(input.t, 0), 0, T_MAX),   // Infinity / 1e308 stay a (finite) sack; a string is 0
-      lead: clamp(num(input.lead, 0), -1, 1),
-      loft: clamp(num(input.loft, 0), 0, 1),
-      power: clamp(num(input.power, 1), 0, T.powerMax),
-      quality: clamp(num(input.quality, 0.5), 0, 1),
-      green: !!input.green
+      t: 0, phase: 'DONE', qb: { x: 0, y: 0, vx: 0, vy: 0, hasBall: false, down: false, escaped: 0 },
+      receivers: [], defenders: [], linemen: [], ball: null, carrier: null, events: [], pressure: 0, rest: 0, previewShown: false,
+      field: null, sim: sim,
+      step: function () { return 'DONE'; },
+      classify: function () { return { kind: 'INVALID', target: null, points: [], length: 0, maxLen: 0, tooLong: false, preview: null, previewShown: false, margin: null, reason: no.reason }; },
+      aim: function () { return null; },
+      setRun: function () { return { ok: false, reason: no.reason }; },
+      throwAlong: function () { return no; },
+      throwAway: function () { return no; },
+      result: function () { return sim; },
+      plan: function () { return { runs: [], pass: null, away: null }; },
+      snapshot: function () { return { t: 0, phase: 'DONE', carrier: null, pressure: 0, qb: null, receivers: [], defenders: [], ball: null }; }
     };
-  }
-
-  /** The accuracy penalty under the rush: full pressPen at the sack, tapering to 0 pressWindow before it; poise relieves it. */
-  function pressurePenalty(t, sackAt, POI) {
-    var T = P().throw;
-    var closeness = clamp(1 - (sackAt - t) / T.pressWindow, 0, 1);
-    return T.pressPen * closeness * (1 - ratio(POI) * T.poiRelief);
-  }
-
-  /** The weather penalty: wind above the free mph (more on a floated ball), the weather kind, a frozen ball. */
-  function weatherPenalty(wx, loft) {
-    if (!wx) return 0;
-    var W = P().weather, kind = wx.weather || 'clear';
-    if (kind === 'dome') return 0;
-    var wind = Math.max(0, num(wx.wind && wx.wind.speed, 0) - W.windFree) * W.windPerMph * (W.windLoftBase + W.windLoftPer * loft);
-    var cold = Math.max(0, W.coldBelowF - num(wx.tempF, 70)) * W.coldPer;
-    return wind + num(W.byWeather[kind], 0) + cold;
-  }
-
-  /** The base fields every PlayResult shares. */
-  function baseResult(sim, inp, outcome) {
-    var res = {
-      run: false, playId: sim.playId, play: sim.play, kind: inp.kind, outcome: outcome, target: inp.target,
-      yards: 0, airYards: 0, yac: 0, td: false, firstDown: false, turnover: false, fumble: false,
-      flight: 0, arrive: null, need: null, dist: null, landing: { x: 0, y: 0 }, accuracy: null, fit: null, quality: rd(inp.quality),
-      t: rd(inp.t), lead: rd(inp.lead), loft: rd(inp.loft), power: rd(inp.power), green: false,
-      pComplete: null, pInt: null, text: '', banner: '', feedback: null, sackAt: sim.sackAt
-    };
-    res[WINDOW] = null;
-    return res;
   }
 
   /**
-   * Clamp a gain to the field and set td / firstDown / text / banner. On the last play a first down that does not
-   * score loses the game, so the banner is the text ('CATCH +12'), never 'FIRST DOWN' (the flag stays for the line).
+   * The play, live: ONE fork rng.fork('play:live') = 1 parent draw; the child rng lives inside the Live for the in-play
+   * rolls (sack escape, scatter, tip, pick, catch, drop, broken tackle), drawn in EVENT ORDER (engine/field.js header).
+   * Returns the Live (RTG.Field.create): positions mutated in place by live.step(dt); classify / aim / setRun /
+   * throwAlong / throwAway / result / plan / snapshot. A run sim gets a finished Live whose result() is the sim.
+   * @param {Object} sim PlaySim @param {RNG} rng @returns {Object} Live
    */
-  function settle(res, sit, verb) {
-    res.yards = nz(clamp(res.yards, -(sit.yl - 1), FIELD_YARDS - sit.yl));
-    res.td = res.yards > 0 && sit.yl + res.yards >= FIELD_YARDS;
-    res.firstDown = res.td || res.yards >= sit.toGo;
-    res.landing.y = rd(res.landing.y);
-    res.landing.x = rd(res.landing.x);
-    if (verb) res.text = verb + ' ' + signed(res.yards);
-    res.banner = res.td ? 'TOUCHDOWN!' : (res.firstDown && !sit.lastPlay ? 'FIRST DOWN' : res.text);
-    return res;
-  }
-
-  /** SACK: yards gauss (2 draws). */
-  function sackResult(sim, inp, r) {
-    var S = P().throw.sackYards, sit = sim.ctx.situation;
-    var res = baseResult(sim, inp, 'SACK');
-    res.yards = clamp(Math.round(r.gauss(S.mean, S.sd)), S.min, S.max);                  // draws 1, 2
-    res.landing = { x: 0, y: res.yards };
-    settle(res, sit, 'SACKED');
-    res.td = false; res.firstDown = false; res.banner = res.text;
-    res.feedback = {
-      timing: 'TOO LATE', touch: 'GOOD',
-      coachSaw: sim.hot ? 'Coach saw the blitz you did not — that ball has to be out hot.' : 'Coach saw the pocket fold. Get it out, or get out.'
-    };
-    return res;
-  }
-
-  /** THROWAWAY: 0 draws, never a turnover. */
-  function throwawayResult(sim, inp) {
-    var res = baseResult(sim, inp, 'THROWAWAY');
-    res.landing = { x: 30 * (sim.ctx.sign || 1), y: 5 };
-    res.text = 'THROWN AWAY'; res.banner = res.text;
-    res.feedback = { timing: inp.t < sim.sackAt - P().throw.pressWindow ? 'ON TIME' : 'LATE', touch: 'GOOD', coachSaw: 'Coach saw you throw it away. Nothing wrong with living to play another down.' };
-    return res;
-  }
+  Play.live = function (sim, rng) {
+    if (!sim || !sim.ctx) fail('live', 'a PlaySim is required');
+    if (!rng || typeof rng.fork !== 'function') fail('live', 'an rng is required');
+    var r = rng.fork('play:live');                                                       // 1 parent draw
+    if (sim.run) return runLive(sim);
+    return RTG.Field.create(sim, r);
+  };
 
   /**
-   * SCRAMBLE: yards gauss 2 · fumble roll 1. The yards are sim.scrambleYards (+ gauss) × how much of the pocket
-   * was used, clamp(t / useT, useMin, 1): a tuck at the snap is worth useMin of it — the lanes open once the rush
-   * has committed. The fumble roll never goes under fumbleMin.
+   * Replay a plan: Play.live + the plan's inputs at their sim times + step to DONE. The SAME PlayResult as the live play
+   * that produced the plan (live.plan()). ONE parent draw (Play.live's fork). A run sim returns the sim.
+   * @param {Object} sim PlaySim @param {{runs?: Array<{t, points}>, pass?: {t, points, loft}|null, away?: number|null}} plan
+   * @param {RNG} rng @returns {Object} PlayResult
    */
-  function scrambleResult(sim, inp, r) {
-    var SC = P().throw.scramble, sit = sim.ctx.situation, attrs = sim.ctx.qb.attrs;
-    var res = baseResult(sim, inp, 'SCRAMBLE');
-    var use = clamp(inp.t / num(SC.useT, 1), num(SC.useMin, 1), 1);
-    res.yards = clamp(Math.round((sim.scrambleYards + r.gauss(0, SC.sd2)) * use), SC.min, SC.max);   // draws 1, 2
-    res.fumble = r.chance(Math.max(num(SC.fumbleMin, 0), SC.fumble * Math.max(0, 1 - attrs.MOB / SC.fumbleMobFree)));   // draw 3
-    res.landing = { x: 5 * (sim.ctx.sign || 1), y: res.yards };
-    settle(res, sit, 'SCRAMBLE');
-    if (res.fumble) {
-      res.turnover = true; res.td = false; res.firstDown = false; res.text = 'FUMBLE'; res.banner = 'FUMBLE';
-    }
-    res.feedback = {
-      timing: 'ON TIME', touch: 'GOOD',
-      coachSaw: res.fumble ? 'Coach saw the ball on the ground. Two hands on it.'
-        : (res.firstDown ? 'Coach saw you take off and take the sticks with you.' : 'Coach saw you tuck it. A few yards beats a sack.')
-    };
-    return res;
-  }
-
-  /** The touch label from the lead / loft errors (the larger relative error names it). */
-  function touchLabel(rec, route, dLead, dLoft) {
-    var F = P().feedback;
-    var offLead = Math.abs(dLead) / F.leadOff, offLoft = Math.abs(dLoft) / F.loftOff;
-    if (offLead < 1 && offLoft < 1) return 'GOOD';
-    if (offLoft >= offLead) return dLoft < 0 ? 'BULLET' : 'FLOATED';
-    if (CROSSING[route.id]) return dLead > 0 ? 'LED' : 'BEHIND';
-    return dLead > 0 ? 'OVERTHROWN' : 'UNDERTHROWN';
-  }
-
-  /** The timing label from the arrival vs the receiver's window. */
-  function timingLabel(arrive, win) {
-    var F = P().feedback;
-    if (arrive < win.from - F.early) return 'EARLY';
-    if (arrive <= win.to + F.late) return 'ON TIME';
-    if (arrive <= win.to + F.tooLate) return 'LATE';
-    return 'TOO LATE';
-  }
-
-  /** 'COVER 2' for a coverage id (the id itself when unknown). */
-  function coverageName(id) { var c = D().coverages[id]; return c && c.name ? c.name : String(id); }
-
-  /** One sentence: what the coach saw on a pass. */
-  function coachSawPass(res, rec, sim, parts) {
-    var name = rec.name;
-    switch (res.outcome) {
-      case 'CATCH':
-        if (res.td) return sim.ctx.clutch ? 'Coach saw the end zone with the game on the line. So did everybody else.' : 'Coach saw the end zone. So did everybody else.';
-        if (res.firstDown) return res.yac >= 8 ? 'Coach saw the catch and the run after it. ' + name + ' did the rest.' : 'Coach saw you move the sticks. Clean.';
-        return res.feedback.timing === 'ON TIME' ? 'Coach saw a completion. Not enough of one.' : 'Coach saw a catch, late and short. Take what they give sooner.';
-      case 'DROP': return 'Coach saw a good ball hit the turf. That one is on ' + name + '.';
-      case 'INT':
-        if (res.feedback.timing === 'LATE' || res.feedback.timing === 'TOO LATE') return 'Coach saw you throw late into a closed window. The safety was waiting.';
-        if (sim.shown && sim.real && sim.shown !== sim.real) return 'Coach saw them show ' + coverageName(sim.shown) + ' and play ' + coverageName(sim.real) + '. The look lied and you bought it.';
-        if (parts.press >= 0.05) return 'Coach saw the rush in your face and the ball come out anyway. Eat it next time.';
-        return 'Coach saw you force it into coverage. That is not a window, that is a wish.';
-      default: break;
-    }
-    // INCOMPLETE: name the dominant cause
-    var f = res.feedback;
-    if (parts.beyond > 0) return 'Coach saw you throw it further than your arm goes. Know your range.';
-    if (f.timing === 'EARLY') return 'Coach saw you throw before the break. Let ' + name + ' get there.';
-    if (f.timing === 'TOO LATE') return 'Coach saw you hold it a beat too long. The window had closed.';
-    if (parts.press >= 0.05) return 'Coach saw the rush in your face — you threw off your back foot.';
-    if (parts.wx >= 0.03) return 'Coach saw the weather take it. Drive it lower next time.';
-    if (f.touch === 'FLOATED') return 'Coach saw it hang up there. Put something on it.';
-    if (f.touch === 'BULLET') return 'Coach saw you fire one nobody could handle. Take a little off it.';
-    if (f.touch === 'OVERTHROWN' || f.touch === 'LED') return 'Coach saw it sail past ' + name + '. Too much lead.';
-    if (f.touch === 'UNDERTHROWN' || f.touch === 'BEHIND') return 'Coach saw it die behind ' + name + '. Lead him.';
-    if (f.timing === 'LATE') return 'Coach saw you a beat late. It was there and then it was not.';
-    if (res[WINDOW] < P().throw.intWindow) return 'Coach saw you throw into coverage and get away with it. Do not count on that.';
-    if (res.quality < 0.5) return 'Coach saw a sloppy release. Hit the green.';
-    return 'Coach saw a miss. Nothing mechanical, just a miss.';
-  }
-
-  /** THROW: 9 draws in a fixed order. */
-  function passResult(sim, inp, r) {
-    var T = P().throw, O = P().open, sit = sim.ctx.situation, attrs = sim.ctx.qb.attrs;
-    var rec = receiverOf(sim, inp.target), route = D().routes[rec.route];
-    var res = baseResult(sim, inp, 'INCOMPLETE');
-
-    // the ball meets the receiver
-    var a = Play.arrival(rec, attrs, inp.t, inp.power, inp.loft);
-    var need = Play.needFor(Play.arrival(rec, attrs, inp.t, 1, route.ideal.loft).dist, attrs);
-    var band = Play.greenBand(attrs.ACC);
-    var green = inp.green && Play.inGreen(inp.power, need, band);
-    var quality = green ? Math.max(inp.quality, T.greenQuality) : inp.quality;
-    // the input's fit to the route
-    var dLead = inp.lead - route.ideal.lead, dLoft = inp.loft - route.ideal.loft;
-    var hot = Math.max(0, inp.power - (need + band)) * T.hotBallPen;
-    var fit = clamp(1 - Math.abs(dLead) * T.leadW - Math.abs(dLoft) * T.loftW - hot, 0, 1);
-    // penalties
-    var press = pressurePenalty(inp.t, sim.sackAt, attrs.POI);
-    var wx = weatherPenalty(sim.ctx.weather, inp.loft);
-    var beyond = Math.max(0, a.dist - Play.maxDist(attrs)) * T.beyondRangePen;
-    var accuracy = clamp(ratio(attrs.ACC) * T.accW + quality * T.qualW + fit * T.fitW - press - wx - beyond, 0, 1);
-    var openness = Play.openAt(rec, a.arrive);
-    var pComplete = sigmoid(T.k * (accuracy * T.accMul + openness * T.windowMul - T.bias));
-    var pInt = openness < T.intWindow && accuracy < T.intAcc ? T.intBase * (1 - openness) : 0;
-    var pDrop = T.drop * (1 - ratio(rec.skill));
-
-    var caught = r.chance(pComplete);                                                    // draw 1
-    var picked = r.chance(pInt);                                                         // draw 2
-    var dropped = r.chance(pDrop);                                                       // draw 3
-    var Y = T.yac;
-    var yacRaw = num(Y.base[route.family], 3) * (Y.speedBase + Y.speedPer * ratio(rec.speed)) * (Y.windowBase + Y.windowPer * openness)
-      + (route.id === 'SCREEN' ? Y.screenBonus : 0) + r.gauss(0, Y.sd);                  // draws 4, 5
-    var sd = T.scatter.sd * (1 - accuracy) + T.scatter.min;
-    var sx = r.gauss(0, sd), sy = r.gauss(0, sd);                                        // draws 6..9
-
-    res.outcome = caught ? (dropped ? 'DROP' : 'CATCH') : (picked ? 'INT' : 'INCOMPLETE');
-    res.airYards = Math.round(a.pos.y);
-    res.flight = rd(a.flight);
-    res.arrive = rd(a.arrive);
-    res.accuracy = rd(accuracy); res[WINDOW] = rd(openness); res.fit = rd(fit); res.quality = rd(quality); res.green = green;
-    res.need = rd(need); res.dist = rd(a.dist);
-    res.pComplete = rd(pComplete); res.pInt = rd(pInt);
-    res.feedback = { timing: timingLabel(a.arrive, rec[WINDOW]), touch: touchLabel(rec, route, dLead, dLoft), coachSaw: '' };
-    if (res.outcome === 'CATCH') {
-      var yac = Math.max(Y.min, Math.round(yacRaw));
-      res.yards = res.airYards + yac;
-      res.landing = { x: a.pos.x, y: a.pos.y };
-      settle(res, sit, 'CATCH');
-      // a clamp comes off the run, never invents one: the goal line shortens the yac, the own goal line (a catch
-      // behind the line clamped up to 0) leaves yac 0 and puts the air yards at the spot
-      res.yac = clamp(res.yards - res.airYards, 0, yac);
-      res.airYards = res.yards - res.yac;
-    } else {
-      res.landing = { x: rd(a.pos.x + sx), y: rd(a.pos.y + sy + dLead * T.scatter.leadYd) };
-      res.turnover = res.outcome === 'INT';
-      res.text = res.outcome === 'INT' ? 'INTERCEPTED' : (res.outcome === 'DROP' ? 'DROPPED' : 'INCOMPLETE');
-      res.banner = res.text;
-    }
-    res.feedback.coachSaw = coachSawPass(res, rec, sim, { press: press, wx: wx, beyond: beyond });
-    return res;
-  }
-
-  /**
-   * Resolve the throw (or the tuck, the throwaway, the sack). ONE fork rng.fork('play:throw') = 1 parent draw.
-   *   input = { target: slot, t: release (s from the snap), lead: -1..1, loft: 0..1, power: 0..1.15, quality: 0..1,
-   *             green?: bool (the UI's band claim; re-checked with Play.inGreen), kind?: 'THROW'|'THROWAWAY'|'SCRAMBLE'|'SACK' }
-   * Rules: t ≥ sim.sackAt → SACK whatever the input (a SCRAMBLE may escape on a MOB roll) · THROWAWAY (or THROW
-   * without a target) → 0 yards, never a turnover · SCRAMBLE → sim.scrambleYards + gauss, may fumble at low MOB ·
-   * THROW → see passResult: flight from the distance and the arm, fit from lead/loft vs the route's ideal, accuracy
-   * from ACC / quality / fit minus pressure and weather, the window from the openness at the arrival, completion
-   * by a logistic on accuracy and window, an interception only into a closed window with an imperfect ball.
-   * Returns PlayResult = {
-   *   run: false, playId, play, kind, outcome: 'CATCH'|'INCOMPLETE'|'INT'|'SACK'|'THROWAWAY'|'SCRAMBLE'|'DROP', target,
-   *   yards, airYards, yac, td, firstDown, turnover, fumble, flight (s), arrive (s), landing: {x, y} (yards for the scene),
-   *   accuracy, window, fit, quality, green, need, dist, pComplete, pInt, t, lead, loft, power, sackAt,
-   *   text ('CATCH +14' · 'INCOMPLETE' · 'INTERCEPTED' · 'SACKED -7' · 'DROPPED' · 'THROWN AWAY' · 'SCRAMBLE +6' · 'FUMBLE'),
-   *   banner ('TOUCHDOWN!' · 'FIRST DOWN' (never on a last play: a first down that does not score loses) · else text),
-   *   feedback: { timing: 'EARLY'|'ON TIME'|'LATE'|'TOO LATE', touch: 'BULLET'|'GOOD'|'FLOATED'|'OVERTHROWN'|'UNDERTHROWN'|'BEHIND'|'LED', coachSaw }
-   * }
-   * A run sim is returned as it is (it already is the result).
-   * @param {Object} sim PlaySim @param {Object} input @param {RNG} rng @returns {Object} PlayResult
-   */
-  Play.throw = function (sim, input, rng) {
-    if (!sim || !sim.ctx) fail('throw', 'a PlaySim is required');
-    if (!rng || typeof rng.fork !== 'function') fail('throw', 'an rng is required');
-    var r = rng.fork('play:throw');                                                      // 1 parent draw
+  Play.resolve = function (sim, plan, rng) {
+    var live = Play.live(sim, rng);
     if (sim.run) return sim;
-    var inp = normInput(input, sim);
-    if (inp.kind === 'SACK' || (inp.t >= sim.sackAt && inp.kind !== 'SCRAMBLE')) return sackResult(sim, inp, r);
-    if (inp.kind === 'SCRAMBLE') {
-      if (inp.t >= sim.sackAt) {
-        var SC = P().throw.scramble, mob = ratio(sim.ctx.qb.attrs.MOB);
-        var pEscape = clamp(SC.escape * mob - SC.escapeMob * (1 - mob), 0, 1);
-        if (!r.chance(pEscape)) return sackResult(sim, inp, r);                          // escape roll, then the sack draws
+    return RTG.Field.replay(live, plan);
+  };
+
+  /**
+   * A sensible plan for a pass sim with no human (the shell's headless auto-resolve, RTG.debug.skipTo): at the first of
+   * field.auto.times with a GREEN or GOLD line, a straight touch pass (field.auto.loft) to the spot the best of those
+   * receivers can reach (the best colour, then the most separation now); at the last of those times the best line
+   * whatever its colour; with no PASS line at all, a throw-away field.auto.awayEarly before sim.sackAt. Pure: it
+   * rehearses on a private Live whose rolls are the median (every chance at 0.5, every gauss at its mean) — 0 draws
+   * from any rng.
+   * @param {Object} sim PlaySim @returns {{runs: Array, pass: Object|null, away: number|null}}
+   */
+  Play.autoPlan = function (sim) {
+    var empty = { runs: [], pass: null, away: null };
+    if (!sim || sim.run || !sim.receivers) return empty;
+    var A = P().field.auto, live = RTG.Field.create(sim, MEDIAN), times = A.times, loft = A.loft;
+    var DT = P().field.dt, best = null;
+    for (var i = 0; i < times.length && !best; i++) {
+      while (live.t < times[i] - 1e-9 && live.phase === 'PRE_THROW') live._steps(1);
+      if (live.phase !== 'PRE_THROW') break;
+      var pick = null, pickRank = -1;
+      for (var j = 0; j < sim.receivers.length; j++) {
+        var aim = live.aim(sim.receivers[j].slot, loft);
+        if (!aim || aim.tooLong) continue;
+        var c = live.classify(aim.points, loft);
+        if (c.kind !== 'PASS' || c.target !== sim.receivers[j].slot) continue;
+        var rank = (c.preview === 'GREEN' ? 2 : (c.preview === 'GOLD' ? 1 : 0)) * 100 + live.receivers[j].sep;
+        if (rank > pickRank) { pickRank = rank; pick = aim; }
       }
-      return scrambleResult(sim, inp, r);
+      if (pick && (pickRank >= 100 || i === times.length - 1)) best = { t: Math.round(live.t / DT) * DT, points: pick.points, loft: loft };
     }
-    if (inp.kind === 'THROWAWAY' || !inp.target || inp.power < P().throw.minCommit) return throwawayResult(sim, inp);
-    return passResult(sim, inp, r);
+    if (best) return { runs: [], pass: { t: Util.roundN(best.t, 6), points: best.points, loft: loft }, away: null };
+    var awayT = Math.max(0, num(sim.sackAt, 2) - A.awayEarly);
+    return { runs: [], pass: null, away: Util.roundN(Math.round(awayT / DT) * DT, 6) };
+  };
+
+  /** The median "rng" for rehearsals (Play.autoPlan): no randomness at all. */
+  var MEDIAN = {
+    next: function () { return 0.5; }, chance: function (p) { return p > 0.5; }, float: function (a, b) { return (a + b) / 2; },
+    int: function (a, b) { return Math.round((a + b) / 2); }, gauss: function (mu) { return mu === undefined ? 0 : mu; },
+    pick: function (arr) { return arr && arr.length ? arr[0] : undefined; }, weighted: function (arr) { return arr && arr.length ? arr[0] : undefined; },
+    fork: function () { return MEDIAN; }, state: function () { return 0; }, setState: function () {}
   };
 
   /**
    * Debug: a consistent PlayResult for a requested outcome without consuming rng (the shell's RTG.debug.forceResult).
    * kind: 'CATCH'|'FIRST_DOWN'|'TD'|'INCOMPLETE'|'INT'|'SACK'|'DROP'|'THROWAWAY'|'SCRAMBLE'|'FUMBLE'. 0 draws.
-   * @param {Object} sim @param {string} kind @param {Object} [input] @returns {Object} PlayResult
+   * The target defaults to the first receiver, the release to 0.8 s before his separation peak (≥ 0.3 s).
+   * @param {Object} sim @param {string} kind @param {Object} [input] {target?, t?, loft?} @returns {Object} PlayResult
    */
   Play.forcedResult = function (sim, kind, input) {
     if (!sim || !sim.ctx) fail('forcedResult', 'a PlaySim is required');
     if (sim.run) return sim;
-    var sit = sim.ctx.situation, T = P().throw;
-    var target = (input && input.target && receiverOf(sim, input.target)) ? input.target : (sim.receivers[0] ? sim.receivers[0].slot : null);
+    var sit = sim.ctx.situation, goal = FIELD_YARDS - sit.yl;
+    input = input || {};
+    var target = (input.target && receiverOf(sim, input.target)) ? input.target : (sim.receivers[0] ? sim.receivers[0].slot : null);
     var rec = receiverOf(sim, target);
-    var inp = normInput(Object.assign({ target: target, t: rec ? rec.release.peakAt : 1, quality: 1, power: 1 }, input || {}), sim);
-    var res = baseResult(sim, inp, 'INCOMPLETE');
-    res.forced = true;
-    var pos = rec ? Play.pathAt(rec, inp.t + 1) : { x: 0, y: 5 };
-    res.landing = { x: pos.x, y: pos.y };
-    res.airYards = Math.round(pos.y); res.flight = 1; res.arrive = rd(inp.t + 1);
-    res.feedback = { timing: 'ON TIME', touch: 'GOOD', coachSaw: 'Coach saw the debug menu.' };
-    switch (kind) {
-      case 'CATCH': res.outcome = 'CATCH'; res.yards = Math.max(0, Math.min(res.airYards + 2, sit.toGo - 1)); settle(res, sit, 'CATCH'); break;   // never a first down (0 at toGo 1)
-      case 'FIRST_DOWN': res.outcome = 'CATCH'; res.yards = Math.max(sit.toGo, Math.min(sit.toGo + 3, FIELD_YARDS - sit.yl)); settle(res, sit, 'CATCH'); break;   // always the sticks (a TD when they are the goal line)
-      case 'TD': res.outcome = 'CATCH'; res.yards = FIELD_YARDS - sit.yl; settle(res, sit, 'CATCH'); break;
-      case 'INT': res.outcome = 'INT'; res.turnover = true; res.text = 'INTERCEPTED'; res.banner = res.text; res[WINDOW] = 0.1; res.accuracy = 0.5; break;
-      case 'SACK': res.outcome = 'SACK'; res.kind = 'SACK'; res.yards = T.sackYards.mean; res.landing = { x: 0, y: res.yards }; res.text = 'SACKED ' + signed(res.yards); res.banner = res.text; res.feedback.timing = 'TOO LATE'; break;
-      case 'DROP': res.outcome = 'DROP'; res.text = 'DROPPED'; res.banner = res.text; break;
-      case 'THROWAWAY': res.outcome = 'THROWAWAY'; res.kind = 'THROWAWAY'; res.text = 'THROWN AWAY'; res.banner = res.text; break;
-      case 'SCRAMBLE': res.outcome = 'SCRAMBLE'; res.kind = 'SCRAMBLE'; res.yards = Math.round(sim.scrambleYards); settle(res, sit, 'SCRAMBLE'); break;
-      case 'FUMBLE': res.outcome = 'SCRAMBLE'; res.kind = 'SCRAMBLE'; res.yards = 2; res.fumble = true; res.turnover = true; res.text = 'FUMBLE'; res.banner = 'FUMBLE'; break;
-      default: res.outcome = 'INCOMPLETE'; res.text = 'INCOMPLETE'; res.banner = res.text; break;
+    var t = clamp(num(input.t, rec && rec.ghost ? rec.ghost.peakAt - 0.8 : 1), 0.3, 6);
+    var pos = rec ? Play.pathAt(rec, t + 1) : { x: 0, y: 5 };
+    var air = clamp(Math.round(pos.y), -(sit.yl - 1), goal);
+    var res = {
+      run: false, playId: sim.playId, play: sim.play, kind: 'PASS', outcome: 'INCOMPLETE', target: target,
+      yards: 0, airYards: 0, yac: 0, td: false, firstDown: false, turnover: false, fumble: false,
+      t: rd(t), loft: rd(clamp(num(input.loft, 0.5), 0, 1)), length: rd(Math.sqrt(pos.x * pos.x + (pos.y + 7) * (pos.y + 7))),
+      landing: { x: rd(pos.x), y: rd(pos.y) }, release: null, arrive: rd(t + 1), flight: 1, sep: null, escaped: 0,
+      ended: 'FORCED', endT: rd(t + 1), tooLong: false, sackAt: sim.sackAt,
+      text: 'INCOMPLETE', banner: 'INCOMPLETE', forced: true,
+      feedback: { timing: 'ON TIME', touch: 'TOUCH', placement: 'ON THE MONEY', coachSaw: 'Coach saw the debug menu.' }
+    };
+    function gain(y, verb) {
+      res.yards = nz(clamp(y, -(sit.yl - 1), goal));
+      res.airYards = Math.min(res.yards, Math.max(0, air));
+      res.yac = res.yards - res.airYards;
+      res.td = res.yards > 0 && sit.yl + res.yards >= FIELD_YARDS;
+      res.firstDown = res.td || res.yards >= sit.toGo;
+      res.text = verb + ' ' + signed(res.yards);
+      res.banner = res.td ? 'TOUCHDOWN!' : (res.firstDown && !sit.lastPlay ? 'FIRST DOWN' : res.text);
     }
-    if (res.yac === 0 && res.outcome === 'CATCH') res.airYards = res.yards;
+    switch (kind) {
+      case 'CATCH': res.outcome = 'CATCH'; gain(Math.max(0, Math.min(air + 2, sit.toGo - 1)), 'CATCH'); break;   // never a first down (0 at toGo 1)
+      case 'FIRST_DOWN': res.outcome = 'CATCH'; gain(Math.max(sit.toGo, Math.min(sit.toGo + 3, goal)), 'CATCH'); break;   // always the sticks (a TD when they are the goal line)
+      case 'TD': res.outcome = 'CATCH'; gain(goal, 'CATCH'); break;
+      case 'INT': res.outcome = 'INT'; res.turnover = true; res.text = 'INTERCEPTED'; res.banner = res.text; res.feedback.placement = 'INTO COVERAGE'; break;
+      case 'SACK': res.outcome = 'SACK'; res.kind = 'SACK'; res.target = null; res.landing = { x: 0, y: P().field.qbDrop.depth };
+        res.yards = P().field.qbDrop.depth; res.text = 'SACKED ' + signed(res.yards); res.banner = res.text; res.feedback.timing = 'TOO LATE'; res.feedback.placement = '—'; break;
+      case 'DROP': res.outcome = 'DROP'; res.text = 'DROPPED'; res.banner = res.text; break;
+      case 'THROWAWAY': res.outcome = 'THROWAWAY'; res.kind = 'THROWAWAY'; res.target = null; res.text = 'THROWN AWAY'; res.banner = res.text; res.feedback.placement = '—'; break;
+      case 'SCRAMBLE': res.outcome = 'SCRAMBLE'; res.kind = 'SCRAMBLE'; res.target = null; res.feedback.placement = '—'; gain(Math.min(4, goal), 'SCRAMBLE'); res.airYards = 0; res.yac = 0; break;
+      case 'FUMBLE': res.outcome = 'SCRAMBLE'; res.kind = 'SCRAMBLE'; res.target = null; res.feedback.placement = '—'; res.yards = Math.min(2, goal); res.fumble = true; res.turnover = true; res.text = 'FUMBLE'; res.banner = 'FUMBLE'; break;
+      default: res.outcome = 'INCOMPLETE'; break;
+    }
     return res;
   };
 

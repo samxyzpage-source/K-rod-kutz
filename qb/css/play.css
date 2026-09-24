@@ -1,7 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════════
-   Road to Glory: QB — play.css (owner: the SCENE agent — the QB moment scene: the field canvas wrapper,
-   the .pv-hud chips, the pressure meter, the velocity bar with its green band, the lead/loft readout,
-   the play cards of the READ phase, the banners of the RESULT phase, THROW AWAY / SCRAMBLE buttons).
+   Road to Glory: QB — play.css (owner: the SCENE agent — the QB moment scene, v2 "draw the pass": the field
+   canvas wrapper, the .pv-hud chips, the RUSH meter, the draw HUD over the field (the SLOW-MO chip with its
+   budget bar, the draft chip), the slow-motion look, the play cards of the READ phase, the banners of the
+   RESULT phase, the THROW AWAY button and the keyboard legend).
    Depends on css/style.css tokens (--navy … --dusk, --team-1/2) with hard fallbacks so a missing
    stylesheet still renders. Pixel idiom: 8-px grid, 2-px borders, hard shadows, no gradients,
    image-rendering: pixelated on the canvas. Phone-first (390 px, 16-px gutters, no horizontal
@@ -9,7 +10,7 @@
    ═══════════════════════════════════════════════════════════════════════════════ */
 
 /* ───────────────────────────── the view: HUD on top, the stage, the panel under it ─────────────────────────────
-   The panel keeps a fixed minimum height in every phase (the play cards in READ, the velocity bar in SNAP / THROW,
+   The panel keeps a fixed minimum height in every phase (the play cards in READ, the hint + THROW AWAY in PLAY,
    the feedback line in RESULT), so the canvas never re-fits mid-play. Desktop and landscape phones move it beside
    the stage as a column. */
 .playview { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; height: 100%; width: 100%; position: relative; background: var(--navy, #1b1f3a); color: var(--cream, #f4e9d0); }
@@ -81,7 +82,7 @@ body.hc .pv-banner-blocked, html.hc .pv-banner-blocked { background: var(--red, 
 .pv-sub-clutch { border-color: var(--red, #d8433a); color: var(--red, #d8433a); }
 .pv-sub-good { border-color: var(--mint, #4dbb63); color: var(--mint, #4dbb63); }
 /* the stray-tap hint sits over the deep field under the sub line, never over the backfield (the QB and the RB the beginner is told to tap) */
-.pv-toast { position: absolute; top: 30%; left: 50%; transform: translateX(-50%); font-size: max(9px, 0.85em); color: var(--gold, #f6c445); letter-spacing: 1px; white-space: nowrap; background: rgba(16,18,38,0.75); padding: 3px 8px; border: 2px solid var(--gold, #f6c445); }
+.pv-toast { position: absolute; top: 30%; left: 50%; transform: translateX(-50%); font-size: max(9px, 0.85em); color: var(--gold, #f6c445); letter-spacing: 1px; white-space: normal; text-align: center; line-height: 1.6; width: max-content; max-width: 88%; background: rgba(16,18,38,0.8); padding: 3px 8px; border: 2px solid var(--gold, #f6c445); }
 .pv-skip { position: absolute; bottom: 6px; right: 6px; font-size: 8px; color: var(--grey, #8a8f9e); letter-spacing: 1px; }
 
 /* ───────────────────────────── the panel under the stage ───────────────────────────── */
@@ -120,23 +121,40 @@ body.hc .pv-banner-blocked, html.hc .pv-banner-blocked { background: var(--red, 
 .pv-tag { font-size: 7px; color: var(--grey, #8a8f9e); letter-spacing: 0.5px; }
 body.hc .pv-card, html.hc .pv-card { border-color: #fff; }
 
-/* the throw box (SNAP / THROW): the hint, the velocity bar with its green band, the lead / loft readout, the buttons */
-.pv-throwbox { display: flex; flex-direction: column; gap: 6px; }
+/* the draw box (PLAY): the one-line hint, the keyboard legend (fine pointers), THROW AWAY */
+.pv-drawbox { display: flex; flex-direction: column; gap: 6px; }
 .pv-hint { font-size: max(8px, 0.8em); color: var(--cream, #f4e9d0); opacity: 0.9; letter-spacing: 1px; text-align: center; line-height: 1.5; min-height: 1.5em; }
-.pv-vbar { display: flex; align-items: center; gap: 6px; }
-.pv-vbar-label { flex: 0 0 auto; font-size: 8px; color: var(--grey, #8a8f9e); letter-spacing: 1px; }
-.pv-vbar-track { position: relative; flex: 1 1 auto; height: 16px; background: var(--navy, #1b1f3a); border: 2px solid var(--ink, #101226); overflow: hidden; }
-.pv-vbar-green { position: absolute; top: 0; bottom: 0; background: var(--mint, #4dbb63); opacity: 0.6; }
-.pv-vbar-red { position: absolute; top: 0; bottom: 0; right: 0; background: var(--red, #d8433a); opacity: 0.45; }
-.pv-vbar-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--gold, #f6c445); }
-.pv-vbar-fill.in-green { background: var(--chalk, #f2f2e6); }
-.pv-vbar-tick { position: absolute; top: 0; width: 1px; height: 4px; background: var(--chalk, #f2f2e6); opacity: 0.7; }
-.pv-vbar-tick.big { height: 100%; opacity: 0.35; }
-.pv-throwrow { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
-.pv-aim { display: flex; gap: 4px; }
-.pv-aim .pv-chip { min-width: 5.5em; justify-content: center; }
-.pv-actions { display: flex; gap: 6px; margin-left: auto; }
-.pv-actions .btn { font-size: 8px; padding: 4px 8px; }
+.pv-keys { font-size: 7px; color: var(--grey, #8a8f9e); letter-spacing: 0.5px; text-align: center; line-height: 1.6; }
+.pv-actions { display: flex; gap: 6px; justify-content: center; }
+.pv-actions .btn { font-size: 8px; padding: 6px 10px; min-height: 32px; }
+
+/* the draw HUD over the field (PLAY): the SLOW-MO chip + its budget bar, the draft chip (PASS → WR1 · BULLET …) */
+.pv-drawhud { position: absolute; top: 6px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; z-index: 3; pointer-events: none; }
+.pv-slowmo {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px; border: 2px solid var(--sky, #7fc7ff);
+  background: var(--ink, #101226); color: var(--sky, #7fc7ff); font-size: 8px; letter-spacing: 1px; white-space: nowrap;
+  box-shadow: 2px 2px 0 var(--ink, #101226);
+}
+.pv-slowmo-track { position: relative; display: inline-block; width: 44px; height: 6px; background: var(--navy, #1b1f3a); border: 1px solid var(--sky, #7fc7ff); overflow: hidden; }
+.pv-slowmo-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; background: var(--sky, #7fc7ff); }
+.pv-slowmo.out { border-color: var(--grey, #8a8f9e); color: var(--grey, #8a8f9e); }
+.pv-slowmo.out .pv-slowmo-track { border-color: var(--grey, #8a8f9e); }
+.pv-draft {
+  padding: 4px 8px; border: 2px solid var(--gold, #f6c445); background: var(--navy, #1b1f3a); color: var(--gold, #f6c445);
+  font-size: max(9px, 0.85em); letter-spacing: 1px; white-space: nowrap; box-shadow: 2px 2px 0 var(--ink, #101226); max-width: 94%; overflow: hidden; text-overflow: ellipsis;
+}
+.pv-draft-run { border-color: var(--chalk, #f2f2e6); color: var(--chalk, #f2f2e6); }
+.pv-draft-throwaway { border-color: var(--grey, #8a8f9e); color: var(--cream, #f4e9d0); }
+.pv-draft.too-long { border-color: var(--red, #d8433a); color: var(--red, #d8433a); }
+/* the preview (a FIELD GENERAL's read of the race to the spot): the chip's border says it too — with a shape cue (solid / dashed / double) for cb / hc */
+.pv-draft.pv-preview-green { border-color: var(--mint, #4dbb63); border-style: solid; }
+.pv-draft.pv-preview-gold { border-color: var(--gold, #f6c445); border-style: dashed; }
+.pv-draft.pv-preview-red { border-color: var(--red, #d8433a); border-style: double; border-width: 3px; }
+body.hc .pv-draft, html.hc .pv-draft, body.hc .pv-slowmo, html.hc .pv-slowmo { background: var(--ink, #000); }
+
+/* slow motion must LOOK like slow motion: the canvas desaturates (the letterbox bands are drawn on it) */
+.pv-stage.is-slow canvas.rtg-canvas { filter: saturate(0.5) contrast(1.05); }
+body.hc .pv-stage.is-slow canvas.rtg-canvas, html.hc .pv-stage.is-slow canvas.rtg-canvas { filter: none; }
 
 /* the feedback line (RESULT) */
 .pv-feedback { padding: 2px 0; font-size: max(9px, 0.85em); line-height: 1.5; color: var(--cream, #f4e9d0); text-align: center; }
@@ -148,6 +166,7 @@ body.hc .pv-card, html.hc .pv-card { border-color: #fff; }
 .pv-situation { animation-name: pv-pop-centre; }
 @keyframes pv-pop-centre { 0% { transform: translate(-50%, -50%) scale(0.6); opacity: 0; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
 .reduced-motion .pv-banner, .reduced-motion .pv-sub, .reduced-motion .pv-situation, .reduced-motion .pv-pressure-label { animation: none !important; }
+.pv-drawhud[hidden], .pv-slowmo[hidden], .pv-draft[hidden], .pv-keys[hidden] { display: none !important; }
 @media (prefers-reduced-motion: reduce) { .pv-banner, .pv-sub, .pv-situation, .pv-pressure-label { animation: none !important; } }
 
 /* ───────────────────────────── desktop: the panel is a column beside the stage ───────────────────────────── */
@@ -177,8 +196,9 @@ body.hc .pv-card, html.hc .pv-card { border-color: #fff; }
   .pv-card { padding: 4px 4px 4px 6px; }
   .pv-card-name { min-height: 0; }
   .pv-routes { height: 30px; }
-  .pv-throwrow { flex-direction: column; align-items: stretch; }
-  .pv-actions { margin-left: 0; flex-direction: column; }
+  .pv-actions { flex-direction: column; }
+  .pv-drawhud { top: 4px; }
+  .pv-draft { font-size: 8px; padding: 3px 6px; }
   .pv-banner { top: 46%; font-size: 12px; padding: 6px 10px; border-width: 2px; }
   .pv-sub { top: 18%; font-size: 9px; padding: 4px 8px; }
   .pv-situation { top: 50%; padding: 8px 10px; }

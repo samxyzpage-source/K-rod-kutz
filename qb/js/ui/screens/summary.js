@@ -1,7 +1,9 @@
 /**
- * Road to Glory: QB — 'summary' screen: the drive's box score. The line (CMP/ATT, YDS, TD, INT, SACKS, RUSH), the
- * passer rating (Play.rating, NFL formula), the best throw, the verdict line, the six moments one per row, and
- * PLAY AGAIN (the same seed, the same picks — the same script) / NEW DRIVE (a new seed, the same picks) / TITLE.
+ * Road to Glory: QB — 'summary' screen: the drive's box score. The passing line (CMP/ATT, YDS, TD, INT, SACKS), the
+ * rushing line (RUSH: scrambles — the QB carried it over the line — and the SNEAK / DRAW cards; scramble yards count
+ * as rushing, never as passing), the passer rating (Play.rating on the passing line, NFL formula), the best throw
+ * (or the best run when nothing was caught), the verdict line, the six moments one per row, and PLAY AGAIN (the same
+ * seed, the same picks — the same script) / NEW DRIVE (a new seed, the same picks) / TITLE.
  *
  *   RTG.UI.Screens.summary(store) → {el, destroy, onKey}
  */
@@ -54,14 +56,17 @@
     stat('TD', l.td, l.td ? 'mint' : '');
     stat('INT', l.int, l.int ? 'red' : '');
     stat('SACKS', l.sacks + (l.sackYds ? ' (' + l.sackYds + ')' : ''));
-    stat('RUSH', l.rushes ? l.rushYds + ' on ' + l.rushes : '—');
+    stat('RUSH', l.rushes ? l.rushYds + ' on ' + l.rushes + (l.rushTd ? ' · ' + l.rushTd + ' TD' : '') : '—', l.rushTd ? 'mint' : '');
+    stats.lastChild.setAttribute('data-rush', String(l.rushYds));
+    stats.lastChild.setAttribute('data-rushes', String(l.rushes));
     var lineCard = C.card({ title: 'THE LINE', class: 'sum-line', body: [big, stats,
-      C.el('p', { class: 'small txt-grey center mt-1', text: 'LONG ' + (l.long || '—') + ' · FIRST DOWNS ' + l.firstDowns + ' · TURNOVERS ' + l.turnovers }) ] });
+      C.el('p', { class: 'small txt-grey center mt-1', text: 'LONG ' + (l.long || '—') + ' · FIRST DOWNS ' + l.firstDowns + ' · TURNOVERS ' + l.turnovers }),
+      C.el('p', { class: 'small txt-grey center', text: 'The rating is the passing line; scramble yards are rushing yards.' }) ] });
     el.appendChild(lineCard);
 
     // ── the best throw + the verdict ──
     var best = s.best;
-    el.appendChild(C.card({ title: 'THE BEST THROW', kind: best ? 'gold' : '', class: 'sum-best', body: [
+    el.appendChild(C.card({ title: best && best.rush ? 'THE BEST PLAY' : 'THE BEST THROW', kind: best ? 'gold' : '', class: 'sum-best', body: [
       C.el('p', { class: 'sum-best-text' + (best ? ' txt-gold' : ' txt-grey'), 'data-best': best ? '1' : '0', text: best ? best.text : 'No completion to speak of.' }),
       best && best.sub ? C.el('p', { class: 'small txt-grey', text: best.sub }) : null
     ] }));
@@ -73,7 +78,8 @@
       var row = C.el('div', { class: 'sum-row sum-row-' + rowKind(r), 'data-idx': String(r.idx), 'data-outcome': r.outcome });
       row.appendChild(C.el('span', { class: 'sum-row-kind small', text: (r.idx + 1) + ' · ' + (KIND_SHORT[r.kind] || r.kind) }));
       row.appendChild(C.el('span', { class: 'sum-row-sit small txt-grey', text: 'Q' + r.quarter + ' ' + (RTG.Play.downText ? RTG.Play.downText(r) : r.down + ' & ' + r.toGo) + ' · ' + (RTG.Play.spotText ? RTG.Play.spotText(r.yl) : r.yl) }));
-      row.appendChild(C.el('span', { class: 'sum-row-play small', text: (r.playName || r.play || '') + (r.targetName ? ' → ' + r.targetName : '') }));
+      var how = r.outcome === 'SCRAMBLE' ? ' · SCRAMBLE' : (r.touch && r.outcome !== 'SACK' && r.outcome !== 'RUN' && r.outcome !== 'THROWAWAY' ? ' · ' + r.touch : '');
+      row.appendChild(C.el('span', { class: 'sum-row-play small', text: (r.playName || r.play || '') + (r.targetName ? ' → ' + r.targetName : '') + how }));
       row.appendChild(C.el('span', { class: 'sum-row-res num', text: r.banner || r.text || r.outcome }));
       rows.appendChild(row);
     });
