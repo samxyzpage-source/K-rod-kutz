@@ -48,8 +48,8 @@ async function finish(page, shot, names) {
   return sc;
 }
 
-/** Make every ball that passes a defender's hands a sure touch (INT: picked · TIP: batted; the line can't reach it, so the
-    linebackers either: the pick is made downfield, by the secondary) — RTG.debug.tune, reset after. */
+/** Make every ball that passes a defender's hands a sure touch (INT: picked · TIP: batted; the defensive line and the
+    linebackers can't reach it, so the play is made downfield, by the secondary) — RTG.debug.tune, reset after. */
 async function sureContact(page, kind) {
   const knobs = [['reachR', 3], ['reach.DL', 0], ['reach.LB', 0], ['tip.base', 1], ['tip.near', 1], ['tip.hMin', 1], ['tip.blind', 1], ['tip.held', 1], ['tip.max', 1],
     ['int.touch', kind === 'INT' ? 1 : 0], ['int.high', 1], ['int.blind', 1], ['int.held', 1], ['int.contest', kind === 'INT' ? 5 : 0], ['int.alone', kind === 'INT' ? 1 : 0]];
