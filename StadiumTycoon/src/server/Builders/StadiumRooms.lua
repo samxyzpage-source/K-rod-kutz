@@ -24,21 +24,26 @@
 	                               light walls, ceiling panels) and both wing shells, the coach's
 	                               office door (glass) and the open archway to the showers
 	    2 Lockers                  16 lockers along the side walls, each with its own door (look:
-	                               whose locker it is) and a numbered jersey inside, helmets on top,
-	                               two padded benches facing the speech spot (TEAM TALK CAM +
-	                               TUNNEL CAM seats), the sports-drink cooler (use)
+	                               whose locker it is) and a numbered jersey + cleats inside (GUI on
+	                               the back panel), helmets on top, two padded benches facing the
+	                               speech spot (TEAM TALK CAM + TUNNEL CAM seats), the sports-drink
+	                               cooler (use)
 	    3 Coach's Office & Showers desk + coach's chair (seat), guest chair, a live STARTERS
-	                               whiteboard (roster, look), playbook library (look);
-	                               tiled showers with four heads on chrome pipes (look) + a cold tub
+	                               whiteboard (roster, look), playbook library (look), team rug,
+	                               live team-rating monitor, leather couch (seat); tiled showers with
+	                               four heads on chrome pipes (look) between partitions, a cold tub
+	                               (look), a teak bench and a towel shelf
 	    4 Logo & Hype Screens      the huge floor logo (look), a glowing ceiling halo over it, the
 	                               feature wall with the pre-game speech podium (use: podium, camera
 	                               on the speaker), live summary / record / season / gameday
-	                               screens, the trophy shelf (look: titles)
+	                               screens, the trophy shelf (look: titles), the hype mirror and the
+	                               game-day checklist (looks) beside the doors
 	  visitor_lockerroom (zone X[-80, 80] Z[-126, -35]) the corridor z -75..-63, the room
 	                    X[-18, 18] Z[-99, -76] (ceiling 11). Smaller and plainer on purpose.
 	    1 Tunnel & Walls           grey corridor with flat fluorescent tubes, the home team's
 	                               "WELCOME TO THE <team>" sign (live team, look), a HOME TEAM RULES
-	                               sign + visitors' plaque (looks), the room shell and a grey door
+	                               sign + visitors' plaque (looks), the room shell (a bulkhead closes
+	                               the corridor's higher ceiling) and a grey door
 	    2 Lockers                  8 open grey stalls with white away jerseys (some looks)
 	    3 Bench & Signs            squeaky bench (seat), an old TV on an AV cart with the live
 	                               score, a lukewarm soda cooler (use), a leaky ceiling + bucket,
@@ -395,14 +400,16 @@ local function welcomeSign(part, face, header, footer, name, colors)
 end
 
 --[[
-	The corridor shell from the bowl's tunnel (z0) to a room's front wall (z1): floor, walls,
-	ceiling. Returns nothing; decorations are added by the callers.
-	spec: z0, z1, wallColor, wallMaterial, floorColor, floorMaterial, ceilingColor
+	The corridor shell from the bowl's tunnel (z0) to a room's front wall (z1 = the wall's corridor
+	face, so no corridor face shares the wall's room face): floor, walls, ceiling. The floor runs on
+	to floorZ1 (under the doorway, up to the room's floor). Decorations are added by the callers.
+	spec: z0, z1, floorZ1, wallColor, wallMaterial, floorColor, floorMaterial, ceilingColor
 ]]
 local function corridorShell(ctx, spec)
 	local z0, z1 = spec.z0, spec.z1
 	local zLo, zHi = math.min(z0, z1), math.max(z0, z1)
-	box(ctx, "TunnelFloor", -TUNNEL_IN, 0, zLo, TUNNEL_IN, TUNNEL_FLOOR, zHi, spec.floorColor, spec.floorMaterial)
+	local f1 = spec.floorZ1 or z1
+	box(ctx, "TunnelFloor", -TUNNEL_IN, 0, math.min(z0, f1), TUNNEL_IN, TUNNEL_FLOOR, math.max(z0, f1), spec.floorColor, spec.floorMaterial)
 	for _, s in ipairs({ -1, 1 }) do
 		box(ctx, "TunnelWall", s * TUNNEL_IN, 0, zLo, s * TUNNEL_OUT, TUNNEL_CEIL, zHi, spec.wallColor, spec.wallMaterial)
 	end
@@ -421,6 +428,36 @@ local function corridorShell(ctx, spec)
 end
 
 --[[
+	A game jersey on its hanger with a pair of cleats below it, drawn on a locker bank's back-panel
+	GUI. faceW / faceH: the panel's face in studs; x: the locker's centre along the panel (local X;
+	the GUI's x runs toward local -X); w: the locker's width. o: JerseyColor, NumberColor.
+]]
+local function hangJersey(gui, faceW, faceH, x, w, number, o)
+	local function rect(name, color, cx, top, width, height, z)
+		local frame = addFrame(gui, name, color, (faceW / 2 - cx - width / 2) / faceW, top / faceH, width / faceW, height / faceH)
+		frame.ZIndex = z
+		return frame
+	end
+	rect("Hanger", CHROME, x, 0.4, 0.14, 0.55, 1)
+	rect("JerseySleeves", o.JerseyColor, x, 0.9, w - 0.5, 1.15, 2)
+	rect("JerseyBody", o.JerseyColor, x, 0.9, w - 1.3, 3.4, 2)
+	rect("JerseyCollar", o.NumberColor, x, 0.9, 0.8, 0.22, 3)
+	local numberW = w - 1.7
+	local label = addLabel(
+		gui,
+		"JerseyNumber",
+		number,
+		o.NumberColor,
+		(faceW / 2 - x - numberW / 2) / faceW,
+		1.75 / faceH,
+		numberW / faceW,
+		1.9 / faceH
+	)
+	label.ZIndex = 3
+	rect("Cleats", INK, x, faceH - 0.6, w - 1.2, 0.45, 1)
+end
+
+--[[
 	A bank of lockers against a wall, each with its own door (BuildUtil.Door, Object "Locker",
 	LookKey "locker:<n>": opening it shows whose locker it is), the jersey number on the door and
 	a numbered jersey hanging inside. `frame` is a plot-local CFrame at floor level on the wall face
@@ -435,7 +472,11 @@ local function lockerBank(ctx, frame, o)
 	local len = n * w
 	local plinth, doorH, header = 0.5, o.DoorHeight, 1.4
 	lblock(bank, frame, "LockerPlinth", Vector3.new(len, plinth, D), 0, 0, -D / 2, DARK_METAL, Enum.Material.Metal)
-	lblock(bank, frame, "LockerBack", Vector3.new(len, doorH, 0.3), 0, plinth, -0.15, o.BackColor, Enum.Material.Wood)
+	-- the back panel stops 0.1 short of the bank's ends (its end faces hide in the end panels); the
+	-- jerseys hang on it (one GUI for the whole bank: no extra parts)
+	local backLen = len - 0.2
+	local back = lblock(bank, frame, "LockerBack", Vector3.new(backLen, doorH, 0.3), 0, plinth, -0.15, o.BackColor, Enum.Material.Wood)
+	local hangers = faceGui(back, Enum.NormalId.Front, "JerseysGui", 20)
 	-- end panels (0.1 proud of the doors) on the open ends of the bank (o.Ends: -1 / 1 = local -X / +X)
 	for _, s in ipairs(o.Ends) do
 		lblock(
@@ -458,13 +499,7 @@ local function lockerBank(ctx, frame, o)
 		local number = o.First + i - 1
 		local jerseyNumber = HOME_NUMBERS[(number - 1) % #HOME_NUMBERS + 1]
 		local x = -len / 2 + (i - 0.5) * w
-		local jersey =
-			lblock(bank, frame, "Jersey", Vector3.new(w - 1.2, 3.2, 0.25), x, 3.6, -0.6, o.JerseyColor, Enum.Material.Fabric, DECOR)
-		sign(jersey, { Enum.NormalId.Front }, jerseyNumber, o.JerseyColor, nil, {
-			TextColor3 = o.NumberColor,
-			InsetX = 0.2,
-			InsetY = 0.18,
-		})
+		hangJersey(hangers, backLen, doorH, x, w, jerseyNumber, o)
 
 		local plateW = w - 0.8
 		addLabel(
@@ -600,7 +635,8 @@ function M.home_lockerroom(ctx)
 	local tunnel = BuildUtil.Child(ctx, "Tunnel")
 	corridorShell(tunnel, {
 		z0 = P.TunnelZ,
-		z1 = P.FrontZ1,
+		z1 = P.FrontZ0,
+		floorZ1 = P.FrontZ0 + 0.5, -- (the room's floor starts there)
 		wallColor = TUNNEL_WALL,
 		wallMaterial = wallMat,
 		floorColor = TUNNEL_RUBBER,
@@ -608,7 +644,19 @@ function M.home_lockerroom(ctx)
 		ceilingColor = TUNNEL_TOP,
 	})
 	-- the team runway continues the bowl's tunnel runway right up to the doors
-	box(tunnel, "TunnelRunway", -8, TUNNEL_FLOOR, P.TunnelZ, 8, TUNNEL_FLOOR + 0.06, P.FrontZ1, team.Primary, Enum.Material.Fabric, PAINT)
+	box(
+		tunnel,
+		"TunnelRunway",
+		-8,
+		TUNNEL_FLOOR,
+		P.TunnelZ,
+		8,
+		TUNNEL_FLOOR + 0.06,
+		P.FrontZ0 + 0.5,
+		team.Primary,
+		Enum.Material.Fabric,
+		PAINT
+	)
 	for _, s in ipairs({ -1, 1 }) do
 		-- the bowl tunnel's team LED strip runs on along both walls
 		local led = box(
@@ -751,7 +799,8 @@ function M.home_lockerroom(ctx)
 			0.24
 		)
 	end
-	local back = box(shell, "BackWall", -P.OutX, 0, P.BackZ, P.OutX, wallTop, P.BackOutZ, HOME_WALL, wallMat)
+	-- (between the side walls: no shared outer faces with them)
+	local back = box(shell, "BackWall", -P.InX, 0, P.BackZ, P.InX, wallTop, P.BackOutZ, HOME_WALL, wallMat)
 	box(shell, "Floor", -P.InX, 0, P.FrontZ0 + 0.5, P.InX, FLOOR_TOP, P.BackZ, carpet, Enum.Material.Carpet)
 	box(shell, "Ceiling", -P.InX, P.Ceil, P.FrontZ1, P.InX, P.Ceil + 0.4, P.BackZ, CEILING)
 	for _, s in ipairs({ -1, 1 }) do
@@ -864,7 +913,7 @@ function M.home_lockerroom(ctx)
 	lockerBank(lockers, CFrame.new(P.InX, FLOOR_TOP, LK.MidZ) * CFrame.Angles(0, math.pi / 2, 0), east)
 	-- a helmet on top of each bank, facemask toward the room
 	for _, h in ipairs({ { -1, 152.4 }, { 1, 171.6 } }) do
-		local turn = CFrame.Angles(0, -h[1] * math.pi / 2, 0)
+		local turn = CFrame.Angles(0, h[1] * math.pi / 2, 0) -- LookVector (facemask) toward the room
 		helmet(lockers, CFrame.new(h[1] * (P.InX - LK.Depth / 2), FLOOR_TOP + lockerH, h[2]) * turn, 1.8, team.Primary)
 	end
 
@@ -978,7 +1027,7 @@ function M.home_lockerroom(ctx)
 		board,
 		"Coach's Whiteboard",
 		"Today's starting lineup, in the coach's best handwriting. Train your players to raise their ratings!",
-		{ LookKey = "rating", At = Vector3.new(4.5, -1.6, -1.5), Distance = 7 }
+		{ LookKey = "rating", At = Vector3.new(-4.5, -1.6, -1.5), Distance = 7 }
 	)
 	-- the playbook library on the office's front wall
 	local library = box(office, "PlaybookShelf", -43.4, FLOOR_TOP, P.FrontZ1, -36.4, 7.6, P.FrontZ1 + 1, WOOD, Enum.Material.Wood)
@@ -995,6 +1044,39 @@ function M.home_lockerroom(ctx)
 		"Every play your team has ever run, in thick binders. The secret trick plays are on the top shelf.",
 		{ At = Vector3.new(0, -0.6, 1.4), Distance = 7 }
 	)
+	-- a team rug under the desk, the coach's monitor (live team rating) and a leather couch
+	box(
+		office,
+		"OfficeRug",
+		-43.6,
+		FLOOR_TOP,
+		145.6,
+		-31.8,
+		FLOOR_TOP + 0.04,
+		156.4,
+		shade(team.Primary, 0.75),
+		Enum.Material.Fabric,
+		PAINT
+	)
+	local monitor = box(office, "CoachMonitor", -37.25, 3.3, 149.2, -36.95, 5.5, 152.8, SCREEN_BLACK, Enum.Material.SmoothPlastic, DECOR)
+	liveScreen(monitor, Enum.NormalId.Left, "rating", "TEAM RATING 50", { TextColor3 = accent, PixelsPerStud = 30 })
+	-- (the couch stands under the whiteboard, away from the lockers behind the east wall, so its
+	-- prompt never shows through that wall; sitters face the desk side of the office)
+	local couchX0, couchX1, couchZ0, couchZ1 = -37.4, -29.4, P.WingZ - 2.4, P.WingZ - 0.6
+	local leather = shade(team.Primary, 0.6)
+	box(office, "CouchBase", couchX0, FLOOR_TOP, couchZ0, couchX1, 1.2, couchZ1, WOOD_DARK, Enum.Material.Wood)
+	box(office, "CouchBack", couchX0, FLOOR_TOP, couchZ1, couchX1, 2.9, P.WingZ, leather, Enum.Material.Leather)
+	for _, x in ipairs({ couchX0 - 0.6, couchX1 }) do
+		box(office, "CouchArm", x, FLOOR_TOP, couchZ0, x + 0.6, 2.4, P.WingZ, leather, Enum.Material.Leather)
+	end
+	BuildUtil.Seat(office, {
+		Name = "Couch",
+		Size = Vector3.new(couchX1 - couchX0, 0.6, couchZ1 - couchZ0),
+		CFrame = CFrame.new((couchX0 + couchX1) / 2, 1.5, (couchZ0 + couchZ1) / 2),
+		Color = leather,
+		Material = Enum.Material.Leather,
+		Object = "Coach's Couch",
+	})
 
 	-- showers: chrome pipes along the east + back walls with four heads, a cold tub, towels
 	local showers = BuildUtil.Child(ctx, "Showers")
@@ -1055,6 +1137,24 @@ function M.home_lockerroom(ctx)
 		"Brrr! An ice bath for sore muscles after a big game. The bravest players jump in all the way.",
 		{ At = Vector3.new(0.6, 0, -3.6), Distance = 8 } -- (cylinder space: local X is up)
 	)
+	-- tiled privacy partitions between the shower heads
+	for _, w in ipairs({
+		{ P.WingX - 3.4, 148.85, P.WingX, 149.15 },
+		{ P.WingX - 3.4, 155.85, P.WingX, 156.15 },
+		{ 37.1, P.WingZ - 3.4, 37.4, P.WingZ },
+	}) do
+		box(showers, "ShowerPartition", w[1], FLOOR_TOP, w[2], w[3], 7.4, w[4], TILE, Enum.Material.CeramicTiles)
+	end
+	-- a teak bench along the front wall (sitters face the showers)
+	box(showers, "ShowerBenchBase", 33.5, FLOOR_TOP, P.FrontZ1 + 0.3, 39.5, 1.4, P.FrontZ1 + 1.3, TILE, Enum.Material.CeramicTiles)
+	BuildUtil.Seat(showers, {
+		Name = "ShowerBench",
+		Size = Vector3.new(7, 0.4, 1.5),
+		CFrame = CFrame.new(36.5, 1.6, P.FrontZ1 + 0.85) * CFrame.Angles(0, math.pi, 0),
+		Color = WOOD,
+		Material = Enum.Material.WoodPlanks,
+		NoPrompt = true,
+	})
 	local towels = box(showers, "TowelShelf", 28.2, FLOOR_TOP, P.WingZ - 1.4, 33.2, 3.4, P.WingZ, WOOD, Enum.Material.Wood)
 	local towelGui = faceGui(towels, Enum.NormalId.Front, "TowelGui", 16)
 	for i = 0, 3 do
@@ -1196,6 +1296,54 @@ function M.home_lockerroom(ctx)
 		"Every championship your team wins earns a spot up here. Plenty of room for more!",
 		{ LookKey = "titles", At = Vector3.new(0, -0.6, -1.4), Distance = 8 }
 	)
+
+	-- on the front wall (inside, either side of the doors): the hype mirror players check on their
+	-- way out, and the game-day checklist
+	local mirrorFrame = box(hype, "MirrorFrame", 13.6, 1.2, P.FrontZ1, 20.4, 11.2, P.FrontZ1 + 0.15, team.Secondary)
+	local mirrorHead = faceGui(mirrorFrame, Enum.NormalId.Back, "MirrorGui", 20)
+	addLabel(mirrorHead, "MirrorMotto", "LOOK GOOD. PLAY GOOD.", textColorOn(team.Secondary, { team.Primary, INK }), 0.06, 0.02, 0.88, 0.12)
+	local mirror =
+		box(hype, "HypeMirror", 14, 1.6, P.FrontZ1 + 0.15, 20, 9.6, P.FrontZ1 + 0.25, Color3.fromRGB(196, 214, 226), Enum.Material.Glass, {
+			Reflectance = 0.35,
+			CanCollide = false,
+		})
+	BuildUtil.Look(
+		mirror,
+		"Hype Mirror",
+		"Eye black on? Chinstrap tight? Look yourself in the eye and say it: 'Today is OUR day!'",
+		{ LookKey = "team", At = Vector3.new(0, -1.2, 1.2), Distance = 8 }
+	)
+	local checklist = box(hype, "ChecklistBoard", -20.5, 3.4, P.FrontZ1, -11.5, 9.4, P.FrontZ1 + 0.2, WHITEBOARD)
+	local listGui = faceGui(checklist, Enum.NormalId.Back, "ChecklistGui", 20)
+	addFrame(listGui, "ChecklistHeader", team.Primary, 0, 0, 1, 0.2)
+	addLabel(
+		listGui,
+		"ChecklistTitle",
+		"GAME-DAY CHECKLIST",
+		textColorOn(team.Primary, { team.Trim, team.Secondary }),
+		0.05,
+		0.03,
+		0.9,
+		0.14
+	)
+	local items = addLabel(
+		listGui,
+		"ChecklistItems",
+		"[X] TAPE ANKLES\n[X] PADS + HELMET\n[X] SLAP THE SIGN\n[  ] WIN THE GAME",
+		MARKER_BLUE,
+		0.08,
+		0.25,
+		0.84,
+		0.7,
+		Enum.Font.GothamBold
+	)
+	items.TextXAlignment = Enum.TextXAlignment.Left
+	BuildUtil.Look(
+		checklist,
+		"Game-Day Checklist",
+		"Ankles taped, pads on, sign slapped... just one box left to tick. Go out there and win it!",
+		{ LookKey = "season", At = Vector3.new(0, -1.5, 1.4), Distance = 8 }
+	)
 end
 
 ---------------------------------------------------------------------------------------------
@@ -1214,7 +1362,8 @@ function M.visitor_lockerroom(ctx)
 	local tunnel = BuildUtil.Child(ctx, "Tunnel")
 	corridorShell(tunnel, {
 		z0 = V.TunnelZ,
-		z1 = V.FrontZ0,
+		z1 = V.FrontZ1,
+		floorZ1 = V.FrontZ1 - 0.5, -- (the room's floor starts there)
 		wallColor = VISITOR_TUNNEL,
 		wallMaterial = Enum.Material.Brick,
 		floorColor = VISITOR_CONCRETE,
@@ -1277,8 +1426,10 @@ function M.visitor_lockerroom(ctx)
 	box(shell, "FrontWall", -V.OutX, 0, V.FrontZ0, -V.DoorHalf, wallTop, V.FrontZ1, VISITOR_WALL, wallMat)
 	box(shell, "FrontWall", V.DoorHalf, 0, V.FrontZ0, V.OutX, wallTop, V.FrontZ1, VISITOR_WALL, wallMat)
 	local lintel = box(shell, "DoorLintel", -V.DoorHalf, V.DoorTop, V.FrontZ0, V.DoorHalf, wallTop, V.FrontZ1, VISITOR_WALL, wallMat)
+	-- the corridor ceiling is higher than the room's: close the slot above the front wall
+	box(shell, "Bulkhead", -TUNNEL_OUT, wallTop, V.FrontZ0, TUNNEL_OUT, TUNNEL_CEIL + 0.4, V.FrontZ1, VISITOR_WALL, wallMat)
 	for _, s in ipairs({ -1, 1 }) do
-		box(shell, "SideWall", s * V.InX, 0, V.BackOutZ, s * V.OutX, wallTop, V.FrontZ1, VISITOR_WALL, wallMat)
+		box(shell, "SideWall", s * V.InX, 0, V.BackOutZ, s * V.OutX, wallTop, V.FrontZ0, VISITOR_WALL, wallMat)
 	end
 	box(shell, "BackWall", -V.InX, 0, V.BackOutZ, V.InX, wallTop, V.BackZ, VISITOR_WALL, wallMat)
 	box(shell, "Floor", -V.InX, 0, V.BackZ, V.InX, FLOOR_TOP, V.FrontZ1 - 0.5, VISITOR_FLOOR, Enum.Material.Concrete)
