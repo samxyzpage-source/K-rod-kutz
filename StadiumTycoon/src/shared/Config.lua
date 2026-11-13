@@ -32,6 +32,14 @@ Config.NightStartsAt = 18 -- ClockTime when stadium lights switch on
 Config.NightEndsAt = 6.5 -- ClockTime when stadium lights switch off
 Config.BuildAnimation = true
 Config.RespawnAtPlot = true -- owners respawn at their own stadium
+Config.ShowGuideBeam = true -- a glowing beam points to your next buy button
+
+-- Sounds (client only). Set Id = "" to turn one off, or paste your own "rbxassetid://123..." ids.
+Config.Sounds = {
+	Purchase = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.6, Speed = 1 },
+	Collect = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.35, Speed = 1.5 },
+	Error = { Id = "", Volume = 0.4, Speed = 0.8 },
+}
 
 -- Team colours: plot N uses palette N -------------------------------------------------------
 Config.TeamColors = {
