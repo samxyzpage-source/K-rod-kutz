@@ -17,7 +17,8 @@ local LiveScreens = {}
 
 local plotManager = nil
 local tycoonsFolder = nil
-local labelsByPlot = {} -- [plot] = { TextLabel, ... }
+local labelsByPlot = {} -- [plot] = { TextLabel, ... } in the built steps
+local baseLabels = {} -- [plot] = { TextLabel, ... } in the always-present plot base (HQ shell signs)
 
 local function clock(seconds)
 	seconds = math.max(0, math.floor(seconds))
@@ -105,11 +106,18 @@ function LiveScreens.Texts(plot)
 end
 
 local function refreshPlot(plot)
-	local labels = labelsByPlot[plot]
-	if not labels or #labels == 0 or not plot.Owner then
+	local labels = labelsByPlot[plot] or {}
+	local fixed = baseLabels[plot] or {}
+	if not plot.Owner or (#labels == 0 and #fixed == 0) then
 		return
 	end
 	local texts = LiveScreens.Texts(plot)
+	for _, label in ipairs(fixed) do
+		local text = texts[label:GetAttribute("Live")]
+		if text and label.Text ~= text then
+			label.Text = text
+		end
+	end
 	for index = #labels, 1, -1 do
 		local label = labels[index]
 		if label.Parent == nil or not label:IsDescendantOf(plot.Model) then
@@ -141,14 +149,34 @@ function LiveScreens.Refresh()
 	end
 end
 
+-- Finds the live labels of the plot base (built once per plot, before anyone owns it).
+function LiveScreens.TrackBase(plot)
+	local list = {}
+	for _, descendant in ipairs(plot.Model:GetDescendants()) do
+		if descendant:IsA("TextLabel") and descendant:GetAttribute("Live") ~= nil then
+			if descendant:GetAttribute("LiveDefault") == nil then
+				descendant:SetAttribute("LiveDefault", descendant.Text)
+			end
+			table.insert(list, descendant)
+		end
+	end
+	baseLabels[plot] = list
+end
+
 function LiveScreens.Init(manager, folder)
 	plotManager = manager
 	tycoonsFolder = folder
+	for _, plot in ipairs(plotManager.GetPlots()) do
+		LiveScreens.TrackBase(plot)
+	end
 	plotManager.OnAnyBuilt(function(plot, _item, model)
 		LiveScreens.Track(plot, model)
 	end)
 	plotManager.OnPlotReleased(function(plot)
 		labelsByPlot[plot] = nil
+		for _, label in ipairs(baseLabels[plot] or {}) do
+			label.Text = label:GetAttribute("LiveDefault") or ""
+		end
 		plot.Model:SetAttribute("ArcadeHigh", nil)
 		plot.Model:SetAttribute("ArcadeHighName", nil)
 		plot.Model:SetAttribute("RallyBest", nil)

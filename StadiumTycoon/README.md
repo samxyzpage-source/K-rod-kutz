@@ -29,7 +29,11 @@ and championships.
 | --- | --- | --- |
 | ![Game day crowd and the full bowl](docs/preview-gameday.png) | ![Team HQ rooms seen from above](docs/preview-hq.png) | ![Practice field, indoor dome, golf carts and Hall of Fame](docs/preview-campus.png) |
 
-*Previews are rendered offline from the real build code (tools/), so signs and text aren't shown.*
+| Inside the press box | Player lounge (arcade, ping-pong, pool) | HQ locker room |
+| --- | --- | --- |
+| ![Press box desks and camera chairs looking down on the field](docs/preview-pressbox.png) | ![Player lounge with arcade cabinets, ping-pong, pool and foosball](docs/preview-lounge.png) | ![HQ locker room with lockers that open](docs/preview-lockers.png) |
+
+*Previews are rendered offline from the real build code (tools/), so signs, screens and text aren't shown.*
 
 ## Versions
 
@@ -114,7 +118,7 @@ How saving stays safe:
 | --- | --- |
 | Press E to look | Prompts on interesting objects (tap them on a phone) show a short description. Some show live info from your team: lockers show your players' names, trophy cases show your championships, the Draft Board shows the next pick's price. |
 | Doors | Every room has a door: press E to open it. Doors close again by themselves. |
-| Elevators | Ride up to the press box, the luxury suites and the HQ rooftop terrace (and back down). |
+| Elevators | Ride up to the press box, the luxury suites, the upper decks, the scoreboard catwalk, the practice-field coach tower and the HQ rooftop deck (and back down). |
 | Seats | Sit on chairs, couches and benches. Press-box, broadcast-booth and other camera seats switch to a TV view of the field with a LIVE badge and your score. Jump to stand up. |
 | Weight room | "Lift weights": tap fast to push the bar. Counts workouts and pays a little. |
 | Lounge | Arcade "Pigskin Catch" (catch falling footballs) and ping-pong rallies. High scores show on the machines. |
@@ -238,7 +242,7 @@ These tools are optional. You only need them to edit the code outside Studio.
   * `node tools/preview/shoot.js tools/out/parts.json tools/out` renders it to PNG images
     (run `npm install` in `tools/preview` first; needs Playwright + Chromium). `--prompts` marks
     every interaction, `--noroof` hides roofs and `--cam=x,y,z:tx,ty,tz` renders any close-up.
-  * `lune run tools/test_server.luau` runs about 300 checks of the server logic and the client
+  * `lune run tools/test_server.luau` runs about 370 checks of the server logic and the client
     scripts against a fake Roblox engine. It covers:
     * claiming, step-by-step buying, the vault and auto-collect
     * golf carts and the drive controller

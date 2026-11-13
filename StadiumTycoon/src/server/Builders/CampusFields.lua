@@ -1277,7 +1277,14 @@ local function coachTower(ctx, cx, cz, team, text, fieldCentre)
 			metal
 		)
 	end
-	BuildUtil.Box(ctx, "TowerDeck", Vector3.new(7.6, 0.6, 7.6), Vector3.new(cx, deckY + 0.3, cz), DARK_METAL, Enum.Material.DiamondPlate)
+	local deck = BuildUtil.Box(
+		ctx,
+		"TowerDeck",
+		Vector3.new(7.6, 0.6, 7.6),
+		Vector3.new(cx, deckY + 0.3, cz),
+		DARK_METAL,
+		Enum.Material.DiamondPlate
+	)
 	local floorY = deckY + 0.6
 	local panel = BuildUtil.Box(
 		ctx,
@@ -1305,15 +1312,17 @@ local function coachTower(ctx, cx, cz, team, text, fieldCentre)
 	BuildUtil.Box(ctx, "TowerRail", Vector3.new(0.3, 0.3, 7.3), Vector3.new(cx - 3.65, railY, cz), STEEL_WHITE, metal)
 	BuildUtil.Box(ctx, "TowerRail", Vector3.new(0.3, 0.3, 3.4), Vector3.new(cx + 3.65, railY, cz - 1.95), STEEL_WHITE, metal)
 	-- ladder up the +X face (rungs 1.2 apart, so characters climb it), arriving at the open back half
-	-- of that side, with the top rung level with the deck
+	-- of that side, with the top rung level with the deck. The handrails stand 2.2 apart (inside) so a
+	-- character fits between them when stepping off onto the deck.
 	local ladderX = cx + leg + 0.6
 	local ladderZ = cz + 1.6
+	local railOffset = 1.25
 	for _, s in ipairs({ -1, 1 }) do
 		local rail = BuildUtil.Block(
 			ctx,
 			"LadderRail",
 			Vector3.new(0.3, 16.6, 0.3),
-			Vector3.new(ladderX, 0, ladderZ + s * 1),
+			Vector3.new(ladderX, 0, ladderZ + s * railOffset),
 			STEEL_WHITE,
 			metal,
 			nil,
@@ -1324,7 +1333,15 @@ local function coachTower(ctx, cx, cz, team, text, fieldCentre)
 				rail,
 				"Coach Tower",
 				"Climb the ladder to the head coach's tower! Up top there's a chair with the best view of practice.",
-				{ At = Vector3.new(0.9, -4.3, 1), Distance = 8 }
+				{ At = Vector3.new(0.9, -4.3, railOffset), Distance = 8 }
+			)
+		else
+			-- (a quick way up too, in case climbing is fiddly - e.g. on a phone)
+			BuildUtil.Elevator(
+				ctx,
+				rail,
+				CFrame.new(cx + 1.6, deckY + 0.6, cz + 1.8) * CFrame.Angles(0, math.rad(90), 0),
+				{ Action = "Climb up", Object = "Coach Tower", Label = "COACH TOWER", At = Vector3.new(0.9, -6.5, -railOffset) }
 			)
 		end
 	end
@@ -1332,12 +1349,18 @@ local function coachTower(ctx, cx, cz, team, text, fieldCentre)
 		BuildUtil.Box(
 			ctx,
 			"LadderStep",
-			Vector3.new(0.25, 0.25, 1.8),
+			Vector3.new(0.25, 0.25, 2 * railOffset),
 			Vector3.new(ladderX, TURF_TOP + i * 1.2, ladderZ),
 			STEEL_WHITE,
 			metal
 		)
 	end
+	BuildUtil.Elevator(
+		ctx,
+		deck,
+		CFrame.new(ladderX + 2.4, TURF_TOP, ladderZ) * CFrame.Angles(0, math.rad(-90), 0),
+		{ Action = "Climb down", Object = "Coach Tower", Label = "PRACTICE FIELD", Distance = 7 }
+	)
 	-- video camera on a tripod, aimed at the field
 	local camX, camZ = cx - 1.6, cz - 1.8
 	local headY = floorY + 3.4

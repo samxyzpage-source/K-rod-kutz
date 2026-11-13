@@ -1422,6 +1422,20 @@ local function runTests()
 		check(liveLabels.record.Text == "RECORD " .. alice:GetAttribute("Record"), "record screen")
 		check(liveLabels.owner.Text == "OWNER: ALICE" and liveLabels.team.Text == teamName, "owner + team screens")
 		check(liveLabels.gameday.Text ~= "", "game day screen: " .. liveLabels.gameday.Text)
+		local baseLive = {}
+		for _, d in ipairs(plotModel(1).Base:GetDescendants()) do
+			if d:IsA("TextLabel") and d:GetAttribute("Live") ~= nil then
+				table.insert(baseLive, d)
+			end
+		end
+		LiveScreens.Refresh()
+		local baseOk = #baseLive > 0
+		for _, label in ipairs(baseLive) do
+			if label:GetAttribute("Live") == "team" and label.Text ~= teamName then
+				baseOk = false
+			end
+		end
+		check(baseOk, ("the HQ building's own signs show the team (%d live signs)"):format(#baseLive))
 		alicePlot.HomeScore = 21
 		alicePlot.AwayScore = 14
 		LiveScreens.Refresh()
@@ -1528,6 +1542,14 @@ local function runTests()
 	removePlayer(alice)
 	PlotManager.Release(alice)
 	PlayerData.Release(alice)
+	task.wait(0.05)
+	local baseReset = true
+	for _, d in ipairs(plotModel(1).Base:GetDescendants()) do
+		if d:IsA("TextLabel") and d:GetAttribute("Live") ~= nil and d.Text ~= d:GetAttribute("LiveDefault") then
+			baseReset = false
+		end
+	end
+	check(baseReset, "the HQ signs go back to their placeholders when the plot is freed")
 	local saved = dataStore.data.Player_1001
 	check(
 		saved ~= nil and saved.Cash == cashAtLeave + vaultAtLeave,

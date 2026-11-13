@@ -708,7 +708,7 @@ local function buildWalls(ctx, S, team)
 			name = "WestDoors",
 			x = (S.x0 + S.ix0) / 2,
 			title = "West Doors",
-			info = "The way out to the cart road: hop in a golf cart or walk to the practice field.",
+			info = "The way out to the cart road on the west edge of your campus. Follow it to the practice field behind the HQ!",
 		},
 		{
 			name = "EastDoors",
@@ -1943,7 +1943,7 @@ local function buildSkyDeck(ctx, team)
 		northTeleZ,
 		Vector3.new(150, 15, 475),
 		"Campus Telescope",
-		"That big curved roof is the Indoor Practice Dome. Look right for the Hall of Fame and the golf carts on the back road!"
+		"That big curved roof is the Indoor Practice Dome. Turn left to spot the golf cart garage and the Hall of Fame behind it!"
 	)
 	local flat = Vector3.new(fieldDir.X, 0, fieldDir.Z).Unit
 	local stool = Vector3.new(79.5, 0, northTeleZ) - flat * 2.4

@@ -502,7 +502,7 @@ end
 	An elevator (or staircase) call button: rides the player to `target`.
 	target: local CFrame where the player arrives (standing on a floor there; they face its -Z)
 	opts: Action (default "Ride the elevator"), Object (default "Elevator"),
-	      Label (shown when you arrive, e.g. "PRESS LEVEL"), Distance
+	      Label (shown when you arrive, e.g. "PRESS LEVEL"), Distance, At
 ]]
 function BuildUtil.Elevator(ctx, part, target, opts)
 	opts = opts or {}
@@ -511,6 +511,7 @@ function BuildUtil.Elevator(ctx, part, target, opts)
 		Action = opts.Action or "Ride the elevator",
 		Object = opts.Object or "Elevator",
 		Distance = opts.Distance,
+		At = opts.At,
 		Attributes = { Target = ctx.origin * target, Label = opts.Label or "" },
 	})
 end
