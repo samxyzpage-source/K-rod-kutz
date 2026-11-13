@@ -116,6 +116,17 @@ end
 ---------------------------------------------------------------------------------------------
 -- Coaching staff
 ---------------------------------------------------------------------------------------------
+-- What the staff say when you look at them (fictional people, fun facts)
+local COACH_INFO = {
+	"Calls the plays on offense. Says the best play is the one the defense isn't ready for.",
+	"Runs the defense. Has watched so much film he dreams in X's and O's.",
+	"Coaches the kickers, punters and returners. Ask him about the 55-yard kick spot on your field!",
+}
+local TRAINER_INFO = {
+	"Tapes ankles, checks injuries and keeps the players on the field. Better staff = a higher team rating.",
+	"Runs the weight room. Lift weights in your HQ to make him proud.",
+	"Checks every player before game day. The red cross on his shirt means business.",
+}
 local COACHES = {
 	{ Title = "OFFENSIVE COORDINATOR", Short = "OFFENSE" },
 	{ Title = "DEFENSIVE COORDINATOR", Short = "DEFENSE" },
@@ -126,7 +137,11 @@ function Staff.staff_coaches(ctx)
 	local spots = ctx.config.Layout.StaffSpots.staff_coaches
 	for index, info in ipairs(COACHES) do
 		BuildUtil.Stage(ctx, index)
-		local _, at = person(ctx, spots[index], ctx.colors.Primary, SKIN[(index % #SKIN) + 1], info.Title)
+		local torso, at = person(ctx, spots[index], ctx.colors.Primary, SKIN[(index % #SKIN) + 1], info.Title)
+		BuildUtil.Look(torso, info.Title, COACH_INFO[index] .. " Each coach adds +3 to your team rating.", {
+			Action = "Talk",
+			LookKey = "rating",
+		})
 		cap(ctx, at, ctx.colors.Secondary)
 		headset(ctx, at)
 		clipboard(ctx, at)
@@ -152,7 +167,11 @@ function Staff.staff_trainers(ctx)
 	for index, title in ipairs(TRAINERS) do
 		BuildUtil.Stage(ctx, index)
 		local shirt = index == 2 and ctx.colors.Secondary or WHITE
-		local _, at = person(ctx, spots[index], shirt, SKIN[((index + 2) % #SKIN) + 1], title)
+		local torso, at = person(ctx, spots[index], shirt, SKIN[((index + 2) % #SKIN) + 1], title)
+		BuildUtil.Look(torso, title, TRAINER_INFO[index] .. " Each one adds +2 to your team rating.", {
+			Action = "Talk",
+			LookKey = "rating",
+		})
 		if index == 1 then
 			-- trainer: fanny pack + tape roll
 			BuildUtil.Part(
@@ -218,9 +237,9 @@ end
 -- Food vendors (with carts)
 ---------------------------------------------------------------------------------------------
 local VENDORS = {
-	{ Title = "HOT DOG VENDOR", Food = "HOT DOGS", Color = Color3.fromRGB(220, 60, 40) },
-	{ Title = "POPCORN VENDOR", Food = "POPCORN", Color = Color3.fromRGB(240, 200, 40) },
-	{ Title = "DRINKS VENDOR", Food = "COLD DRINKS", Color = Color3.fromRGB(40, 140, 220) },
+	{ Title = "HOT DOG VENDOR", Food = "HOT DOGS", Color = Color3.fromRGB(220, 60, 40), Use = "hotdog" },
+	{ Title = "POPCORN VENDOR", Food = "POPCORN", Color = Color3.fromRGB(240, 200, 40), Use = "popcorn" },
+	{ Title = "DRINKS VENDOR", Food = "COLD DRINKS", Color = Color3.fromRGB(40, 140, 220), Use = "soda" },
 }
 
 function Staff.staff_vendors(ctx)
@@ -228,7 +247,8 @@ function Staff.staff_vendors(ctx)
 	for index, info in ipairs(VENDORS) do
 		BuildUtil.Stage(ctx, index)
 		local feet = spots[index]
-		local _, at = person(ctx, feet + Vector3.new(2.6, 0, 0), WHITE, SKIN[((index + 1) % #SKIN) + 1], info.Title)
+		local torso, at = person(ctx, feet + Vector3.new(2.6, 0, 0), WHITE, SKIN[((index + 1) % #SKIN) + 1], info.Title)
+		BuildUtil.Use(ctx, torso, info.Use, { Object = info.Title, Distance = 8 })
 		cap(ctx, at, info.Color)
 		-- apron stripe
 		BuildUtil.Part(

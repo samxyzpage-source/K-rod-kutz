@@ -295,6 +295,10 @@ L.Zones = {
 	hq_trainingroom = { MinX = -100, MaxX = -50, MinZ = 278, MaxZ = 358, MaxY = 26 },
 	hq_filmroom = { MinX = -50, MaxX = 0, MinZ = 278, MaxZ = 358, MaxY = 26 },
 	hq_cafeteria = { MinX = 0, MaxX = 98, MinZ = 278, MaxZ = 358, MaxY = 26 },
+	-- stadium press level (walk-in, reached by elevators)
+	pressbox = { MinX = -44, MaxX = 44, MinZ = 143, MaxZ = 171, MaxY = 50 },
+	suites = { MinX = -120, MaxX = 120, MinZ = -104, MaxZ = -83, MaxY = 40 },
+	broadcast_booth = { MinX = -24, MaxX = 24, MinZ = -96, MaxZ = -66, MaxY = 40 },
 	-- outdoors
 	hall_of_fame = { MinX = 120, MaxX = 270, MinZ = 200, MaxZ = 320, MaxY = 40 },
 	golf_carts = { MinX = 128, MaxX = 270, MinZ = 328, MaxZ = 368, MaxY = 20 },

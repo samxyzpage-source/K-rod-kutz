@@ -280,6 +280,253 @@ function BuildUtil.Light(part, className, props)
 	return light
 end
 
+---------------------------------------------------------------------------------------------
+-- INTERACTIONS
+-- Everything a player can interact with gets a ProximityPrompt named "Interact" ("Press E",
+-- or tap on a phone). Its "Kind" attribute says what it does - see src/shared/Interact.lua.
+-- The server (Interactions.lua) and client (Interact.client.lua) do the rest, so builders only
+-- describe WHAT can be done, here, with these helpers. Prompts belong to the step of their part.
+---------------------------------------------------------------------------------------------
+
+--[[
+	Adds an "Interact" prompt to `host` (a part, or an Attachment).
+	spec: Kind ("look" | "door" | "seat" | "elevator" | "use"), Action (button text, e.g. "Look"),
+	      Object (small text above it, e.g. "Draft Board"), Distance (default 10), Hold (seconds),
+	      At (Vector3 offset in the part's own space: the prompt shows there instead of the centre),
+	      Attributes (table copied onto the prompt)
+]]
+function BuildUtil.Prompt(host, spec)
+	if spec.At and host:IsA("BasePart") then
+		local attachment = Instance.new("Attachment")
+		attachment.Name = "PromptAt"
+		attachment.Position = spec.At
+		attachment.Parent = host
+		host = attachment
+	end
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "Interact"
+	prompt.ActionText = spec.Action or ""
+	prompt.ObjectText = spec.Object or ""
+	prompt.HoldDuration = spec.Hold or 0
+	prompt.MaxActivationDistance = spec.Distance or 10
+	prompt.RequiresLineOfSight = false
+	prompt.KeyboardKeyCode = Enum.KeyCode.E
+	prompt:SetAttribute("Kind", spec.Kind)
+	for key, value in pairs(spec.Attributes or {}) do
+		prompt:SetAttribute(key, value)
+	end
+	prompt.Parent = host
+	return prompt
+end
+
+--[[
+	"Press E to look": shows a card with `title` and `info` (one or two short sentences).
+	opts: LookKey (adds live info from the owner's team, see Interact.LookKeys, e.g. "roster:QB",
+	      "locker:3", "record"), Action (default "Look"), Distance, At
+]]
+function BuildUtil.Look(part, title, info, opts)
+	opts = opts or {}
+	return BuildUtil.Prompt(part, {
+		Kind = "look",
+		Action = opts.Action or "Look",
+		Object = title,
+		Distance = opts.Distance,
+		At = opts.At,
+		Attributes = { Title = title, Info = info or "", LookKey = opts.LookKey },
+	})
+end
+
+--[[
+	A "use" action (Interact.Uses): use = "lift" | "arcade" | "pingpong" | "podium" (mini-games)
+	or "tray" | "smoothie" | "hotdog" | "popcorn" | "soda" | "sportsdrink" | "foamfinger" (items).
+	opts: Action (button text; default from Interact.Uses), Object, Title, Info, Distance, At,
+	      Camera = { From = Vector3, To = Vector3, Fov = number } (local; podium / arcade view)
+]]
+function BuildUtil.Use(ctx, part, use, opts)
+	opts = opts or {}
+	local attributes = { Use = use, Title = opts.Title, Info = opts.Info }
+	if opts.Camera then
+		attributes.CameraCFrame = ctx.origin * CFrame.lookAt(opts.Camera.From, opts.Camera.To)
+		attributes.CameraFov = opts.Camera.Fov or 50
+	end
+	return BuildUtil.Prompt(part, {
+		Kind = "use",
+		Action = opts.Action,
+		Object = opts.Object or "",
+		Distance = opts.Distance,
+		At = opts.At,
+		Attributes = attributes,
+	})
+end
+
+--[[
+	A door that opens with a prompt (and closes again by itself).
+	props:
+	  Name       model name (default "Door")
+	  Size       size of the whole closed door: X = width, Y = height, Z = thickness
+	  CFrame     local CFrame of the closed door's centre (its X axis runs across the doorway)
+	  Double     two leaves that open from the middle
+	  Slide      slides sideways (elevator / glass doors) instead of swinging on hinges
+	  Swing      hinge angle in degrees (default 95). Leaves swing toward the door's FRONT (its -Z,
+	             the LookVector side); use a negative number to swing toward its back (+Z)
+	  Hinge      "Left" or "Right" (single swinging door: the hinge side, in the door's own X)
+	  Color, Material, Transparency  of the leaves
+	  Window     true = a glass panel in each leaf
+	  Object     prompt label (default "Door"); Info / Title / LookKey for a description card
+	  AutoClose  seconds before it closes again (default 6, 0 = stays open)
+	  Distance   prompt distance (default 10)
+	Returns the door Model. Parts of the door (handles, windows) move together with their leaf.
+]]
+function BuildUtil.Door(ctx, props)
+	local doorCtx, model = BuildUtil.Child(ctx, props.Name or "Door")
+	local size = props.Size
+	local closed = props.CFrame
+	local leaves = {}
+	if props.Double then
+		local half = size.X / 2
+		leaves[1] = { offset = -half / 2, width = half, hingeX = -half / 2, sign = 1 }
+		leaves[2] = { offset = half / 2, width = half, hingeX = half / 2, sign = -1 }
+	else
+		local right = props.Hinge == "Right"
+		leaves[1] = { offset = 0, width = size.X, hingeX = right and size.X / 2 or -size.X / 2, sign = right and -1 or 1 }
+	end
+	local swing = props.Swing or 95
+	for index, leaf in ipairs(leaves) do
+		local leafCFrame = closed * CFrame.new(leaf.offset, 0, 0)
+		local part = BuildUtil.Part(doorCtx, {
+			Name = "DoorLeaf",
+			Size = Vector3.new(leaf.width - 0.1, size.Y, size.Z),
+			CFrame = leafCFrame,
+			Color = props.Color or Color3.fromRGB(120, 85, 55),
+			Material = props.Material or Enum.Material.Wood,
+			Transparency = props.Transparency,
+		})
+		local handleX = leaf.sign * (leaf.width / 2 - 0.5) -- on the side away from the hinge
+		if props.Slide then
+			handleX = 0
+		end
+		local handle = BuildUtil.Part(doorCtx, {
+			Name = "DoorHandle",
+			Size = Vector3.new(0.25, 1.4, size.Z + 0.5),
+			CFrame = leafCFrame * CFrame.new(handleX, -size.Y / 2 + 3.6, 0),
+			Color = Color3.fromRGB(200, 200, 205),
+			Material = Enum.Material.Metal,
+			CanCollide = false,
+		})
+		local moving = { part, handle }
+		if props.Window then
+			local window = BuildUtil.Part(doorCtx, {
+				Name = "DoorWindow",
+				Size = Vector3.new(math.max(0.6, leaf.width * 0.5), size.Y * 0.35, size.Z + 0.1),
+				CFrame = leafCFrame * CFrame.new(0, size.Y * 0.18, 0),
+				Color = Color3.fromRGB(170, 210, 235),
+				Material = Enum.Material.Glass,
+				Transparency = 0.45,
+				CanCollide = false,
+			})
+			table.insert(moving, window)
+		end
+		-- the pivot is the hinge line (or the leaf centre for sliding doors); "Open<i>" is how the
+		-- leaf moves relative to it
+		local pivotLocal, openOffset
+		if props.Slide then
+			pivotLocal = leafCFrame
+			local slideX = props.Double and (leaf.sign * -leaf.width) or -leaf.width
+			openOffset = CFrame.new(slideX, 0, 0)
+		else
+			pivotLocal = leafCFrame * CFrame.new(leaf.hingeX, 0, 0)
+			openOffset = CFrame.Angles(0, math.rad(swing * leaf.sign), 0)
+		end
+		model:SetAttribute("Pivot" .. index, ctx.origin * pivotLocal)
+		model:SetAttribute("Open" .. index, openOffset)
+		for _, p in ipairs(moving) do
+			p:SetAttribute("Leaf", index)
+			p:SetAttribute("ClosedCFrame", p.CFrame)
+		end
+	end
+	model:SetAttribute("Leaves", #leaves)
+	model:SetAttribute("AutoClose", props.AutoClose or 6)
+	model:SetAttribute("Sliding", props.Slide == true)
+	-- the prompt sits on an invisible marker in the middle of the doorway (it never moves)
+	local marker = BuildUtil.Part(doorCtx, {
+		Name = "DoorPrompt",
+		Size = Vector3.new(1, 1, 1),
+		CFrame = closed * CFrame.new(0, -size.Y / 2 + 4, 0),
+		Transparency = 1,
+		CanCollide = false,
+	})
+	marker.CanTouch = false
+	marker.CanQuery = false
+	BuildUtil.Prompt(marker, {
+		Kind = "door",
+		Action = "Open",
+		Object = props.Object or "Door",
+		Distance = props.Distance or 10,
+		Attributes = { Title = props.Title, Info = props.Info, LookKey = props.LookKey },
+	})
+	return model
+end
+
+--[[
+	A seat players can sit in (touch it or press E).
+	props: Name, Size (default 2 x 1 x 2), CFrame (local; a seated player faces the seat's -Z,
+	       its LookVector), Color, Material, Object (prompt label, default "Seat"),
+	       Camera = { From = Vector3, To = Vector3, Fov = 40, Label = "PRESS BOX CAM" } (local):
+	       sitting switches the player's camera to this TV-style view.
+	       NoPrompt = true to skip the prompt (rows of plain chairs: touching still seats you)
+]]
+function BuildUtil.Seat(ctx, props)
+	local seat = Instance.new("Seat")
+	local seatProps = table.clone(props)
+	seatProps.Name = props.Name or "Seat"
+	seatProps.Size = props.Size or Vector3.new(2, 1, 2)
+	seatProps.Color = props.Color or Color3.fromRGB(40, 40, 46)
+	finishPart(ctx, seat, seatProps, resolveLocalCFrame(props))
+	if props.Camera then
+		seat:SetAttribute("CameraCFrame", ctx.origin * CFrame.lookAt(props.Camera.From, props.Camera.To))
+		seat:SetAttribute("CameraFov", props.Camera.Fov or 40)
+		seat:SetAttribute("CameraLabel", props.Camera.Label or "LIVE")
+	end
+	if not props.NoPrompt then
+		BuildUtil.Prompt(seat, {
+			Kind = "seat",
+			Action = "Sit",
+			Object = props.Object or (props.Camera and "TV Camera Seat" or "Seat"),
+			Distance = 8,
+		})
+	end
+	return seat
+end
+
+--[[
+	An elevator (or staircase) call button: rides the player to `target`.
+	target: local CFrame where the player arrives (standing on a floor there; they face its -Z)
+	opts: Action (default "Ride the elevator"), Object (default "Elevator"),
+	      Label (shown when you arrive, e.g. "PRESS LEVEL"), Distance
+]]
+function BuildUtil.Elevator(ctx, part, target, opts)
+	opts = opts or {}
+	return BuildUtil.Prompt(part, {
+		Kind = "elevator",
+		Action = opts.Action or "Ride the elevator",
+		Object = opts.Object or "Elevator",
+		Distance = opts.Distance,
+		Attributes = { Target = ctx.origin * target, Label = opts.Label or "" },
+	})
+end
+
+--[[
+	Text that the server keeps up to date with the owner's team (Interact.LiveKinds):
+	"team", "score", "record", "season", "titles", "rating", "summary", "gameday", "roster",
+	"arcade", "pingpong", "owner". Same opts as SurfaceText (+ Text = placeholder).
+]]
+function BuildUtil.LiveText(part, face, live, opts)
+	opts = opts or {}
+	local gui, label = BuildUtil.SurfaceText(part, face, opts.Text or "", opts)
+	label:SetAttribute("Live", live)
+	return gui, label
+end
+
 --[[
 	Builds stepped stadium rows (solid blocks from the ground up, like real seating bowls).
 

@@ -563,6 +563,133 @@ if L.Zones then
 end
 
 ---------------------------------------------------------------------------------------------
+-- Interactions: prompts (look / door / seat / elevator / use), seats and live screens
+---------------------------------------------------------------------------------------------
+local Interact = requireNode("ReplicatedStorage/TycoonShared/Interact")
+local interactionsByPiece, interactionOrder = {}, {}
+local promptsOut = {}
+local elevatorTargets = {}
+local allSolid = {}
+for _, list in pairs(partsByItem) do
+	for _, entry in ipairs(list) do
+		if entry.part.CanCollide and entry.part.Transparency < 1 then
+			table.insert(allSolid, entry)
+		end
+	end
+end
+local function nonEmpty(value)
+	return type(value) == "string" and value:match("%S") ~= nil
+end
+for _, entry in ipairs(built) do
+	local key = entry.pieceId or entry.id
+	local tally = interactionsByPiece[key]
+	if not tally then
+		tally = { look = 0, door = 0, seat = 0, elevator = 0, use = 0, live = 0, seats = 0, camera = 0 }
+		interactionsByPiece[key] = tally
+		table.insert(interactionOrder, key)
+	end
+	for _, inst in ipairs(entry.model:GetDescendants()) do
+		if inst:IsA("ProximityPrompt") then
+			local host = inst.Parent
+			local hostPart = host
+			if hostPart and hostPart:IsA("Attachment") then
+				hostPart = hostPart.Parent
+			end
+			local where = ("%s/%s"):format(entry.id, hostPart and hostPart.Name or "?")
+			local kind = inst:GetAttribute("Kind")
+			if inst.Name ~= Interact.PromptName then
+				addError(where .. ": a ProximityPrompt must be named 'Interact' (use the BuildUtil helpers)")
+			end
+			if not Interact.Kinds[kind] then
+				addError(where .. ": unknown prompt Kind '" .. tostring(kind) .. "'")
+			else
+				tally[kind] += 1
+			end
+			if not (hostPart and hostPart:IsA("BasePart")) then
+				addError(where .. ": prompt is not on a part")
+			end
+			local lookKey = inst:GetAttribute("LookKey")
+			if lookKey ~= nil and not Interact.IsLookKey(lookKey) then
+				addError(where .. ": unknown LookKey '" .. tostring(lookKey) .. "'")
+			end
+			if kind == "look" then
+				if not nonEmpty(inst:GetAttribute("Title")) then
+					addError(where .. ": look prompt without a Title")
+				end
+				if not nonEmpty(inst:GetAttribute("Info")) and lookKey == nil then
+					addError(where .. ": look prompt without Info or a LookKey")
+				end
+			elseif kind == "use" then
+				local use = inst:GetAttribute("Use")
+				if not Interact.Uses[use] then
+					addError(where .. ": unknown Use '" .. tostring(use) .. "'")
+				end
+			elseif kind == "door" then
+				local model = hostPart and hostPart.Parent
+				local leaves = model and model:GetAttribute("Leaves")
+				local leafParts = 0
+				for _, d in ipairs(model and model:GetDescendants() or {}) do
+					if d:IsA("BasePart") and d:GetAttribute("Leaf") ~= nil then
+						leafParts += 1
+					end
+				end
+				if not leaves or typeof(model:GetAttribute("Pivot1")) ~= "CFrame" or leafParts == 0 then
+					addError(where .. ": door prompt without door leaves (use BuildUtil.Door)")
+				end
+			elseif kind == "seat" then
+				if not (hostPart and hostPart:IsA("Seat")) then
+					addError(where .. ": seat prompt must be on a Seat (use BuildUtil.Seat)")
+				end
+			elseif kind == "elevator" then
+				local target = inst:GetAttribute("Target")
+				if typeof(target) ~= "CFrame" then
+					addError(where .. ": elevator without a Target CFrame")
+				else
+					table.insert(elevatorTargets, { where = where, target = target })
+				end
+			end
+			if hostPart and hostPart:IsA("BasePart") then
+				local position = host:IsA("Attachment") and (hostPart.CFrame * host.Position) or hostPart.CFrame.Position
+				table.insert(promptsOut, {
+					kind = kind,
+					text = inst.ActionText ~= "" and inst.ActionText or tostring(inst:GetAttribute("Use") or kind),
+					p = { round(position.X), round(position.Y), round(position.Z) },
+				})
+			end
+		elseif inst:IsA("TextLabel") and inst:GetAttribute("Live") ~= nil then
+			local live = inst:GetAttribute("Live")
+			if not Interact.LiveKinds[live] then
+				addError(("%s/%s: unknown Live kind '%s'"):format(entry.id, inst.Name, tostring(live)))
+			end
+			tally.live += 1
+		elseif inst:IsA("Seat") then
+			tally.seats += 1
+			if inst:GetAttribute("CameraCFrame") ~= nil then
+				tally.camera += 1
+			end
+		end
+	end
+end
+-- elevators must land on a floor with head room
+for _, e in ipairs(elevatorTargets) do
+	local p = e.target.Position
+	local body = { minX = p.X - 1.2, maxX = p.X + 1.2, minY = p.Y + 0.6, maxY = p.Y + 5.5, minZ = p.Z - 1.2, maxZ = p.Z + 1.2 }
+	local floorFound = false
+	for _, entry in ipairs(allSolid) do
+		local b = entry.box
+		if overlaps(body, b) then
+			addWarning(("%s: elevator target (%.1f, %.1f, %.1f) is inside %s"):format(e.where, p.X, p.Y, p.Z, entry.part.Name))
+		end
+		if b.minX <= p.X and b.maxX >= p.X and b.minZ <= p.Z and b.maxZ >= p.Z and b.maxY <= p.Y + 0.6 and b.maxY >= p.Y - 1.5 then
+			floorFound = true
+		end
+	end
+	if not floorFound then
+		addWarning(("%s: no floor under the elevator target (%.1f, %.1f, %.1f)"):format(e.where, p.X, p.Y, p.Z))
+	end
+end
+
+---------------------------------------------------------------------------------------------
 -- Report
 ---------------------------------------------------------------------------------------------
 fs.writeDir(outDir)
@@ -575,6 +702,7 @@ fs.writeFile(
 	serde.encode("json", {
 		parts = partsOut,
 		buttons = buttons,
+		prompts = promptsOut,
 		plot = { width = L.PlotWidth, frontZ = L.PlotFrontZ, backZ = L.PlotBackZ },
 	})
 )
@@ -593,6 +721,25 @@ for _, key in ipairs(pieceOrder) do
 	print(("  %-22s %4d"):format(key, pieceTotals[key]))
 end
 print(("Total parts: %d   GUIs: %d   Lights: %d"):format(total, guiCount, lightCount))
+print("\nInteractions per piece (prompts by kind, seats, camera seats, live screens):")
+for _, key in ipairs(interactionOrder) do
+	local t = interactionsByPiece[key]
+	local sum = t.look + t.door + t.seat + t.elevator + t.use + t.live + t.seats
+	if sum > 0 then
+		print(
+			("  %-22s look %2d  door %2d  use %2d  elevator %2d  seats %2d (camera %d)  live %2d"):format(
+				key,
+				t.look,
+				t.door,
+				t.use,
+				t.elevator,
+				t.seats,
+				t.camera,
+				t.live
+			)
+		)
+	end
+end
 
 if #warnings > 0 then
 	print(("\n%d warning(s):"):format(#warnings))

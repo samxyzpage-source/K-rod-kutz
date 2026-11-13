@@ -102,6 +102,7 @@ local QUESTS = {
 	{ Id = "rooms2", Text = "Finish 2 HQ rooms", Stat = "RoomsDone", Goal = 2, Reward = 2000 },
 	{ Id = "field", Text = "Finish the Practice Field", Stat = "Piece:practice_field", Goal = 1, Reward = 5000 },
 	{ Id = "cart", Text = "Drive a golf cart", Stat = "Drives", Goal = 1, Reward = 3000 },
+	{ Id = "lift", Text = "Lift weights in the Weight Room", Stat = "Workouts", Goal = 1, Reward = 3500 },
 	{ Id = "draft1", Text = "Draft your first player", Stat = "Drafted", Goal = 1, Reward = 4000 },
 	{ Id = "train1", Text = "Train a player in the Weight Room", Stat = "Trainings", Goal = 1, Reward = 8000 },
 	{ Id = "rooms6", Text = "Finish 6 HQ rooms", Stat = "RoomsDone", Goal = 6, Reward = 12000 },
@@ -109,8 +110,10 @@ local QUESTS = {
 	{ Id = "roster", Text = "Fill every roster position", Stat = "PositionsFilled", Goal = #POSITIONS, Reward = 30000 },
 	{ Id = "kick1", Text = "Kick a field goal", Stat = "FieldGoals", Goal = 1, Reward = 25000 },
 	{ Id = "win1", Text = "Win a game day", Stat = "Wins", Goal = 1, Reward = 40000 },
+	{ Id = "presser", Text = "Hold a press conference", Stat = "PressConferences", Goal = 1, Reward = 50000 },
 	{ Id = "staff", Text = "Hire the whole coaching staff", Stat = "Piece:staff_coaches", Goal = 1, Reward = 60000 },
 	{ Id = "lowerbowl", Text = "Close the lower bowl (Corner Seats)", Stat = "Piece:corner_seats", Goal = 1, Reward = 150000 },
+	{ Id = "arcade20", Text = "Catch 20 footballs in the lounge arcade", Stat = "ArcadeBest", Goal = 20, Reward = 120000 },
 	{ Id = "kick50", Text = "Kick a 55-yard field goal", Stat = "LongestFG", Goal = 55, Reward = 200000 },
 	{ Id = "rooms12", Text = "Finish every HQ room", Stat = "RoomsDone", Goal = 11, Reward = 300000 },
 	{ Id = "win5", Text = "Win 5 game days", Stat = "Wins", Goal = 5, Reward = 400000 },
@@ -124,6 +127,7 @@ local QUESTS = {
 }
 local QUESTS_SHOWN = 3
 local SEASON_STAGES = { regular = true, semifinal = true, final = true }
+local MAX_HYPE = 3 -- press conferences add hype: +1 team rating each for the next game day
 
 ---------------------------------------------------------------------------------------------
 -- Data helpers
@@ -195,6 +199,10 @@ local function sanitize(f)
 	if not isNumber(f.NextBonus) then
 		f.NextBonus = 0
 	end
+	if not isNumber(f.Hype) or f.Hype < 0 then
+		f.Hype = 0
+	end
+	f.Hype = math.min(math.floor(f.Hype), MAX_HYPE)
 	local season = f.Season
 	if
 		type(season) ~= "table"
@@ -377,6 +385,21 @@ local function publish(player)
 		})
 	end
 	player:SetAttribute("Roster", HttpService:JSONEncode(roster))
+	-- every player, for locker name plates: position order, best first
+	local everyone = table.clone(f.Roster)
+	table.sort(everyone, function(a, b)
+		local pa, pb = table.find(POSITIONS, a.Pos) or 99, table.find(POSITIONS, b.Pos) or 99
+		if pa ~= pb then
+			return pa < pb
+		end
+		return a.Rating > b.Rating
+	end)
+	local lockers = {}
+	for _, p in ipairs(everyone) do
+		table.insert(lockers, { Name = p.Name, Pos = p.Pos, Rating = p.Rating })
+	end
+	player:SetAttribute("RosterAll", HttpService:JSONEncode(lockers))
+	player:SetAttribute("Hype", f.Hype)
 	player:SetAttribute("RosterSize", #f.Roster)
 	local rating = Franchise.TeamRating(player)
 	player:SetAttribute("TeamRating", rating)
@@ -681,7 +704,8 @@ function Franchise.PlayGameDay()
 				built += 1
 			end
 			local progress = built / #Items.List
-			local rating = Franchise.TeamRating(player)
+			local rating = Franchise.TeamRating(player) + f.Hype -- press conferences fire the team up
+			f.Hype = 0
 			local playoff = f.Season.Stage ~= "regular"
 			local opponent = 46 + progress * 40 + rng:NextInteger(-6, 6) + (playoff and Config.Season.PlayoffBoost or 0)
 			local winChance = 1 / (1 + math.exp(-(rating - opponent) / 6))
@@ -746,6 +770,34 @@ function Franchise.RecordKick(player, yards, made)
 	end
 	addStat(player, "Kicks", 1)
 	Franchise.CheckQuests(player)
+end
+
+-- Things players do in their facility (Interactions.lua): "lift", "podium", "arcade", "pingpong".
+-- Returns a short note for the notification (or nil).
+function Franchise.RecordActivity(player, kind, score)
+	local f = franchiseOf(player)
+	if not f then
+		return nil
+	end
+	local note = nil
+	if kind == "lift" then
+		addStat(player, "Workouts", 1)
+	elseif kind == "podium" then
+		addStat(player, "PressConferences", 1)
+		if f.Hype < MAX_HYPE then
+			f.Hype += 1
+			note = ("Team hype %d/%d: +%d rating in the next game!"):format(f.Hype, MAX_HYPE, f.Hype)
+		else
+			note = "The team is already fired up for the next game!"
+		end
+	elseif kind == "arcade" then
+		maxStat(player, "ArcadeBest", score)
+	elseif kind == "pingpong" then
+		maxStat(player, "RallyBest", score)
+	end
+	PlayerData.MarkChanged(player)
+	Franchise.CheckQuests(player)
+	return note
 end
 
 -- Golf cart rides (Vehicles.lua)

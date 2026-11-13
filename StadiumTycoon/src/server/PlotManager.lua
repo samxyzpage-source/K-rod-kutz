@@ -32,6 +32,7 @@ local releaseHooks = {} -- fn(plot) when a plot is released
 local purchaseHooks = {} -- fn(player, plot, item) after a step is bought
 local collectHooks = {} -- fn(player, amount) after vault money is collected
 local teamHooks = {} -- fn(plot) after a plot's team colours / name change
+local builtHooks = {} -- fn(plot, item, model) after ANY step is built (incl. rebuilds)
 local teamProvider = nil -- fn(player, profile) -> palette, teamName (Franchise.lua)
 local PlayerData = require(script.Parent.PlayerData)
 local World = require(script.Parent.World)
@@ -141,7 +142,18 @@ local function attendance(plot)
 	return plot.Income * Config.AttendancePerIncome
 end
 
+-- Plot model attributes: clients read these for live info (look cards, TV score bugs).
+local function publishPlot(plot)
+	local model = plot.Model
+	model:SetAttribute("OwnerUserId", plot.Owner and plot.Owner.UserId or nil)
+	model:SetAttribute("OwnerName", plot.Owner and plot.Owner.DisplayName or nil)
+	model:SetAttribute("TeamName", plot.TeamName ~= "" and plot.TeamName or nil)
+	model:SetAttribute("HomeScore", plot.HomeScore)
+	model:SetAttribute("AwayScore", plot.AwayScore)
+end
+
 local function updateScoreboard(plot)
+	publishPlot(plot)
 	local title = findLabel(plot, "ScoreboardTitle")
 	if title then
 		title.Text = plot.TeamName .. " STADIUM"
@@ -300,6 +312,9 @@ local function buildItem(plot, item, animate)
 	end
 	for _, hook in ipairs(pieceHooks[pieceId] or {}) do
 		task.spawn(hook, plot, item)
+	end
+	for _, hook in ipairs(builtHooks) do
+		task.spawn(hook, plot, item, model)
 	end
 end
 
@@ -533,6 +548,7 @@ function PlotManager.Claim(plot, player, profile)
 	plot.HomeScore, plot.AwayScore = 0, 0
 	plotByPlayer[player] = plot
 	setGateClaimed(plot, player)
+	publishPlot(plot)
 
 	for _, item in ipairs(Items.List) do
 		if plot.Owned[item.Id] then
@@ -632,6 +648,8 @@ function PlotManager.Release(player)
 	end
 	plot.Buttons = {}
 	setGateClaimed(plot, nil)
+	plot.HomeScore, plot.AwayScore = 0, 0
+	publishPlot(plot)
 	GameDay.ClearCrowd(plot)
 	for _, hook in ipairs(releaseHooks) do
 		task.spawn(hook, plot)
@@ -986,6 +1004,12 @@ function PlotManager.ApplyTeam(player, palette, teamName)
 		task.spawn(hook, plot)
 	end
 	return true
+end
+
+-- fn(plot, item, model) runs after any step of any piece is built (also when a plot is
+-- rebuilt for a returning player or a new team), e.g. to find live screens and prompts.
+function PlotManager.OnAnyBuilt(fn)
+	table.insert(builtHooks, fn)
 end
 
 -- fn(plot) runs after ApplyTeam re-coloured a plot (e.g. to repaint the golf carts).

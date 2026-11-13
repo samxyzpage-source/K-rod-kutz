@@ -16,6 +16,7 @@ local MODULES = {
 	"Stands",
 	"Plaza",
 	"Features",
+	"PressLevel",
 	"StadiumRooms",
 	"CampusFields",
 	"HQRoomsFront",

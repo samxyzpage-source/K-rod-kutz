@@ -246,15 +246,16 @@ local function onOccupantChanged(info)
 	local chassis = info.model.PrimaryPart
 	local occupant = seat.Occupant
 	info.lastUsed = os.clock()
-	if occupant then
-		local player = Players:GetPlayerFromCharacter(occupant.Parent)
-		if player and chassis then
+	-- (a seat taken by something that isn't a player counts as empty)
+	local player = occupant and Players:GetPlayerFromCharacter(occupant.Parent)
+	if player then
+		if chassis then
 			pcall(function()
 				chassis:SetNetworkOwner(player)
 			end)
-			for _, hook in ipairs(driveHooks) do
-				task.spawn(hook, player)
-			end
+		end
+		for _, hook in ipairs(driveHooks) do
+			task.spawn(hook, player)
 		end
 	else
 		stopCart(info)
@@ -311,7 +312,8 @@ function Vehicles.Tidy(now)
 			local chassis = info.model.PrimaryPart
 			if chassis and info.model.Parent then
 				local position = chassis.CFrame.Position
-				local occupied = info.seat and info.seat.Occupant ~= nil
+				local occupant = info.seat and info.seat.Occupant
+				local occupied = occupant ~= nil and occupant.Parent ~= nil
 				if occupied then
 					info.lastUsed = now
 				end

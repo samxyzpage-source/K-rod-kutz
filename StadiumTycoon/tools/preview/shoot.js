@@ -5,6 +5,9 @@
 //
 //   views     comma separated list of view names, or "all" (default)
 //   --buttons draw the buy-button positions (green pads labelled with their item id)
+//   --prompts draw interaction prompts (look blue, door orange, seat purple, elevator red, use green)
+//   --noroof  hide parts named *roof*/*ceiling*/*skylight*/*canopy*/*clerestory*
+//   --cam=x,y,z:tx,ty,tz[:fov]  a custom camera, rendered as the view "cam" (e.g. views = cam)
 //
 // Needs: npm install (in tools/preview) for three.js, and Playwright + Chromium.
 
@@ -18,6 +21,9 @@ const partsFile = args[0] || "tools/out/parts.json";
 const outDir = args[1] || "tools/out";
 const viewArg = args[2] || "all";
 const showButtons = flags.includes("--buttons");
+const showPrompts = flags.includes("--prompts");
+// --cam=x,y,z:tx,ty,tz[:fov]  adds a custom view named "cam" (use it as the views argument)
+const camFlag = flags.find((f) => f.startsWith("--cam="));
 const noRoofFlag = flags.includes("--noroof");
 
 // Camera views in plot-local studs (-Z = front/plaza, +Z = back).
@@ -43,7 +49,7 @@ const VIEWS = {
 };
 
 function render(payload) {
-  const { data, view, showButtons, noRoof } = payload;
+  const { data, view, showButtons, showPrompts, noRoof } = payload;
   const roofPattern = /roof|ceiling|skylight|canopy|clerestory/i;
   const THREE = window.THREE;
   const width = 1400;
@@ -112,6 +118,33 @@ function render(payload) {
     scene.add(mesh);
   }
 
+  if (showPrompts && data.prompts) {
+    const colors = { look: 0x33aaff, door: 0xffaa22, seat: 0xaa66ff, elevator: 0xff3366, use: 0x33ff99 };
+    for (const p of data.prompts) {
+      const color = colors[p.kind] || 0xffffff;
+      const marker = new THREE.Mesh(
+        new THREE.SphereGeometry(0.7, 10, 8),
+        new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.8 })
+      );
+      marker.position.set(p.p[0], p.p[1], p.p[2]);
+      scene.add(marker);
+      const canvas = document.createElement("canvas");
+      canvas.width = 256;
+      canvas.height = 48;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.fillRect(0, 0, 256, 48);
+      ctx.fillStyle = "#" + color.toString(16).padStart(6, "0");
+      ctx.font = "bold 24px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(p.text, 128, 33);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false }));
+      sprite.scale.set(6, 1.1, 1);
+      sprite.position.set(p.p[0], p.p[1] + 1.4, p.p[2]);
+      scene.add(sprite);
+    }
+  }
+
   if (showButtons) {
     for (const b of data.buttons) {
       const pad = new THREE.Mesh(
@@ -157,6 +190,10 @@ function render(payload) {
 
 (async () => {
   const data = JSON.parse(fs.readFileSync(partsFile, "utf8"));
+  if (camFlag) {
+    const [from, to, fov] = camFlag.slice(6).split(":");
+    VIEWS.cam = { pos: from.split(",").map(Number), target: to.split(",").map(Number), fov: Number(fov || 70) };
+  }
   const names = viewArg === "all" ? Object.keys(VIEWS) : viewArg.split(",");
   fs.mkdirSync(outDir, { recursive: true });
   const browser = await chromium.launch({
@@ -173,7 +210,7 @@ function render(payload) {
     page.on("pageerror", (e) => console.error("page error:", e.message));
     await page.setContent("<!doctype html><html><body></body></html>");
     await page.addScriptTag({ path: threePath });
-    await page.evaluate(render, { data, view, showButtons, noRoof: noRoofFlag || !!view.noroof });
+    await page.evaluate(render, { data, view, showButtons, showPrompts, noRoof: noRoofFlag || !!view.noroof });
     const file = path.join(outDir, `${name}.png`);
     await page.screenshot({ path: file });
     await page.close();
