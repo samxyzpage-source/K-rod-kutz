@@ -170,14 +170,23 @@ local function addWarning(msg)
 	table.insert(warnings, msg)
 end
 
-local selected = {}
+-- selection: "all", or comma separated piece ids ("turf,yardlines") and/or step ids ("turf:2")
+local selected = {} -- [stepId] = true
 if selection == "all" then
 	for _, item in ipairs(Items.List) do
 		selected[item.Id] = true
 	end
 else
 	for id in selection:gmatch("[^,]+") do
-		selected[id] = true
+		if Items.PieceById[id] then
+			for _, stepId in ipairs(Items.PieceById[id].StageIds) do
+				selected[stepId] = true
+			end
+		elseif Items.ById[id] then
+			selected[id] = true
+		else
+			addError("Unknown piece or step '" .. id .. "'")
+		end
 	end
 end
 
@@ -198,24 +207,46 @@ end
 table.insert(built, { id = "PlotBase", model = baseModel })
 
 for id in pairs(Builders) do
-	if id ~= "PlotBase" and Items.ById[id] == nil then
-		addWarning("Builder '" .. id .. "' has no matching entry in Items.List")
+	if id ~= "PlotBase" and Items.PieceById[id] == nil then
+		addWarning("Builder '" .. id .. "' has no matching piece in Items")
 	end
 end
 
+-- Build every selected STEP separately, exactly like the game does (ctx.onlyStage = step).
+local stepsPerPiece = {} -- [pieceId] = highest Stage() the builder used
 for _, item in ipairs(Items.List) do
 	if selected[item.Id] then
-		local builder = Builders[item.Id]
+		local builder = Builders[item.PieceId]
 		if builder == nil then
-			addError("No builder for item '" .. item.Id .. "'")
+			if item.Stage == 1 then
+				addError("No builder for piece '" .. item.PieceId .. "'")
+			end
 		else
-			local ctx, model = BuildUtil.Child(BuildUtil.NewContext(origin, root, palette, "PREVIEW", Config), item.Id)
+			local stepCtx = BuildUtil.NewContext(origin, root, palette, "PREVIEW", Config, item.Stage)
+			local ctx, model = BuildUtil.Child(stepCtx, item.Id)
 			local ok, err = pcall(builder, ctx)
 			if not ok then
-				addError("Builder '" .. item.Id .. "' failed: " .. tostring(err))
+				addError(("Builder '%s' failed on step %d: %s"):format(item.PieceId, item.Stage, tostring(err)))
 			end
-			table.insert(built, { id = item.Id, model = model })
+			BuildUtil.PruneEmpty(model)
+			stepsPerPiece[item.PieceId] = stepCtx.stageState.highest
+			local partCount = 0
+			for _, d in ipairs(model:GetDescendants()) do
+				if d:IsA("BasePart") then
+					partCount += 1
+				end
+			end
+			if ok and partCount == 0 then
+				addError(("Step %d (%s) of '%s' builds no parts"):format(item.Stage, item.StageName, item.PieceId))
+			end
+			table.insert(built, { id = item.Id, model = model, pieceId = item.PieceId })
 		end
+	end
+end
+for pieceId, highest in pairs(stepsPerPiece) do
+	local p = Items.PieceById[pieceId]
+	if highest ~= #p.Stages then
+		addError(("'%s' has %d steps in Items.lua but its builder uses BuildUtil.Stage up to %d"):format(pieceId, #p.Stages, highest))
 	end
 end
 
@@ -397,7 +428,7 @@ for _, item in ipairs(Items.List) do
 	end
 	-- buttons that overlap each other
 	for _, other in ipairs(Items.List) do
-		if other.Order > item.Order then
+		if other.Order > item.Order and other.PieceId ~= item.PieceId then
 			local o = other.Button
 			if math.abs(o.X - b.X) < 7 and math.abs(o.Z - b.Z) < 7 then
 				addWarning(("Buttons '%s' and '%s' overlap"):format(item.Id, other.Id))
@@ -444,18 +475,31 @@ if L.BackWalk then
 		},
 	})
 end
-if L.CampusWalk then
+local function corridorFrom(name, rect, inset, ignore)
 	table.insert(corridors, {
-		name = "campus walk",
+		name = name,
 		box = {
-			minX = L.CampusWalk.MinX + 1,
-			maxX = L.CampusWalk.MaxX - 1,
+			minX = rect.MinX + inset,
+			maxX = rect.MaxX - inset,
 			minY = 0.8,
 			maxY = 9,
-			minZ = L.CampusWalk.MinZ + 3,
-			maxZ = L.CampusWalk.MaxZ,
+			minZ = rect.MinZ + inset,
+			maxZ = rect.MaxZ - inset,
 		},
+		ignore = ignore,
 	})
+end
+if L.HQCorridor then
+	corridorFrom("HQ corridor", L.HQCorridor, 1)
+end
+if L.HQEntranceWalk then
+	corridorFrom("HQ entrance", L.HQEntranceWalk, 1)
+end
+if L.BackRoad then
+	corridorFrom("back road", L.BackRoad, 1)
+end
+if L.CartRoad then
+	corridorFrom("cart road", L.CartRoad, 1)
 end
 if L.CampusRoad then
 	table.insert(corridors, {
@@ -481,6 +525,43 @@ for _, corridor in ipairs(corridors) do
 	end
 end
 
+-- Pieces outside the stadium must stay inside their zone (Config.Layout.Zones)
+if L.Zones then
+	for _, entry in ipairs(built) do
+		local zone = entry.pieceId and L.Zones[entry.pieceId]
+		if zone then
+			for _, part in ipairs(partsByItem[entry.id] or {}) do
+				local box = part.box
+				local tolerance = 0.6
+				if
+					box.minX < zone.MinX - tolerance
+					or box.maxX > zone.MaxX + tolerance
+					or box.minZ < zone.MinZ - tolerance
+					or box.maxZ > zone.MaxZ + tolerance
+					or box.maxY > zone.MaxY + tolerance
+				then
+					addWarning(
+						("%s/%s is outside its zone (x %.1f..%.1f, z %.1f..%.1f, top %.1f; zone x %g..%g, z %g..%g, top %g)"):format(
+							entry.id,
+							part.part.Name,
+							box.minX,
+							box.maxX,
+							box.minZ,
+							box.maxZ,
+							box.maxY,
+							zone.MinX,
+							zone.MaxX,
+							zone.MinZ,
+							zone.MaxZ,
+							zone.MaxY
+						)
+					)
+				end
+			end
+		end
+	end
+end
+
 ---------------------------------------------------------------------------------------------
 -- Report
 ---------------------------------------------------------------------------------------------
@@ -498,9 +579,18 @@ fs.writeFile(
 	})
 )
 
-print("Parts per item:")
+print("Parts per piece (all built steps):")
+local pieceTotals, pieceOrder = {}, {}
 for _, entry in ipairs(built) do
-	print(("  %-22s %4d"):format(entry.id, counts[entry.id]))
+	local key = entry.pieceId or entry.id
+	if not pieceTotals[key] then
+		pieceTotals[key] = 0
+		table.insert(pieceOrder, key)
+	end
+	pieceTotals[key] += counts[entry.id]
+end
+for _, key in ipairs(pieceOrder) do
+	print(("  %-22s %4d"):format(key, pieceTotals[key]))
 end
 print(("Total parts: %d   GUIs: %d   Lights: %d"):format(total, guiCount, lightCount))
 

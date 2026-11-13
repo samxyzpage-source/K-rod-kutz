@@ -8,6 +8,12 @@
 	  ctx.colors    team palette: { Primary = Color3, Secondary = Color3, Trim = Color3 }
 	  ctx.teamName  short upper-case name of the owner, e.g. "SAMXYZ"
 	  ctx.config    the shared Config module (ctx.config.Layout, ctx.config.Colors)
+	  ctx.onlyStage when set, only parts of that STEP are kept (see BuildUtil.Stage)
+
+	STEPS: every piece is bought in several steps. A builder builds the WHOLE piece and calls
+	BuildUtil.Stage(ctx, n) before the parts that belong to step n. When the game builds step n
+	(ctx.onlyStage = n), parts of other steps are still created but never parented, so they don't
+	exist in the world; anything attached to them (text, lights, welds) disappears with them.
 
 	All positions/CFrames passed to these helpers are LOCAL to the plot.
 	This module only uses Instance/CFrame/Vector3/Color3/Enum/UDim2 so it can also be run
@@ -18,14 +24,35 @@ local BuildUtil = {}
 
 local DEFAULT_COLOR = Color3.fromRGB(163, 162, 165)
 
-function BuildUtil.NewContext(origin, parent, colors, teamName, config)
+function BuildUtil.NewContext(origin, parent, colors, teamName, config, onlyStage)
 	return {
 		origin = origin,
 		parent = parent,
 		colors = colors,
 		teamName = teamName,
 		config = config,
+		onlyStage = onlyStage,
+		-- shared by every child context (table.clone is shallow), so Stage() affects them all
+		stageState = { current = 1, highest = 1, parts = {} },
 	}
+end
+
+-- Marks the parts created after this call as belonging to step `stage` (1, 2, 3...).
+function BuildUtil.Stage(ctx, stage)
+	local state = ctx.stageState
+	if state then
+		state.current = stage
+		state.highest = math.max(state.highest, stage)
+	end
+end
+
+-- True if parts created right now should exist (they belong to the step being built).
+function BuildUtil.IsActive(ctx)
+	if not ctx.onlyStage then
+		return true
+	end
+	local state = ctx.stageState
+	return (state and state.current or 1) == ctx.onlyStage
 end
 
 -- Creates a Model under ctx.parent and returns a copy of ctx that builds into it.
@@ -73,8 +100,36 @@ local function finishPart(ctx, part, props, localCFrame)
 	if props.CastShadow ~= nil then
 		part.CastShadow = props.CastShadow
 	end
-	part.Parent = props.Parent or ctx.parent
+	local state = ctx.stageState
+	if state then
+		state.parts[state.current] = (state.parts[state.current] or 0) + 1
+	end
+	if BuildUtil.IsActive(ctx) then
+		part.Parent = props.Parent or ctx.parent
+	end
+	-- (parts of other steps stay unparented and are simply garbage collected)
 	return part
+end
+
+-- Removes models/folders that ended up with no parts (e.g. a sub-model whose parts all
+-- belong to other steps).
+function BuildUtil.PruneEmpty(root)
+	local descendants = root:GetDescendants()
+	for index = #descendants, 1, -1 do
+		local inst = descendants[index]
+		if (inst:IsA("Model") or inst:IsA("Folder")) and inst.Parent ~= nil then
+			local hasPart = false
+			for _, d in ipairs(inst:GetDescendants()) do
+				if d:IsA("BasePart") then
+					hasPart = true
+					break
+				end
+			end
+			if not hasPart then
+				inst:Destroy()
+			end
+		end
+	end
 end
 
 --[[

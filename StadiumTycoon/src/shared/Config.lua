@@ -14,7 +14,7 @@ local Config = {}
 
 -- General ----------------------------------------------------------------------------------
 Config.GameTitle = "Gridiron Stadium Tycoon"
-Config.PlotCount = 6 -- stadium plots per server (1 - 6). Set Max Players in Game Settings to the same number!
+Config.PlotCount = 4 -- stadium plots per server (1 - 6). Set Max Players in Game Settings to the same number!
 Config.StartingCash = 0
 Config.IncomeMultiplier = 1 -- set to 10 or 100 while testing to build faster
 Config.IncomeTickSeconds = 1 -- how often income is added to the vault
@@ -115,10 +115,10 @@ Config.Colors = {
 
 -- Layout (plot-local studs) ----------------------------------------------------------------
 local L = {}
-L.PlotWidth = 420 -- X
+L.PlotWidth = 560 -- X (the stadium area is X[-210,210]; the extra strips hold the fan zone and the cart road)
 L.PlotDepth = 400 -- Z depth of the original stadium area (front edge at -PlotDepth/2)
 L.PlotFrontZ = -200 -- front edge of the plot (faces the street)
-L.PlotBackZ = 360 -- back edge of the plot (the practice campus sits behind the stadium)
+L.PlotBackZ = 600 -- back edge of the plot (the team HQ + practice campus sit behind the stadium)
 L.StreetWidth = 60 -- gap between the two rows of plots (spawn is in the middle)
 L.PlotGap = 30 -- gap between neighbouring plots on the same side of the street
 L.Yard = 2
@@ -178,13 +178,54 @@ L.LightTowerPositions = {
 	Vector3.new(-194, 0, -90),
 }
 
--- Practice campus (behind the stadium)
+-- Team campus (behind the stadium) -----------------------------------------------------------
 L.BackWalk = { MinX = -12, MaxX = 12, MinZ = 95, MaxZ = 172 } -- home tunnel -> campus road
-L.CampusRoad = { MinX = -206, MaxX = 206, MinZ = 172, MaxZ = 186 }
-L.CampusWalk = { MinX = -20, MaxX = 20, MinZ = 186, MaxZ = 258 }
+L.CampusRoad = { MinX = -276, MaxX = 276, MinZ = 172, MaxZ = 186 }
+L.HQEntranceWalk = { MinX = -112, MaxX = -88, MinZ = 186, MaxZ = 200 } -- campus road -> HQ front doors
+L.BackRoad = { MinX = -276, MaxX = 276, MinZ = 372, MaxZ = 386 } -- behind the HQ, in front of the fields
+L.CartRoad = { MinX = -276, MaxX = -256, MinZ = -196, MaxZ = 596 } -- road along the west edge for golf carts
 L.BusStopPlaza = Vector3.new(-26, 0, -145)
-L.BusStopCampus = Vector3.new(-34, 0, 179)
-L.CampusSafePosition = Vector3.new(34, 0, 179)
+L.BusStopCampus = Vector3.new(-150, 0, 179)
+
+-- The Team HQ: a big building that starts EMPTY. Each room is a piece you build inside it.
+-- The shell (outer walls, roof, floor, room outlines) is part of every plot from the start.
+L.HQ = { MinX = -250, MaxX = 100, MinZ = 200, MaxZ = 360, Height = 30 }
+L.HQCorridor = { MinX = -248, MaxX = 98, MinZ = 264, MaxZ = 278 } -- must stay walkable
+L.HQSpawn = Vector3.new(-100, 0, 210) -- owners appear here (facing into the building)
+L.HQSafePosition = Vector3.new(-75, 0, 212) -- collect pad in the lobby (the safe block sits 9 studs to +X)
+
+-- Golf carts spawn here (in front of the garage, facing -X)
+L.CartPads = {
+	Vector3.new(138, 0, 336),
+	Vector3.new(138, 0, 348),
+	Vector3.new(138, 0, 360),
+}
+
+-- Every piece outside the original stadium must stay inside its zone (the preview tool checks).
+-- MinX/MaxX/MinZ/MaxZ are plot-local studs, MaxY is the height limit.
+L.Zones = {
+	-- HQ rooms, front row (doors open onto the corridor at z = 264)
+	hq_frontoffice = { MinX = -248, MaxX = -200, MinZ = 202, MaxZ = 264, MaxY = 26 },
+	hq_coaches = { MinX = -200, MaxX = -150, MinZ = 202, MaxZ = 264, MaxY = 26 },
+	hq_lobby = { MinX = -150, MaxX = -50, MinZ = 202, MaxZ = 264, MaxY = 28 },
+	hq_interview = { MinX = -50, MaxX = 0, MinZ = 202, MaxZ = 264, MaxY = 26 },
+	hq_meeting = { MinX = 0, MaxX = 50, MinZ = 202, MaxZ = 264, MaxY = 26 },
+	hq_lounge = { MinX = 50, MaxX = 98, MinZ = 202, MaxZ = 264, MaxY = 26 },
+	-- HQ rooms, back row (doors open onto the corridor at z = 278)
+	hq_lockerroom = { MinX = -248, MaxX = -200, MinZ = 278, MaxZ = 358, MaxY = 26 },
+	hq_equipment = { MinX = -200, MaxX = -150, MinZ = 278, MaxZ = 358, MaxY = 26 },
+	hq_weightroom = { MinX = -150, MaxX = -100, MinZ = 278, MaxZ = 358, MaxY = 26 },
+	hq_trainingroom = { MinX = -100, MaxX = -50, MinZ = 278, MaxZ = 358, MaxY = 26 },
+	hq_filmroom = { MinX = -50, MaxX = 0, MinZ = 278, MaxZ = 358, MaxY = 26 },
+	hq_cafeteria = { MinX = 0, MaxX = 98, MinZ = 278, MaxZ = 358, MaxY = 26 },
+	-- outdoors
+	hall_of_fame = { MinX = 120, MaxX = 270, MinZ = 200, MaxZ = 320, MaxY = 40 },
+	golf_carts = { MinX = 128, MaxX = 270, MinZ = 328, MaxZ = 368, MaxY = 20 },
+	practice_field = { MinX = -250, MaxX = -10, MinZ = 396, MaxZ = 520, MaxY = 24 },
+	practice_gear = { MinX = -250, MaxX = -10, MinZ = 396, MaxZ = 530, MaxY = 24 },
+	indoor_dome = { MinX = 30, MaxX = 270, MinZ = 410, MaxZ = 540, MaxY = 50 },
+	fan_zone = { MinX = 212, MaxX = 276, MinZ = -190, MaxZ = 150, MaxY = 30 },
+}
 
 -- Fixed (always present) plot features
 L.GateZ = L.PlazaFrontZ + 3 -- -197

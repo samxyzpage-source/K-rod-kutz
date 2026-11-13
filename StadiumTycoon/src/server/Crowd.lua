@@ -38,8 +38,17 @@ local AISLE_OFFSET = 26 -- Stands.lua puts an aisle 26 studs either side of each
 function Crowd.SeatSections(layout, owned)
 	local L = layout
 	local sections = {}
-	local function add(itemId, origin, length, firstHeight, rows, gaps, visitor)
-		if owned[itemId] then
+	-- `owned` holds step ids ("bleachers_home:1"); a section has seats once its first step (the
+	-- concrete rows) is built. Upper corners come with step 2 of upper_bowl_ends.
+	local function stagesOwned(pieceId)
+		local count = 0
+		while owned[pieceId .. ":" .. (count + 1)] do
+			count += 1
+		end
+		return count
+	end
+	local function add(itemId, origin, length, firstHeight, rows, gaps, visitor, minStage)
+		if stagesOwned(itemId) >= (minStage or 1) then
 			table.insert(sections, {
 				origin = origin,
 				length = length,
@@ -73,7 +82,8 @@ function Crowd.SeatSections(layout, owned)
 	local frontTunnel = withAisles({ tunnelGap(L.TunnelHalfWidth) }, sideAisles)
 	local homeTunnel = withAisles({ tunnelGap(L.BackTunnelHalfWidth or L.TunnelHalfWidth) }, sideAisles)
 	-- the TV broadcast booth sits on the visitor upper deck above the tunnel: keep fans out from under it
-	local boothGap = owned.broadcast_booth and withAisles({ { -22 - FAN_HALF_WIDTH, 22 + FAN_HALF_WIDTH } }, sideAisles) or frontTunnel
+	local boothGap = stagesOwned("broadcast_booth") >= 1 and withAisles({ { -22 - FAN_HALF_WIDTH, 22 + FAN_HALF_WIDTH } }, sideAisles)
+		or frontTunnel
 	local endGaps = withAisles({}, endAisles)
 	local endLength = L.FieldWidth
 	local back = CFrame.Angles(0, math.pi, 0)
@@ -121,7 +131,17 @@ function Crowd.SeatSections(layout, owned)
 			lower
 		)
 		-- upper corners
-		add("upper_bowl_ends", CFrame.new(sx * upperCornerX, 0, L.BackLowerOuterZ) * back, upperCornerLength, L.UpperStartHeight, upper)
+		-- (upper corners are step 2 "Corner Rows" of upper_bowl_ends)
+		add(
+			"upper_bowl_ends",
+			CFrame.new(sx * upperCornerX, 0, L.BackLowerOuterZ) * back,
+			upperCornerLength,
+			L.UpperStartHeight,
+			upper,
+			nil,
+			false,
+			2
+		)
 		add(
 			"upper_bowl_ends",
 			CFrame.new(sx * upperCornerX, 0, L.FrontLowerOuterZ),
@@ -129,21 +149,28 @@ function Crowd.SeatSections(layout, owned)
 			L.UpperStartHeight,
 			upper,
 			nil,
-			true
+			true,
+			2
 		)
 		add(
 			"upper_bowl_ends",
 			CFrame.new(sx * L.EndLowerOuterX, 0, upperBackCornerZ) * endRotation,
 			L.BackLowerOuterZ - L.FieldBackZ,
 			L.UpperStartHeight,
-			upper
+			upper,
+			nil,
+			false,
+			2
 		)
 		add(
 			"upper_bowl_ends",
 			CFrame.new(sx * L.EndLowerOuterX, 0, upperFrontCornerZ) * endRotation,
 			L.FieldFrontZ - L.FrontLowerOuterZ,
 			L.UpperStartHeight,
-			upper
+			upper,
+			nil,
+			false,
+			2
 		)
 	end
 	return sections

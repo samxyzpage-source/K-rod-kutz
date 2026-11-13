@@ -2,7 +2,8 @@
 	PlotBase
 	The parts every plot has before anything is bought: the concrete slab, the walkway,
 	the entrance gate (touch it to claim the stadium), the cash vault and the collect pad,
-	plus the paths, team-bus stops and team safe of the practice campus behind the stadium.
+	plus the roads, team-bus stops and team safe of the campus behind the stadium, and the EMPTY
+	Team HQ building (Builders/HQShell.lua) that every plot starts with.
 ]]
 
 local BuildUtil = require(script.Parent.Parent.BuildUtil)
@@ -225,54 +226,55 @@ function PlotBase.PlotBase(ctx)
 		C.Walkway,
 		Enum.Material.Pavement
 	)
-	local walk = L.CampusWalk
-	BuildUtil.Box(
-		ctx,
-		"CampusWalk",
-		Vector3.new(walk.MaxX - walk.MinX, 0.1, walk.MaxZ - walk.MinZ),
-		Vector3.new((walk.MinX + walk.MaxX) / 2, 0.05, (walk.MinZ + walk.MaxZ) / 2),
-		C.Walkway,
-		Enum.Material.Pavement
-	)
-	-- campus entrance arch over the centre walk
-	local archZ = walk.MinZ + 1.5
-	for _, side in ipairs({ -1, 1 }) do
-		BuildUtil.Block(
+	local function paintStrip(name, rect, color)
+		return BuildUtil.Box(
 			ctx,
-			"CampusArchPost",
-			Vector3.new(2, 16, 2),
-			Vector3.new(side * (walk.MaxX + 2), 0, archZ),
-			team.Primary,
-			Enum.Material.Brick
+			name,
+			Vector3.new(rect.MaxX - rect.MinX, 0.1, rect.MaxZ - rect.MinZ),
+			Vector3.new((rect.MinX + rect.MaxX) / 2, 0.05, (rect.MinZ + rect.MaxZ) / 2),
+			color,
+			Enum.Material.Pavement
 		)
 	end
-	local archBeam = BuildUtil.Box(
+	paintStrip("HQEntranceWalk", L.HQEntranceWalk, C.Walkway)
+	paintStrip("BackRoad", L.BackRoad, C.Walkway)
+	-- golf-cart road along the west edge, with a dashed centre line
+	local cartRoad = L.CartRoad
+	BuildUtil.Box(
 		ctx,
-		"CampusArchBeam",
-		Vector3.new((walk.MaxX + 3) * 2, 3.5, 2),
-		Vector3.new(0, 17.75, archZ),
-		team.Secondary,
-		Enum.Material.SmoothPlastic
+		"CartRoad",
+		Vector3.new(cartRoad.MaxX - cartRoad.MinX, 0.1, cartRoad.MaxZ - cartRoad.MinZ),
+		Vector3.new((cartRoad.MinX + cartRoad.MaxX) / 2, 0.05, (cartRoad.MinZ + cartRoad.MaxZ) / 2),
+		C.Asphalt,
+		Enum.Material.Asphalt
 	)
-	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
-		BuildUtil.SurfaceText(archBeam, face, "PRACTICE FACILITY", {
-			LabelName = "CampusArchText",
-			TextColor3 = team.Trim,
-			BackgroundColor3 = team.Primary,
-			BackgroundTransparency = 0,
-			PixelsPerStud = 25,
-		})
+	local cartCentreX = (cartRoad.MinX + cartRoad.MaxX) / 2
+	BuildUtil.Box(
+		ctx,
+		"CartRoadLine",
+		Vector3.new(0.6, 0.05, cartRoad.MaxZ - cartRoad.MinZ - 8),
+		Vector3.new(cartCentreX, 0.125, (cartRoad.MinZ + cartRoad.MaxZ) / 2),
+		Color3.fromRGB(255, 214, 10),
+		Enum.Material.SmoothPlastic,
+		{ CanCollide = false }
+	)
+
+	-- The empty Team HQ building that every plot starts with (rooms are built inside it)
+	local shellModule = script.Parent:FindFirstChild("HQShell")
+	local hqRefs = {}
+	if shellModule then
+		hqRefs = require(shellModule).Build(ctx) or {}
 	end
 
 	-- Team bus stops (plaza <-> campus) -------------------------------------------------------
-	local busPlaza = busStop(ctx, "BusStopPlaza", L.BusStopPlaza, "TEAM BUS > PRACTICE FACILITY")
+	local busPlaza = busStop(ctx, "BusStopPlaza", L.BusStopPlaza, "TEAM BUS > TEAM HQ")
 	local busCampus = busStop(ctx, "BusStopCampus", L.BusStopCampus, "TEAM BUS > STADIUM")
 	local facingBack = CFrame.Angles(0, math.pi, 0) -- local +Z, into the plot
 	local arrivePlaza = CFrame.new(L.BusStopPlaza + Vector3.new(0, 4, 11)) * facingBack
 	local arriveCampus = CFrame.new(L.BusStopCampus + Vector3.new(0, 4, 11)) * facingBack
 
 	-- Team safe: a second collect pad at the campus (same vault)
-	local safePos = L.CampusSafePosition
+	local safePos = L.HQSafePosition
 	local campusPad = BuildUtil.Box(
 		ctx,
 		"CampusCollectPad",
@@ -302,7 +304,9 @@ function PlotBase.PlotBase(ctx)
 		MaxDistance = 80,
 	})
 
-	local spawnLocal = CFrame.new(L.SpawnPosition + Vector3.new(0, 4, 0)) * CFrame.Angles(0, math.pi, 0)
+	-- owners start (and respawn) inside the HQ lobby, facing into the building (+Z)
+	local spawnLocal = CFrame.new(L.HQSpawn + Vector3.new(0, 4, 0)) * CFrame.Angles(0, math.pi, 0)
+	local gateLocal = CFrame.new(L.SpawnPosition + Vector3.new(0, 4, 0)) * CFrame.Angles(0, math.pi, 0)
 
 	return {
 		ClaimTrigger = claimTrigger,
@@ -311,6 +315,8 @@ function PlotBase.PlotBase(ctx)
 		VaultLabel = vaultLabel,
 		CollectPad = collectPad,
 		SpawnCFrame = ctx.origin * spawnLocal,
+		GateCFrame = ctx.origin * gateLocal,
+		HQ = hqRefs,
 		BusStopPlaza = busPlaza,
 		BusStopCampus = busCampus,
 		BusArrivePlaza = ctx.origin * arrivePlaza,

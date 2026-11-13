@@ -1,94 +1,511 @@
 --[[
 	Items
-	Every buildable piece of the franchise, in the order they unlock: the Front Office and the
-	practice facility come first, then the stadium.
+	Everything you can build, as PIECES (a room, a field, a stand...). Every piece is built in
+	several STEPS: e.g. the Practice Field goes Grass -> Yard Lines -> End Zones -> Goal Posts ->
+	Fence & Sideline -> Bleachers. Each step is its own buy button (shown one after another on the
+	piece's button spot).
 
-	  Id        unique key (also the name of the builder function in Builders/)
+	Piece fields:
+	  Id        unique key; also the name of the builder function in Builders/
 	  Name      shown on the buy button
-	  Cost      price in cash
-	  Income    cash per second this piece adds to the vault once built
-	  Requires  list of item Ids that must be owned before this button appears
-	  Button    plot-local position of the buy button (y = 0 is the plot surface)
+	  Stages    list of step names (2-6)
+	  Cost      total price of all steps (split over the steps, later steps cost more)
+	  Income    total cash/second of all steps (split the same way)
+	  Requires  list of piece Ids that must be FULLY built before this piece's first step appears
+	  Button    plot-local position of the piece's buy button (y = 0 is the plot surface)
 
-	To add a new piece: add an entry here, then add a builder function with the same Id
-	in one of the modules inside ServerScriptService/TycoonServer/Builders.
+	Items.List is generated from the pieces: one entry per step with
+	  Id = "<pieceId>:<step>", PieceId, Stage, StageCount, Name, StageName, Cost, Income, Requires, Button
+
+	To add a piece: add it to PIECES below and add a builder function with the same Id in one of the
+	modules in ServerScriptService/TycoonServer/Builders (use BuildUtil.Stage(ctx, n) inside it to
+	say which parts belong to which step).
 ]]
 
 local Items = {}
 
--- Buttons for field + stadium pieces sit in a row on the front sideline (z = -29),
--- buttons for plaza buildings sit next to the building they create, and buttons for the
--- practice campus line the campus road (z = 190) behind the stadium. The two locker rooms sit
--- by the players' tunnels (front: visitors, back: home team).
-local SIDELINE_Z = -29
-local CAMPUS_Z = 190
+local SIDELINE_Z = -29 -- the buy-button row on the front sideline of the stadium
+local HQ_FRONT_BUTTON_Z = 268 -- HQ corridor, in front of the front-row rooms
+local HQ_BACK_BUTTON_Z = 274 -- HQ corridor, in front of the back-row rooms
+local PRICE_SCALE = 2.6 -- multiplies every Cost below (tune the game's length here)
 
-local function item(id, name, cost, income, requires, button)
-	return { Id = id, Name = name, Cost = cost, Income = income, Requires = requires, Button = button }
+local function piece(id, name, stages, cost, income, requires, button)
+	return { Id = id, Name = name, Stages = stages, Cost = cost, Income = income, Requires = requires, Button = button }
 end
 
-Items.List = {
-	-- Front office + practice facility ----------------------------------------------------
-	item("frontoffice", "Front Office", 0, 1, {}, Vector3.new(0, 0, -178)),
-	item("practice_field", "Practice Field", 20, 2, { "frontoffice" }, Vector3.new(-10, 0, 200)),
-	item("practice_lockerroom", "Practice Locker Room", 50, 2, { "practice_field" }, Vector3.new(-175, 0, CAMPUS_Z)),
-	item("practice_gear", "Practice Gear", 90, 3, { "practice_field" }, Vector3.new(10, 0, 200)),
-	item("weightroom", "Weight Room", 150, 4, { "practice_lockerroom" }, Vector3.new(-115, 0, CAMPUS_Z)),
-	item("trainingroom", "Training Room", 240, 5, { "weightroom" }, Vector3.new(-55, 0, CAMPUS_Z)),
-	item("filmroom", "Film Room", 360, 6, { "trainingroom" }, Vector3.new(55, 0, CAMPUS_Z)),
+local PIECES = {
+	-- The Team HQ (you start inside it) ----------------------------------------------------------
+	piece(
+		"hq_lobby",
+		"Lobby & Reception",
+		{ "Reception Desk", "Team Wall & Logo", "Seating & Plants", "Trophy Case", "Big Screen" },
+		300,
+		10,
+		{},
+		Vector3.new(-100, 0, 222)
+	),
+	piece(
+		"hq_frontoffice",
+		"Front Office",
+		{ "Walls & Door", "GM Desk", "Draft Board", "Windows & Decor" },
+		800,
+		14,
+		{ "hq_lobby" },
+		Vector3.new(-232, 0, HQ_FRONT_BUTTON_Z)
+	),
+	piece(
+		"hq_lockerroom",
+		"Locker Room",
+		{ "Walls & Floor", "Lockers", "Benches & Logo", "Showers & Extras" },
+		1200,
+		18,
+		{ "hq_lobby" },
+		Vector3.new(-216, 0, HQ_BACK_BUTTON_Z)
+	),
+	piece(
+		"hq_coaches",
+		"Coaches' Offices",
+		{ "Walls & Doors", "Head Coach Office", "Assistant Desks", "Play Whiteboards" },
+		2000,
+		22,
+		{ "hq_frontoffice" },
+		Vector3.new(-183, 0, HQ_FRONT_BUTTON_Z)
+	),
 
-	-- Groundbreaking at the stadium -------------------------------------------------------
-	item("turf", "Turf Field", 500, 6, { "filmroom", "practice_gear" }, Vector3.new(0, 0, 165)),
-	item("yardlines", "Yard Lines", 650, 7, { "turf" }, Vector3.new(-20, 0, SIDELINE_Z)),
-	item("benches", "Team Benches", 750, 7, { "turf" }, Vector3.new(20, 0, SIDELINE_Z)),
-	item("endzones", "End Zones", 900, 8, { "yardlines" }, Vector3.new(-33, 0, SIDELINE_Z)),
-	item("ticketbooth", "Ticket Booth", 1100, 9, { "turf" }, Vector3.new(-20, 0, -166)),
-	item("goalposts", "Goal Posts", 1400, 10, { "endzones" }, Vector3.new(-46, 0, SIDELINE_Z)),
-	item("midfield", "Midfield Logo", 1700, 10, { "endzones" }, Vector3.new(33, 0, SIDELINE_Z)),
-	item("concessions", "Concession Stand", 2100, 12, { "ticketbooth" }, Vector3.new(-38, 0, -128)),
+	-- Practice ---------------------------------------------------------------------------------------
+	piece(
+		"practice_field",
+		"Practice Field",
+		{ "Grass", "Yard Lines", "End Zones", "Goal Posts", "Fence & Sideline", "Bleachers" },
+		3500,
+		32,
+		{ "hq_lockerroom" },
+		Vector3.new(-130, 0, 392)
+	),
+	piece(
+		"hq_weightroom",
+		"Weight Room",
+		{ "Walls & Rubber Floor", "Squat Racks", "Benches & Dumbbells", "Mirrors & Banners" },
+		4500,
+		36,
+		{ "hq_lockerroom" },
+		Vector3.new(-117, 0, HQ_BACK_BUTTON_Z)
+	),
+	piece(
+		"hq_equipment",
+		"Equipment Room",
+		{ "Walls & Shelves", "Helmets & Pads", "Laundry & Carts" },
+		5000,
+		38,
+		{ "hq_lockerroom" },
+		Vector3.new(-167, 0, HQ_BACK_BUTTON_Z)
+	),
+	piece(
+		"golf_carts",
+		"Golf Cart Garage",
+		{ "Garage", "Golf Cart #1", "Golf Cart #2", "Charging Station & Cart #3" },
+		6000,
+		30,
+		{ "practice_field" },
+		Vector3.new(124, 0, 348)
+	),
+	piece(
+		"practice_gear",
+		"Practice Gear",
+		{ "Blocking Sleds", "Tackling Dummies", "Agility Ladder & Cones", "Coach Tower" },
+		7000,
+		44,
+		{ "practice_field" },
+		Vector3.new(-40, 0, 392)
+	),
+	piece(
+		"hq_trainingroom",
+		"Training Room",
+		{ "Walls & Floor", "Treatment Tables", "Cold & Hot Tubs", "Rehab Gear" },
+		8500,
+		50,
+		{ "hq_weightroom" },
+		Vector3.new(-67, 0, HQ_BACK_BUTTON_Z)
+	),
+	piece(
+		"hq_filmroom",
+		"Film Room",
+		{ "Walls & Tiers", "Seats", "Big Screen & Projector" },
+		10000,
+		56,
+		{ "hq_coaches" },
+		Vector3.new(-17, 0, HQ_BACK_BUTTON_Z)
+	),
+	piece(
+		"hq_meeting",
+		"Team Meeting Room",
+		{ "Walls", "Seating Rows", "Podium & Screen" },
+		12000,
+		62,
+		{ "hq_coaches" },
+		Vector3.new(17, 0, HQ_FRONT_BUTTON_Z)
+	),
 
-	-- The lower bowl + locker rooms --------------------------------------------------------
-	item("bleachers_home", "Home Stands", 3000, 16, { "goalposts" }, Vector3.new(46, 0, SIDELINE_Z)),
-	item("home_lockerroom", "Home Locker Room", 3800, 18, { "bleachers_home" }, Vector3.new(20, 0, 163)),
-	item("bleachers_visitor", "Visitor Stands", 4500, 20, { "bleachers_home" }, Vector3.new(-59, 0, SIDELINE_Z)),
-	item("visitor_lockerroom", "Visitor Locker Room", 5500, 22, { "bleachers_visitor" }, Vector3.new(-58, 0, -105)),
-	item("scoreboard", "Scoreboard", 6500, 24, { "bleachers_home" }, Vector3.new(59, 0, SIDELINE_Z)),
-	item("parking", "Parking Lot", 8500, 28, { "concessions" }, Vector3.new(-84, 0, -165)),
-	item("endzone_stands_west", "West End Zone Seats", 11000, 34, { "bleachers_visitor" }, Vector3.new(-72, 0, SIDELINE_Z)),
-	item("endzone_stands_east", "East End Zone Seats", 11000, 34, { "bleachers_visitor" }, Vector3.new(72, 0, SIDELINE_Z)),
-	item(
+	-- The stadium: field ---------------------------------------------------------------------------
+	piece(
+		"turf",
+		"Stadium Turf",
+		{ "Field Base", "Grass", "Mowing Stripes" },
+		15000,
+		70,
+		{ "hq_filmroom", "practice_gear" },
+		Vector3.new(0, 0, 165)
+	),
+	piece(
+		"yardlines",
+		"Yard Lines",
+		{ "Sidelines & End Lines", "Yard Lines", "Numbers & Hash Marks" },
+		17000,
+		74,
+		{ "turf" },
+		Vector3.new(-20, 0, SIDELINE_Z)
+	),
+	piece(
+		"benches",
+		"Team Benches",
+		{ "Sideline Mats", "Benches", "Coolers & Medical Tent", "Sideline Boards" },
+		19000,
+		78,
+		{ "turf" },
+		Vector3.new(20, 0, SIDELINE_Z)
+	),
+	piece(
+		"endzones",
+		"End Zones",
+		{ "End Zone Paint", "Team Name", "Pylons" },
+		21000,
+		82,
+		{ "yardlines" },
+		Vector3.new(-33, 0, SIDELINE_Z)
+	),
+	piece(
+		"hq_cafeteria",
+		"Cafeteria",
+		{ "Walls & Floor", "Serving Line", "Tables & Chairs", "Smoothie Bar" },
+		23000,
+		86,
+		{ "hq_trainingroom" },
+		Vector3.new(57, 0, HQ_BACK_BUTTON_Z)
+	),
+	piece(
+		"goalposts",
+		"Goal Posts",
+		{ "Posts & Padding", "Crossbars & Uprights", "Wind Ribbons" },
+		26000,
+		90,
+		{ "endzones" },
+		Vector3.new(-46, 0, SIDELINE_Z)
+	),
+	piece("ticketbooth", "Ticket Booth", { "Booth", "Window & Awning", "Signs" }, 28000, 92, { "turf" }, Vector3.new(-20, 0, -166)),
+	piece("midfield", "Midfield Logo", { "Logo Ring", "Team Logo" }, 30000, 95, { "endzones" }, Vector3.new(33, 0, SIDELINE_Z)),
+	piece(
+		"concessions",
+		"Concession Stand",
+		{ "Stand", "Counter & Awning", "Menu & Giant Hot Dog" },
+		34000,
+		100,
+		{ "ticketbooth" },
+		Vector3.new(-38, 0, -128)
+	),
+	piece(
+		"hq_lounge",
+		"Player Lounge",
+		{ "Walls & Carpet", "Couches & TV", "Pool & Ping-Pong", "Arcade & Snacks" },
+		38000,
+		105,
+		{ "hq_cafeteria" },
+		Vector3.new(66, 0, HQ_FRONT_BUTTON_Z)
+	),
+
+	-- The stadium: the bowl -------------------------------------------------------------------------
+	piece(
+		"bleachers_home",
+		"Home Stands",
+		{ "Concrete Rows", "Seats", "Aisles & Railings", "Field Wall & Signs", "Home Tunnel" },
+		45000,
+		120,
+		{ "goalposts" },
+		Vector3.new(46, 0, SIDELINE_Z)
+	),
+	piece(
+		"home_lockerroom",
+		"Home Locker Room",
+		{ "Building", "Lockers", "Logo & Whiteboard" },
+		50000,
+		125,
+		{ "bleachers_home" },
+		Vector3.new(20, 0, 163)
+	),
+	piece(
+		"hq_interview",
+		"Interview Room",
+		{ "Walls & Backdrop", "Podium & Mics", "Press Seats & Cameras" },
+		55000,
+		130,
+		{ "hq_meeting" },
+		Vector3.new(-33, 0, HQ_FRONT_BUTTON_Z)
+	),
+	piece(
+		"bleachers_visitor",
+		"Visitor Stands",
+		{ "Concrete Rows", "Seats", "Aisles & Railings", "Field Wall & Players' Tunnel" },
+		62000,
+		140,
+		{ "bleachers_home" },
+		Vector3.new(-59, 0, SIDELINE_Z)
+	),
+	piece(
+		"visitor_lockerroom",
+		"Visitor Locker Room",
+		{ "Building", "Lockers", "Bench & Signs" },
+		68000,
+		145,
+		{ "bleachers_visitor" },
+		Vector3.new(-58, 0, -105)
+	),
+	piece(
+		"scoreboard",
+		"Scoreboard",
+		{ "Support Legs", "Board Frame", "Screens" },
+		75000,
+		155,
+		{ "bleachers_home" },
+		Vector3.new(59, 0, SIDELINE_Z)
+	),
+	piece(
+		"parking",
+		"Parking Lot",
+		{ "Asphalt", "Parking Lines", "Lamp Posts", "Cars" },
+		85000,
+		165,
+		{ "concessions" },
+		Vector3.new(-84, 0, -165)
+	),
+	piece(
+		"endzone_stands_west",
+		"West End Zone Seats",
+		{ "Concrete Rows", "Seats", "Aisles & Walls" },
+		95000,
+		175,
+		{ "bleachers_visitor" },
+		Vector3.new(-72, 0, SIDELINE_Z)
+	),
+	piece(
+		"endzone_stands_east",
+		"East End Zone Seats",
+		{ "Concrete Rows", "Seats", "Aisles & Walls" },
+		95000,
+		175,
+		{ "bleachers_visitor" },
+		Vector3.new(72, 0, SIDELINE_Z)
+	),
+	piece(
 		"corner_seats",
 		"Corner Seats (Full Bowl)",
-		14000,
-		40,
+		{ "Concrete Rows", "Seats", "Corner Walls & Aisles" },
+		120000,
+		200,
 		{ "endzone_stands_west", "endzone_stands_east" },
 		Vector3.new(-124, 0, SIDELINE_Z)
 	),
-	item("teamstore", "Team Store", 16000, 45, { "parking" }, Vector3.new(40, 0, -150)),
-
-	-- Big league --------------------------------------------------------------------------
-	item("lights", "Stadium Lights", 30000, 60, { "scoreboard" }, Vector3.new(-85, 0, SIDELINE_Z)),
-	item("upper_home", "Home Upper Deck", 50000, 80, { "corner_seats" }, Vector3.new(85, 0, SIDELINE_Z)),
-	item("indoor_dome", "Indoor Practice Dome", 65000, 90, { "upper_home", "filmroom" }, Vector3.new(0, 0, 235)),
-	item("upper_visitor", "Visitor Upper Deck", 85000, 105, { "upper_home" }, Vector3.new(-98, 0, SIDELINE_Z)),
-	item("jumbotron", "Jumbotron", 120000, 135, { "lights" }, Vector3.new(98, 0, SIDELINE_Z)),
-	item("pressbox", "Press Box", 165000, 170, { "upper_home" }, Vector3.new(-111, 0, SIDELINE_Z)),
-	item("upper_bowl_ends", "Upper Bowl Ends (Full Ring)", 200000, 190, { "upper_visitor" }, Vector3.new(124, 0, SIDELINE_Z)),
-	item("suites", "Luxury Suites", 230000, 215, { "upper_visitor" }, Vector3.new(111, 0, SIDELINE_Z)),
-	item("broadcast_booth", "TV Broadcast Booth", 260000, 230, { "suites", "pressbox" }, Vector3.new(16, 0, -100)),
-	item("canopy", "Stadium Canopy", 360000, 300, { "upper_bowl_ends", "broadcast_booth" }, Vector3.new(0, 0, 10)),
-	item("trophy", "Championship Trophy", 550000, 420, { "canopy", "jumbotron", "indoor_dome" }, Vector3.new(118, 0, -140)),
+	piece(
+		"teamstore",
+		"Team Store",
+		{ "Building", "Glass Front & Doors", "Merch & Sign" },
+		135000,
+		210,
+		{ "parking" },
+		Vector3.new(40, 0, -150)
+	),
+	piece(
+		"fan_zone",
+		"Tailgate & Fan Zone",
+		{ "Tailgate Lot", "Food Trucks", "Tents & Grills", "Football Toss Game", "Mascot Statue", "Stage & Speakers" },
+		160000,
+		240,
+		{ "teamstore" },
+		Vector3.new(206, 0, -150)
+	),
+	piece(
+		"lights",
+		"Stadium Lights",
+		{ "Tower 1", "Tower 2", "Tower 3", "Tower 4" },
+		190000,
+		260,
+		{ "scoreboard" },
+		Vector3.new(-85, 0, SIDELINE_Z)
+	),
+	piece(
+		"upper_home",
+		"Home Upper Deck",
+		{ "Upper Rows", "Seats", "Facade & Railings", "Tunnel Bridge" },
+		230000,
+		290,
+		{ "corner_seats" },
+		Vector3.new(85, 0, SIDELINE_Z)
+	),
+	piece(
+		"indoor_dome",
+		"Indoor Practice Dome",
+		{ "Frame", "Turf & Lines", "Roof Panels", "Doors & Lights" },
+		270000,
+		320,
+		{ "upper_home", "practice_gear" },
+		Vector3.new(150, 0, 400)
+	),
+	piece(
+		"hall_of_fame",
+		"Hall of Fame & Museum",
+		{ "Building", "Trophy Cases", "Jersey Wall", "Player Statues", "Gold Entrance" },
+		320000,
+		350,
+		{ "hq_interview", "upper_home" },
+		Vector3.new(195, 0, 193)
+	),
+	piece(
+		"upper_visitor",
+		"Visitor Upper Deck",
+		{ "Upper Rows", "Seats", "Facade & Railings" },
+		380000,
+		390,
+		{ "upper_home" },
+		Vector3.new(-98, 0, SIDELINE_Z)
+	),
+	piece(
+		"jumbotron",
+		"Jumbotron",
+		{ "Support Tower", "Screen Frame", "Video Screen & Speakers" },
+		450000,
+		430,
+		{ "lights" },
+		Vector3.new(98, 0, SIDELINE_Z)
+	),
+	piece(
+		"pressbox",
+		"Press Box",
+		{ "Columns & Floor", "Lower Level", "Upper Level", "Roof & TV Cameras" },
+		530000,
+		470,
+		{ "upper_home" },
+		Vector3.new(-111, 0, SIDELINE_Z)
+	),
+	piece(
+		"upper_bowl_ends",
+		"Upper Bowl Ends (Full Ring)",
+		{ "End Rows", "Corner Rows", "Seats", "Facades & Railings" },
+		620000,
+		520,
+		{ "upper_visitor" },
+		Vector3.new(124, 0, SIDELINE_Z)
+	),
+	piece(
+		"suites",
+		"Luxury Suites",
+		{ "Columns & Floor", "Glass Fronts", "Suite Interiors & Signs" },
+		720000,
+		570,
+		{ "upper_visitor" },
+		Vector3.new(111, 0, SIDELINE_Z)
+	),
+	piece(
+		"broadcast_booth",
+		"TV Broadcast Booth",
+		{ "Booth", "Glass & Cameras", "Satellite Dish" },
+		830000,
+		620,
+		{ "suites", "pressbox" },
+		Vector3.new(16, 0, -100)
+	),
+	piece(
+		"canopy",
+		"Stadium Canopy",
+		{ "Roof Supports", "Sideline Roofs", "End Roofs", "Roof Lights" },
+		1000000,
+		700,
+		{ "upper_bowl_ends", "broadcast_booth" },
+		Vector3.new(0, 0, 10)
+	),
+	piece(
+		"trophy",
+		"Championship Trophy",
+		{ "Plinth", "Trophy Base", "Golden Trophy", "Champions Plaque" },
+		1500000,
+		800,
+		{ "canopy", "jumbotron", "indoor_dome", "hall_of_fame" },
+		Vector3.new(118, 0, -140)
+	),
 }
 
+-- Rounds a price to 2 significant digits (1234 -> 1200, 56789 -> 57000).
+local function nice(value)
+	if value <= 0 then
+		return 0
+	end
+	local digits = math.max(0, math.floor(math.log10(value)) - 1)
+	local unit = 10 ^ digits
+	return math.floor(value / unit + 0.5) * unit
+end
+
+Items.Pieces = PIECES
+Items.PieceById = {}
+Items.List = {}
 Items.ById = {}
+
+for _, p in ipairs(PIECES) do
+	Items.PieceById[p.Id] = p
+end
+
+for pieceIndex, p in ipairs(PIECES) do
+	local count = #p.Stages
+	local weightTotal = count * (count + 1) / 2
+	p.Order = pieceIndex
+	p.StageIds = {}
+	for stage, stageName in ipairs(p.Stages) do
+		local requires
+		if stage == 1 then
+			requires = {}
+			for _, requiredPiece in ipairs(p.Requires) do
+				local other = Items.PieceById[requiredPiece]
+				assert(other, ("Items: %s requires unknown piece %s"):format(p.Id, requiredPiece))
+				table.insert(requires, requiredPiece .. ":" .. #other.Stages)
+			end
+		else
+			requires = { p.Id .. ":" .. (stage - 1) }
+		end
+		local cost = nice(p.Cost * PRICE_SCALE * stage / weightTotal)
+		if pieceIndex == 1 and stage == 1 then
+			cost = 0 -- the very first step is free
+		end
+		local entry = {
+			Id = p.Id .. ":" .. stage,
+			PieceId = p.Id,
+			Stage = stage,
+			StageCount = count,
+			Name = ("%s: %s"):format(p.Name, stageName),
+			PieceName = p.Name,
+			StageName = stageName,
+			Cost = cost,
+			Income = math.max(1, math.floor(p.Income * stage / weightTotal + 0.5)),
+			Requires = requires,
+			Button = p.Button,
+		}
+		table.insert(Items.List, entry)
+		Items.ById[entry.Id] = entry
+		p.StageIds[stage] = entry.Id
+	end
+end
 for index, entry in ipairs(Items.List) do
 	entry.Order = index
-	Items.ById[entry.Id] = entry
 end
 
 -- Returns true when every requirement of `item` is in the `owned` set.
-function Items.IsUnlocked(entry, owned)
-	for _, requiredId in ipairs(entry.Requires) do
+function Items.IsUnlocked(item, owned)
+	for _, requiredId in ipairs(item.Requires) do
 		if not owned[requiredId] then
 			return false
 		end
@@ -100,12 +517,37 @@ end
 function Items.TotalIncome(owned)
 	local total = 0
 	for id in pairs(owned) do
-		local entry = Items.ById[id]
-		if entry then
-			total += entry.Income
+		local item = Items.ById[id]
+		if item then
+			total += item.Income
 		end
 	end
 	return total
+end
+
+-- How many steps of a piece are owned (steps are always bought in order).
+function Items.StagesOwned(owned, pieceId)
+	local p = Items.PieceById[pieceId]
+	local count = 0
+	if p then
+		for stage = 1, #p.Stages do
+			if owned[pieceId .. ":" .. stage] then
+				count = stage
+			else
+				break
+			end
+		end
+	end
+	return count
+end
+
+-- True if at least `stage` steps (default: all) of a piece are owned.
+function Items.HasPiece(owned, pieceId, stage)
+	local p = Items.PieceById[pieceId]
+	if not p then
+		return false
+	end
+	return Items.StagesOwned(owned, pieceId) >= (stage or #p.Stages)
 end
 
 return Items

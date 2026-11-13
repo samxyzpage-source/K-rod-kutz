@@ -25,6 +25,10 @@ local Format = require(Shared:WaitForChild("Format"))
 local BuildUtil = require(script.Parent.BuildUtil)
 local Builders = require(script.Parent.Builders)
 local GameDay = require(script.Parent.GameDay)
+
+-- Other modules can react when a step of a piece is built (e.g. golf carts): [pieceId] = fn(plot, item)
+local pieceHooks = {}
+local releaseHooks = {} -- fn(plot) when a plot is released
 local PlayerData = require(script.Parent.PlayerData)
 local World = require(script.Parent.World)
 
@@ -112,12 +116,9 @@ end
 -- Displays
 ---------------------------------------------------------------------------------------------
 
-local function findLabel(plot, itemId, labelName)
-	local model = plot.ItemModels[itemId]
-	if not model then
-		return nil
-	end
-	local label = model:FindFirstChild(labelName, true)
+-- Finds a named TextLabel anywhere in the plot's built pieces (label names are unique per plot).
+local function findLabel(plot, labelName)
+	local label = plot.ItemsFolder:FindFirstChild(labelName, true)
 	if label and label:IsA("TextLabel") then
 		return label
 	end
@@ -137,27 +138,27 @@ local function attendance(plot)
 end
 
 local function updateScoreboard(plot)
-	local title = findLabel(plot, "scoreboard", "ScoreboardTitle")
+	local title = findLabel(plot, "ScoreboardTitle")
 	if title then
 		title.Text = plot.TeamName .. " STADIUM"
 	end
-	local score = findLabel(plot, "scoreboard", "ScoreboardScore")
+	local score = findLabel(plot, "ScoreboardScore")
 	if score then
 		score.Text = ("HOME %d  -  AWAY %d"):format(plot.HomeScore, plot.AwayScore)
 	end
-	local crowd = findLabel(plot, "scoreboard", "ScoreboardAttendance")
+	local crowd = findLabel(plot, "ScoreboardAttendance")
 	if crowd then
 		crowd.Text = "ATTENDANCE " .. Format.Commas(attendance(plot))
 	end
 end
 
 -- Flood lights live on the light towers and under the canopy roof.
-local LIGHT_ITEMS = { "lights", "canopy" }
+local LIGHT_PIECES = { lights = true, canopy = true }
 
 local function applyLights(plot)
-	for _, itemId in ipairs(LIGHT_ITEMS) do
-		local model = plot.ItemModels[itemId]
-		if model then
+	for itemId, model in pairs(plot.ItemModels) do
+		local item = Items.ById[itemId]
+		if item and LIGHT_PIECES[item.PieceId] then
 			for _, descendant in ipairs(model:GetDescendants()) do
 				if descendant:IsA("SpotLight") or descendant:IsA("PointLight") or descendant:IsA("SurfaceLight") then
 					if descendant.Name == "FloodLight" then
@@ -255,19 +256,21 @@ local function animateIn(model)
 	end
 end
 
+-- Builds one STEP of a piece (the piece's builder runs with ctx.onlyStage = step).
 local function buildItem(plot, item, animate)
-	local builder = Builders[item.Id]
+	local builder = Builders[item.PieceId]
 	if not builder then
-		warn("[PlotManager] No builder for item " .. item.Id)
+		warn("[PlotManager] No builder for piece " .. item.PieceId)
 		return
 	end
 	local model = Instance.new("Model")
 	model.Name = item.Id
-	local ctx = BuildUtil.NewContext(plot.Origin, model, plot.Palette, plot.TeamName, Config)
+	local ctx = BuildUtil.NewContext(plot.Origin, model, plot.Palette, plot.TeamName, Config, item.Stage)
 	local ok, err = pcall(builder, ctx)
 	if not ok then
-		warn(("[PlotManager] Builder '%s' failed: %s"):format(item.Id, tostring(err)))
+		warn(("[PlotManager] Builder '%s' (step %d) failed: %s"):format(item.PieceId, item.Stage, tostring(err)))
 	end
+	BuildUtil.PruneEmpty(model)
 	model.Parent = plot.ItemsFolder
 	plot.ItemModels[item.Id] = model
 	if animate and Config.BuildAnimation then
@@ -277,15 +280,19 @@ local function buildItem(plot, item, animate)
 		end
 	end
 
-	if item.Id == "lights" or item.Id == "canopy" then
+	local pieceId = item.PieceId
+	if LIGHT_PIECES[pieceId] then
 		applyLights(plot)
-	elseif item.Id == "scoreboard" then
+	elseif pieceId == "scoreboard" then
 		updateScoreboard(plot)
-	elseif item.Id == "jumbotron" then
-		local screen = findLabel(plot, "jumbotron", "JumbotronText")
+	elseif pieceId == "jumbotron" then
+		local screen = findLabel(plot, "JumbotronText")
 		if screen then
 			screen.Text = plot.TeamName
 		end
+	end
+	if pieceHooks[pieceId] then
+		task.spawn(pieceHooks[pieceId], plot, item)
 	end
 end
 
@@ -309,7 +316,7 @@ local function createButton(plot, item)
 
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "Info"
-	gui.Size = UDim2.new(11, 0, 4, 0)
+	gui.Size = UDim2.new(12, 0, 5, 0)
 	gui.StudsOffset = Vector3.new(0, 4.5, 0)
 	gui.MaxDistance = 160
 	gui.LightInfluence = 0
@@ -317,19 +324,31 @@ local function createButton(plot, item)
 
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Name = "ItemName"
-	nameLabel.Size = UDim2.new(1, 0, 0.55, 0)
+	nameLabel.Size = UDim2.new(1, 0, 0.42, 0)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Font = Enum.Font.GothamBlack
 	nameLabel.TextScaled = true
 	nameLabel.TextColor3 = Color3.new(1, 1, 1)
 	nameLabel.TextStrokeTransparency = 0.3
-	nameLabel.Text = item.Name
+	nameLabel.Text = item.PieceName
 	nameLabel.Parent = gui
+
+	local stepLabel = Instance.new("TextLabel")
+	stepLabel.Name = "Step"
+	stepLabel.Position = UDim2.new(0, 0, 0.42, 0)
+	stepLabel.Size = UDim2.new(1, 0, 0.28, 0)
+	stepLabel.BackgroundTransparency = 1
+	stepLabel.Font = Enum.Font.GothamBold
+	stepLabel.TextScaled = true
+	stepLabel.TextColor3 = Color3.fromRGB(190, 230, 255)
+	stepLabel.TextStrokeTransparency = 0.3
+	stepLabel.Text = ("Step %d/%d: %s"):format(item.Stage, item.StageCount, item.StageName)
+	stepLabel.Parent = gui
 
 	local priceLabel = Instance.new("TextLabel")
 	priceLabel.Name = "Price"
-	priceLabel.Position = UDim2.new(0, 0, 0.55, 0)
-	priceLabel.Size = UDim2.new(1, 0, 0.45, 0)
+	priceLabel.Position = UDim2.new(0, 0, 0.7, 0)
+	priceLabel.Size = UDim2.new(1, 0, 0.3, 0)
 	priceLabel.BackgroundTransparency = 1
 	priceLabel.Font = Enum.Font.GothamBold
 	priceLabel.TextScaled = true
@@ -408,11 +427,13 @@ function PlotManager.Purchase(plot, item)
 	recalcIncome(plot)
 	local unlocked = refreshButtons(plot)
 	local message = ("Built %s!  +%s/s"):format(item.Name, Format.Short(item.Income * Config.IncomeMultiplier))
-	if #unlocked > 0 then
-		local names = {}
-		for _, newItem in ipairs(unlocked) do
-			table.insert(names, newItem.Name)
+	local names = {}
+	for _, newItem in ipairs(unlocked) do
+		if newItem.Stage == 1 then
+			table.insert(names, newItem.PieceName)
 		end
+	end
+	if #names > 0 then
 		message ..= "  Unlocked: " .. table.concat(names, ", ")
 	end
 	notify(player, message, "success")
@@ -510,12 +531,18 @@ function PlotManager.Claim(plot, player, profile)
 
 	updateFreePlots()
 
+	-- take the new owner into their Team HQ
+	local character = player.Character
+	if character then
+		character:PivotTo(plot.Refs.SpawnCFrame)
+	end
+
 	local built = countOwned(plot)
 	if built > 0 then
-		notify(player, ("Welcome back! Your stadium has %d of %d pieces."):format(built, #Items.List), "success")
+		notify(player, ("Welcome back to your Team HQ! %d of %d steps built."):format(built, #Items.List), "success")
 	else
-		notify(player, "Stadium claimed! Step on the glowing button to start building.", "success")
-		notify(player, "Your money piles up in the VAULT by the gate - step on the green pad to collect it.", "info")
+		notify(player, "Welcome to your Team HQ! Step on the glowing button to start building.", "success")
+		notify(player, "Your money piles up in the TEAM SAFE - step on the green pad in the lobby to collect it.", "info")
 	end
 	GameDay.OnPlotClaimed(plot)
 end
@@ -590,6 +617,9 @@ function PlotManager.Release(player)
 	plot.Buttons = {}
 	setGateClaimed(plot, nil)
 	GameDay.ClearCrowd(plot)
+	for _, hook in ipairs(releaseHooks) do
+		task.spawn(hook, plot)
+	end
 	updateVault(plot)
 	updateFreePlots()
 	for _, other in ipairs(Players:GetPlayers()) do
@@ -699,7 +729,7 @@ local function jumbotronMessages(plot)
 end
 
 local function showOnJumbotron(plot, text, color)
-	local screen = findLabel(plot, "jumbotron", "JumbotronText")
+	local screen = findLabel(plot, "JumbotronText")
 	if screen then
 		screen.Text = text
 		screen.BackgroundColor3 = color
@@ -709,7 +739,7 @@ end
 
 -- Every so often one of the teams scores, so the scoreboard and jumbotron feel alive.
 local function simulateGame(plot)
-	if not plot.ItemModels.scoreboard then
+	if not findLabel(plot, "ScoreboardScore") then
 		return
 	end
 	local homeScores = rng:NextNumber() < 0.6
@@ -723,7 +753,7 @@ local function simulateGame(plot)
 		plot.HomeScore, plot.AwayScore = 0, 0
 	end
 	updateScoreboard(plot)
-	if homeScores and plot.ItemModels.jumbotron then
+	if homeScores and findLabel(plot, "JumbotronText") then
 		plot.JumbotronHoldUntil = os.clock() + 4
 		showOnJumbotron(plot, points == 7 and "TOUCHDOWN!" or "FIELD GOAL!", Color3.fromRGB(255, 196, 37))
 	end
@@ -848,7 +878,7 @@ function PlotManager.Start()
 		while true do
 			task.wait(3)
 			for _, plot in ipairs(plots) do
-				if plot.Owner and plot.ItemModels.jumbotron and os.clock() >= plot.JumbotronHoldUntil then
+				if plot.Owner and os.clock() >= plot.JumbotronHoldUntil and findLabel(plot, "JumbotronText") then
 					local messages = jumbotronMessages(plot)
 					plot.JumbotronStep = plot.JumbotronStep % #messages + 1
 					local message = messages[plot.JumbotronStep]
@@ -880,6 +910,17 @@ function PlotManager.GetPlots()
 	return plots
 end
 
+-- fn(plot, item) is called (in its own thread) whenever a step of `pieceId` is built,
+-- including when a returning player's plot is rebuilt.
+function PlotManager.OnPieceBuilt(pieceId, fn)
+	pieceHooks[pieceId] = fn
+end
+
+-- fn(plot) is called when a plot is released (its owner left).
+function PlotManager.OnPlotReleased(fn)
+	table.insert(releaseHooks, fn)
+end
+
 -- Called by GameDay when a game day starts (active = true) or ends.
 function PlotManager.SetGameDay(active, multiplier)
 	gameDayActive = active
@@ -889,7 +930,7 @@ function PlotManager.SetGameDay(active, multiplier)
 			updateOwnerAttributes(plot)
 			if active then
 				notify(plot.Owner, ("GAME DAY! Fans are pouring in - %dX CASH!"):format(incomeBoost), "success")
-				if plot.ItemModels.jumbotron then
+				if findLabel(plot, "JumbotronText") then
 					plot.JumbotronHoldUntil = os.clock() + 4
 					showOnJumbotron(plot, "GAME DAY!", Color3.fromRGB(255, 196, 37))
 				end
