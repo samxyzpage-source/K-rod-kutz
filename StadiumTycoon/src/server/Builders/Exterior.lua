@@ -38,8 +38,10 @@
 	                         which climbs along the segment inside the facade band (offsets 152.4..158.4,
 	                         x 52 -> 17.4) to the top landing (x -8..17.4) at the upper concourse's gate
 	                         opening (offset 152, |x| < 8). Steps are diamond-plate ramps (30-33 deg).
-	  * elevator             a glass shaft at x 6.2..14, offsets 140.2..146 (doors at y 0, 30, 54) + a
-	                         door on the top landing (y 74); every door has buttons to the other 3 levels
+	  * elevator             a glass shaft at x 6.2..14, offsets 140.2..146 (doors at y 0 + 30 on its plaza
+	                         side, 54 on bridge E) + a door on the top landing (y 74); every door has
+	                         buttons to the other 3 levels. (The pocket behind the shaft, between F1 and
+	                         the +x hall wall, is closed: nothing opens or arrives into it.)
 	  The front walkway / back walk corridors (|x| < 11 from offset 149 outward, y 0.8..9) stay clear:
 	  turnstiles are non-collidable, everything collidable stands at |x| >= 13 or above y 22.
 
@@ -527,8 +529,20 @@ local function buildGate(ctx, seg, gate, L)
 		BuildUtil.Light(pylon, "PointLight", { Name = "PylonLight", Range = 22, Brightness = 1.2, Color = LIGHT_WARM, Shadows = false })
 		if s == -(gate.plazaSide or 1) then
 			-- a ticket window in the pylon's side, facing the people walking through the portal
-			local window =
-				box(hall, seg, "TicketWindow", s * PORTAL_HALF, s * (PORTAL_HALF - 0.15), 2.6, 7.4, 156, 161, SIGN_DARK, Enum.Material.Glass, PAINT)
+			local window = box(
+				hall,
+				seg,
+				"TicketWindow",
+				s * PORTAL_HALF,
+				s * (PORTAL_HALF - 0.15),
+				2.6,
+				7.4,
+				156,
+				161,
+				SIGN_DARK,
+				Enum.Material.Glass,
+				PAINT
+			)
 			local face = s < 0 and Enum.NormalId.Right or Enum.NormalId.Left
 			local tickets = write(window, face, "TICKETS", ink(SIGN_DARK, team), { Glow = true, Top = 0.06, Height = 0.26 })
 			addLine(tickets, "WILL CALL", 0.36, 0.14, Enum.Font.GothamBold)
@@ -882,7 +896,8 @@ local function buildGate(ctx, seg, gate, L)
 	-- record (both kept up to date by the server)
 	for _, s in ipairs({ -1, 1 }) do
 		local color = s < 0 and team.Primary or team.Secondary
-		local banner = box(hall, seg, "WellBanner", s * (HALL_HALF - 0.15), s * HALL_HALF, 9, 25, 95, 111, color, Enum.Material.Fabric, PAINT)
+		local banner =
+			box(hall, seg, "WellBanner", s * (HALL_HALF - 0.15), s * HALL_HALF, 9, 25, 95, 111, color, Enum.Material.Fabric, PAINT)
 		local face = s < 0 and Enum.NormalId.Right or Enum.NormalId.Left
 		if s < 0 then
 			liveTeam(ctx, banner, face, ink(color, team), color, { PPS = 10, PadY = 0.3 })
@@ -1031,7 +1046,14 @@ local function hallEscalators(ctx, seg)
 	-- (from the ground the truss starts where its lower corner clears the floor)
 	local len1 = math.sqrt(f1run * f1run + 30 * 30)
 	local f1start = ((TREAD + TRUSS) * f1run / len1 + 0.3) / (30 / f1run) / f1run
-	escalatorBank(esc, seg, { F1.x, F1.y0, F1.bottom }, { F1.x, F1.y1, F1.top }, -6, 6, 2, f1start)
+	local f1 = escalatorBank(esc, seg, { F1.x, F1.y0, F1.bottom }, { F1.x, F1.y1, F1.top }, -6, 6, 2, f1start)
+	-- (the steps' local +Z runs down the slope: the prompt hangs over the bottom of the bank)
+	BuildUtil.Look(
+		f1,
+		"Escalators",
+		"Up to the main concourse! Hold the handrail - before kickoff thousands of fans ride up here to find their seats.",
+		{ At = Vector3.new(0, 3, len1 / 2 - 2.5), Distance = 9 }
+	)
 	box(esc, seg, "LandingC", -HALL_HALF, 6, 29, 30, 84, F1.top, slab, Enum.Material.Concrete)
 	rail(esc, seg, 5.6, 6, 30, HALL_IN, F1.top)
 	-- bridge A back out to the mezzanine B (the bottom of F2)
@@ -1148,7 +1170,8 @@ local function cornerRamp(ctx, seg, s)
 	local inside = at(seg, x(c), L.Bowl.MainConcourse.Floor, 71) * TURN
 	local outside = at(seg, x(c), L.Bowl.MainConcourse.Floor, 93)
 	local doorTop = 38.6
-	local door = box(ramp, seg, "ConcourseEntryDoor", x(c - 3), x(c + 3), 30.05, doorTop, 84.2, 84.5, SIGN_DARK, Enum.Material.Glass, NO_COLLIDE)
+	local door =
+		box(ramp, seg, "ConcourseEntryDoor", x(c - 3), x(c + 3), 30.05, doorTop, 84.2, 84.5, SIGN_DARK, Enum.Material.Glass, NO_COLLIDE)
 	local label = write(door, OUTWARD, "MAIN CONCOURSE", ink(SIGN_DARK, ctx.colors), { Glow = true, Top = 0.05, Height = 0.15 })
 	local hint = addLine(label, "PRESS E TO WALK IN  >>>", 0.23, 0.08, Enum.Font.GothamBold)
 	hint.TextColor3 = WHITE
