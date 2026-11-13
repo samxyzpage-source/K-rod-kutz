@@ -379,9 +379,18 @@ function Field.turf(ctx)
 		{ x = -(halfX - GUTTER / 2), z = crownZ, alongX = false },
 		{ x = halfX - GUTTER / 2, z = crownZ, alongX = false },
 	}
-	for _, basin in ipairs(basins) do
+	for index, basin in ipairs(basins) do
 		local size = basin.alongX and Vector3.new(4, basinTop, GUTTER - 0.2) or Vector3.new(GUTTER - 0.2, basinTop, 4)
-		BuildUtil.Box(ctx, "CatchBasin", size, Vector3.new(basin.x, basinTop / 2, basin.z), BASIN_GREY, Enum.Material.Metal)
+		local part = BuildUtil.Box(ctx, "CatchBasin", size, Vector3.new(basin.x, basinTop / 2, basin.z), BASIN_GREY, Enum.Material.Metal)
+		if index == 2 then
+			-- (front sideline, west of every buy button)
+			BuildUtil.Look(
+				part,
+				"Drain Grate",
+				"Rain runs off the field into these grates and the drain pipes under the grass, so the turf never turns into a mud pit.",
+				{ At = Vector3.new(0, 2.5, 0), Distance = 8 }
+			)
+		end
 	end
 
 	-- Step 2: Grass --------------------------------------------------------------------------
@@ -434,7 +443,14 @@ function Field.yardlines(ctx)
 	BuildUtil.Stage(ctx, 1)
 	local outerLength = (half + BOUNDARY_WIDTH) * 2
 	paint(ctx, "SidelineFront", outerLength, BOUNDARY_WIDTH, 0, front - BOUNDARY_WIDTH / 2, LINE_THICKNESS, lineColor)
-	paint(ctx, "SidelineBack", outerLength, BOUNDARY_WIDTH, 0, back + BOUNDARY_WIDTH / 2, LINE_THICKNESS, lineColor)
+	local sidelineBack = paint(ctx, "SidelineBack", outerLength, BOUNDARY_WIDTH, 0, back + BOUNDARY_WIDTH / 2, LINE_THICKNESS, lineColor)
+	-- (beside the home bench area, west of it)
+	BuildUtil.Look(
+		sidelineBack,
+		"Sideline",
+		"Step on this white line with the ball and you're out of bounds! The field is 100 yards from goal line to goal line.",
+		{ At = Vector3.new(-80, 2.5, 0), Distance = 8 }
+	)
 	paint(ctx, "EndLineWest", BOUNDARY_WIDTH, width, -(half + BOUNDARY_WIDTH / 2), centerZ, LINE_THICKNESS, lineColor)
 	paint(ctx, "EndLineEast", BOUNDARY_WIDTH, width, half + BOUNDARY_WIDTH / 2, centerZ, LINE_THICKNESS, lineColor)
 	for _, s in ipairs({ -1, 1 }) do
