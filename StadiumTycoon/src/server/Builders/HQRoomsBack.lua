@@ -16,9 +16,11 @@
 	                     a live gear checklist + chair (seat), empty shelves, a pad rail, an island
 	                   2 helmets with facemasks, shoulder pads, cleats and ball bins (looks)
 	                   3 washers + dryers (looks), folding table, laundry carts, travel trunks
-	  hq_weightroom    1 rubber floor, glass front with sliding glass doors, team accent wall
+	  hq_weightroom    1 rubber floor with a turf sprint lane, glass front with sliding glass doors,
+	                     team accent wall
 	                   2 three squat racks with team bumper plates (use: lift), a plate stack
-	                   3 two bench presses (use: lift), dumbbell rack, kettlebells, plyo boxes
+	                   3 two bench presses (use: lift), dumbbell rack, kettlebells, plyo boxes, a push
+	                     sled on the turf and battle ropes (looks)
 	                   4 mirror wall, three motivational banners (looks), a live TEAM RATING board,
 	                     the weight-room record board
 	  hq_trainingroom  1 white clinic, tiled floor, frosted windows, red cross signs
@@ -29,7 +31,7 @@
 	                     resistance bands (looks)
 	  hq_filmroom      1 dark theatre: a staircase from the lobby up to six carpeted tiers with lit
 	                     step edges, glass rails
-	                   2 48 theatre seats (three of them TV camera seats aimed at the screen)
+	                   2 48 theatre seats (three aisle seats are TV camera seats aimed at the screen)
 	                   3 big screen (live summary), projector + beam, speakers, the coach's clicker
 	                     podium, popcorn machine (use), playbook library and a NOW SHOWING poster
 	  hq_cafeteria     1 the double-width dining hall, glass front, double doors with windows
@@ -526,7 +528,7 @@ local function lockerBank(ctx, frame, count, first, team)
 	local len = count * LOCKER_PITCH
 	local D = LOCKER_DEPTH
 	local inner = D - 0.3
-	lblock(bank, frame, "LockerBack", Vector3.new(len, 8.7, 0.3), 0, 0, -0.15, shade(team.Primary, 0.3), Enum.Material.Wood)
+	lblock(bank, frame, "LockerBack", Vector3.new(len, 8.5, 0.3), 0, 0, -0.15, shade(team.Primary, 0.3), Enum.Material.Wood)
 	lblock(bank, frame, "LockerBase", Vector3.new(len, 1, inner), 0, 0, -0.3 - inner / 2, BLACK)
 	local cap = lblock(bank, frame, "LockerCap", Vector3.new(len + 0.2, 0.9, D + 0.3), 0, 7.8, -(D + 0.3) / 2, team.Secondary)
 	for i = 0, count do
@@ -1106,7 +1108,7 @@ function HQRoomsBack.hq_equipment(ctx)
 	-- travel trunks on wheels
 	for i, tx in ipairs({ -164, -157 }) do
 		box(laundry, "TrunkWheels", tx - 2.4, FLOOR_TOP, 336.6, tx + 2.4, 0.8, 339.4, DARK_METAL, Enum.Material.Metal)
-		local trunk = box(laundry, "EquipmentTrunk", tx - 2.5, 0.8, 336.5, tx + 2.5, 3.8, 339.5, team.Primary, Enum.Material.SmoothPlastic)
+		local trunk = box(laundry, "EquipmentTrunk", tx - 2.5, 0.8, 336.5, tx + 2.5, 3.4, 339.5, team.Primary, Enum.Material.SmoothPlastic)
 		box(laundry, "TrunkLid", tx - 2.55, 3.4, 336.45, tx + 2.55, 3.8, 339.55, team.Secondary, Enum.Material.Metal)
 		if i == 1 then
 			sign(trunk, Enum.NormalId.Front, teamLabel(ctx), team.Primary, team, { InsetX = 0.1, Top = 0.15, Height = 0.55 })
@@ -1178,6 +1180,11 @@ function HQRoomsBack.hq_weightroom(ctx)
 		CastShadow = false,
 	})
 	sign(logoText, Enum.NormalId.Top, name, team.Primary, team, { InsetX = 0.02, InsetY = 0.05, PixelsPerStud = 14 })
+	-- a strip of turf for sprints and sled pushes, east of the door along the front windows
+	box(room, "TurfLane", -120, FLOOR_TOP, 281, -108, FLOOR_TOP + 0.04, 309, Color3.fromRGB(64, 140, 60), Enum.Material.Grass, PAINT)
+	for _, lz in ipairs({ 284, 291, 298, 305 }) do
+		box(room, "TurfLine", -120, FLOOR_TOP + 0.04, lz - 0.2, -108, FLOOR_TOP + 0.06, lz + 0.2, WHITE, Enum.Material.SmoothPlastic, PAINT)
+	end
 
 	-- Step 2: three squat racks on lifting platforms + a stack of spare plates -----------------
 	BuildUtil.Stage(ctx, 2)
@@ -1299,6 +1306,70 @@ function HQRoomsBack.hq_weightroom(ctx)
 	box(benches, "PlyoBox", -105.5, FLOOR_TOP, 298.5, -102.5, FLOOR_TOP + 2, 301.5, LIGHT_WOOD, Enum.Material.Wood)
 	local plyo = box(benches, "PlyoBox", -105.5, FLOOR_TOP, 303, -102.5, FLOOR_TOP + 3, 306, LIGHT_WOOD, Enum.Material.Wood)
 	BuildUtil.Look(plyo, "Plyo Boxes", "Jump up! Explosive box jumps make players quicker off the line.", { Distance = 7 })
+	-- a push sled loaded with team plates, at the far end of the turf lane
+	local sledX, sledZ = -114, 302.5
+	box(benches, "SledSkid", sledX - 1.6, FLOOR_TOP, sledZ - 2, sledX + 1.6, FLOOR_TOP + 0.4, sledZ + 2, IRON, Enum.Material.Metal)
+	local sledPost = cyl(benches, "SledPost", Vector3.new(sledX, FLOOR_TOP + 1.4, sledZ + 0.6), 2, 0.5, "Y", CHROME, Enum.Material.Metal)
+	for k, color in ipairs({ team.Primary, team.Secondary }) do
+		local plateY = FLOOR_TOP + 0.4 + (k - 0.5) * 0.5
+		cyl(benches, "SledPlate", Vector3.new(sledX, plateY, sledZ + 0.6), 0.5, 2.6 - 0.4 * k, "Y", color, Enum.Material.Rubber)
+	end
+	for _, s in ipairs({ -1, 1 }) do
+		local hx = sledX + s * 1.2
+		box(
+			benches,
+			"SledHandle",
+			hx - 0.15,
+			FLOOR_TOP + 0.4,
+			sledZ - 1.9,
+			hx + 0.15,
+			FLOOR_TOP + 3.3,
+			sledZ - 1.6,
+			IRON,
+			Enum.Material.Metal
+		)
+	end
+	box(
+		benches,
+		"SledBar",
+		sledX - 1.4,
+		FLOOR_TOP + 3.3,
+		sledZ - 1.9,
+		sledX + 1.4,
+		FLOOR_TOP + 3.6,
+		sledZ - 1.6,
+		team.Primary,
+		Enum.Material.Metal
+	)
+	BuildUtil.Look(
+		sledPost,
+		"Push Sled",
+		"Lean in and drive it down the turf! Sled pushes build the leg power linemen need to move the pile.",
+		{ Distance = 8 }
+	)
+	-- battle ropes tied to an anchor in front of the mirror wall
+	local anchor = box(benches, "RopeAnchor", IX1 - 1.3, FLOOR_TOP, 319, IX1 - 0.3, FLOOR_TOP + 1.2, 321, IRON, Enum.Material.Metal)
+	for _, rz in ipairs({ 319.5, 320.5 }) do
+		cyl(
+			benches,
+			"BattleRope",
+			Vector3.new(IX1 - 4.55, FLOOR_TOP + 0.2, rz),
+			6.5,
+			0.4,
+			"X",
+			Color3.fromRGB(40, 40, 44),
+			Enum.Material.Fabric,
+			{
+				CanCollide = false,
+			}
+		)
+	end
+	BuildUtil.Look(
+		anchor,
+		"Battle Ropes",
+		"Grab both ends and make waves as fast as you can. Thirty seconds of this and your arms feel like spaghetti!",
+		{ Distance = 8 }
+	)
 
 	-- Step 4: mirror wall, motivational banners, live team rating, record board ----------------
 	BuildUtil.Stage(ctx, 4)
@@ -1361,10 +1432,10 @@ function HQRoomsBack.hq_weightroom(ctx)
 	guiFrame(gui, 0, 0, 9, 1.2, team.Primary)
 	guiText(gui, 0.3, 0.15, 8.4, 0.9, "WEIGHT ROOM RECORDS", textColorOn(team.Primary, team), Enum.Font.GothamBlack)
 	local lines = {
-		{ "SQUAT", "655", "T. 'TANK' OKAFOR" },
-		{ "BENCH", "475", "D. 'DOZER' REYES" },
-		{ "DEADLIFT", "700", "M. 'MOOSE' LINDQVIST" },
-		{ "BOX JUMP", "64 IN", "J. 'HOPS' CARVER" },
+		{ "SQUAT", "655", "T. 'TANK' IRONWOOD" },
+		{ "BENCH", "475", "D. 'DOZER' BOULDERS" },
+		{ "DEADLIFT", "700", "M. 'MOOSE' MAPLEWOOD" },
+		{ "BOX JUMP", "64 IN", "J. 'HOPS' HOPPERTON" },
 	}
 	for i, line in ipairs(lines) do
 		local y = 1.5 + (i - 1) * 1
@@ -1372,7 +1443,7 @@ function HQRoomsBack.hq_weightroom(ctx)
 		guiText(gui, 2.9, y, 1.6, 0.7, line[2], WHITE, Enum.Font.GothamBlack, Enum.TextXAlignment.Left)
 		guiText(gui, 4.5, y, 4.3, 0.7, line[3], WHITE, Enum.Font.GothamBold, Enum.TextXAlignment.Left)
 	end
-	BuildUtil.Look(records, "Record Board", "The strongest lifts in team history. Legend says 'Tank' Okafor once squatted a golf cart!", {
+	BuildUtil.Look(records, "Record Board", "The strongest lifts in team history. Legend says 'Tank' Ironwood once squatted a golf cart!", {
 		Distance = 8,
 	})
 end
@@ -1464,7 +1535,7 @@ function HQRoomsBack.hq_trainingroom(ctx)
 					Transparency = 0.1,
 				}
 			)
-			box(treatment, "CurtainRod", -94.4, 8.6, cz - 0.08, -94.2, WALL_TOP, cz + 0.08, CHROME, Enum.Material.Metal, NO_COLLIDE)
+			box(treatment, "CurtainTrack", IX0, 8.6, cz - 0.12, tableX + 3.6, 8.85, cz + 0.12, CHROME, Enum.Material.Metal, NO_COLLIDE)
 		end
 	end
 	-- taping station by the door: a padded bench and a tape cart
@@ -1683,7 +1754,7 @@ function HQRoomsBack.hq_trainingroom(ctx)
 		tank,
 		"Underwater Treadmill",
 		"Jogging in warm water takes the weight off sore legs, so injured players can start running again sooner. Splash!",
-		{ Distance = 8 }
+		{ At = Vector3.new(0, 0.8, -5), Distance = 8 } -- by the window at the front of the tank
 	)
 	BuildUtil.Look(
 		exerciseBall,
@@ -1754,6 +1825,7 @@ function HQRoomsBack.hq_filmroom(ctx)
 		},
 		DoorSign = "QUIET - FILM IN PROGRESS",
 		Lights = { { -25, 286 }, { -25, 318 }, { -25, 348 } },
+		LightSize = { 6, 3 }, -- small dim downlights, so they don't glare into the screen
 		LightBrightness = 1,
 		LightRange = 24,
 		LampColor = Color3.fromRGB(150, 130, 100),
@@ -1810,11 +1882,13 @@ function HQRoomsBack.hq_filmroom(ctx)
 	-- Step 2: theatre seats (three TV camera seats aimed at the screen) ------------------------
 	BuildUtil.Stage(ctx, 2)
 	local seating = BuildUtil.Child(ctx, "Seats")
-	-- (the cameras sit beside the projector beam, which runs down the middle at x = -25)
+	-- The camera seats are aisle seats (the end of a row, right by a side aisle), so nobody has to
+	-- squeeze past a row of touch-to-sit seats to reach them. Their TV cameras film the screen from
+	-- the middle of the room, beside the projector beam (x = -25).
 	local cameras = {
-		[2] = { x = -23, cam = { From = Vector3.new(-22.5, 6.4, 336.6), To = screenTarget, Fov = 64, Label = "FRONT ROW" } },
-		[4] = { x = -27, cam = { From = Vector3.new(-27.5, 8.4, 324.5), To = screenTarget, Fov = 52, Label = "FILM SESSION" } },
-		[6] = { x = -23, cam = { From = Vector3.new(-22, 10.4, 309.5), To = screenTarget, Fov = 44, Label = "COACH'S VIEW" } },
+		[1] = { x = -11, cam = { From = Vector3.new(-22.5, 5.8, 336.6), To = screenTarget, Fov = 62, Label = "FRONT ROW" } },
+		[4] = { x = -39, cam = { From = Vector3.new(-27.5, 8.4, 324.5), To = screenTarget, Fov = 52, Label = "FILM SESSION" } },
+		[6] = { x = -11, cam = { From = Vector3.new(-22, 10.4, 309.5), To = screenTarget, Fov = 44, Label = "COACH'S VIEW" } },
 	}
 	local backColor = shade(team.Primary, 0.65)
 	for k, row in ipairs(FILM_ROWS) do
@@ -2128,7 +2202,7 @@ function HQRoomsBack.hq_cafeteria(ctx)
 					Object = "Cafeteria Chair",
 					NoPrompt = not (k == 1 and promptAt[tx .. "," .. tz]),
 				})
-				lblock(dining, frame, "ChairBack", Vector3.new(2, 4.1, 0.35), 0, 0, 0.95, shade(color, 0.8), Enum.Material.SmoothPlastic)
+				lblock(dining, frame, "ChairBack", Vector3.new(1.9, 4.1, 0.35), 0, 0, 0.95, shade(color, 0.8), Enum.Material.SmoothPlastic)
 			end
 		end
 	end

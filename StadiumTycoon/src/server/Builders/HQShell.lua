@@ -2,7 +2,8 @@
 	HQShell
 	The EMPTY Team HQ building every plot starts with. PlotBase.lua calls HQShell.Build(ctx) once
 	per plot. It is never built in steps (no BuildUtil.Stage) and ctx.teamName is still empty, so
-	all text is generic ("TEAM HEADQUARTERS").
+	all printed text is generic ("TEAM HEADQUARTERS"); the team name and the owner appear through
+	live text (BuildUtil.LiveText) on the facade sign and the entrance monument.
 
 	Footprint Config.Layout.HQ = X[-250, 100] Z[200, 360], 30 tall (parapet 31):
 	  * Front (-Z) facade: glass curtain wall - a granite plinth, a tall glass band, a white floor
@@ -13,10 +14,21 @@
 	    three team flags, two planters with trees and a monument sign beside the walk.
 	  * Sides + back: precast cladding with two window strips under a team-colour parapet band
 	    ("TEAM HQ" / "TEAM HEADQUARTERS"), team-colour corner piers and back pilasters, and an EXIT
-	    doorway with a small canopy at each end of the corridor (west: cart road, east: hall of
-	    fame).
+	    doorway with sliding glass doors at each end of the corridor (west: cart road, under a
+	    small canopy; east: the glass elevator tower).
 	  * Roof (y 29..30): a gabled glass lantern over the lobby, four skylights over the corridor,
 	    steel beams underneath, HVAC units, two solar arrays and a helipad on top.
+	  * Glass elevator tower X[100, 118] Z[258, 284] outside the east doors: a glass lobby (open
+	    toward the Hall of Fame), a glass shaft with a cab at each landing (sliding doors, call
+	    panel + cab buttons that ride to the other landing) and a glass top floor level with the
+	    roof, whose sliding doors open onto the Sky Deck through a gap in the east parapet.
+	  * The SKY DECK roof terrace X[74.5, 98.4] Z[202, 358.4] (wood deck top 30.3, from the front
+	    edge of the roof to the back edge): glass railings, planters and two trees, string lights,
+	    a cafe table, benches facing the stadium (BLIMP CAM seat) and the campus (CAMPUS CAM
+	    seat) and three telescopes (stadium, practice field + TELESCOPE CAM stool, dome).
+	  * Interactions: look prompts on the revolving doors, the monument, the WELCOME banner and
+	    the two HQ directories (corridor end walls, above the EXIT signs); doors, seats,
+	    elevators and telescopes as above; the corridor benches are seats too.
 	  * Inside: polished concrete floor (top y = 0.2) and a lighter corridor with team-colour edge
 	    lines, a team medallion and wayfinding arrows (room lists on their shafts) at the lobby.
 	    Every room zone (Config.Layout.Zones.hq_*) is a raw-concrete pad outlined in layout
@@ -1718,7 +1730,7 @@ local function buildElevatorTower(ctx, S, team)
 	})
 end
 
-local function buildSkyDeck(ctx, S, team)
+local function buildSkyDeck(ctx, team)
 	local C = ctx.config.Colors
 	local deck = BuildUtil.Child(ctx, "SkyDeck")
 	local D = DECK
@@ -2022,7 +2034,7 @@ function HQShell.Build(ctx)
 	buildRoof(shell, S)
 	buildInterior(shell, S, team)
 	buildElevatorTower(shell, S, team)
-	buildSkyDeck(shell, S, team)
+	buildSkyDeck(shell, team)
 	return S.refs
 end
 

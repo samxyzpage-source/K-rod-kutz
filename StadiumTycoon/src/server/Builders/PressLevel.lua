@@ -301,7 +301,7 @@ local PRESS_NAMES = {
 	"GRIDIRON DAILY",
 	"KICKOFF RADIO",
 	"SPORTS WIRE",
-	"MORNING POST",
+	"MORNING HUDDLE",
 	"TOUCHDOWN TIMES",
 	"PIGSKIN GAZETTE",
 	"BLITZ TV",
@@ -375,14 +375,8 @@ function PressLevel.pressbox(ctx)
 	end
 	box(frame, "Level1Slab", -XI, SLAB1, ZI, XI, F1, ZB, C.ConcreteDark, Enum.Material.Concrete)
 	-- parapets round the open slab; later the window sill, the side wall bases and the back wall
-	local parapet = box(frame, "WindowParapet", -XI, GIRDER, ZO, XI, F1 + 1, ZI, team.Primary)
-	sign(parapet, Enum.NormalId.Front, name, team.Primary, team, {
-		Left = 0.3,
-		Width = 0.4,
-		Top = 0.08,
-		Height = 0.5,
-		PixelsPerStud = 10,
-	})
+	-- (no text on its field face: below y 26 it hides behind the top row of the upper deck)
+	box(frame, "WindowParapet", -XI, GIRDER, ZO, XI, F1 + 1, ZI, team.Primary)
 	for _, s in ipairs({ -1, 1 }) do
 		box(frame, "SideParapet", s * XI, GIRDER, ZO, s * XO, F1 + 1.2, CORE_Z, team.Primary)
 	end
@@ -568,7 +562,7 @@ function PressLevel.pressbox(ctx)
 			BackColor = team.Primary,
 			Material = Enum.Material.Leather,
 			Object = "Press Row Seat",
-			Camera = { From = Vector3.new(x * 0.6, F1 + 5.5, ZO - 0.8), To = FIELD_CENTRE, Fov = 50, Label = "PRESS BOX CAM" },
+			Camera = { From = Vector3.new(x * 0.6, F1 + 10, ZO - 3), To = FIELD_CENTRE, Fov = 50, Label = "PRESS BOX CAM" },
 		})
 	end
 	local sheets = box(room, "StatSheets", -1, F1 + 2.9, ZI + 1.9, 1, F1 + 3.15, ZI + 2.8, PAPER)
@@ -581,7 +575,7 @@ function PressLevel.pressbox(ctx)
 
 	-- Second row on a riser behind the press row (one easy step up)
 	local riserTop = F1 + 1
-	box(room, "Riser", -20, F1, CORE_Z + 0.5, 20, riserTop, 163, CARPET, Enum.Material.Carpet)
+	box(room, "Riser", -19.5, F1, CORE_Z + 0.5, 19.5, riserTop, 163, CARPET, Enum.Material.Carpet)
 	box(room, "PressDesk", -17, riserTop + 2.6, CORE_Z + 0.8, 17, riserTop + 2.9, CORE_Z + 2.8, WOOD, Enum.Material.Wood)
 	box(room, "DeskPanel", -17, riserTop, CORE_Z + 0.8, 17, riserTop + 2.6, CORE_Z + 1.2, DARK_WOOD, Enum.Material.Wood)
 	for index, x in ipairs({ -8, 8 }) do
@@ -666,7 +660,14 @@ function PressLevel.pressbox(ctx)
 		Height = 0.5,
 		PixelsPerStud = 12,
 	})
-	box(booth, "LevelBand", -XI, T1, ZO, XI, F2 + 0.8, ZI, team.Primary)
+	-- the band between the two window rows carries the team name (seen from the whole bowl)
+	local levelBand = box(booth, "LevelBand", -XI, T1, ZO, XI, F2 + 0.8, ZI, team.Primary)
+	sign(levelBand, Enum.NormalId.Front, name, team.Primary, team, {
+		Left = 0.3,
+		Width = 0.4,
+		InsetY = 0.08,
+		PixelsPerStud = 10,
+	})
 	box(booth, "Windows", -XI, F2 + 0.8, ZO + 0.2, XI, F2 + 7.2, ZO + 0.5, GLASS, Enum.Material.Glass, { Transparency = 0.55 })
 	for _, x in ipairs({ -21.6, 21.6 }) do
 		box(booth, "Mullion", x - 0.25, F2 + 0.8, ZO - 0.05, x + 0.25, F2 + 7.2, ZI, STEEL, Enum.Material.Metal)
@@ -894,19 +895,19 @@ function PressLevel.suites(ctx)
 		InsetY = 0.12,
 		PixelsPerStud = 10,
 	})
-	sign(lowerBand, Enum.NormalId.Back, "SUITES 1 - 4   <<<        ELEVATOR        >>>   SUITES 5 - 8", team.Primary, team, {
+	-- corridor directory: a sign panel over the plaza windows, opposite the elevator alcove
+	local directoryPlate =
+		box(frame, "CorridorDirectory", 14, S_FLOOR + 3.4, Z_OUT_IN, 38, S_FLOOR + 5.6, Z_OUT_IN + 0.15, team.Primary, nil, PAINT)
+	sign(directoryPlate, Enum.NormalId.Back, "SUITES 1 - 4   <<<     ELEVATOR     >>>   SUITES 5 - 8", team.Primary, team, {
 		LabelName = "Directory",
-		Left = (X_END + 4) / (2 * X_END),
-		Width = 44 / (2 * X_END),
-		Top = 0.58,
-		Height = 0.24,
-		PixelsPerStud = 10,
+		InsetX = 0.03,
+		InsetY = 0.16,
 	})
 	BuildUtil.Look(
-		lowerBand,
+		directoryPlate,
 		"Suite Level",
 		"Welcome to the club level! Suites 1 to 4 are to the west, 5 to 8 to the east, and the TV booth is in the middle.",
-		{ At = Vector3.new(26, 4.2, 0.6), Distance = 8 }
+		{ Distance = 8 }
 	)
 	box(frame, "FacadeWindows", -X_END, S_FLOOR + 2.4, Z_OUT + 0.15, X_END, S_FLOOR + 7.2, Z_OUT_IN - 0.15, GLASS, Enum.Material.Glass, {
 		Transparency = 0.45,
@@ -1125,7 +1126,7 @@ function PressLevel.suites(ctx)
 				Object = "Suite Seat",
 				NoPrompt = index == 2,
 				Camera = index == 1 and {
-					From = Vector3.new(cx * 0.75, S_FLOOR + 5, Z_FRONT + 0.7),
+					From = Vector3.new(cx, S_FLOOR + 8, Z_FRONT + 6.5),
 					To = FIELD_CENTRE,
 					Fov = 55,
 					Label = "SUITE " .. suite.n .. " - LIVE",
@@ -1167,7 +1168,7 @@ function PressLevel.suites(ctx)
 				Object = "Owner's Chair",
 				Material = Enum.Material.Leather,
 				BackColor = GOLD,
-				Camera = { From = Vector3.new(-6, S_FLOOR + 6, Z_FRONT + 1), To = FIELD_CENTRE, Fov = 45, Label = "OWNER'S BOX" },
+				Camera = { From = Vector3.new(cx, S_FLOOR + 9, Z_FRONT + 5.5), To = FIELD_CENTRE, Fov = 45, Label = "OWNER'S BOX" },
 			})
 			local popcorn = box(c, "PopcornMachine", a + 6, S_FLOOR, Z_CW1, a + 8.4, S_FLOOR + 4.2, Z_CW1 + 2, POPCORN_RED)
 			BuildUtil.Use(ctx, popcorn, "popcorn", {

@@ -101,13 +101,14 @@ local function readable(background, preferred)
 	return Color3.fromRGB(250, 250, 250)
 end
 
+-- True once the owner has a team name (ctx.teamName may be empty).
+local function hasName(ctx)
+	return type(ctx.teamName) == "string" and ctx.teamName ~= ""
+end
+
 -- The owner's team name, or a stand-in while it is empty.
 local function displayName(ctx)
-	local name = ctx.teamName
-	if type(name) ~= "string" or name == "" then
-		return "HOME TEAM"
-	end
-	return name
+	return hasName(ctx) and ctx.teamName or "HOME TEAM"
 end
 
 -- Stand space -> plot-local CFrame.
@@ -692,8 +693,8 @@ local function tunnel(ctx, halfWidth, zSign, texts, plaque)
 			team.Primary,
 			Enum.Material.Brick
 		)
-		-- LED strip along the inside of each wall (above head height)
-		BuildUtil.Box(
+		-- LED strip along the inside of each wall (above head height), lighting the tunnel
+		local led = BuildUtil.Box(
 			ctx,
 			"TunnelLED",
 			Vector3.new(0.15, 0.5, depth - 1),
@@ -702,6 +703,7 @@ local function tunnel(ctx, halfWidth, zSign, texts, plaque)
 			Enum.Material.Neon,
 			{ CanCollide = false, CastShadow = false }
 		)
+		BuildUtil.Light(led, "PointLight", { Name = "TunnelGlow", Range = 20, Brightness = 1.2 })
 		BuildUtil.Box(
 			ctx,
 			"TunnelWallCap",
@@ -936,14 +938,17 @@ end
 	front face at d = 0). The lower bowl's top row runs right along the facade, so:
 	  * a section plaque in line with the walkable aisle (stand x = aisleX) you can look at
 	  * a STAIRS UP panel a few studs along (toward `dir`): rides you to the upper deck's first row
-	  * a STAIRS DOWN sign on the parapet further along: rides you back down to the top of the
-	    lower bowl's walkable aisle
-	The two stairs buttons are 5 studs apart in x with short prompt ranges, so each is only offered
-	on its own level. section = { number, info, key }
+	  * a STAIRS DOWN sign on a post on the parapet further along: rides you back down to the top
+	    of the lower bowl's walkable aisle
+	Each stairs button is only offered on its own level: the prompts reach 4 studs, the STAIRS UP
+	panel hangs below the upper deck's floor and the STAIRS DOWN sign is held up on a post, more
+	than 4 studs above the body of anyone on the lower bowl's top row (even on its seat strip).
+	section = { number, info, key }
 	Both targets need the lower bowl's top row, which is always built first (Items requirements).
 ]]
 local function deckAccess(ctx, frame, aisleX, dir, section)
 	local L = ctx.config.Layout
+	local C = ctx.config.Colors
 	local team = ctx.colors
 	local upX = aisleX + dir * 6
 	local downX = aisleX + dir * 11
@@ -964,22 +969,37 @@ local function deckAccess(ctx, frame, aisleX, dir, section)
 		Action = "Climb the stairs",
 		Object = "Upper Deck",
 		Label = "UPPER DECK - SECTION " .. section.number,
-		Distance = 5,
+		Distance = 4,
 	})
 
+	-- a post on the parapet cap (FACADE_TOP + 0.3) holding the sign up above head height
+	local capTop = FACADE_TOP + 0.3
+	local postHeight = 2.1
+	standBox(
+		ctx,
+		frame,
+		"StairsDownPost",
+		Vector3.new(0.3, postHeight, 0.3),
+		downX,
+		capTop + postHeight / 2,
+		-0.2,
+		C.Metal,
+		Enum.Material.Metal
+	)
 	local downSign = standBox(
 		ctx,
 		frame,
 		"StairsDownSign",
-		Vector3.new(3.4, 1.1, 0.25),
+		Vector3.new(3.4, 1.4, 0.25),
 		downX,
-		L.UpperStartHeight + 0.6,
-		0.125,
+		capTop + postHeight + 0.7,
+		-0.2,
 		team.Secondary,
 		Enum.Material.SmoothPlastic,
 		{ CanCollide = false }
 	)
 	addText(downSign, AWAY_FROM_FIELD, "STAIRS DOWN", readable(team.Secondary, team.Primary), 20)
+	addText(downSign, TOWARD_FIELD, "SEC " .. section.number, readable(team.Secondary, team.Primary), 20)
 	-- arrive on the lower bowl's top row at the top of its stair aisle, in front of the section
 	-- plaque (the lower bowl lies L.LowerDepth in front of this deck: the target is 2.4 studs in
 	-- front of the facade, clear of the seat strips, in the aisle gap where Crowd seats no fans)
@@ -987,7 +1007,7 @@ local function deckAccess(ctx, frame, aisleX, dir, section)
 		Action = "Go down the stairs",
 		Object = "Lower Bowl",
 		Label = "LOWER BOWL",
-		Distance = 5,
+		Distance = 4,
 	})
 end
 
@@ -1029,7 +1049,7 @@ function Stands.bleachers_home(ctx)
 	-- Step 5: the HOME tunnel, from the back sideline through the stands toward the locker rooms
 	BuildUtil.Stage(ctx, 5)
 	tunnel(BuildUtil.Child(ctx, "HomeTunnel"), tunnelHalf, 1, {
-		field = "HOME TEAM: " .. displayName(ctx),
+		field = hasName(ctx) and "HOME TEAM: " .. displayName(ctx) or "HOME TEAM",
 		inside = "LOCKER ROOMS",
 		plaque = "HOME TUNNEL",
 	}, {
@@ -1300,7 +1320,13 @@ function Stands.upper_home(ctx)
 		facadeSpan(sectionCtx, frame, {
 			x0 = s * tunnelHalf,
 			x1 = s * outer,
-			labels = { { text = side < 0 and "HOME OF THE " .. name or name .. " NATION", x0 = s * 18, x1 = s * 78 } },
+			labels = {
+				{
+					text = side > 0 and name .. " NATION" or (hasName(ctx) and "HOME OF THE " .. name or "WELCOME HOME"),
+					x0 = s * 18,
+					x1 = s * 78,
+				},
+			},
 		})
 		bandSpan(sectionCtx, frame, s * tunnelHalf, s * outer, 11.2, 1.4, face, team.Primary, "ConcourseBand")
 		-- the press box (X -44..44) later stands right in front of the middle of the stand, so the

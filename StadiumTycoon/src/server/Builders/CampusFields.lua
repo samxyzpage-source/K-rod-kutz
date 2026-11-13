@@ -26,7 +26,18 @@
 	                        practice field, east loading door), entrance portal at the buy button (-Z)
 	    2 Turf & Lines      indoor turf, an 80-yard field with lines, numbers, end zones, goal posts
 	    3 Roof Panels       team-coloured base panels, translucent membrane, team name on top
-	    4 Doors & Lights    glass entrance doors, INDOOR PRACTICE + team signs, side doors, lamps
+	    4 Doors & Lights    glass entrance doors, INDOOR PRACTICE + team signs, side doors, lamps,
+	                        the scoreboard
+
+	Interactions (BuildUtil.Look / Seat / Use / Door / LiveText):
+	  practice_field  goal post, gate (LookKey "rating"), play clock and ball bin looks, the water
+	                  station (sports drink), bench seats, bleacher seats with a PRACTICE CAM seat
+	  practice_gear   looks on the sleds, dummies, tackle wheel, agility ladder, cones, hurdles,
+	                  the coach tower ladder and its camera; the head coach's chair on the tower
+	                  deck is the COACH CAM seat
+	  indoor_dome     looks on the portal, the indoor field, the championship wall, the equipment
+	                  door and the scoreboard; double doors at the entrance (glass) and the west
+	                  end; a west-wall scoreboard with live team / game-day / record text
 
 	Paint layers (bottom of every layer is the turf top 0.2):
 	  mowing stripes 0.24 | team mat 0.26 | end zones 0.3 | lines 0.32 | mark sheets 0.335 |
@@ -486,7 +497,7 @@ local function goalPost(ctx, planeX, dir, z, uprightHeight, team, postColor, wit
 	local metal = Enum.Material.Metal
 	local baseX = planeX + dir * POST_SETBACK
 	local padTop = TURF_TOP + PAD_HEIGHT
-	post(ctx, "GoalPostPad", baseX, z, TURF_TOP, PAD_HEIGHT, 2, team.Primary, Enum.Material.Fabric)
+	local pad = post(ctx, "GoalPostPad", baseX, z, TURF_TOP, PAD_HEIGHT, 2, team.Primary, Enum.Material.Fabric)
 	local elbow = Vector3.new(baseX, CROSSBAR_HEIGHT, z)
 	pipe(ctx, "GoalPostStem", Vector3.new(baseX, padTop, z), elbow, 0.8, postColor, metal)
 	BuildUtil.Ball(ctx, { Name = "GoalPostElbow", Position = elbow, Diameter = 0.8, Color = postColor, Material = metal })
@@ -518,6 +529,7 @@ local function goalPost(ctx, planeX, dir, z, uprightHeight, team, postColor, wit
 			BuildUtil.Part(ctx, ribbon)
 		end
 	end
+	return pad
 end
 
 ---------------------------------------------------------------------------------------------
@@ -590,12 +602,28 @@ local function playClock(ctx, x, z, face)
 	})
 	label.Size = UDim2.new(0.8, 0, 0.8, 0)
 	label.Position = UDim2.new(0.1, 0, 0.1, 0)
+	return box
 end
 
--- Team bench facing +Z (the field): aluminium seat, team backrest with the name toward the road.
+--[[
+	Team bench facing +Z (the field): an aluminium seat in three sections players can sit on (the
+	middle one has the prompt, touching any of them seats you), team backrest with the name toward
+	the road.
+]]
 local function bench(ctx, cx, cz, length, team, text)
 	local metal = Enum.Material.Metal
-	BuildUtil.Box(ctx, "BenchSeat", Vector3.new(length, 0.4, 1.6), Vector3.new(cx, TURF_TOP + 2, cz + 0.6), ALUMINIUM, metal)
+	local section = length / 3
+	for i = -1, 1 do
+		BuildUtil.Seat(ctx, {
+			Name = "BenchSeat",
+			Size = Vector3.new(section - 0.1, 0.4, 1.6),
+			CFrame = CFrame.new(cx + i * section, TURF_TOP + 2, cz + 0.6) * CFrame.Angles(0, math.pi, 0),
+			Color = ALUMINIUM,
+			Material = metal,
+			Object = "Team Bench",
+			NoPrompt = i ~= 0,
+		})
+	end
 	local back =
 		BuildUtil.Box(ctx, "BenchBack", Vector3.new(length, 1.8, 0.3), Vector3.new(cx, TURF_TOP + 3.4, cz - 0.4), team.Primary, metal)
 	faceText(back, Enum.NormalId.Front, text, team.Primary, team, { LabelName = "BenchName", InsetX = 0.2 })
@@ -632,16 +660,39 @@ local function waterStation(ctx, cx, cz, team)
 	local skirt =
 		BuildUtil.Box(ctx, "TableSkirt", Vector3.new(8, 2, 0.2), Vector3.new(cx, top - 1.4, cz + 1.6), team.Primary, Enum.Material.Fabric)
 	faceText(skirt, Enum.NormalId.Back, "WATER", team.Primary, team, { LabelName = "WaterSign", InsetX = 0.25 })
-	for _, dx in ipairs({ -2.2, 0.6 }) do
-		post(ctx, "Cooler", cx + dx, cz, top, 2.6, 2.2, COOLER_ORANGE, Enum.Material.SmoothPlastic)
+	for i, dx in ipairs({ -2.2, 0.6 }) do
+		local cooler = post(ctx, "Cooler", cx + dx, cz, top, 2.6, 2.2, COOLER_ORANGE, Enum.Material.SmoothPlastic)
 		post(ctx, "CoolerLid", cx + dx, cz, top + 2.6, 0.3, 2.35, WHITE, Enum.Material.SmoothPlastic)
+		if i == 1 then
+			BuildUtil.Use(ctx, cooler, "sportsdrink", {
+				Object = "Water Station",
+				Title = "Water Station",
+				Info = "Practice is hot work! Players grab a sports drink here between drills.",
+				Distance = 8,
+			})
+		end
 	end
 	post(ctx, "CupStack", cx + 2.8, cz + 0.4, top, 1.6, 0.7, WHITE, Enum.Material.SmoothPlastic)
 end
 
 -- Ball bin full of footballs.
 local function ballBin(ctx, cx, cz)
-	BuildUtil.Block(ctx, "BallBin", Vector3.new(4, 2.2, 2.6), Vector3.new(cx, 0, cz), DARK_METAL, Enum.Material.DiamondPlate, nil, TURF_TOP)
+	local bin = BuildUtil.Block(
+		ctx,
+		"BallBin",
+		Vector3.new(4, 2.2, 2.6),
+		Vector3.new(cx, 0, cz),
+		DARK_METAL,
+		Enum.Material.DiamondPlate,
+		nil,
+		TURF_TOP
+	)
+	BuildUtil.Look(
+		bin,
+		"Ball Bin",
+		"A bin full of footballs for passing drills. A quarterback can throw hundreds of passes in one practice!",
+		{ Distance = 8 }
+	)
 	local balls = { { -1.2, 0.2, 0 }, { 0.2, -0.3, 0.5 }, { 1.3, 0.4, -0.2 } }
 	for i, b in ipairs(balls) do
 		BuildUtil.Cylinder(ctx, {
@@ -661,16 +712,31 @@ end
 	field). Seats + footboards, sloped stringers, a back guard rail with a team banner and team side
 	panels.
 ]]
-local function bleachers(ctx, x0, x1, frontZ, team, text)
+local function bleachers(ctx, x0, x1, frontZ, team, text, camera)
 	local metal = Enum.Material.Metal
 	local rows, rowDepth, rowRise = 5, 2.2, 1.4
+	local sections = 4 -- every seat plank is four Seat sections (touch one to sit down)
+	local sectionW = (x1 - x0) / sections
 	local backZ = frontZ + rows * rowDepth
 	local topSeat = TURF_TOP + 1.2 + (rows - 1) * rowRise
 	local railTop = topSeat + 3.4
 	for r = 1, rows do
 		local z = frontZ + (r - 1) * rowDepth
 		local seatTop = TURF_TOP + 1.2 + (r - 1) * rowRise
-		span(ctx, "BleacherSeat", Vector3.new(x0, seatTop - 0.3, z + 1), Vector3.new(x1, seatTop, z + rowDepth), ALUMINIUM, metal)
+		for i = 1, sections do
+			-- one prompted TV camera seat in the front row
+			local prompted = r == 1 and i == 2
+			BuildUtil.Seat(ctx, {
+				Name = "BleacherSeat",
+				Size = Vector3.new(sectionW - 0.1, 0.3, rowDepth - 1),
+				CFrame = CFrame.new(x0 + (i - 0.5) * sectionW, seatTop - 0.15, z + 1 + (rowDepth - 1) / 2),
+				Color = ALUMINIUM,
+				Material = metal,
+				Object = "Bleachers",
+				NoPrompt = not prompted,
+				Camera = prompted and camera or nil,
+			})
+		end
 		span(ctx, "BleacherFootboard", Vector3.new(x0, seatTop - 1.2, z), Vector3.new(x1, seatTop - 1, z + 1), ALUMINIUM_DARK, metal)
 		-- team-coloured riser under the nose of every seat
 		span(ctx, "BleacherRiser", Vector3.new(x0, seatTop - 1, z + 1), Vector3.new(x1, seatTop - 0.3, z + 1.15), team.Primary, metal)
@@ -793,8 +859,14 @@ function CampusFields.practice_field(ctx)
 
 	-- STEP 4: Goal Posts ------------------------------------------------------------------------
 	BuildUtil.Stage(ctx, 4)
-	goalPost(BuildUtil.Child(ctx, "GoalPostWest"), f.EndW - BOUNDARY_WIDTH / 2, -1, f.CenterZ, 16, team, C.GoalPost, true)
+	local westPad = goalPost(BuildUtil.Child(ctx, "GoalPostWest"), f.EndW - BOUNDARY_WIDTH / 2, -1, f.CenterZ, 16, team, C.GoalPost, true)
 	goalPost(BuildUtil.Child(ctx, "GoalPostEast"), f.EndE + BOUNDARY_WIDTH / 2, 1, f.CenterZ, 16, team, C.GoalPost, true)
+	BuildUtil.Look(
+		westPad,
+		"Practice Goal Post",
+		"The kicker practises field goals here every day: long snap, hold, kick... it's good! The red ribbons on top show the wind.",
+		{ Distance = 8 }
+	)
 
 	-- STEP 5: Fence & Sideline ------------------------------------------------------------------
 	BuildUtil.Stage(ctx, 5)
@@ -822,8 +894,8 @@ function CampusFields.practice_field(ctx)
 
 	-- main gate behind the buy button: team posts with gold balls and an arch banner (clear to y 9.6)
 	local gate = BuildUtil.Child(ctx, "MainGate")
-	for _, x in ipairs({ gateW - 0.6, gateE + 0.6 }) do
-		BuildUtil.Block(
+	for gi, x in ipairs({ gateW - 0.6, gateE + 0.6 }) do
+		local gatePost = BuildUtil.Block(
 			gate,
 			"GatePost",
 			Vector3.new(1.2, 12.8, 1.2),
@@ -840,6 +912,15 @@ function CampusFields.practice_field(ctx)
 			Color = C.Gold,
 			Material = Enum.Material.Metal,
 		})
+		if gi == 1 then
+			-- (west post: the buy button is right in front of the gate)
+			BuildUtil.Look(
+				gatePost,
+				"Practice Field",
+				"Your team practises here every day: blocking sleds, tackling dummies, agility drills and a coach watching from the tower. Better practice = a better team!",
+				{ At = Vector3.new(0, -2.4, -1.2), LookKey = "rating", Distance = 8 }
+			)
+		end
 	end
 	local arch = span(
 		gate,
@@ -900,14 +981,26 @@ function CampusFields.practice_field(ctx)
 	ballBin(BuildUtil.Child(side, "BallBin"), f.CenterX + 22, areaZ)
 	-- play clocks behind both end lines (near corner, clear of the goal posts)
 	local clocks = BuildUtil.Child(ctx, "PlayClocks")
-	playClock(clocks, (f.EndW - BOUNDARY_WIDTH + x0) / 2, f.MinZ + 6, Enum.NormalId.Right)
+	local clock = playClock(clocks, (f.EndW - BOUNDARY_WIDTH + x0) / 2, f.MinZ + 6, Enum.NormalId.Right)
+	BuildUtil.Look(
+		clock,
+		"Play Clock",
+		"Counts down 40 seconds between plays. The quarterback has to snap the ball before it hits zero!",
+		{ At = Vector3.new(0, -6.2, 0), Distance = 8 }
+	)
 	playClock(clocks, (f.EndE + BOUNDARY_WIDTH + x1) / 2, f.MinZ + 6, Enum.NormalId.Left)
 
 	-- STEP 6: Bleachers -------------------------------------------------------------------------
 	BuildUtil.Stage(ctx, 6)
 	local stands = BuildUtil.Child(ctx, "Bleachers")
 	local bleacherText = withName(ctx, "HOME OF THE ", "", "HOME OF CHAMPIONS")
-	bleachers(stands, f.CenterX - 32, f.CenterX + 32, f.MaxZ + BOUNDARY_WIDTH + 1.5, team, bleacherText)
+	local practiceCam = {
+		From = Vector3.new(f.CenterX + 24, 34, f.MaxZ + 36),
+		To = Vector3.new(f.CenterX - 4, 0, f.CenterZ - 8),
+		Fov = 55,
+		Label = "PRACTICE CAM",
+	}
+	bleachers(stands, f.CenterX - 32, f.CenterX + 32, f.MaxZ + BOUNDARY_WIDTH + 1.5, team, bleacherText, practiceCam)
 end
 
 ---------------------------------------------------------------------------------------------
@@ -957,7 +1050,7 @@ local function sevenManSled(ctx, cx, cz, team, text)
 	BuildUtil.Box(ctx, "SledBeam", Vector3.new(0.6, 0.6, length - 1), Vector3.new(cx - 1, TURF_TOP + 4.6, cz), DARK_METAL, metal)
 	for i = 1, 7 do
 		local color = i % 2 == 1 and team.Primary or team.Secondary
-		BuildUtil.Block(
+		local pad = BuildUtil.Block(
 			ctx,
 			"SledPad",
 			Vector3.new(1.4, 3.8, 3.5),
@@ -967,6 +1060,14 @@ local function sevenManSled(ctx, cx, cz, team, text)
 			nil,
 			TURF_TOP + 1.3
 		)
+		if i == 4 then
+			BuildUtil.Look(
+				pad,
+				"Seven-Man Sled",
+				"The whole offensive line hits these pads at once and drives the heavy sled down the field. Stay low and push together!",
+				{ At = Vector3.new(-1.2, 0, 0), Distance = 8 }
+			)
+		end
 	end
 	local plate =
 		BuildUtil.Box(ctx, "SledNamePlate", Vector3.new(0.25, 1.5, 14), Vector3.new(cx + 2.65, TURF_TOP + 1.6, cz), team.Primary, metal)
@@ -988,7 +1089,7 @@ local function twoManSled(ctx, cx, cz, team)
 			nil,
 			TURF_TOP + 0.8
 		)
-		BuildUtil.Block(
+		local pad = BuildUtil.Block(
 			ctx,
 			"SledPad",
 			Vector3.new(1.2, 4, 3.2),
@@ -998,6 +1099,14 @@ local function twoManSled(ctx, cx, cz, team)
 			nil,
 			TURF_TOP + 1.4
 		)
+		if s < 0 then
+			BuildUtil.Look(
+				pad,
+				"Two-Man Sled",
+				"Two blockers hit this sled side by side to practise double-team blocks. Lighter than the big sled, but just as sweaty!",
+				{ At = Vector3.new(-1, 0, 2.4), Distance = 8 }
+			)
+		end
 	end
 	BuildUtil.Block(ctx, "SledBackBar", Vector3.new(0.5, 0.5, 7.6), Vector3.new(cx + 3.75, 0, cz), DARK_METAL, metal, nil, TURF_TOP)
 	BuildUtil.Block(
@@ -1016,7 +1125,7 @@ end
 -- Upright tackling dummy on a rubber base (or knocked over, lying along X).
 local function tacklingDummy(ctx, x, z, color, bandColor, knockedOver)
 	if knockedOver then
-		BuildUtil.Cylinder(ctx, {
+		local body = BuildUtil.Cylinder(ctx, {
 			Name = "DummyBody",
 			Axis = "X",
 			Position = Vector3.new(x, TURF_TOP + 1.2, z),
@@ -1043,17 +1152,18 @@ local function tacklingDummy(ctx, x, z, color, bandColor, knockedOver)
 			Color = RUBBER_BLACK,
 			Material = Enum.Material.Rubber,
 		})
-		return
+		return body
 	end
 	post(ctx, "DummyBase", x, z, TURF_TOP, 0.6, 3.2, RUBBER_BLACK, Enum.Material.Rubber)
-	post(ctx, "DummyBody", x, z, TURF_TOP + 0.6, 5.4, 2.4, color, Enum.Material.Fabric)
+	local body = post(ctx, "DummyBody", x, z, TURF_TOP + 0.6, 5.4, 2.4, color, Enum.Material.Fabric)
 	post(ctx, "DummyBand", x, z, TURF_TOP + 3.85, 0.7, 2.5, bandColor, Enum.Material.Fabric)
+	return body
 end
 
 -- Big foam tackle wheel standing on its rim (rolls along Z).
 local function tackleWheel(ctx, x, z, team)
 	local y = TURF_TOP + 2.6
-	BuildUtil.Cylinder(ctx, {
+	local wheel = BuildUtil.Cylinder(ctx, {
 		Name = "TackleWheel",
 		Axis = "X",
 		Position = Vector3.new(x, y, z),
@@ -1071,26 +1181,30 @@ local function tackleWheel(ctx, x, z, team)
 		Color = team.Secondary,
 		Material = Enum.Material.Fabric,
 	})
+	return wheel
 end
 
 -- Flat agility ladder from x0 to x1 centred on z (yellow rungs on black straps).
 local function agilityLadder(ctx, x0, x1, z)
 	local halfW = 1.5
+	local strap
 	for _, s in ipairs({ -1, 1 }) do
-		paint(ctx, "LadderStrap", x0, x1, z + s * halfW - 0.15, z + s * halfW + 0.15, STRAP_TOP, STRAP_BLACK, Enum.Material.Fabric)
+		strap = paint(ctx, "LadderStrap", x0, x1, z + s * halfW - 0.15, z + s * halfW + 0.15, STRAP_TOP, STRAP_BLACK, Enum.Material.Fabric)
 	end
 	local rungs = 8
 	for i = 0, rungs - 1 do
 		local x = x0 + 0.15 + (x1 - x0 - 0.3) * i / (rungs - 1)
 		paint(ctx, "LadderRung", x - 0.15, x + 0.15, z - halfW + 0.15, z + halfW - 0.15, RUNG_TOP, LADDER_YELLOW)
 	end
+	return strap
 end
 
 -- Traffic cone (not collidable, so nobody trips over the drill).
 local function cone(ctx, x, z)
 	paint(ctx, "ConeBase", x - 0.75, x + 0.75, z - 0.75, z + 0.75, CONE_BASE_TOP, CONE_ORANGE, Enum.Material.Plastic)
-	post(ctx, "ConeBody", x, z, CONE_BASE_TOP, 0.8, 1, CONE_ORANGE, Enum.Material.Plastic, NO_COLLIDE)
+	local body = post(ctx, "ConeBody", x, z, CONE_BASE_TOP, 0.8, 1, CONE_ORANGE, Enum.Material.Plastic, NO_COLLIDE)
 	post(ctx, "ConeTip", x, z, CONE_BASE_TOP + 0.8, 0.7, 0.55, WHITE, Enum.Material.Plastic, NO_COLLIDE)
+	return body
 end
 
 -- Mini hurdle (bar along Z, players hop along X); walk-through.
@@ -1107,7 +1221,7 @@ local function miniHurdle(ctx, x, z)
 			TURF_TOP
 		)
 	end
-	BuildUtil.Cylinder(ctx, {
+	return BuildUtil.Cylinder(ctx, {
 		Name = "HurdleBar",
 		Axis = "Z",
 		Position = Vector3.new(x, TURF_TOP + 1.6, z),
@@ -1124,7 +1238,7 @@ end
 	(-Z), rails, a ladder on the +X side, a video camera on a tripod, a megaphone, a shade umbrella and
 	a team banner across the front legs.
 ]]
-local function coachTower(ctx, cx, cz, team, text)
+local function coachTower(ctx, cx, cz, team, text, fieldCentre)
 	local metal = Enum.Material.Metal
 	local deckY = TURF_TOP + 14
 	local leg = 3.2
@@ -1190,11 +1304,12 @@ local function coachTower(ctx, cx, cz, team, text)
 	BuildUtil.Box(ctx, "TowerRail", Vector3.new(7.6, 0.3, 0.3), Vector3.new(cx, railY, cz + 3.65), STEEL_WHITE, metal)
 	BuildUtil.Box(ctx, "TowerRail", Vector3.new(0.3, 0.3, 7.3), Vector3.new(cx - 3.65, railY, cz), STEEL_WHITE, metal)
 	BuildUtil.Box(ctx, "TowerRail", Vector3.new(0.3, 0.3, 3.4), Vector3.new(cx + 3.65, railY, cz - 1.95), STEEL_WHITE, metal)
-	-- ladder up the +X face (rungs 1.75 apart, climbable), arriving at the open back half of that side
+	-- ladder up the +X face (rungs 1.2 apart, so characters climb it), arriving at the open back half
+	-- of that side, with the top rung level with the deck
 	local ladderX = cx + leg + 0.6
 	local ladderZ = cz + 1.6
 	for _, s in ipairs({ -1, 1 }) do
-		BuildUtil.Block(
+		local rail = BuildUtil.Block(
 			ctx,
 			"LadderRail",
 			Vector3.new(0.3, 16.6, 0.3),
@@ -1204,13 +1319,21 @@ local function coachTower(ctx, cx, cz, team, text)
 			nil,
 			TURF_TOP
 		)
+		if s < 0 then
+			BuildUtil.Look(
+				rail,
+				"Coach Tower",
+				"Climb the ladder to the head coach's tower! Up top there's a chair with the best view of practice.",
+				{ At = Vector3.new(0.9, -4.3, 1), Distance = 8 }
+			)
+		end
 	end
-	for i = 1, 8 do
+	for i = 1, 12 do
 		BuildUtil.Box(
 			ctx,
 			"LadderStep",
 			Vector3.new(0.25, 0.25, 1.8),
-			Vector3.new(ladderX, TURF_TOP + i * 1.75, ladderZ),
+			Vector3.new(ladderX, TURF_TOP + i * 1.2, ladderZ),
 			STEEL_WHITE,
 			metal
 		)
@@ -1230,13 +1353,19 @@ local function coachTower(ctx, cx, cz, team, text)
 			metal
 		)
 	end
-	BuildUtil.Box(
+	local cameraBody = BuildUtil.Box(
 		ctx,
 		"CameraBody",
 		Vector3.new(1.2, 1.3, 2.2),
 		Vector3.new(camX, headY + 0.65, camZ),
 		CAMERA_BLACK,
 		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.Look(
+		cameraBody,
+		"Practice Camera",
+		"Films every snap of practice, so the coaches can study it later in the Film Room.",
+		{ Distance = 6 }
 	)
 	BuildUtil.Cylinder(ctx, {
 		Name = "CameraLens",
@@ -1275,9 +1404,33 @@ local function coachTower(ctx, cx, cz, team, text)
 		Color = team.Secondary,
 		Material = Enum.Material.SmoothPlastic,
 	})
-	-- shade umbrella
-	post(ctx, "UmbrellaPole", cx + 1.5, cz + 1.5, floorY, 7.2, 0.3, STEEL_WHITE, metal)
-	post(ctx, "UmbrellaCanopy", cx + 1.5, cz + 1.5, floorY + 7.2, 0.4, 9, team.Secondary, Enum.Material.Fabric)
+	-- shade umbrella (its pole stays out of the way from the ladder to the chair)
+	post(ctx, "UmbrellaPole", cx + 1.8, cz - 1.2, floorY, 7.2, 0.3, STEEL_WHITE, metal)
+	post(ctx, "UmbrellaCanopy", cx + 1.8, cz - 1.2, floorY + 7.2, 0.4, 9, team.Secondary, Enum.Material.Fabric)
+	-- the head coach's chair: sit down for the COACH CAM view of the whole field
+	local chairX, chairZ = cx - 1.4, cz + 1.8
+	BuildUtil.Seat(ctx, {
+		Name = "CoachChair",
+		Size = Vector3.new(2, 1, 2),
+		CFrame = CFrame.new(chairX, floorY + 0.5, chairZ),
+		Color = team.Primary,
+		Material = Enum.Material.Fabric,
+		Object = "Head Coach's Chair",
+		Camera = {
+			From = Vector3.new(cx - 1, floorY + 4.5, cz - 6), -- in front of the deck, under the umbrella's edge
+			To = fieldCentre,
+			Fov = 55,
+			Label = "COACH CAM",
+		},
+	})
+	BuildUtil.Box(
+		ctx,
+		"CoachChairBack",
+		Vector3.new(2, 2.2, 0.3),
+		Vector3.new(chairX, floorY + 2.1, chairZ + 1.15),
+		team.Primary,
+		Enum.Material.Fabric
+	)
 	-- team banner tied across the front legs, facing the field
 	local banner = span(
 		ctx,
@@ -1308,28 +1461,73 @@ function CampusFields.practice_gear(ctx)
 		local color = i % 2 == 0 and team.Primary or team.Secondary
 		local band = i % 2 == 0 and team.Secondary or team.Primary
 		local x = f.GoalE - 40 + (i % 2) * 8
-		tacklingDummy(dummies, x, f.MinZ + 14 + i * 13, color, band, i == 4)
+		local dummy = tacklingDummy(dummies, x, f.MinZ + 14 + i * 13, color, band, i == 4)
+		if i == 0 then
+			BuildUtil.Look(
+				dummy,
+				"Tackling Dummy",
+				"Players practise safe tackling on these padded dummies: head up, wrap your arms, drive through with your legs!",
+				{ Distance = 8 }
+			)
+		elseif i == 4 then
+			BuildUtil.Look(
+				dummy,
+				"Knocked-Over Dummy",
+				"Somebody hit this one a little TOO hard. The coaches stand it back up... until the next drill.",
+				{ At = Vector3.new(0, 2, 0), Distance = 8 }
+			)
+		end
 	end
-	tackleWheel(dummies, f.GoalE - 18, f.CenterZ - 14, team)
+	local wheel = tackleWheel(dummies, f.GoalE - 18, f.CenterZ - 14, team)
 	tackleWheel(dummies, f.GoalE - 18, f.CenterZ + 14, team)
+	BuildUtil.Look(
+		wheel,
+		"Tackle Wheel",
+		"A giant foam wheel that rolls away when you hit it. Chase it, wrap it up and bring it down!",
+		{ Distance = 8 }
+	)
 
 	-- STEP 3: Agility Ladder & Cones (flat / walk-through) --------------------------------------
 	BuildUtil.Stage(ctx, 3)
 	local drills = BuildUtil.Child(ctx, "AgilityDrills")
 	-- ladders lie between the yard numbers and the hash marks, so they never cover painted digits
 	local ladderInset = (NUMBER_INSET + NUMBER_HEIGHT / 2 + f.HashInset) / 2 -- 24.5
-	agilityLadder(drills, f.CenterX + 12, f.CenterX + 34, f.MinZ + ladderInset)
+	local ladder = agilityLadder(drills, f.CenterX + 12, f.CenterX + 34, f.MinZ + ladderInset)
 	agilityLadder(drills, f.CenterX - 40, f.CenterX - 18, f.MaxZ - ladderInset)
+	BuildUtil.Look(
+		ladder,
+		"Agility Ladder",
+		"Quick feet! Hop through every square as fast as you can without touching the rungs. Try it yourself!",
+		{ At = Vector3.new(0, 2.5, -1.5), Distance = 8 }
+	)
 	for i = 0, 7 do
-		cone(drills, f.CenterX + 18 + i * 4, f.CenterZ + 14 + (i % 2) * 6)
+		local coneBody = cone(drills, f.CenterX + 18 + i * 4, f.CenterZ + 14 + (i % 2) * 6)
+		if i == 0 then
+			-- (cylinder: its local X points up)
+			BuildUtil.Look(
+				coneBody,
+				"Cone Weave",
+				"Sprint, plant your foot and cut around every cone. Running backs do this to learn to dodge tacklers!",
+				{ At = Vector3.new(2, 0, 0), Distance = 8 }
+			)
+		end
 	end
 	for i = 0, 3 do
-		miniHurdle(drills, f.GoalW + 58 + i * 6, f.MinZ + 22)
+		local hurdle = miniHurdle(drills, f.GoalW + 58 + i * 6, f.MinZ + 22)
+		if i == 0 then
+			BuildUtil.Look(
+				hurdle,
+				"Mini Hurdles",
+				"Hop, hop, hop, hop! Jumping the mini hurdles builds springy legs for receivers and running backs.",
+				{ At = Vector3.new(0, 1.2, 0), Distance = 8 }
+			)
+		end
 	end
 
 	-- STEP 4: Coach Tower (far sideline, east of the bleachers) ---------------------------------
 	BuildUtil.Stage(ctx, 4)
-	coachTower(BuildUtil.Child(ctx, "CoachTower"), f.CenterX + 60, f.MaxZ + BOUNDARY_WIDTH + 6.5, team, name)
+	local fieldCentre = Vector3.new(f.CenterX, 0, f.CenterZ)
+	coachTower(BuildUtil.Child(ctx, "CoachTower"), f.CenterX + 60, f.MaxZ + BOUNDARY_WIDTH + 6.5, team, name, fieldCentre)
 end
 
 ---------------------------------------------------------------------------------------------
@@ -1483,7 +1681,7 @@ function CampusFields.indoor_dome(ctx)
 		local innerX = s < 0 and doorMinX or doorMaxX
 		local outerX = innerX + s * d.PillarW
 		local pMin, pMax = math.min(innerX, outerX), math.max(innerX, outerX)
-		span(
+		local pillar = span(
 			frame,
 			"PortalPillar",
 			Vector3.new(pMin, 0, d.FrontZ),
@@ -1491,6 +1689,19 @@ function CampusFields.indoor_dome(ctx)
 			team.Primary,
 			Enum.Material.SmoothPlastic
 		)
+		if s < 0 then
+			-- (in front of the pillar, at eye height)
+			BuildUtil.Look(
+				pillar,
+				"Indoor Practice Dome",
+				"Rain, snow or freezing wind? No problem: your team moves practice in here and never misses a day.",
+				{
+					At = Vector3.new(0, 4 - d.HeaderTop / 2, d.FrontZ - 1.5 - (d.FrontZ + portalBackZ) / 2),
+					LookKey = "season",
+					Distance = 8,
+				}
+			)
+		end
 		span(
 			frame,
 			"PortalStripe",
@@ -1520,7 +1731,14 @@ function CampusFields.indoor_dome(ctx)
 	-- STEP 2: Turf & Lines ---------------------------------------------------------------------
 	BuildUtil.Stage(ctx, 2)
 	local floor = BuildUtil.Child(ctx, "IndoorField")
-	span(floor, "IndoorTurf", Vector3.new(inX0, 0, inZ0), Vector3.new(inX1, TURF_TOP, inZ1), C.Grass, Enum.Material.Grass)
+	local turf = span(floor, "IndoorTurf", Vector3.new(inX0, 0, inZ0), Vector3.new(inX1, TURF_TOP, inZ1), C.Grass, Enum.Material.Grass)
+	-- (the prompt sits just inside the entrance)
+	BuildUtil.Look(
+		turf,
+		"Indoor Field",
+		"An 80-yard field under one giant roof, with real end zones and goal posts. Perfect for practice in any weather!",
+		{ At = Vector3.new(0, 2.5, inZ0 + 7 - zc), Distance = 8 }
+	)
 	span(floor, "PortalMat", Vector3.new(doorMinX, 0, d.FrontZ), Vector3.new(doorMaxX, TURF_TOP, inZ0), team.Primary, Enum.Material.Fabric)
 	local f = {
 		GoalW = d.CenterX - 40 * YARD,
@@ -1602,17 +1820,28 @@ function CampusFields.indoor_dome(ctx)
 	-- STEP 4: Doors & Lights -------------------------------------------------------------------
 	BuildUtil.Stage(ctx, 4)
 	local doors = BuildUtil.Child(ctx, "Doors")
-	-- entrance: glass sliding doors pushed to the sides, transom, signs, wall lanterns
+	-- entrance: glass sidelights, a pair of glass doors that swing into the dome under a glass
+	-- transom, the transom bar, signs, wall lanterns
+	local entranceDoorHalf, entranceDoorTop = 5.5, TURF_TOP + 10
 	for _, s in ipairs({ -1, 1 }) do
 		local edgeX = s < 0 and doorMinX or doorMaxX
+		local innerX = d.CenterX + s * entranceDoorHalf
 		span(
 			doors,
-			"EntranceDoor",
-			Vector3.new(math.min(edgeX, edgeX - s * 6.5), TURF_TOP, d.FrontZ + 0.7),
-			Vector3.new(math.max(edgeX, edgeX - s * 6.5), d.OpenTop - 1.4, d.FrontZ + 1.1),
+			"EntranceSidelight",
+			Vector3.new(math.min(edgeX, innerX), TURF_TOP, d.FrontZ + 0.7),
+			Vector3.new(math.max(edgeX, innerX), d.OpenTop - 1.4, d.FrontZ + 1.1),
 			GLASS_TINT,
 			Enum.Material.Glass,
 			{ Transparency = 0.5 }
+		)
+		span(
+			doors,
+			"EntranceMullion",
+			Vector3.new(innerX - 0.2, TURF_TOP, d.FrontZ + 0.6),
+			Vector3.new(innerX + 0.2, d.OpenTop - 1.4, d.FrontZ + 1.2),
+			team.Secondary,
+			Enum.Material.Metal
 		)
 		local lantern = BuildUtil.Box(
 			doors,
@@ -1632,6 +1861,37 @@ function CampusFields.indoor_dome(ctx)
 		team.Secondary,
 		Enum.Material.Metal
 	)
+	span(
+		doors,
+		"EntranceDoorHead",
+		Vector3.new(d.CenterX - entranceDoorHalf, entranceDoorTop, d.FrontZ + 0.6),
+		Vector3.new(d.CenterX + entranceDoorHalf, entranceDoorTop + 0.6, d.FrontZ + 1.2),
+		team.Secondary,
+		Enum.Material.Metal
+	)
+	span(
+		doors,
+		"EntranceTransomGlass",
+		Vector3.new(d.CenterX - entranceDoorHalf, entranceDoorTop + 0.6, d.FrontZ + 0.7),
+		Vector3.new(d.CenterX + entranceDoorHalf, d.OpenTop - 1.4, d.FrontZ + 1.1),
+		GLASS_TINT,
+		Enum.Material.Glass,
+		{ Transparency = 0.5 }
+	)
+	local entranceCentre = Vector3.new(d.CenterX, (TURF_TOP + entranceDoorTop) / 2, d.FrontZ + 0.9)
+	BuildUtil.Door(doors, {
+		Name = "EntranceDoors",
+		Size = Vector3.new(entranceDoorHalf * 2, entranceDoorTop - TURF_TOP, 0.4),
+		CFrame = CFrame.lookAt(entranceCentre, entranceCentre + Vector3.new(0, 0, 1)), -- swings in (+Z)
+		Double = true,
+		Color = GLASS_TINT,
+		Material = Enum.Material.Glass,
+		Transparency = 0.35,
+		Object = "Dome Doors",
+		Title = "Indoor Practice Dome",
+		Info = "Step inside: an 80-yard indoor field where your team practises when the weather turns bad.",
+		Distance = 8,
+	})
 	local sign = span(
 		doors,
 		"EntranceSign",
@@ -1653,16 +1913,29 @@ function CampusFields.indoor_dome(ctx)
 
 	-- west door (toward the practice field): doors swung in, a canopy and a sign above
 	local wz0, wz1 = d.WestDoorZ - d.WestDoorHalf, d.WestDoorZ + d.WestDoorHalf
-	for _, z in ipairs({ wz0 + 0.3, wz1 - 0.3 }) do
-		span(
-			doors,
-			"WestDoorLeaf",
-			Vector3.new(inX0 + 0.1, TURF_TOP, z - 0.15),
-			Vector3.new(inX0 + 0.1 + d.WestDoorHalf - 0.2, y1 - 3, z + 0.15),
-			team.Secondary,
-			Enum.Material.Metal
-		)
-	end
+	local westDoorTop = y1 - 3
+	span(
+		doors,
+		"WestDoorHeader",
+		Vector3.new(westWallX - t / 2, westDoorTop, wz0),
+		Vector3.new(westWallX + t / 2, y1, wz1),
+		team.Primary,
+		Enum.Material.Metal
+	)
+	local westCentre = Vector3.new(westWallX, (TURF_TOP + westDoorTop) / 2, d.WestDoorZ)
+	BuildUtil.Door(doors, {
+		Name = "WestDoors",
+		Size = Vector3.new(wz1 - wz0, westDoorTop - TURF_TOP, 0.4),
+		CFrame = CFrame.lookAt(westCentre, westCentre + Vector3.new(1, 0, 0)), -- swings in (+X)
+		Double = true,
+		Window = true,
+		Color = team.Secondary,
+		Material = Enum.Material.Metal,
+		Object = "Field Doors",
+		Title = "West Doors",
+		Info = "The quick way between the indoor field and the outdoor practice field.",
+		Distance = 8,
+	})
 	span(
 		doors,
 		"WestDoorCanopy",
@@ -1692,6 +1965,13 @@ function CampusFields.indoor_dome(ctx)
 		Enum.Material.CorrodedMetal
 	)
 	faceText(rollDoor, Enum.NormalId.Right, "EQUIPMENT", ALUMINIUM, team, { LabelName = "LoadingDoorText", InsetX = 0.15, InsetY = 0.2 })
+	-- (the prompt sits inside, by the open bottom half of the door)
+	BuildUtil.Look(
+		rollDoor,
+		"Equipment Door",
+		"A roll-up door for the equipment carts: sleds, dummies and ball bins roll in here when it rains.",
+		{ At = Vector3.new(-4, 4.5 - (10 + y1) / 2, 0), Distance = 8 }
+	)
 	BuildUtil.Cylinder(doors, {
 		Name = "LoadingDoorRoll",
 		Axis = "Z",
@@ -1761,6 +2041,63 @@ function CampusFields.indoor_dome(ctx)
 		InsetX = 0.06,
 		Outline = 3,
 	})
+	BuildUtil.Look(
+		board,
+		"Championship Wall",
+		"Every title your team wins gets celebrated in here. How many championships have you won so far?",
+		{ At = Vector3.new(0, -4.5, -1.5), LookKey = "titles", Distance = 8 }
+	)
+
+	-- end-zone scoreboard on the west wall, facing down the field: team name, game-day clock and
+	-- record (live text the server keeps up to date)
+	local scoreboard = BuildUtil.Child(ctx, "Scoreboard")
+	local sbZ0, sbZ1, sbY0, sbY1 = zc - 16, zc + 16, 17.5, 30.5
+	local sbFrame = span(
+		scoreboard,
+		"ScoreboardFrame",
+		Vector3.new(inX0, sbY0, sbZ0),
+		Vector3.new(inX0 + 1, sbY1, sbZ1),
+		team.Primary,
+		Enum.Material.Metal
+	)
+	BuildUtil.Look(
+		sbFrame,
+		"Practice Scoreboard",
+		"Shows the countdown to your next game day. Practice hard - the next game is coming!",
+		{ At = Vector3.new(2.5, 4.5 - (sbY0 + sbY1) / 2, 0), LookKey = "season", Distance = 8 }
+	)
+	local screenDark = Color3.fromRGB(16, 18, 24)
+	for _, screen in ipairs({
+		{ name = "ScoreboardTeam", y0 = 27.6, y1 = 30, live = "team", text = name, color = teamTextColors(screenDark, team) },
+		{ name = "ScoreboardClock", y0 = 21.6, y1 = 27.2, live = "gameday", text = "GAME DAY SOON", color = Color3.fromRGB(255, 190, 40) },
+		{ name = "ScoreboardRecord", y0 = 18, y1 = 21.2, live = "record", text = "RECORD 0-0", color = WHITE },
+	}) do
+		local panel = span(
+			scoreboard,
+			screen.name,
+			Vector3.new(inX0 + 1, screen.y0, sbZ0 + 1),
+			Vector3.new(inX0 + 1.2, screen.y1, sbZ1 - 1),
+			screenDark,
+			Enum.Material.SmoothPlastic
+		)
+		BuildUtil.LiveText(panel, Enum.NormalId.Right, screen.live, {
+			LabelName = screen.name .. "Text",
+			Text = screen.text,
+			TextColor3 = screen.color,
+			BackgroundColor3 = screenDark,
+			BackgroundTransparency = 0,
+			LightInfluence = 0,
+			Font = screen.live == "gameday" and Enum.Font.Arcade or Enum.Font.GothamBlack,
+			PixelsPerStud = 16,
+		})
+		if screen.live == "gameday" then
+			BuildUtil.Light(
+				panel,
+				"SurfaceLight",
+				{ Name = "ScoreboardGlow", Face = Enum.NormalId.Right, Range = 20, Brightness = 1, Color = WHITE }
+			)
+		end
+	end
 end
 
 return CampusFields

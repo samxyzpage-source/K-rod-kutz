@@ -251,7 +251,7 @@ local TEAM_PHOTOS = {
 -- Franchise History timeline: { year, event } (the last one shows the owner's team name)
 local MILESTONES = {
 	{ "1950", "FOUNDED" },
-	{ "1958", "FIRST WIN" },
+	{ "1958", "FIRST PLAYOFFS" },
 	{ "1966", "COACH HALLORAN" },
 	{ "1972", "FIRST TITLE" },
 	{ "1999", "NEW STADIUM" },
@@ -719,7 +719,8 @@ local function buildMuseumFloor(ctx)
 
 	-- benches: two in the nave facing the Ring of Honor (one is a TV camera seat) and one in
 	-- each gallery, facing the legend plaques (west) and the big screens (east)
-	local ringCam = { From = Vector3.new(CX, 10, 272), To = Vector3.new(CX, 11, INNER.MaxZ), Fov = 55, Label = "RING OF HONOR" }
+	-- (the camera stands between the back statues, so all ten jerseys and the header fit the shot)
+	local ringCam = { From = Vector3.new(CX, 9.5, 276), To = Vector3.new(CX, 11, INNER.MaxZ), Fov = 62, Label = "RING OF HONOR" }
 	bench(hall, CX - 10, 296, 180, 7, { Object = "Ring of Honor Bench", Camera = ringCam })
 	bench(hall, CX + 10, 296, 180, 7)
 	bench(hall, 158, 266, 90, 8)

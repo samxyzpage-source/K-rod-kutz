@@ -1966,8 +1966,7 @@ function HQRoomsFront.hq_interview(ctx)
 	for _, ex in ipairs({ backX0 - 1, backX1 }) do
 		box(backdrop, "BackdropEdge", ex, FLOOR_TOP, 203.3, ex + 1, 11.6, 204.3, team.Primary)
 	end
-	local header =
-		box(backdrop, "BackdropHeader", backX0 - 1, 11.6, 203.3, backX1 + 1, WALL_TOP, 204.6, Color3.fromRGB(30, 30, 36))
+	local header = box(backdrop, "BackdropHeader", backX0 - 1, 11.6, 203.3, backX1 + 1, WALL_TOP, 204.6, Color3.fromRGB(30, 30, 36))
 	sign(header, Enum.NormalId.Back, "PRESS CONFERENCE", Color3.fromRGB(30, 30, 36), team, { InsetX = 0.2, InsetY = 0.1 })
 	-- seen from the lobby: a PRESS ROOM panel and an ON AIR light
 	local lobbyPanel = box(backdrop, "LobbySign", -50.2, 3.5, 222, -50, 9.5, 246, team.Primary)

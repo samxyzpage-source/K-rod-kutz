@@ -722,14 +722,29 @@ local QUESTIONS = {
 	},
 }
 
+-- Pre-game speeches (a podium whose Title mentions "speech", e.g. in the locker room)
+local SPEECHES = {
+	{
+		Q = "The whole team is looking at you. What do you tell them?",
+		A = { "Play for each other out there!", "Leave it all on the field!", "This is OUR house - defend it!" },
+	},
+	{
+		Q = "It's the last game day speech before kickoff. Make it count!",
+		A = { "Nobody believed in us. Prove them wrong!", "Have fun and play fast!", "One play at a time. Let's go!" },
+	},
+}
+
 local function startPodium(g, prompt)
-	gameTitle.Text = "PRESS CONFERENCE"
+	local title = prompt:GetAttribute("Title")
+	local speech = type(title) == "string" and title:lower():find("speech") ~= nil
+	gameTitle.Text = speech and string.upper(title) or "PRESS CONFERENCE"
 	local camera = prompt:GetAttribute("CameraCFrame")
 	if typeof(camera) == "CFrame" then
 		setCamera(camera, prompt:GetAttribute("CameraFov") or 45)
 	end
-	local question = QUESTIONS[math.random(1, #QUESTIONS)]
-	gameInfo.Text = "A reporter asks:"
+	local pool = speech and SPEECHES or QUESTIONS
+	local question = pool[math.random(1, #pool)]
+	gameInfo.Text = speech and "The locker room goes quiet..." or "A reporter asks:"
 	text({
 		Name = "Question",
 		Position = UDim2.new(0.04, 0, 0.04, 0),
@@ -754,7 +769,7 @@ local function startPodium(g, prompt)
 			if g.finished then
 				return
 			end
-			gameInfo.Text = "Camera flashes everywhere - the reporters loved it!"
+			gameInfo.Text = speech and "The team goes wild - they're fired up!" or "Camera flashes everywhere - the reporters loved it!"
 			local flash = box("Flash", { Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = WHITE, BackgroundTransparency = 0.2 })
 			flash.ZIndex = 5
 			finishGame(index, true)

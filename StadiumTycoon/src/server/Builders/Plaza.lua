@@ -2390,11 +2390,12 @@ function Plaza.trophy(ctx)
 	local stepsTop = y
 	BuildUtil.Block(ctx, "Pedestal", Vector3.new(half * 2, pedestalTop - y, half * 2), center, STONE_LIGHT, Enum.Material.Marble, nil, y)
 	BuildUtil.Block(ctx, "PedestalCap", Vector3.new(9.8, 0.6, 9.8), center, C.Gold, Enum.Material.Metal, gold, pedestalTop)
-	-- a stone viewing bench on the bottom step (street side): a TV camera seat on the trophy
+	-- a stone viewing bench on the front edge of the bottom step (street side), far enough from
+	-- the middle step that a sitter's legs stay clear of it: a TV camera seat on the trophy
 	BuildUtil.Seat(ctx, {
 		Name = "ViewingBench",
 		Size = Vector3.new(8, 1.4, 1.8),
-		CFrame = CFrame.new(cx, 1.2 + 0.7, cz - 12.6) * CFrame.Angles(0, math.pi, 0),
+		CFrame = CFrame.new(cx, 1.2 + 0.7, cz - 13) * CFrame.Angles(0, math.pi, 0),
 		Color = STONE_LIGHT,
 		Material = Enum.Material.Marble,
 		Object = "Viewing Bench",
@@ -2479,12 +2480,13 @@ function Plaza.trophy(ctx)
 	BuildUtil.Stage(ctx, 3)
 	goldCylinder("Stem", base + 6.1, 7, 1.8)
 	local knob = goldBall("Knob", base + 5.8, 3)
-	-- (the prompt hangs at eye level in front of the street side of the pedestal)
+	-- (the prompt hangs at eye level in front of the street side of the pedestal; it reaches 12
+	-- studs so it also shows from the pavement in front of the steps)
 	BuildUtil.Look(
 		knob,
 		"Championship Trophy",
 		"Solid gold and taller than a giraffe! Win the championship game and your team's name joins the legends.",
-		{ LookKey = "season", At = Vector3.new(0, -12.4, -5.6), Distance = 9 }
+		{ LookKey = "season", At = Vector3.new(0, -12.4, -5.6), Distance = 12 }
 	)
 	goldBall("Bowl", base + 13.4, 9)
 	local cup = goldCylinder("Cup", base + 15.9, 5, 9)

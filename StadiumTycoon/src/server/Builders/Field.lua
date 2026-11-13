@@ -22,6 +22,12 @@
 	             3 Coolers & Medical Tent   drinks table, medical tent, heaters, kicking net, gear
 	             4 Sideline Boards          team boards behind the benches
 
+	Interactions (BuildUtil.Look / Seat / Use): a drain grate (turf 1), the home sideline
+	(yardlines 1), a pylon per end zone (endzones 3), both goal posts (the east one explains the
+	field goal game), the midfield logo (LookKey "team"), three seat cushions per bench (the west
+	middle one is the SIDELINE CAM seat), the sports drink cooler (use), the kicking net, the
+	medical tent and the home sideline board (LookKey "record").
+
 	Layers (tops, y). The plot slab top is 0; paint bottoms sit on the grass top 0.2. Overlapping
 	flat layers are at least 0.04 apart so they never z-fight, even far away:
 	  base 0.1 (drains 0.14 / 0.18, grates 0.12, basins 0.17) | grass 0.2 | stripes 0.24 |
@@ -76,6 +82,11 @@ local PAD_HEIGHT = 4
 
 local PAINT = { CanCollide = false, CastShadow = false }
 local UP = Vector3.new(0, 1, 0)
+
+-- TV view of the west bench's camera seat: a sideline camera on the field pointed back at the
+-- bench, so whoever sits there sees themselves on TV
+local SIDELINE_CAM_FROM = Vector3.new(-6, 9, 58)
+local SIDELINE_CAM_TO = Vector3.new(-31, 3.5, 88)
 
 local BASE_DIRT = Color3.fromRGB(126, 102, 78)
 local DRAIN_GRAVEL = Color3.fromRGB(178, 172, 160)
@@ -651,7 +662,7 @@ function Field.goalposts(ctx)
 		-- Step 1: Posts & Padding -----------------------------------------------------------
 		BuildUtil.Stage(goal, 1)
 		disk(goal, "Footing", baseX, zc, 3.6, TURF_TOP + 0.08, CONCRETE_FOOTING, Enum.Material.Concrete)
-		BuildUtil.Cylinder(goal, {
+		local padding = BuildUtil.Cylinder(goal, {
 			Name = "Padding",
 			Position = Vector3.new(baseX, TURF_TOP + PAD_HEIGHT / 2, zc),
 			Height = PAD_HEIGHT,
@@ -659,6 +670,22 @@ function Field.goalposts(ctx)
 			Color = team.Primary,
 			Material = Enum.Material.Fabric,
 		})
+		if s > 0 then
+			-- the kick game (KickGame.lua) kicks at the east goal
+			BuildUtil.Look(
+				padding,
+				"Field Goal Posts",
+				"Field goals: step on a kick spot on the field, then time your aim and power to split the uprights! The kick spots appear when the goal posts are finished.",
+				{ Distance = 8 }
+			)
+		else
+			BuildUtil.Look(
+				padding,
+				"Goal Post",
+				"One padded post bends up to the crossbar like a slingshot, so nobody runs into two poles. Kick it between the yellow uprights for 3 points!",
+				{ Distance = 8 }
+			)
+		end
 		BuildUtil.Cylinder(goal, {
 			Name = "PaddingBand",
 			Position = Vector3.new(baseX, padTop - 0.6, zc),
@@ -794,7 +821,13 @@ function Field.midfield(ctx)
 	-- Step 2: Team Logo ----------------------------------------------------------------------
 	BuildUtil.Stage(ctx, 2)
 	-- the disk slips under the inside edge of the ring
-	disk(ctx, "LogoDisk", 0, zc, 2 * (RING_IN + 0.4), 0.38, team.Primary)
+	local logoDisk = disk(ctx, "LogoDisk", 0, zc, 2 * (RING_IN + 0.4), 0.38, team.Primary)
+	BuildUtil.Look(
+		logoDisk,
+		"Midfield Logo",
+		"Your team's logo on the 50-yard line, the most famous spot on the field. The TV cameras show it before every kickoff!",
+		{ LookKey = "team", Distance = 9 }
+	)
 
 	-- two bars framing the name
 	for _, side in ipairs({ -1, 1 }) do
@@ -938,7 +971,7 @@ function Field.benches(ctx)
 		end
 		BuildUtil.Block(
 			bench,
-			"Seat",
+			"BenchPlank",
 			Vector3.new(BENCH_LEN, 0.4, 2),
 			Vector3.new(bx, 0, seatZ),
 			team.Primary,
@@ -967,6 +1000,24 @@ function Field.benches(ctx)
 			nil,
 			seatTop + 1.5
 		)
+		-- three team cushions players can sit on, facing the field (the middle one has the prompt;
+		-- touching any of them seats you). The west bench's middle seat is a TV camera seat.
+		for _, offset in ipairs({ -3.4, 0, 3.4 }) do
+			local camera = nil
+			if s < 0 and offset == 0 then
+				camera = { From = SIDELINE_CAM_FROM, To = SIDELINE_CAM_TO, Fov = 50, Label = "SIDELINE CAM" }
+			end
+			BuildUtil.Seat(bench, {
+				Name = "BenchSeat",
+				Size = Vector3.new(2.6, 0.2, 1.5),
+				CFrame = CFrame.new(bx + offset, seatTop + 0.1, seatZ - 0.2),
+				Color = team.Secondary,
+				Material = Enum.Material.Fabric,
+				Object = "Team Bench",
+				NoPrompt = offset ~= 0,
+				Camera = camera,
+			})
+		end
 		-- helmets resting on the seat, a towel over the backrest (all clear of the lettering)
 		for _, offset in ipairs({ -9, -6.8, 7.2 }) do
 			helmet(bench, bx + offset, seatTop, seatZ - 0.15, team)
@@ -1004,7 +1055,7 @@ function Field.benches(ctx)
 		matTop
 	)
 	for _, s in ipairs({ -1, 1 }) do
-		BuildUtil.Cylinder(drinks, {
+		local cooler = BuildUtil.Cylinder(drinks, {
 			Name = "Cooler",
 			Position = Vector3.new(drinksX + s * 1.2, tableTop + 0.8, seatZ + 0.2),
 			Height = 1.6,
@@ -1012,6 +1063,14 @@ function Field.benches(ctx)
 			Color = COOLER_ORANGE,
 			Material = Enum.Material.SmoothPlastic,
 		})
+		if s < 0 then
+			BuildUtil.Use(ctx, cooler, "sportsdrink", {
+				Object = "Sports Drink Cooler",
+				Title = "Sideline Cooler",
+				Info = "Ice-cold sports drink keeps the players going all four quarters. Take a cup!",
+				Distance = 7,
+			})
+		end
 		BuildUtil.Cylinder(drinks, {
 			Name = "CoolerLid",
 			Position = Vector3.new(drinksX + s * 1.2, tableTop + 1.75, seatZ + 0.2),
@@ -1088,7 +1147,7 @@ function Field.benches(ctx)
 		nil,
 		matTop + netH
 	)
-	BuildUtil.Block(
+	local netPart = BuildUtil.Block(
 		net,
 		"Net",
 		Vector3.new(netX1 - netX0 - 0.3, netH - 0.4, 0.08),
@@ -1097,6 +1156,12 @@ function Field.benches(ctx)
 		Enum.Material.Fabric,
 		{ Transparency = 0.45, CastShadow = false },
 		matTop + 0.2
+	)
+	BuildUtil.Look(
+		netPart,
+		"Kicking Net",
+		"The kicker warms up here, booting balls into the net so they don't fly into the crowd. Hit the white target!",
+		{ Distance = 8 }
 	)
 	BuildUtil.Block(
 		net,
@@ -1138,7 +1203,7 @@ function Field.benches(ctx)
 	local tent = BuildUtil.Child(ctx, "MedicalTent")
 	local tentX, tentZ = 52.5, areaFront + 3.6
 	local tentW, tentD, tentH, roofH = 6, 5.4, 4, 1.6
-	BuildUtil.Block(
+	local tentBody = BuildUtil.Block(
 		tent,
 		"TentBody",
 		Vector3.new(tentW, tentH, tentD),
@@ -1147,6 +1212,12 @@ function Field.benches(ctx)
 		Enum.Material.Fabric,
 		nil,
 		matTop
+	)
+	BuildUtil.Look(
+		tentBody,
+		"Medical Tent",
+		"When a player gets hurt, the team doctors check him in here, away from the TV cameras. Most players are back in the game in minutes!",
+		{ At = Vector3.new(0, 0, -tentD / 2 - 0.6), Distance = 8 }
 	)
 	for _, s in ipairs({ -1, 1 }) do
 		-- gable roof: tall face of each wedge meets at the ridge (along Z)
@@ -1284,6 +1355,14 @@ function Field.benches(ctx)
 			nil,
 			matTop
 		)
+		if info.x > 0 then
+			BuildUtil.Look(
+				panel,
+				"Sideline Board",
+				"Your team's colours behind the bench. Every TV shot of the sideline shows it, so the whole league knows your record!",
+				{ LookKey = "record", Distance = 9 }
+			)
+		end
 		local front = teamText(panel, Enum.NormalId.Front, info.text, team.Secondary, team, 30, 0, 0, "BoardText", 3)
 		front.Position = UDim2.new(0.03, 0, bandTopInset / boardHeight, 0)
 		front.Size = UDim2.new(0.94, 0, (boardTop - bandTopInset - bandBottom) / boardHeight, 0)

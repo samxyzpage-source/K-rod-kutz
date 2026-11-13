@@ -107,7 +107,7 @@ local PIECES = {
 		6000,
 		30,
 		{ "practice_field" },
-		Vector3.new(124, 0, 348)
+		Vector3.new(124, 0, 324) -- between the Hall of Fame and the garage (clear of the carts' exits)
 	),
 	piece(
 		"practice_gear",

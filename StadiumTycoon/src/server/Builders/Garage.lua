@@ -2,7 +2,8 @@
 	Garage
 	The Golf Cart Garage (piece "golf_carts") in Config.Layout.Zones.golf_carts (X[128, 270]
 	Z[328, 368], max height 20): behind the Hall of Fame, beside the back road. The buy button
-	(124, 348) stays clear on the open slab west of the building.
+	(124, 324) sits on the open slab between the Hall of Fame and the garage, clear of the
+	carts' way out to the west.
 
 	The building X[129, 183] Z[329, 367] is one walk-in garage with two rooms:
 	  * CART BAYS (x 130 .. 160): three bays open to the west, one per cart. The server
@@ -49,9 +50,10 @@ local DEFAULT_PADS = { Vector3.new(138, 0, 336), Vector3.new(138, 0, 348), Vecto
 local CART_REAR_X = 142.5 -- back end of a parked cart (9 long, centred on its pad)
 local SIGN_X = 145.7 -- bay sign posts, just behind the carts
 local TRAY_X = 146.5 -- overhead charging cable tray
-local LIFT = { X = 170.5, Z = 338 } -- the cart lift in the workshop
+local LIFT = { X = 170, Z = 339.4 } -- the cart lift in the workshop (4-stud aisles on every side)
 local LOUNGE_Z = 360 -- lounge bench + TV
-local STADIUM_CAM = { From = Vector3.new(0, 70, 178), To = Vector3.new(0, 0, 30) }
+-- the lounge TV camera: high over the bowl's back corner, clear of the end-zone canopy roof
+local STADIUM_CAM = { From = Vector3.new(150, 70, 110), To = Vector3.new(0, 0, 30) }
 
 local PAINT = { CanCollide = false, CastShadow = false }
 local UP = Vector3.new(0, 1, 0)
@@ -390,7 +392,7 @@ local function shell(ctx, pads, team, name)
 		plaque,
 		"Golf Cart Garage",
 		"Home of your team's golf carts. Hop in one and cruise the campus roads - the fastest way from the stadium to the practice fields!",
-		{ LookKey = "team", Distance = 8 }
+		{ LookKey = "team", Distance = 6 } -- short, so it stays quiet on the buy button next door
 	)
 
 	-- long walls: a high clerestory window band along the bays (tool boards and tire racks hang
@@ -662,7 +664,7 @@ local function workshop(ctx, team)
 		Color = team.Primary,
 		Material = Enum.Material.Fabric,
 		Object = "Lounge Bench - Stadium TV",
-		Camera = { From = STADIUM_CAM.From, To = STADIUM_CAM.To, Fov = 60, Label = "GARAGE TV - STADIUM CAM" },
+		Camera = { From = STADIUM_CAM.From, To = STADIUM_CAM.To, Fov = 55, Label = "GARAGE TV - CORNER CAM" },
 	})
 end
 
@@ -721,13 +723,14 @@ local function bayDetails(ctx, index, pad, pads, team)
 	)
 
 	-- tire rack on the north side: a wall shelf with two tires, three more standing on the floor
-	local rackZ0 = northFace - 1.6
+	-- (tires centred 1.3 off the wall, so they stand clear of it)
+	local rackZ0, tireZ = northFace - 2.6, northFace - 1.3
 	span(bay, "TireShelf", 150, 157.4, 3.3, 3.6, rackZ0, northFace, STEEL, Enum.Material.Metal)
 	for k = 0, 2 do
-		cylinder(bay, "Tire", "X", Vector3.new(151.2 + k * 2.2, FLOOR_TOP + 1.25, rackZ0 + 0.8), 1, 2.5, TIRE, Enum.Material.Rubber)
+		cylinder(bay, "Tire", "X", Vector3.new(151.2 + k * 2.2, FLOOR_TOP + 1.25, tireZ), 1, 2.5, TIRE, Enum.Material.Rubber)
 	end
 	for k = 0, 1 do
-		cylinder(bay, "Tire", "X", Vector3.new(152.6 + k * 2.6, 3.6 + 1.2, rackZ0 + 0.8), 1, 2.4, TIRE, Enum.Material.Rubber)
+		cylinder(bay, "Tire", "X", Vector3.new(152.6 + k * 2.6, 3.6 + 1.2, tireZ), 1, 2.4, TIRE, Enum.Material.Rubber)
 	end
 end
 
@@ -814,6 +817,23 @@ local function chargingStation(ctx, pads, team)
 		Enum.Material.Metal,
 		PAINT
 	)
+	-- hanger rods from the ceiling carry the tray (the feed holds its bay-3 end)
+	for index = 1, #pads - 1 do
+		local hz = pads[index].Z + 6 -- over the bay dividers
+		span(
+			station,
+			"TrayHanger",
+			TRAY_X - 0.1,
+			TRAY_X + 0.1,
+			trayY + 0.2,
+			WALL_TOP,
+			hz - 0.1,
+			hz + 0.1,
+			STEEL,
+			Enum.Material.Metal,
+			PAINT
+		)
+	end
 	for _, pad in ipairs(pads) do
 		local plug = Vector3.new(CART_REAR_X + 0.8, 2.6, pad.Z + 1.2)
 		pipe(station, "ChargingCable", Vector3.new(TRAY_X, trayY - 0.2, pad.Z + 1.2), plug, 0.25, CABLE, Enum.Material.Rubber, PAINT)
