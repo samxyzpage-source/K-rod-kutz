@@ -13,6 +13,12 @@ Nothing appears in one click. Every piece is built in **2 to 6 steps**. For exam
 practice field goes grass, then yard lines, then end zones, then goal posts, then fence and
 sideline, then bleachers. That makes **177 build steps** in 49 pieces.
 
+Everything is **walk-in and interactive**. Rooms have doors that open, chairs and couches you
+can sit on, and "Press E to look" prompts (tap on a phone) on interesting things. You can lift
+weights, grab a smoothie, play arcade and ping-pong, hold press conferences and ride elevators up
+to the press box and suites. Press-box and broadcast-booth seats switch to a TV camera, and
+screens everywhere show your live score, record and season.
+
 On top of building, you **run the team**. You pick your colours and nickname, draft and
 train players, hire coaches, kick field goals, play game days and seasons, and chase quests
 and championships.
@@ -33,6 +39,7 @@ and championships.
 | 1.1 | Polish: pulsing buy buttons, a guide beam to your next button, sounds, "Unlocked: ..." messages, vault hints, full-server handling |
 | 2 | Front office + practice campus behind the stadium, a Team Bus, a second collect pad. The stadium becomes a full bowl with a home tunnel, two locker rooms, a bigger press box and a TV booth |
 | 3 | Game days: NPC fans walk in and fill the stands, double income, a countdown in the HUD |
+| 4.1 | Walk-in, interactive rooms: doors, elevators to the press box / suites / HQ roof, seats with TV camera views, "Press E to look" descriptions (lockers show your players' names), lift weights, arcade, ping-pong, press conferences, snacks and drinks to carry, live screens with your score, record and season |
 | 4 | Much bigger plots. You start inside an empty **Team HQ** with 12 rooms to build. Every piece is built in 2-6 steps (177 steps). New: drivable **golf carts**, a **Hall of Fame & Museum**, a **tailgate fan zone**, cafeteria, player lounge, interview room, coaches' offices, equipment room and meeting room. Team features: **team picker, Owner's Bonus, quests, draft + roster, training, hired staff, field goal challenge, seasons + playoffs + titles**, and a leaderboard |
 
 ## Play it in Roblox Studio
@@ -101,13 +108,27 @@ How saving stays safe:
 | Golf carts | The garage gives you up to 3 carts in your team colours. Abandoned carts drive themselves home. |
 | Day / night | A full day takes 10 minutes. Stadium lights switch on at night. |
 
+### Things to do around your franchise
+
+| Thing | How it works |
+| --- | --- |
+| Press E to look | Prompts on interesting objects (tap them on a phone) show a short description. Some show live info from your team: lockers show your players' names, trophy cases show your championships, the Draft Board shows the next pick's price. |
+| Doors | Every room has a door: press E to open it. Doors close again by themselves. |
+| Elevators | Ride up to the press box, the luxury suites and the HQ rooftop terrace (and back down). |
+| Seats | Sit on chairs, couches and benches. Press-box, broadcast-booth and other camera seats switch to a TV view of the field with a LIVE badge and your score. Jump to stand up. |
+| Weight room | "Lift weights": tap fast to push the bar. Counts workouts and pays a little. |
+| Lounge | Arcade "Pigskin Catch" (catch falling footballs) and ping-pong rallies. High scores show on the machines. |
+| Interview room | Take the podium and answer a reporter. Each press conference adds team hype: +1 rating in your next game day (up to +3). |
+| Snacks | Grab a lunch tray or a smoothie in the cafeteria, hot dogs / popcorn / sodas from the vendors and food trucks, a foam finger at the team store. Click to eat or drink; smoothies and sports drinks make you faster for a bit. |
+| Live screens | Screens and boards everywhere show your team name, the score, your record, the season, your starters and the game-day countdown. |
+
 ### Running the team
 
 | Feature | How it works |
 | --- | --- |
 | Pick your team | Choose one of 6 colour schemes and a nickname (Comets, Thunderhawks, Ironclads...). Everything you built is repainted, including the carts. Change it any time with the **TEAM** button. |
 | Owner's Bonus | A free cash gift every 8 minutes: the gold **BONUS** button on the right shows the countdown. |
-| Quests | 27 goals with cash rewards, shown on the left ("Finish 2 HQ rooms", "Kick a 55-yard field goal", "Win a championship"...). |
+| Quests | 30 goals with cash rewards, shown on the left ("Finish 2 HQ rooms", "Kick a 55-yard field goal", "Win a championship"...). |
 | Draft | Build the **Draft Board** in the Front Office, then draft players from the **ROSTER** screen. Each has a position (QB, RB, WR, OL, DEF, K) and a rating. Your film room, coaches' offices and coaching staff give better picks. |
 | Training | Finish the **Weight Room** to train your weakest starter (+1 to +3 rating, +1 more with a Training Room). |
 | Staff | Hire a coaching staff and a medical staff (they appear on the practice field and raise your team rating) and food vendors for the plaza. |
@@ -149,12 +170,16 @@ StadiumTycoon/
     Config.lua                   all tunable numbers, team colours, seasons, kicks, the plot layout
     Items.lua                    every piece and its steps: price, income, unlock order, button spot
     Format.lua                   money formatting ($12.5K)
+    Interact.lua                 the list of interaction kinds, "use" actions, look keys and live screens
   src/server/   -> ServerScriptService.TycoonServer
     Main.server.lua              entry point: builds the world, wires players, saving, loops
     World.lua                    plot positions, street + spawn, day/night cycle
     PlotManager.lua              claiming, buttons, step-by-step purchases, vault, bus, scoreboard
     PlayerData.lua               DataStore loading/saving with session locking
     Franchise.lua                team picker, Owner's Bonus, quests, draft, training, seasons
+    Interactions.lua             doors, seats, elevators, snacks, mini-game results (the "Interact" prompts)
+    Snacks.lua                   hot dogs, smoothies, trays, foam fingers... (Tools built from parts)
+    LiveScreens.lua              keeps every live screen up to date
     KickGame.lua                 the field goal challenge (server side)
     Vehicles.lua                 golf carts
     GameDay.lua                  game day schedule, income boost, crowds
@@ -162,7 +187,7 @@ StadiumTycoon/
     BuildUtil.lua                helpers for parts, text, lights and build steps
     Builders/                    the geometry, one function per piece (each step marked with BuildUtil.Stage)
       PlotBase.lua               slab, roads, gate, vault, collect pads, team bus stops
-      HQShell.lua                the empty Team HQ building
+      HQShell.lua                the empty Team HQ building (+ elevator to the rooftop terrace)
       HQRoomsFront.lua           lobby, front office, coaches' offices, interview, meeting room, lounge
       HQRoomsBack.lua            locker room, equipment, weight room, training room, film room, cafeteria
       CampusFields.lua           practice field, practice gear, indoor practice dome
@@ -174,12 +199,14 @@ StadiumTycoon/
       Field.lua                  turf, yard lines, end zones, goal posts, midfield, benches
       Stands.lua                 the full bowl: lower + upper decks, end zones, corners
       Plaza.lua                  ticket booth, concessions, parking, team store, trophy
-      Features.lua               scoreboard, lights, jumbotron, press box, suites, broadcast booth, canopy
+      Features.lua               scoreboard, lights, jumbotron, canopy
+      PressLevel.lua             walk-in press box, luxury suites and TV broadcast booth (with elevators)
   src/client/   -> StarterPlayer.StarterPlayerScripts.TycoonClient
     HUD.client.lua               cash / income / progress / game day / save status / pop-ups
     Franchise.client.lua         team picker, bonus button, quests, roster + draft + training
     KickGame.client.lua          the field goal aim + power meter
     Drive.client.lua             golf cart driving
+    Interact.client.lua          look cards, TV camera seats, mini-games, elevator fades
     Effects.client.lua           pulsing buttons, guide beam, sounds, cheering fans
   tools/                         offline checks (see below)
   docs/                          preview pictures
@@ -192,6 +219,8 @@ StadiumTycoon/
 2. Add a builder function with the same id to one of the `Builders/` modules (and its module
    to `Builders/init.lua`). Start each step's parts with `BuildUtil.Stage(ctx, n)`. Use the
    `BuildUtil` helpers and plot-local coordinates (see the comment at the top of `Config.lua`).
+   Make it interactive with `BuildUtil.Look`, `Door`, `Seat`, `Elevator`, `Use` and `LiveText`
+   (see the INTERACTIONS section of `BuildUtil.lua` and `src/shared/Interact.lua`).
 3. Check it with `lune run tools/render_plot.luau tools/out <piece id>`, then rebuild the place
    file (below) or paste the changed scripts into Studio.
 
@@ -204,14 +233,18 @@ These tools are optional. You only need them to edit the code outside Studio.
 * **Lune** runs the game code outside Roblox:
   * `lune run tools/render_plot.luau tools/out all` builds every step of a complete plot with
     the real builder code and checks it: zones, plot bounds, blocked buttons, clear walkways,
-    roads, tunnels and HQ corridors. Add `crowd` as a third argument to also seat a crowd.
+    roads, tunnels and HQ corridors, plus every prompt, door, seat, elevator (it must land on a
+    floor with head room) and live screen. Add `crowd` as a third argument to also seat a crowd.
   * `node tools/preview/shoot.js tools/out/parts.json tools/out` renders it to PNG images
-    (run `npm install` in `tools/preview` first; needs Playwright + Chromium).
+    (run `npm install` in `tools/preview` first; needs Playwright + Chromium). `--prompts` marks
+    every interaction, `--noroof` hides roofs and `--cam=x,y,z:tx,ty,tz` renders any close-up.
   * `lune run tools/test_server.luau` runs about 300 checks of the server logic and the client
     scripts against a fake Roblox engine. It covers:
     * claiming, step-by-step buying, the vault and auto-collect
     * golf carts and the drive controller
     * the team picker, Owner's Bonus, quests, draft, training, field goals, seasons and playoffs
+    * doors, seats, elevators, snacks, mini-game results and live screens
+    * look cards, TV camera seats and all four mini-games on the client
     * saving and rejoining, session locks, temporary errors, bad or newer save data, and
       Studio without API access
     * game days and crowds

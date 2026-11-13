@@ -160,12 +160,22 @@ end
 -- Helpers
 ---------------------------------------------------------------------------------------------
 
+-- The owner's team name, or `fallback` when the plot has no name yet.
 local function teamLabel(ctx, fallback)
 	local name = ctx.teamName
 	if type(name) ~= "string" or name == "" then
 		return fallback
 	end
 	return name
+end
+
+-- "<prefix><name><suffix>" with the owner's name, or `otherwise` when there is no name.
+local function withName(ctx, prefix, suffix, otherwise)
+	local name = teamLabel(ctx, nil)
+	if name == nil then
+		return otherwise
+	end
+	return prefix .. name .. suffix
 end
 
 -- Relative luminance / contrast ratio (WCAG) so text stays readable for every team palette.
@@ -593,7 +603,7 @@ local function bench(ctx, cx, cz, length, team, text)
 		BuildUtil.Block(
 			ctx,
 			"BenchLeg",
-			Vector3.new(0.4, 4.3, 2.1),
+			Vector3.new(0.4, 4.25, 2.1),
 			Vector3.new(cx + s * (length / 2 - 0.8), 0, cz + 0.2),
 			DARK_METAL,
 			metal,
@@ -681,8 +691,8 @@ local function bleachers(ctx, x0, x1, frontZ, team, text)
 		BuildUtil.Block(
 			ctx,
 			"BleacherPost",
-			Vector3.new(0.4, railTop - TURF_TOP, 0.4),
-			Vector3.new(x, 0, backZ - 0.2),
+			Vector3.new(0.4, railTop - TURF_TOP - 0.05, 0.4),
+			Vector3.new(x, 0, backZ - 0.28),
 			ALUMINIUM_DARK,
 			metal,
 			nil,
@@ -840,7 +850,7 @@ function CampusFields.practice_field(ctx)
 		Enum.Material.SmoothPlastic
 	)
 	faceText(arch, Enum.NormalId.Front, "PRACTICE FIELD", team.Primary, team, { LabelName = "GateBannerFront" })
-	faceText(arch, Enum.NormalId.Back, "GO " .. name .. "!", team.Primary, team, { LabelName = "GateBannerBack" })
+	faceText(arch, Enum.NormalId.Back, withName(ctx, "GO ", "!", "GO TEAM!"), team.Primary, team, { LabelName = "GateBannerBack" })
 	for _, s in ipairs({ -1, 1 }) do
 		local hingeX = s < 0 and gateW + 0.2 or gateE - 0.2
 		span(
@@ -855,7 +865,8 @@ function CampusFields.practice_field(ctx)
 	end
 
 	-- banners on the outside of the front fence, facing the road
-	local bannerSpecs = { { (x0 + gateW) / 2, name .. " PRACTICE" }, { (gateE + x1) / 2, "PRACTICE LIKE A CHAMPION" } }
+	local bannerSpecs =
+		{ { (x0 + gateW) / 2, withName(ctx, "", " PRACTICE", "TEAM PRACTICE") }, { (gateE + x1) / 2, "PRACTICE LIKE A CHAMPION" } }
 	for i, spec in ipairs(bannerSpecs) do
 		local cloth = span(
 			fence,
@@ -895,7 +906,7 @@ function CampusFields.practice_field(ctx)
 	-- STEP 6: Bleachers -------------------------------------------------------------------------
 	BuildUtil.Stage(ctx, 6)
 	local stands = BuildUtil.Child(ctx, "Bleachers")
-	local bleacherText = name == "HOME" and "HOME OF CHAMPIONS" or ("HOME OF THE " .. name)
+	local bleacherText = withName(ctx, "HOME OF THE ", "", "HOME OF CHAMPIONS")
 	bleachers(stands, f.CenterX - 32, f.CenterX + 32, f.MaxZ + BOUNDARY_WIDTH + 1.5, team, bleacherText)
 end
 
@@ -1157,8 +1168,8 @@ local function coachTower(ctx, cx, cz, team, text)
 	local panel = BuildUtil.Box(
 		ctx,
 		"TowerPanel",
-		Vector3.new(7.6, 2.8, 0.3),
-		Vector3.new(cx, floorY + 1.4, cz - 3.65),
+		Vector3.new(7.6, 2.75, 0.3),
+		Vector3.new(cx, floorY + 1.375, cz - 3.65),
 		team.Primary,
 		Enum.Material.SmoothPlastic
 	)
@@ -1305,8 +1316,10 @@ function CampusFields.practice_gear(ctx)
 	-- STEP 3: Agility Ladder & Cones (flat / walk-through) --------------------------------------
 	BuildUtil.Stage(ctx, 3)
 	local drills = BuildUtil.Child(ctx, "AgilityDrills")
-	agilityLadder(drills, f.CenterX + 12, f.CenterX + 34, f.MinZ + 12)
-	agilityLadder(drills, f.CenterX - 40, f.CenterX - 18, f.MaxZ - 14)
+	-- ladders lie between the yard numbers and the hash marks, so they never cover painted digits
+	local ladderInset = (NUMBER_INSET + NUMBER_HEIGHT / 2 + f.HashInset) / 2 -- 24.5
+	agilityLadder(drills, f.CenterX + 12, f.CenterX + 34, f.MinZ + ladderInset)
+	agilityLadder(drills, f.CenterX - 40, f.CenterX - 18, f.MaxZ - ladderInset)
 	for i = 0, 7 do
 		cone(drills, f.CenterX + 18 + i * 4, f.CenterZ + 14 + (i % 2) * 6)
 	end
@@ -1429,14 +1442,20 @@ function CampusFields.indoor_dome(ctx)
 	local ribInset = t / 2 + 0.7
 	for i = 1, 3 do
 		local x = d.X0 + (d.X1 - d.X0) * i / 4
+		local overPortal = x > cutMinX and x < cutMaxX
 		for k = 0, n - 1 do
-			local overPortal = k == 0 and x > cutMinX and x < cutMaxX
-			if not overPortal then
+			if not (overPortal and k == 0) then
 				local za, ya = domeVertex(d, k, ribInset)
 				local zb, yb = domeVertex(d, k + 1, ribInset)
 				local a, b = Vector3.new(x, ya, za), Vector3.new(x, yb, zb)
 				local dir = (b - a).Unit
-				bar(frame, "Arch", a - dir * 0.6, b + dir * 0.6, 1.2, team.Secondary, Enum.Material.Metal)
+				local start = a - dir * 0.6
+				if overPortal and k == 1 then
+					-- springs from inside the portal header, so its cut end never shows in the doorway
+					local springY = (d.OpenTop + d.HeaderTop) / 2
+					start = a + (b - a) * ((springY - ya) / (yb - ya))
+				end
+				bar(frame, "Arch", start, b + dir * 0.6, 1.2, team.Secondary, Enum.Material.Metal)
 			end
 		end
 	end
@@ -1545,7 +1564,7 @@ function CampusFields.indoor_dome(ctx)
 			faceText(west, Enum.NormalId.Top, "INDOOR PRACTICE", team.Primary, team, bandText)
 		elseif k == n - 1 then
 			local back = roofPanel(roof, d, k, d.X0, d.X1, props)
-			faceText(back, Enum.NormalId.Top, name .. "  INDOOR PRACTICE", team.Primary, team, {
+			faceText(back, Enum.NormalId.Top, withName(ctx, "", "  INDOOR PRACTICE", "INDOOR PRACTICE"), team.Primary, team, {
 				LabelName = "BandNameBack",
 				PixelsPerStud = 4,
 				InsetX = 0.15,
@@ -1559,16 +1578,19 @@ function CampusFields.indoor_dome(ctx)
 			end
 		end
 	end
-	local _, topY = domeVertex(d, (n - 1) / 2)
-	BuildUtil.Box(
-		roof,
-		"RoofRidge",
-		Vector3.new(d.X1 - d.X0, 0.3, 1.6),
-		Vector3.new((d.X0 + d.X1) / 2, topY + t / 2 + 0.15, zc - 7),
-		team.Secondary,
-		Enum.Material.Metal
-	)
-	faceText(topPanel, Enum.NormalId.Top, name .. "  INDOOR PRACTICE", MEMBRANE, team, {
+	-- team trims along both folds of the flat top panel, framing the lettering (clear of its insets)
+	for _, k in ipairs({ (n - 1) / 2, (n + 1) / 2 }) do
+		local foldZ, foldY = domeVertex(d, k)
+		BuildUtil.Box(
+			roof,
+			"RoofTrim",
+			Vector3.new(d.X1 - d.X0, 0.3, 1.2),
+			Vector3.new((d.X0 + d.X1) / 2, foldY + t / 2 + 0.15, foldZ),
+			team.Secondary,
+			Enum.Material.Metal
+		)
+	end
+	faceText(topPanel, Enum.NormalId.Top, withName(ctx, "", "  INDOOR PRACTICE", "INDOOR PRACTICE"), MEMBRANE, team, {
 		LabelName = "RoofName",
 		PixelsPerStud = 4,
 		InsetX = 0.04,
@@ -1731,10 +1753,10 @@ function CampusFields.indoor_dome(ctx)
 		"WelcomeBoard",
 		Vector3.new(d.CenterX - 30, 5, wallZ - 0.4),
 		Vector3.new(d.CenterX + 30, 13.5, wallZ),
-		team.Primary,
+		WHITE,
 		Enum.Material.SmoothPlastic
 	)
-	faceText(board, Enum.NormalId.Front, name == "HOME" and "HOME OF CHAMPIONS" or ("HOME OF THE " .. name), team.Primary, team, {
+	faceText(board, Enum.NormalId.Front, withName(ctx, "HOME OF THE ", "", "HOME OF CHAMPIONS"), WHITE, team, {
 		LabelName = "WelcomeBoardText",
 		InsetX = 0.06,
 		Outline = 3,

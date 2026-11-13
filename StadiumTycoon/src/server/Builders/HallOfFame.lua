@@ -11,7 +11,7 @@
 	Steps (Items.lua):
 	  1 Building        podium + front steps, limestone walls with marble pilasters and tall dark
 	                    windows, "<TEAM> HALL OF FAME" carved in the frieze, a pediment with a team
-	                    medallion, a rotunda topped by a giant football standing on end (laces
+	                    medallion and a copper gable roof behind it, a rotunda topped by a giant football standing on end (laces
 	                    facing the road), nave columns, ceiling lights and a team medallion in the
 	                    floor under the dome
 	  2 Trophy Cases    four lit glass display cases in the galleries: championship trophies,
@@ -334,14 +334,24 @@ local function buildBuilding(ctx)
 		Enum.Material.Slate
 	)
 	local pedimentZ = OUTER.MinZ - 1 -- front face; the cornice edge sits 0.5 further out
+	local gableBackZ = pedimentZ + 23 -- the copper gable roof behind the pediment ends here
 	for _, s in ipairs({ -1, 1 }) do
-		-- each half slopes down away from the centre line (wedge slope = local -Z)
+		-- each half slopes down away from the centre line (wedge slope = local -Z); the stone
+		-- pediment in front and a copper gable roof behind it share the same profile
+		local turn = CFrame.Angles(0, -s * math.pi / 2, 0)
 		BuildUtil.Wedge(b, {
 			Name = "Pediment",
 			Size = Vector3.new(3, 6, 22),
-			CFrame = CFrame.new(CX + s * 11, CORNICE_TOP + 3, pedimentZ + 1.5) * CFrame.Angles(0, -s * math.pi / 2, 0),
+			CFrame = CFrame.new(CX + s * 11, CORNICE_TOP + 3, pedimentZ + 1.5) * turn,
 			Color = LIMESTONE,
 			Material = stone,
+		})
+		BuildUtil.Wedge(b, {
+			Name = "RoofGable",
+			Size = Vector3.new(gableBackZ - pedimentZ - 3, 6, 22),
+			CFrame = CFrame.new(CX + s * 11, CORNICE_TOP + 3, (pedimentZ + 3 + gableBackZ) / 2) * turn,
+			Color = COPPER_ROOF,
+			Material = Enum.Material.Slate,
 		})
 	end
 	cyl(
@@ -383,12 +393,23 @@ local function buildBuilding(ctx)
 	BuildUtil.Light(oculus, "PointLight", { Name = "NaveLight", Range = 50, Brightness = 1.3, Color = WARM_LIGHT })
 
 	-- team medallion in the floor under the dome (reads from the doorway)
-	cyl(b, "FloorMedallionRing", Vector3.new(CX, FLOOR + 0.02, DOME_Z), 0.04, MEDALLION_D, "Y", team.Secondary, Enum.Material.Marble, PAINT)
-	cyl(b, "FloorMedallion", Vector3.new(CX, FLOOR + 0.03, DOME_Z), 0.06, MEDALLION_D - 2, "Y", team.Primary, Enum.Material.Marble, PAINT)
+	-- (paint layers 0.05 apart: ring top FLOOR + 0.05, disc top FLOOR + 0.1, text carrier above)
+	cyl(
+		b,
+		"FloorMedallionRing",
+		Vector3.new(CX, FLOOR + 0.025, DOME_Z),
+		0.05,
+		MEDALLION_D,
+		"Y",
+		team.Secondary,
+		Enum.Material.Marble,
+		PAINT
+	)
+	cyl(b, "FloorMedallion", Vector3.new(CX, FLOOR + 0.05, DOME_Z), 0.1, MEDALLION_D - 2, "Y", team.Primary, Enum.Material.Marble, PAINT)
 	local medallionText = BuildUtil.Part(b, {
 		Name = "FloorMedallionName",
 		Size = Vector3.new(MEDALLION_D - 4, 0.02, 3),
-		CFrame = CFrame.new(CX, FLOOR + 0.08, DOME_Z) * CFrame.Angles(0, math.pi, 0),
+		CFrame = CFrame.new(CX, FLOOR + 0.14, DOME_Z) * CFrame.Angles(0, math.pi, 0),
 		Transparency = 1,
 		CanCollide = false,
 		CastShadow = false,
