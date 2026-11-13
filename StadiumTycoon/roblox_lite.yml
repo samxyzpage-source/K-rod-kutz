@@ -1,0 +1,49 @@
+---
+# Minimal Roblox globals for selene (selene's generated "roblox" std needs to download
+# Roblox's API dump; this lighter std works offline). Catches undefined globals/typos,
+# unused variables, etc. but does not type-check Roblox API members.
+base: luau
+name: roblox_lite
+globals:
+  game: { any: true }
+  workspace: { any: true }
+  script: { any: true }
+  plugin: { any: true }
+  shared: { any: true }
+  Instance: { any: true }
+  Vector3: { any: true }
+  Vector2: { any: true }
+  Vector3int16: { any: true }
+  CFrame: { any: true }
+  Color3: { any: true }
+  BrickColor: { any: true }
+  UDim: { any: true }
+  UDim2: { any: true }
+  Enum: { any: true }
+  Random: { any: true }
+  TweenInfo: { any: true }
+  NumberSequence: { any: true }
+  NumberSequenceKeypoint: { any: true }
+  ColorSequence: { any: true }
+  ColorSequenceKeypoint: { any: true }
+  NumberRange: { any: true }
+  PhysicalProperties: { any: true }
+  Ray: { any: true }
+  Region3: { any: true }
+  Rect: { any: true }
+  Font: { any: true }
+  DateTime: { any: true }
+  task: { any: true }
+  debug: { any: true }
+  utf8: { any: true }
+  buffer: { any: true }
+  warn:
+    args:
+      - type: "..."
+  tick:
+    args: []
+  time:
+    args: []
+  typeof:
+    args:
+      - type: any

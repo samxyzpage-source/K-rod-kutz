@@ -1,0 +1,4041 @@
+<roblox version="4">
+  <Item class="Lighting" referent="0">
+    <Properties>
+      <string name="Name">Lighting</string>
+      <Color3 name="Ambient">
+        <R>0.27</R>
+        <G>0.27</G>
+        <B>0.3</B>
+      </Color3>
+      <float name="Brightness">2</float>
+      <float name="ClockTime">14</float>
+      <bool name="GlobalShadows">true</bool>
+      <Color3 name="OutdoorAmbient">
+        <R>0.5</R>
+        <G>0.5</G>
+        <B>0.5</B>
+      </Color3>
+      <token name="Technology">3</token>
+    </Properties>
+    <Item class="Atmosphere" referent="1">
+      <Properties>
+        <string name="Name">Atmosphere</string>
+        <float name="Density">0.25</float>
+        <float name="Offset">0.1</float>
+      </Properties>
+    </Item>
+  </Item>
+  <Item class="ReplicatedStorage" referent="2">
+    <Properties>
+      <string name="Name">ReplicatedStorage</string>
+    </Properties>
+    <Item class="Folder" referent="3">
+      <Properties>
+        <string name="Name">TycoonShared</string>
+      </Properties>
+      <Item class="ModuleScript" referent="4">
+        <Properties>
+          <string name="Name">Config</string>
+          <string name="Source"><![CDATA[--[[
+	Config
+	All the numbers you are most likely to want to tweak live here.
+
+	Coordinate system used by every builder (plot-local space):
+	  * Origin = centre of the plot, on the walkable plot surface (y = 0).
+	  * -Z is the FRONT of the plot (the side with the entrance gate, facing the street).
+	  * +Z is the BACK of the plot.
+	  * X runs left/right along the length of the football field.
+	  * 1 yard = 2 studs.
+]]
+
+local Config = {}
+
+-- General ----------------------------------------------------------------------------------
+Config.GameTitle = "Gridiron Stadium Tycoon"
+Config.PlotCount = 4 -- how many stadium plots per server (1 - 6)
+Config.StartingCash = 0
+Config.IncomeMultiplier = 1 -- set to 10 or 100 while testing to build faster
+Config.IncomeTickSeconds = 1 -- how often income is added to the vault
+Config.AttendancePerIncome = 25 -- scoreboard "attendance" = income/sec * this
+
+-- Saving -----------------------------------------------------------------------------------
+Config.SaveEnabled = true
+Config.DataStoreName = "GridironStadiumTycoon_v1"
+Config.AutosaveSeconds = 90
+
+-- World ------------------------------------------------------------------------------------
+Config.DayNightCycle = true
+Config.DayLengthSeconds = 600 -- seconds for a full 24 hour day
+Config.NightStartsAt = 18 -- ClockTime when stadium lights switch on
+Config.NightEndsAt = 6.5 -- ClockTime when stadium lights switch off
+Config.BuildAnimation = true
+Config.RespawnAtPlot = true -- owners respawn at their own stadium
+
+-- Team colours: plot N uses palette N -------------------------------------------------------
+Config.TeamColors = {
+	{
+		Name = "Navy & Orange",
+		Primary = Color3.fromRGB(18, 44, 96),
+		Secondary = Color3.fromRGB(245, 130, 32),
+		Trim = Color3.fromRGB(245, 245, 245),
+	},
+	{
+		Name = "Crimson & Gold",
+		Primary = Color3.fromRGB(160, 24, 44),
+		Secondary = Color3.fromRGB(255, 196, 37),
+		Trim = Color3.fromRGB(245, 245, 245),
+	},
+	{
+		Name = "Forest & Silver",
+		Primary = Color3.fromRGB(22, 96, 58),
+		Secondary = Color3.fromRGB(196, 202, 208),
+		Trim = Color3.fromRGB(245, 245, 245),
+	},
+	{
+		Name = "Purple & Black",
+		Primary = Color3.fromRGB(84, 40, 140),
+		Secondary = Color3.fromRGB(32, 32, 38),
+		Trim = Color3.fromRGB(255, 200, 40),
+	},
+	{
+		Name = "Teal & Black",
+		Primary = Color3.fromRGB(0, 128, 140),
+		Secondary = Color3.fromRGB(28, 28, 34),
+		Trim = Color3.fromRGB(245, 245, 245),
+	},
+	{
+		Name = "Royal & White",
+		Primary = Color3.fromRGB(28, 78, 200),
+		Secondary = Color3.fromRGB(240, 240, 245),
+		Trim = Color3.fromRGB(220, 30, 40),
+	},
+}
+
+-- Common colours --------------------------------------------------------------------------
+Config.Colors = {
+	Grass = Color3.fromRGB(58, 125, 52),
+	GrassDark = Color3.fromRGB(50, 112, 45),
+	Line = Color3.fromRGB(250, 250, 250),
+	Concrete = Color3.fromRGB(150, 150, 155),
+	ConcreteDark = Color3.fromRGB(110, 110, 116),
+	Asphalt = Color3.fromRGB(52, 52, 58),
+	Walkway = Color3.fromRGB(196, 190, 176),
+	Metal = Color3.fromRGB(160, 165, 172),
+	Glass = Color3.fromRGB(160, 210, 240),
+	GoalPost = Color3.fromRGB(255, 214, 10),
+	Gold = Color3.fromRGB(255, 190, 40),
+	Wood = Color3.fromRGB(150, 105, 60),
+	ButtonAffordable = Color3.fromRGB(40, 220, 90),
+	ButtonTooExpensive = Color3.fromRGB(230, 60, 60),
+	Vault = Color3.fromRGB(70, 75, 82),
+	CollectPad = Color3.fromRGB(40, 220, 90),
+	ClaimGate = Color3.fromRGB(255, 200, 40),
+}
+
+-- Layout (plot-local studs) ----------------------------------------------------------------
+local L = {}
+L.PlotWidth = 420 -- X
+L.PlotDepth = 400 -- Z
+L.StreetWidth = 60 -- gap between the two rows of plots (spawn is in the middle)
+L.PlotGap = 30 -- gap between neighbouring plots on the same side of the street
+L.Yard = 2
+
+L.FieldCenterZ = 30
+L.FieldLength = 240 -- back of end zone to back of end zone (120 yards)
+L.PlayLength = 200 -- goal line to goal line (100 yards)
+L.EndZoneDepth = 20 -- 10 yards
+L.FieldWidth = 106 -- ~53 yards
+L.SidelineMargin = 12 -- turf between the sideline and the stands
+L.EndMargin = 15 -- turf between the end line and the end-zone stands
+
+L.RowDepth = 4
+L.RowRise = 2
+L.LowerRows = 6
+L.UpperRows = 6
+L.UpperStartHeight = 16 -- height of the first upper-deck row
+
+L.TunnelHalfWidth = 14 -- gap in the front (visitor) stands for the players' tunnel
+L.WalkwayHalfWidth = 12
+
+-- Derived values (do not edit, they are computed from the values above)
+L.FieldFrontZ = L.FieldCenterZ - L.FieldWidth / 2 -- -23
+L.FieldBackZ = L.FieldCenterZ + L.FieldWidth / 2 -- 83
+L.FieldHalfLength = L.FieldLength / 2 -- 120
+L.GoalLineX = L.PlayLength / 2 -- 100
+L.SurfaceMinZ = L.FieldFrontZ - L.SidelineMargin -- -35
+L.SurfaceMaxZ = L.FieldBackZ + L.SidelineMargin -- 95
+L.SurfaceHalfX = L.FieldHalfLength + L.EndMargin -- 135
+L.LowerDepth = L.LowerRows * L.RowDepth -- 24
+L.UpperDepth = L.UpperRows * L.RowDepth -- 24
+L.LowerTopHeight = L.LowerRows * L.RowRise -- 12
+L.UpperTopHeight = L.UpperStartHeight + (L.UpperRows - 1) * L.RowRise -- 26
+L.SidelineStandsHalfLength = L.FieldHalfLength -- 120: sideline stands span X in [-120, 120]
+L.FrontLowerOuterZ = L.SurfaceMinZ - L.LowerDepth -- -59
+L.FrontUpperOuterZ = L.FrontLowerOuterZ - L.UpperDepth -- -83
+L.BackLowerOuterZ = L.SurfaceMaxZ + L.LowerDepth -- 119
+L.BackUpperOuterZ = L.BackLowerOuterZ + L.UpperDepth -- 143
+L.EndLowerOuterX = L.SurfaceHalfX + L.LowerDepth -- 159
+L.PlazaFrontZ = -L.PlotDepth / 2 -- -200
+L.PlazaBackZ = L.FrontUpperOuterZ -- -83
+
+-- Fixed (always present) plot features
+L.GateZ = L.PlazaFrontZ + 3 -- -197
+L.GateHalfWidth = 13
+L.VaultPosition = Vector3.new(36, 0, -182)
+L.CollectPadPosition = Vector3.new(22, 0, -182)
+L.SpawnPosition = Vector3.new(0, 0, -188) -- where owners respawn (just inside the gate)
+
+Config.Layout = L
+
+return Config
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="5">
+        <Properties>
+          <string name="Name">Format</string>
+          <string name="Source"><![CDATA[--[[
+	Format
+	Number helpers shared by the server (signs, buttons) and the client (HUD).
+]]
+
+local Format = {}
+
+-- 1234567 -> "1,234,567"
+function Format.Commas(number)
+	local whole = math.floor(math.abs(number) + 0.5)
+	local text = tostring(whole)
+	local formatted = text:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	if formatted:sub(1, 1) == "," then
+		formatted = formatted:sub(2)
+	end
+	if number < 0 then
+		formatted = "-" .. formatted
+	end
+	return formatted
+end
+
+local SUFFIXES = {
+	{ 1e12, "T" },
+	{ 1e9, "B" },
+	{ 1e6, "M" },
+	{ 1e3, "K" },
+}
+
+-- 950 -> "950", 12500 -> "12.5K", 3400000 -> "3.4M"
+function Format.Short(number)
+	local absolute = math.abs(number)
+	if absolute < 10000 then
+		return Format.Commas(number)
+	end
+	for _, entry in ipairs(SUFFIXES) do
+		local size, suffix = entry[1], entry[2]
+		if absolute >= size then
+			local value = math.floor(number / size * 10) / 10
+			local text = string.format("%.1f", value):gsub("%.0$", "")
+			return text .. suffix
+		end
+	end
+	return Format.Commas(number)
+end
+
+-- Money with a dollar sign: "$12.5K"
+function Format.Money(number)
+	return "$" .. Format.Short(number)
+end
+
+-- Exact money with commas: "$12,500"
+function Format.MoneyExact(number)
+	return "$" .. Format.Commas(number)
+end
+
+return Format
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="6">
+        <Properties>
+          <string name="Name">Items</string>
+          <string name="Source"><![CDATA[--[[
+	Items
+	Every buildable piece of the stadium, in the order they unlock.
+
+	  Id        unique key (also the name of the builder function in Builders/)
+	  Name      shown on the buy button
+	  Cost      price in cash
+	  Income    cash per second this piece adds to the vault once built
+	  Requires  list of item Ids that must be owned before this button appears
+	  Button    plot-local position of the buy button (y = 0 is the plot surface)
+
+	To add a new piece: add an entry here, then add a builder function with the same Id
+	in one of the modules inside ServerScriptService/TycoonServer/Builders.
+]]
+
+local Items = {}
+
+-- Buttons for field + stadium pieces sit in a row on the front sideline (z = -29),
+-- buttons for plaza buildings sit next to the building they create.
+local SIDELINE_Z = -29
+
+Items.List = {
+	-- Groundbreaking ---------------------------------------------------------------------
+	{ Id = "turf", Name = "Turf Field", Cost = 0, Income = 1, Requires = {}, Button = Vector3.new(0, 0, -178) },
+	{ Id = "yardlines", Name = "Yard Lines", Cost = 25, Income = 2, Requires = { "turf" }, Button = Vector3.new(-20, 0, SIDELINE_Z) },
+	{ Id = "benches", Name = "Team Benches", Cost = 60, Income = 2, Requires = { "turf" }, Button = Vector3.new(20, 0, SIDELINE_Z) },
+	{ Id = "endzones", Name = "End Zones", Cost = 120, Income = 3, Requires = { "yardlines" }, Button = Vector3.new(-33, 0, SIDELINE_Z) },
+	{ Id = "ticketbooth", Name = "Ticket Booth", Cost = 200, Income = 4, Requires = { "turf" }, Button = Vector3.new(-20, 0, -166) },
+	{ Id = "goalposts", Name = "Goal Posts", Cost = 350, Income = 5, Requires = { "endzones" }, Button = Vector3.new(-46, 0, SIDELINE_Z) },
+	{ Id = "midfield", Name = "Midfield Logo", Cost = 500, Income = 6, Requires = { "endzones" }, Button = Vector3.new(33, 0, SIDELINE_Z) },
+	{
+		Id = "concessions",
+		Name = "Concession Stand",
+		Cost = 800,
+		Income = 8,
+		Requires = { "ticketbooth" },
+		Button = Vector3.new(-38, 0, -128),
+	},
+
+	-- Seating -----------------------------------------------------------------------------
+	{
+		Id = "bleachers_home",
+		Name = "Home Stands",
+		Cost = 1300,
+		Income = 12,
+		Requires = { "goalposts" },
+		Button = Vector3.new(46, 0, SIDELINE_Z),
+	},
+	{
+		Id = "bleachers_visitor",
+		Name = "Visitor Stands",
+		Cost = 2200,
+		Income = 16,
+		Requires = { "bleachers_home" },
+		Button = Vector3.new(-59, 0, SIDELINE_Z),
+	},
+	{
+		Id = "scoreboard",
+		Name = "Scoreboard",
+		Cost = 3500,
+		Income = 20,
+		Requires = { "bleachers_home" },
+		Button = Vector3.new(59, 0, SIDELINE_Z),
+	},
+	{ Id = "parking", Name = "Parking Lot", Cost = 5000, Income = 25, Requires = { "concessions" }, Button = Vector3.new(-84, 0, -165) },
+	{
+		Id = "endzone_stands_west",
+		Name = "West End Zone Seats",
+		Cost = 7500,
+		Income = 32,
+		Requires = { "bleachers_visitor" },
+		Button = Vector3.new(-72, 0, SIDELINE_Z),
+	},
+	{
+		Id = "endzone_stands_east",
+		Name = "East End Zone Seats",
+		Cost = 7500,
+		Income = 32,
+		Requires = { "bleachers_visitor" },
+		Button = Vector3.new(72, 0, SIDELINE_Z),
+	},
+	{ Id = "teamstore", Name = "Team Store", Cost = 12000, Income = 45, Requires = { "parking" }, Button = Vector3.new(40, 0, -150) },
+
+	-- Big league --------------------------------------------------------------------------
+	{
+		Id = "lights",
+		Name = "Stadium Lights",
+		Cost = 18000,
+		Income = 60,
+		Requires = { "scoreboard" },
+		Button = Vector3.new(-85, 0, SIDELINE_Z),
+	},
+	{
+		Id = "upper_home",
+		Name = "Home Upper Deck",
+		Cost = 28000,
+		Income = 80,
+		Requires = { "endzone_stands_west", "endzone_stands_east" },
+		Button = Vector3.new(85, 0, SIDELINE_Z),
+	},
+	{
+		Id = "upper_visitor",
+		Name = "Visitor Upper Deck",
+		Cost = 40000,
+		Income = 100,
+		Requires = { "upper_home" },
+		Button = Vector3.new(-98, 0, SIDELINE_Z),
+	},
+	{ Id = "jumbotron", Name = "Jumbotron", Cost = 60000, Income = 130, Requires = { "lights" }, Button = Vector3.new(98, 0, SIDELINE_Z) },
+	{
+		Id = "pressbox",
+		Name = "Press Box",
+		Cost = 85000,
+		Income = 170,
+		Requires = { "upper_home" },
+		Button = Vector3.new(-111, 0, SIDELINE_Z),
+	},
+	{
+		Id = "suites",
+		Name = "Luxury Suites",
+		Cost = 120000,
+		Income = 220,
+		Requires = { "upper_visitor" },
+		Button = Vector3.new(111, 0, SIDELINE_Z),
+	},
+	{
+		Id = "canopy",
+		Name = "Stadium Canopy",
+		Cost = 180000,
+		Income = 300,
+		Requires = { "pressbox", "suites" },
+		Button = Vector3.new(0, 0, 14),
+	},
+	{
+		Id = "trophy",
+		Name = "Championship Trophy",
+		Cost = 300000,
+		Income = 500,
+		Requires = { "canopy", "jumbotron" },
+		Button = Vector3.new(118, 0, -140),
+	},
+}
+
+Items.ById = {}
+for index, item in ipairs(Items.List) do
+	item.Order = index
+	Items.ById[item.Id] = item
+end
+
+-- Returns true when every requirement of `item` is in the `owned` set.
+function Items.IsUnlocked(item, owned)
+	for _, requiredId in ipairs(item.Requires) do
+		if not owned[requiredId] then
+			return false
+		end
+	end
+	return true
+end
+
+-- Total income per second for an `owned` set ({ [itemId] = true }).
+function Items.TotalIncome(owned)
+	local total = 0
+	for id in pairs(owned) do
+		local item = Items.ById[id]
+		if item then
+			total += item.Income
+		end
+	end
+	return total
+end
+
+return Items
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="ServerScriptService" referent="7">
+    <Properties>
+      <string name="Name">ServerScriptService</string>
+    </Properties>
+    <Item class="Folder" referent="8">
+      <Properties>
+        <string name="Name">TycoonServer</string>
+      </Properties>
+      <Item class="ModuleScript" referent="9">
+        <Properties>
+          <string name="Name">BuildUtil</string>
+          <string name="Source"><![CDATA[--[[
+	BuildUtil
+	Small helpers for creating anchored parts in plot-local space.
+
+	Every builder receives a `ctx` (context) table:
+	  ctx.origin    CFrame of the plot origin in the world (plot-local (0,0,0), y = 0 is the plot surface)
+	  ctx.parent    Instance that new parts are parented to (the item's Model)
+	  ctx.colors    team palette: { Primary = Color3, Secondary = Color3, Trim = Color3 }
+	  ctx.teamName  short upper-case name of the owner, e.g. "SAMXYZ"
+	  ctx.config    the shared Config module (ctx.config.Layout, ctx.config.Colors)
+
+	All positions/CFrames passed to these helpers are LOCAL to the plot.
+	This module only uses Instance/CFrame/Vector3/Color3/Enum/UDim2 so it can also be run
+	outside Roblox (tools/ uses it to render previews of the stadium).
+]]
+
+local BuildUtil = {}
+
+local DEFAULT_COLOR = Color3.fromRGB(163, 162, 165)
+
+function BuildUtil.NewContext(origin, parent, colors, teamName, config)
+	return {
+		origin = origin,
+		parent = parent,
+		colors = colors,
+		teamName = teamName,
+		config = config,
+	}
+end
+
+-- Creates a Model under ctx.parent and returns a copy of ctx that builds into it.
+function BuildUtil.Child(ctx, name)
+	local model = Instance.new("Model")
+	model.Name = name
+	model.Parent = ctx.parent
+	local child = table.clone(ctx)
+	child.parent = model
+	return child, model
+end
+
+-- Converts a plot-local CFrame into a world CFrame.
+function BuildUtil.ToWorld(ctx, localCFrame)
+	return ctx.origin * localCFrame
+end
+
+local function resolveLocalCFrame(props)
+	if props.CFrame then
+		return props.CFrame
+	elseif props.Position then
+		return CFrame.new(props.Position)
+	end
+	return CFrame.new()
+end
+
+local function finishPart(ctx, part, props, localCFrame)
+	part.Name = props.Name or "Part"
+	part.Anchored = true
+	part.Size = props.Size or Vector3.new(4, 1, 2)
+	part.CFrame = ctx.origin * localCFrame
+	part.Color = props.Color or DEFAULT_COLOR
+	part.Material = props.Material or Enum.Material.SmoothPlastic
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	if props.Transparency ~= nil then
+		part.Transparency = props.Transparency
+	end
+	if props.Reflectance ~= nil then
+		part.Reflectance = props.Reflectance
+	end
+	if props.CanCollide ~= nil then
+		part.CanCollide = props.CanCollide
+	end
+	if props.CastShadow ~= nil then
+		part.CastShadow = props.CastShadow
+	end
+	part.Parent = props.Parent or ctx.parent
+	return part
+end
+
+--[[
+	Creates a block (or Ball/Cylinder if props.Shape is set) Part.
+	props: Name, Size, CFrame (local) or Position (local Vector3), Color, Material, Shape,
+	       Transparency, Reflectance, CanCollide, CastShadow, Parent
+]]
+function BuildUtil.Part(ctx, props)
+	local part = Instance.new("Part")
+	if props.Shape then
+		part.Shape = props.Shape
+	end
+	return finishPart(ctx, part, props, resolveLocalCFrame(props))
+end
+
+-- Shorthand for an axis-aligned block centred at local `position`.
+function BuildUtil.Box(ctx, name, size, position, color, material, extra)
+	local props = extra and table.clone(extra) or {}
+	props.Name = name
+	props.Size = size
+	props.Position = position
+	props.Color = color
+	props.Material = material
+	return BuildUtil.Part(ctx, props)
+end
+
+-- Shorthand for a block whose BOTTOM sits at local y = baseY (handy for things standing on the ground).
+-- `position` is the centre of the footprint (its Y is ignored).
+function BuildUtil.Block(ctx, name, size, position, color, material, extra, baseY)
+	local y = (baseY or 0) + size.Y / 2
+	return BuildUtil.Box(ctx, name, size, Vector3.new(position.X, y, position.Z), color, material, extra)
+end
+
+-- WedgePart. Roblox wedges have their tall vertical face at local +Z (back) and the slope
+-- descends toward local -Z (the LookVector / front). props are the same as BuildUtil.Part.
+function BuildUtil.Wedge(ctx, props)
+	local wedge = Instance.new("WedgePart")
+	return finishPart(ctx, wedge, props, resolveLocalCFrame(props))
+end
+
+--[[
+	Cylinder along an axis.
+	props: Name, Position (local centre), Height (length along the axis), Diameter,
+	       Axis = "X" | "Y" | "Z" (default "Y"), Color, Material, Transparency, ...
+]]
+function BuildUtil.Cylinder(ctx, props)
+	local axis = props.Axis or "Y"
+	local rotation
+	if axis == "X" then
+		rotation = CFrame.new()
+	elseif axis == "Z" then
+		rotation = CFrame.Angles(0, math.rad(90), 0)
+	else
+		rotation = CFrame.Angles(0, 0, math.rad(90))
+	end
+	local position = props.Position or Vector3.new()
+	local cylinderProps = table.clone(props)
+	cylinderProps.Shape = Enum.PartType.Cylinder
+	cylinderProps.Size = Vector3.new(props.Height or 4, props.Diameter or 2, props.Diameter or 2)
+	cylinderProps.CFrame = CFrame.new(position) * rotation
+	cylinderProps.Position = nil
+	return BuildUtil.Part(ctx, cylinderProps)
+end
+
+-- Sphere. props: Name, Position (local centre), Diameter, Color, Material, ...
+function BuildUtil.Ball(ctx, props)
+	local ballProps = table.clone(props)
+	ballProps.Shape = Enum.PartType.Ball
+	local diameter = props.Diameter or 2
+	ballProps.Size = Vector3.new(diameter, diameter, diameter)
+	return BuildUtil.Part(ctx, ballProps)
+end
+
+--[[
+	Puts text on one face of a part.
+	face: Enum.NormalId
+	opts: LabelName, TextColor3, BackgroundColor3, BackgroundTransparency (default 1),
+	      Font, PixelsPerStud (default 20), LightInfluence (default 1), TextStrokeTransparency
+	Returns the SurfaceGui and the TextLabel (so callers can update the text later).
+]]
+function BuildUtil.SurfaceText(part, face, text, opts)
+	opts = opts or {}
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = (opts.LabelName or "Label") .. "Gui"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = opts.PixelsPerStud or 20
+	gui.LightInfluence = opts.LightInfluence or 1
+	gui.Parent = part
+
+	local label = Instance.new("TextLabel")
+	label.Name = opts.LabelName or "Label"
+	label.Size = UDim2.new(1, 0, 1, 0)
+	label.BackgroundColor3 = opts.BackgroundColor3 or Color3.new(0, 0, 0)
+	label.BackgroundTransparency = opts.BackgroundTransparency or 1
+	label.BorderSizePixel = 0
+	label.Font = opts.Font or Enum.Font.GothamBlack
+	label.Text = text
+	label.TextColor3 = opts.TextColor3 or Color3.new(1, 1, 1)
+	label.TextScaled = true
+	label.TextStrokeTransparency = opts.TextStrokeTransparency or 1
+	label.Parent = gui
+	return gui, label
+end
+
+--[[
+	Floating text above a part (always faces the camera).
+	opts: LabelName, Size (UDim2, default 12x3 studs), StudsOffset (Vector3), TextColor3,
+	      BackgroundColor3, BackgroundTransparency, Font, MaxDistance, AlwaysOnTop
+]]
+function BuildUtil.Billboard(part, text, opts)
+	opts = opts or {}
+	local gui = Instance.new("BillboardGui")
+	gui.Name = (opts.LabelName or "Label") .. "Billboard"
+	gui.Size = opts.Size or UDim2.new(12, 0, 3, 0)
+	gui.StudsOffset = opts.StudsOffset or Vector3.new(0, 4, 0)
+	gui.MaxDistance = opts.MaxDistance or 150
+	gui.AlwaysOnTop = opts.AlwaysOnTop or false
+	gui.LightInfluence = 0
+	gui.Parent = part
+
+	local label = Instance.new("TextLabel")
+	label.Name = opts.LabelName or "Label"
+	label.Size = UDim2.new(1, 0, 1, 0)
+	label.BackgroundColor3 = opts.BackgroundColor3 or Color3.new(0, 0, 0)
+	label.BackgroundTransparency = opts.BackgroundTransparency or 1
+	label.BorderSizePixel = 0
+	label.Font = opts.Font or Enum.Font.GothamBlack
+	label.Text = text
+	label.TextColor3 = opts.TextColor3 or Color3.new(1, 1, 1)
+	label.TextScaled = true
+	label.TextStrokeTransparency = opts.TextStrokeTransparency or 0.4
+	label.Parent = gui
+	return gui, label
+end
+
+--[[
+	Adds a light to a part.
+	className: "PointLight" | "SpotLight" | "SurfaceLight"
+	props: any light properties, e.g. { Name = "FloodLight", Range = 60, Brightness = 4, Face = Enum.NormalId.Front }
+]]
+function BuildUtil.Light(part, className, props)
+	local light = Instance.new(className)
+	for key, value in pairs(props or {}) do
+		light[key] = value
+	end
+	light.Parent = part
+	return light
+end
+
+--[[
+	Builds stepped stadium rows (solid blocks from the ground up, like real seating bowls).
+
+	opts:
+	  Name          prefix for part names
+	  StartCFrame   local CFrame at ground level, at the FRONT-CENTRE of the first row.
+	                The rows step away along this CFrame's -Z (LookVector) direction.
+	  Length        length of each row (along the CFrame's X axis)
+	  Rows          number of rows
+	  RowDepth      depth of each row (default Layout.RowDepth)
+	  RowRise       height added per row (default Layout.RowRise)
+	  FirstHeight   height of the first row (default RowRise)
+	  Colors        list of Color3 that alternate per row
+	  SeatColor     colour of the seat strip on top of each row (nil = no strips)
+	  Material      material of the row blocks (default Concrete)
+	Returns the list of created row parts.
+]]
+function BuildUtil.Rows(ctx, opts)
+	local layout = ctx.config.Layout
+	local rowDepth = opts.RowDepth or layout.RowDepth
+	local rowRise = opts.RowRise or layout.RowRise
+	local firstHeight = opts.FirstHeight or rowRise
+	local colors = opts.Colors or { DEFAULT_COLOR }
+	local parts = {}
+	for row = 1, opts.Rows do
+		local height = firstHeight + (row - 1) * rowRise
+		local offset = (row - 0.5) * rowDepth
+		local rowCFrame = opts.StartCFrame * CFrame.new(0, height / 2, -offset)
+		local block = BuildUtil.Part(ctx, {
+			Name = (opts.Name or "Row") .. row,
+			Size = Vector3.new(opts.Length, height, rowDepth),
+			CFrame = rowCFrame,
+			Color = colors[(row - 1) % #colors + 1],
+			Material = opts.Material or Enum.Material.Concrete,
+		})
+		table.insert(parts, block)
+		if opts.SeatColor then
+			-- a thin seat-back strip along the back edge of the row top
+			BuildUtil.Part(ctx, {
+				Name = (opts.Name or "Row") .. row .. "Seats",
+				Size = Vector3.new(opts.Length - 1, 0.8, 1),
+				CFrame = rowCFrame * CFrame.new(0, height / 2 + 0.4, -(rowDepth / 2 - 0.5)),
+				Color = opts.SeatColor,
+				Material = Enum.Material.SmoothPlastic,
+			})
+		end
+	end
+	return parts
+end
+
+return BuildUtil
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="10">
+        <Properties>
+          <string name="Name">Builders</string>
+          <string name="Source"><![CDATA[--[[
+	Builders
+	Maps every item Id (see ReplicatedStorage/TycoonShared/Items) to a function(ctx) that
+	creates that piece of the stadium. ctx is described in BuildUtil.
+
+	The functions are split across the child modules below so each file stays readable.
+	"PlotBase" is special: it builds the always-present parts of a plot (base slab, gate,
+	vault, collect pad) and returns references the PlotManager needs.
+]]
+
+local Builders = {}
+
+local MODULES = { "PlotBase", "Field", "Stands", "Plaza", "Features" }
+
+for _, moduleName in ipairs(MODULES) do
+	local moduleScript = script:FindFirstChild(moduleName)
+	if moduleScript then
+		local builderTable = require(moduleScript)
+		for id, builder in pairs(builderTable) do
+			if Builders[id] ~= nil then
+				error(("Builder '%s' is defined twice (second time in %s)"):format(id, moduleName))
+			end
+			Builders[id] = builder
+		end
+	else
+		warn(("Builders: module '%s' is missing"):format(moduleName))
+	end
+end
+
+return Builders
+]]></string>
+        </Properties>
+        <Item class="ModuleScript" referent="11">
+          <Properties>
+            <string name="Name">Field</string>
+            <string name="Source"><![CDATA[--[[
+	Field
+	The playing surface and everything painted on (or standing on) it.
+
+	  turf       mowing-striped grass covering the whole field surface
+	  yardlines  boundary lines, goal lines, 5-yard lines, try lines, yard numbers + arrows
+	  endzones   team-coloured end zone paint with the owner's name, orange corner pylons
+	  goalposts  NFL "slingshot" goal posts above both end lines
+	  midfield   team logo at the 50-yard line
+	  benches    home-team bench area on the back sideline
+
+	Paint layers (y, bottom of every layer is the turf top 0.2):
+	  turf 0.2 | end zones 0.3 | lines 0.32 | numbers 0.34 | midfield logo 0.34 .. 0.45
+]]
+
+local BuildUtil = require(script.Parent.Parent.BuildUtil)
+
+local Field = {}
+
+local TURF_TOP = 0.2
+local STRIPE_WIDTH = 10 -- mowing stripes line up with the 5-yard lines
+
+local LINE_WIDTH = 0.6
+local BOUNDARY_WIDTH = 1 -- sidelines and end lines are a little bolder than the yard lines
+local LINE_THICKNESS = 0.12 -- 0.2 .. 0.32
+local ENDZONE_THICKNESS = 0.1 -- 0.2 .. 0.3
+
+local NUMBER_INSET = 12 -- distance from a sideline to the centre of its row of yard numbers
+local NUMBER_HEIGHT = 6 -- studs, along Z
+local NUMBER_PPS = 16
+local NUMBER_TEXT_SIZE = 80 -- pixels (TextSize is capped at 100) -> 5 studs
+local DIGIT_WIDTH = 3.2
+local DIGIT_GAP = 1.2 -- the yard line runs through this gap, like a real field
+local ARROW_LENGTH = 1.8
+local ARROW_HALF_WIDTH = 0.8
+
+local CROSSBAR_HEIGHT = 7 -- 10 ft
+local UPRIGHT_HALF_GAP = 6.2 -- 18'6" between the uprights
+local UPRIGHT_HEIGHT = 22 -- above the crossbar
+local POST_SETBACK = 5.5 -- base post sits this far behind the uprights
+local PAD_HEIGHT = 4
+
+local PAINT = { CanCollide = false, CastShadow = false }
+local UP = Vector3.new(0, 1, 0)
+
+local PYLON_ORANGE = Color3.fromRGB(255, 112, 20)
+local RIBBON_RED = Color3.fromRGB(240, 70, 30)
+local COOLER_ORANGE = Color3.fromRGB(247, 128, 10)
+local WHITE = Color3.fromRGB(245, 245, 245)
+local MEDICAL_BLUE = Color3.fromRGB(36, 92, 196)
+local MEDICAL_RED = Color3.fromRGB(215, 30, 40)
+local MAT_GREY = Color3.fromRGB(58, 60, 66)
+local HEATER_GREY = Color3.fromRGB(44, 45, 50)
+local HEATER_GLOW = Color3.fromRGB(255, 120, 30)
+
+---------------------------------------------------------------------------------------------
+-- Helpers
+---------------------------------------------------------------------------------------------
+
+-- Flat paint strip lying on the turf (bottom at TURF_TOP).
+local function paint(ctx, name, sizeX, sizeZ, x, z, thickness, color, material)
+	return BuildUtil.Box(
+		ctx,
+		name,
+		Vector3.new(sizeX, thickness, sizeZ),
+		Vector3.new(x, TURF_TOP + thickness / 2, z),
+		color,
+		material or Enum.Material.SmoothPlastic,
+		PAINT
+	)
+end
+
+-- Relative luminance / contrast ratio (WCAG) so text stays readable for every team palette.
+local function luminance(color)
+	local function channel(v)
+		if v <= 0.03928 then
+			return v / 12.92
+		end
+		return ((v + 0.055) / 1.055) ^ 2.4
+	end
+	return 0.2126 * channel(color.R) + 0.7152 * channel(color.G) + 0.0722 * channel(color.B)
+end
+
+local function contrast(a, b)
+	local la, lb = luminance(a), luminance(b)
+	if la < lb then
+		la, lb = lb, la
+	end
+	return (la + 0.05) / (lb + 0.05)
+end
+
+-- Returns (textColor, outlineColor) from the team palette for text on `background`:
+-- the most readable team colour for the letters, then the best of the other two for the outline.
+local function teamTextColors(background, colors)
+	local candidates = { colors.Trim, colors.Secondary, colors.Primary }
+	table.sort(candidates, function(a, b)
+		return contrast(a, background) > contrast(b, background)
+	end)
+	return candidates[1], candidates[2]
+end
+
+-- Big team-coloured text on one face of a part, inset by a fraction of the face on each side.
+local function teamText(part, face, text, background, colors, pixelsPerStud, insetX, insetY, labelName, outline)
+	local textColor, outlineColor = teamTextColors(background, colors)
+	local _, label = BuildUtil.SurfaceText(part, face, text, {
+		LabelName = labelName,
+		TextColor3 = textColor,
+		PixelsPerStud = pixelsPerStud,
+		Font = Enum.Font.GothamBlack,
+	})
+	label.Size = UDim2.new(1 - 2 * insetX, 0, 1 - 2 * insetY, 0)
+	label.Position = UDim2.new(insetX, 0, insetY, 0)
+	local stroke = Instance.new("UIStroke")
+	stroke.Name = "Outline"
+	stroke.Color = outlineColor
+	stroke.Thickness = outline or 3
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	stroke.Parent = label
+	return label
+end
+
+-- Half of a flat isosceles triangle: a WedgePart lying on its side so its triangular face is on top.
+-- `corner` is the right-angle corner (middle of the arrow's base, y ignored), `dir` the horizontal unit
+-- vector toward the tip, `side` the horizontal unit vector toward the base corner of this half.
+local function flatHalfTriangle(ctx, name, corner, dir, side, length, halfWidth, thickness, color)
+	-- Wedge local frame: X = thickness (up), right angle at local (y = -h/2, z = +d/2),
+	-- legs along local +Y and local -Z. Pick whichever assignment is right-handed.
+	local axisY, axisZ, h, d
+	if (side + UP:Cross(dir)).Magnitude < 1e-3 then
+		axisY, axisZ, h, d = dir, -side, length, halfWidth
+	else
+		axisY, axisZ, h, d = side, -dir, halfWidth, length
+	end
+	local base = Vector3.new(corner.X, TURF_TOP + thickness / 2, corner.Z)
+	local center = base + axisY * (h / 2) - axisZ * (d / 2)
+	return BuildUtil.Wedge(ctx, {
+		Name = name,
+		Size = Vector3.new(thickness, h, d),
+		CFrame = CFrame.fromMatrix(center, UP, axisY, axisZ),
+		Color = color,
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		CastShadow = false,
+	})
+end
+
+-- Cylinder from point a to point b. Both points must share the same Z (the rod lies in an XY plane).
+local function rod(ctx, name, a, b, diameter, color, material)
+	local delta = b - a
+	return BuildUtil.Part(ctx, {
+		Name = name,
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(delta.Magnitude, diameter, diameter),
+		CFrame = CFrame.new((a + b) / 2) * CFrame.Angles(0, 0, math.atan2(delta.Y, delta.X)),
+		Color = color,
+		Material = material,
+	})
+end
+
+local function newSurfaceGui(part, face, pixelsPerStud, name)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = name
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = pixelsPerStud
+	gui.LightInfluence = 1
+	gui.Parent = part
+	return gui
+end
+
+local function digitLabel(gui, text, xPixels, widthPixels, alignment, color)
+	local label = Instance.new("TextLabel")
+	label.Name = "Digit"
+	label.BackgroundTransparency = 1
+	label.BorderSizePixel = 0
+	label.Position = UDim2.new(0, xPixels, 0, 0)
+	label.Size = UDim2.new(0, widthPixels, 1, 0)
+	label.Font = Enum.Font.GothamBlack
+	label.Text = text
+	label.TextColor3 = color
+	label.TextSize = NUMBER_TEXT_SIZE
+	label.TextXAlignment = alignment
+	label.Parent = gui
+	return label
+end
+
+---------------------------------------------------------------------------------------------
+-- turf: alternating mowing stripes over the whole field surface (top at y = 0.2)
+---------------------------------------------------------------------------------------------
+function Field.turf(ctx)
+	local L = ctx.config.Layout
+	local C = ctx.config.Colors
+
+	-- stripe edges: the turf margin behind each end line, then 10-stud bands lined up with the yard lines
+	local edges = { -L.SurfaceHalfX }
+	for x = -L.FieldHalfLength, L.FieldHalfLength, STRIPE_WIDTH do
+		table.insert(edges, x)
+	end
+	table.insert(edges, L.SurfaceHalfX)
+
+	local depth = L.SurfaceMaxZ - L.SurfaceMinZ
+	local centerZ = (L.SurfaceMinZ + L.SurfaceMaxZ) / 2
+	for i = 1, #edges - 1 do
+		local x0, x1 = edges[i], edges[i + 1]
+		BuildUtil.Box(
+			ctx,
+			"TurfStripe" .. i,
+			Vector3.new(x1 - x0, TURF_TOP, depth),
+			Vector3.new((x0 + x1) / 2, TURF_TOP / 2, centerZ),
+			i % 2 == 0 and C.GrassDark or C.Grass,
+			Enum.Material.Grass
+		)
+	end
+end
+
+---------------------------------------------------------------------------------------------
+-- yardlines: all the white paint plus the yard numbers
+---------------------------------------------------------------------------------------------
+function Field.yardlines(ctx)
+	local L = ctx.config.Layout
+	local lineColor = ctx.config.Colors.Line
+	local front, back = L.FieldFrontZ, L.FieldBackZ
+	local width = back - front
+	local centerZ = L.FieldCenterZ
+	local half = L.FieldHalfLength
+
+	-- Boundary: sidelines and end lines sit just outside the field of play
+	local outerLength = (half + BOUNDARY_WIDTH) * 2
+	paint(ctx, "SidelineFront", outerLength, BOUNDARY_WIDTH, 0, front - BOUNDARY_WIDTH / 2, LINE_THICKNESS, lineColor)
+	paint(ctx, "SidelineBack", outerLength, BOUNDARY_WIDTH, 0, back + BOUNDARY_WIDTH / 2, LINE_THICKNESS, lineColor)
+	paint(ctx, "EndLineWest", BOUNDARY_WIDTH, width, -(half + BOUNDARY_WIDTH / 2), centerZ, LINE_THICKNESS, lineColor)
+	paint(ctx, "EndLineEast", BOUNDARY_WIDTH, width, half + BOUNDARY_WIDTH / 2, centerZ, LINE_THICKNESS, lineColor)
+
+	-- Goal lines and a line every 5 yards in between
+	local step = 5 * L.Yard
+	for x = -L.GoalLineX, L.GoalLineX, step do
+		local isGoal = math.abs(x) >= L.GoalLineX
+		local name = isGoal and "GoalLine" or ("YardLine" .. math.floor((L.GoalLineX - math.abs(x)) / L.Yard + 0.5))
+		paint(ctx, name, LINE_WIDTH, width, x, centerZ, LINE_THICKNESS, lineColor)
+	end
+
+	-- Try (extra point) marks on the 2-yard lines
+	for _, s in ipairs({ -1, 1 }) do
+		paint(ctx, "TryLine", LINE_WIDTH, L.Yard, s * (L.GoalLineX - 2 * L.Yard), centerZ, LINE_THICKNESS, lineColor)
+	end
+
+	-- Yard numbers: one invisible carrier part per row, digits drawn with a SurfaceGui on its Top face.
+	-- Top-face text is upright when read from the part's +Z side, so the front row is turned 180 degrees:
+	-- each row then reads upright from its own sideline (tops of the numbers point to the middle of the field).
+	local span = 2 * (L.GoalLineX - 5 * L.Yard) -- numbers + arrows live between the 5-yard lines
+	local rows = {
+		{ name = "NumbersFront", z = front + NUMBER_INSET, flip = true, topDir = 1 },
+		{ name = "NumbersBack", z = back - NUMBER_INSET, flip = false, topDir = -1 },
+	}
+	local digitPixels = DIGIT_WIDTH * NUMBER_PPS
+	local gapPixels = DIGIT_GAP / 2 * NUMBER_PPS
+	for _, row in ipairs(rows) do
+		local carrier = BuildUtil.Part(ctx, {
+			Name = row.name,
+			Size = Vector3.new(span, 0.02, NUMBER_HEIGHT),
+			CFrame = CFrame.new(0, 0.33, row.z) * CFrame.Angles(0, row.flip and math.pi or 0, 0),
+			Transparency = 1,
+			CanCollide = false,
+			CastShadow = false,
+		})
+		local gui = newSurfaceGui(carrier, Enum.NormalId.Top, NUMBER_PPS, "YardNumbersGui")
+
+		for x = -(L.GoalLineX - 10 * L.Yard), L.GoalLineX - 10 * L.Yard, 10 * L.Yard do
+			local yards = math.floor((L.GoalLineX - math.abs(x)) / L.Yard + 0.5)
+			local text = tostring(yards)
+			local localX = row.flip and -x or x
+			local centerPixels = (localX + span / 2) * NUMBER_PPS
+			digitLabel(gui, text:sub(1, 1), centerPixels - gapPixels - digitPixels, digitPixels, Enum.TextXAlignment.Right, lineColor)
+			digitLabel(gui, text:sub(2, 2), centerPixels + gapPixels, digitPixels, Enum.TextXAlignment.Left, lineColor)
+
+			-- direction arrow beside the number, pointing at the nearest goal line
+			if x ~= 0 then
+				local dir = Vector3.new(x < 0 and -1 or 1, 0, 0)
+				local baseX = x + dir.X * (DIGIT_GAP / 2 + DIGIT_WIDTH + 0.7)
+				local corner = Vector3.new(baseX, 0, row.z + row.topDir * 1.2)
+				for _, sz in ipairs({ -1, 1 }) do
+					flatHalfTriangle(
+						ctx,
+						"Arrow",
+						corner,
+						dir,
+						Vector3.new(0, 0, sz),
+						ARROW_LENGTH,
+						ARROW_HALF_WIDTH,
+						LINE_THICKNESS,
+						lineColor
+					)
+				end
+			end
+		end
+	end
+end
+
+---------------------------------------------------------------------------------------------
+-- endzones: team paint with the owner's name + orange pylons on the corners
+---------------------------------------------------------------------------------------------
+function Field.endzones(ctx)
+	local L = ctx.config.Layout
+	local team = ctx.colors
+	local front, back = L.FieldFrontZ, L.FieldBackZ
+	local inner = L.GoalLineX + LINE_WIDTH / 2 -- paint starts right behind the goal line
+	local outer = L.FieldHalfLength
+	local depth = outer - inner
+	local width = back - front
+
+	for _, s in ipairs({ -1, 1 }) do
+		local sideName = s < 0 and "West" or "East"
+		-- Part X runs along the field width (Z) so the name runs across the end zone; rotated so the
+		-- letters read upright for someone standing behind the end line (tops toward the goal line).
+		local zone = BuildUtil.Part(ctx, {
+			Name = "EndZone" .. sideName,
+			Size = Vector3.new(width, ENDZONE_THICKNESS, depth),
+			CFrame = CFrame.new(s * (inner + outer) / 2, TURF_TOP + ENDZONE_THICKNESS / 2, L.FieldCenterZ)
+				* CFrame.Angles(0, s * math.rad(90), 0),
+			Color = team.Primary,
+			Material = Enum.Material.SmoothPlastic,
+			CanCollide = false,
+			CastShadow = false,
+		})
+		teamText(zone, Enum.NormalId.Top, ctx.teamName, team.Primary, team, 6, 0.05, 0.12, "EndZoneName", 4)
+
+		-- pylons where the goal line and end line meet each sideline
+		for _, px in ipairs({ s * L.GoalLineX, s * (outer + BOUNDARY_WIDTH / 2) }) do
+			for _, pz in ipairs({ front - 0.4, back + 0.4 }) do
+				BuildUtil.Block(
+					ctx,
+					"Pylon",
+					Vector3.new(0.6, 1.6, 0.6),
+					Vector3.new(px, 0, pz),
+					PYLON_ORANGE,
+					Enum.Material.SmoothPlastic,
+					PAINT,
+					TURF_TOP
+				)
+			end
+		end
+	end
+end
+
+---------------------------------------------------------------------------------------------
+-- goalposts: single-post "slingshot" goals above both end lines
+---------------------------------------------------------------------------------------------
+function Field.goalposts(ctx)
+	local L = ctx.config.Layout
+	local C = ctx.config.Colors
+	local team = ctx.colors
+	local zc = L.FieldCenterZ
+	local postColor = C.GoalPost
+	local metal = Enum.Material.Metal
+
+	for _, s in ipairs({ -1, 1 }) do
+		local goal = BuildUtil.Child(ctx, s < 0 and "WestGoalPost" or "EastGoalPost")
+		local planeX = s * (L.FieldHalfLength + BOUNDARY_WIDTH / 2) -- uprights stand right above the end line
+		local baseX = planeX + s * POST_SETBACK
+		local padTop = TURF_TOP + PAD_HEIGHT
+
+		-- padded base post
+		BuildUtil.Cylinder(goal, {
+			Name = "Padding",
+			Position = Vector3.new(baseX, TURF_TOP + PAD_HEIGHT / 2, zc),
+			Height = PAD_HEIGHT,
+			Diameter = 2.2,
+			Color = team.Primary,
+			Material = Enum.Material.Fabric,
+		})
+		BuildUtil.Cylinder(goal, {
+			Name = "PaddingBand",
+			Position = Vector3.new(baseX, padTop - 0.6, zc),
+			Height = 0.5,
+			Diameter = 2.3,
+			Color = team.Secondary,
+			Material = Enum.Material.Fabric,
+		})
+
+		-- gooseneck: quarter circle from the top of the pad bending toward the field, then a short arm
+		local radius = CROSSBAR_HEIGHT - padTop
+		local bendCenter = Vector3.new(baseX - s * radius, padTop, zc)
+		local points = {}
+		for i = 0, 3 do
+			local angle = math.rad(30 * i)
+			points[i] = bendCenter + Vector3.new(s * radius * math.cos(angle), radius * math.sin(angle), 0)
+		end
+		for i = 1, 3 do
+			rod(goal, "Gooseneck", points[i - 1], points[i], 0.9, postColor, metal)
+			BuildUtil.Ball(goal, { Name = "GooseneckJoint", Position = points[i], Diameter = 0.9, Color = postColor, Material = metal })
+		end
+		rod(goal, "Arm", points[3], Vector3.new(planeX, CROSSBAR_HEIGHT, zc), 0.9, postColor, metal)
+
+		-- crossbar and uprights
+		BuildUtil.Cylinder(goal, {
+			Name = "Crossbar",
+			Axis = "Z",
+			Position = Vector3.new(planeX, CROSSBAR_HEIGHT, zc),
+			Height = UPRIGHT_HALF_GAP * 2 + 0.5,
+			Diameter = 0.6,
+			Color = postColor,
+			Material = metal,
+		})
+		local uprightBottom = CROSSBAR_HEIGHT - 0.3
+		local uprightLength = UPRIGHT_HEIGHT + 0.3
+		local topY = uprightBottom + uprightLength
+		for _, side in ipairs({ -1, 1 }) do
+			local uz = zc + side * UPRIGHT_HALF_GAP
+			BuildUtil.Cylinder(goal, {
+				Name = "Upright",
+				Position = Vector3.new(planeX, uprightBottom + uprightLength / 2, uz),
+				Height = uprightLength,
+				Diameter = 0.45,
+				Color = postColor,
+				Material = metal,
+			})
+			-- wind ribbon blowing toward +Z
+			local ribbonDir = Vector3.new(0, -0.35, 0.94).Unit
+			local ribbonUp = Vector3.new(0, 0.94, 0.35).Unit
+			BuildUtil.Part(goal, {
+				Name = "WindRibbon",
+				Size = Vector3.new(0.06, 0.4, 2.4),
+				CFrame = CFrame.fromMatrix(
+					Vector3.new(planeX, topY - 0.15, uz) + ribbonDir * 1.2,
+					ribbonUp:Cross(ribbonDir),
+					ribbonUp,
+					ribbonDir
+				),
+				Color = RIBBON_RED,
+				Material = Enum.Material.Fabric,
+				CanCollide = false,
+				CastShadow = false,
+			})
+		end
+	end
+end
+
+---------------------------------------------------------------------------------------------
+-- midfield: team logo at the 50 (covers the 50-yard line, like most NFL fields)
+---------------------------------------------------------------------------------------------
+function Field.midfield(ctx)
+	local L = ctx.config.Layout
+	local team = ctx.colors
+	local zc = L.FieldCenterZ
+
+	local function disk(name, diameter, top, color)
+		BuildUtil.Cylinder(ctx, {
+			Name = name,
+			Axis = "Y",
+			Position = Vector3.new(0, (TURF_TOP + top) / 2, zc),
+			Height = top - TURF_TOP,
+			Diameter = diameter,
+			Color = color,
+			Material = Enum.Material.SmoothPlastic,
+			CanCollide = false,
+			CastShadow = false,
+		})
+	end
+	disk("LogoOuterRing", 28, 0.34, team.Trim)
+	disk("LogoRing", 26.4, 0.37, team.Secondary)
+	disk("LogoDisk", 23, 0.4, team.Primary)
+
+	-- two bars framing the name
+	for _, side in ipairs({ -1, 1 }) do
+		paint(ctx, "LogoBar", 15, 0.7, 0, zc + side * 4.6, 0.23, team.Secondary)
+	end
+
+	-- the owner's name, readable from the front sideline (where the players walk in)
+	local nameCarrier = BuildUtil.Part(ctx, {
+		Name = "LogoName",
+		Size = Vector3.new(20, 0.02, 7),
+		CFrame = CFrame.new(0, 0.44, zc) * CFrame.Angles(0, math.pi, 0),
+		Transparency = 1,
+		CanCollide = false,
+		CastShadow = false,
+	})
+	teamText(nameCarrier, Enum.NormalId.Top, ctx.teamName, team.Primary, team, 13, 0, 0.05, "MidfieldName")
+end
+
+---------------------------------------------------------------------------------------------
+-- benches: home team area on the back sideline (X[-40,40], Z[85,94], height <= 7)
+---------------------------------------------------------------------------------------------
+function Field.benches(ctx)
+	local L = ctx.config.Layout
+	local C = ctx.config.Colors
+	local team = ctx.colors
+	local areaFront = L.FieldBackZ + 2 -- 85
+	local areaBack = L.SurfaceMaxZ - 1 -- 94
+	local matTop = TURF_TOP + 0.06
+
+	-- rubber sideline mat with a team-coloured front edge
+	paint(ctx, "SidelineMat", 80, areaBack - areaFront, 0, (areaFront + areaBack) / 2, 0.06, MAT_GREY, Enum.Material.Fabric)
+	paint(ctx, "MatEdge", 80, 0.5, 0, areaFront + 0.25, 0.08, team.Secondary)
+
+	-- two long team benches facing the field (-Z): metal legs, team-coloured seat and backrest
+	local seatZ = areaFront + 3.5
+	local seatTop = matTop + 2
+	for _, s in ipairs({ -1, 1 }) do
+		local bench = BuildUtil.Child(ctx, s < 0 and "BenchWest" or "BenchEast")
+		local bx = s * 19
+		for _, offset in ipairs({ -10.5, -3.5, 3.5, 10.5 }) do
+			BuildUtil.Block(
+				bench,
+				"Leg",
+				Vector3.new(0.4, 1.6, 1.8),
+				Vector3.new(bx + offset, 0, seatZ + 0.1),
+				C.Metal,
+				Enum.Material.Metal,
+				nil,
+				matTop
+			)
+		end
+		BuildUtil.Block(
+			bench,
+			"Seat",
+			Vector3.new(24, 0.4, 2),
+			Vector3.new(bx, 0, seatZ),
+			team.Primary,
+			Enum.Material.SmoothPlastic,
+			nil,
+			seatTop - 0.4
+		)
+		local back = BuildUtil.Block(
+			bench,
+			"Backrest",
+			Vector3.new(24, 1.8, 0.4),
+			Vector3.new(bx, 0, seatZ + 0.8),
+			team.Primary,
+			Enum.Material.SmoothPlastic,
+			nil,
+			seatTop
+		)
+		BuildUtil.Block(
+			bench,
+			"BackrestStripe",
+			Vector3.new(24.1, 0.4, 0.46),
+			Vector3.new(bx, 0, seatZ + 0.8),
+			team.Secondary,
+			Enum.Material.SmoothPlastic,
+			nil,
+			seatTop + 1.5
+		)
+		-- the name faces the home stands behind the bench
+		teamText(back, Enum.NormalId.Back, ctx.teamName, team.Primary, team, 40, 0.25, 0.12, "BenchName", 2)
+	end
+
+	-- drinks table with two orange coolers between the benches
+	local drinks = BuildUtil.Child(ctx, "DrinksTable")
+	local tableTop = matTop + 2.2
+	BuildUtil.Block(drinks, "Table", Vector3.new(5, 2.2, 2.2), Vector3.new(0, 0, seatZ), team.Primary, Enum.Material.Fabric, nil, matTop)
+	for _, s in ipairs({ -1, 1 }) do
+		BuildUtil.Cylinder(drinks, {
+			Name = "Cooler",
+			Position = Vector3.new(s * 1.2, tableTop + 1, seatZ + 0.2),
+			Height = 2,
+			Diameter = 1.7,
+			Color = COOLER_ORANGE,
+			Material = Enum.Material.SmoothPlastic,
+		})
+		BuildUtil.Cylinder(drinks, {
+			Name = "CoolerLid",
+			Position = Vector3.new(s * 1.2, tableTop + 2.175, seatZ + 0.2),
+			Height = 0.35,
+			Diameter = 1.85,
+			Color = WHITE,
+			Material = Enum.Material.SmoothPlastic,
+		})
+	end
+	BuildUtil.Cylinder(drinks, {
+		Name = "CupStack",
+		Position = Vector3.new(0, tableTop + 0.6, seatZ - 0.6),
+		Height = 1.2,
+		Diameter = 0.55,
+		Color = WHITE,
+		Material = Enum.Material.SmoothPlastic,
+	})
+
+	-- low sideline boards behind the benches (Secondary so they stand out behind the Primary benches)
+	local boardZ = areaBack - 0.8
+	local boardHeight = 3.6
+	local panels = { { x = -26, text = ctx.teamName }, { x = 0, text = "HOME TEAM" }, { x = 26, text = ctx.teamName } }
+	for _, info in ipairs(panels) do
+		local panel = BuildUtil.Block(
+			ctx,
+			"SidelineBoard",
+			Vector3.new(24, boardHeight, 0.5),
+			Vector3.new(info.x, 0, boardZ),
+			team.Secondary,
+			Enum.Material.SmoothPlastic,
+			nil,
+			matTop
+		)
+		teamText(panel, Enum.NormalId.Front, info.text, team.Secondary, team, 30, 0.06, 0.14, "BoardText", 3)
+		BuildUtil.Block(
+			ctx,
+			"SidelineBoardCap",
+			Vector3.new(24.2, 0.3, 0.7),
+			Vector3.new(info.x, 0, boardZ),
+			team.Primary,
+			Enum.Material.SmoothPlastic,
+			nil,
+			matTop + boardHeight
+		)
+	end
+
+	-- blue medical tent at the east end
+	local tent = BuildUtil.Child(ctx, "MedicalTent")
+	local tentX, tentZ = 36.5, areaFront + 3.6
+	local tentW, tentD, tentH, roofH = 6, 5.4, 4, 1.6
+	BuildUtil.Block(
+		tent,
+		"TentBody",
+		Vector3.new(tentW, tentH, tentD),
+		Vector3.new(tentX, 0, tentZ),
+		MEDICAL_BLUE,
+		Enum.Material.Fabric,
+		nil,
+		matTop
+	)
+	for _, s in ipairs({ -1, 1 }) do
+		-- gable roof: tall face of each wedge meets at the ridge (along Z)
+		BuildUtil.Wedge(tent, {
+			Name = "TentRoof",
+			Size = Vector3.new(tentD + 0.6, roofH, tentW / 2 + 0.3),
+			CFrame = CFrame.new(tentX + s * (tentW / 4 + 0.15), matTop + tentH + roofH / 2, tentZ) * CFrame.Angles(0, -s * math.rad(90), 0),
+			Color = MEDICAL_BLUE,
+			Material = Enum.Material.Fabric,
+		})
+	end
+	local tentFrontZ = tentZ - tentD / 2
+	local crossY = matTop + tentH / 2 + 0.3
+	BuildUtil.Box(
+		tent,
+		"CrossPanel",
+		Vector3.new(2.6, 2.6, 0.1),
+		Vector3.new(tentX, crossY, tentFrontZ - 0.05),
+		WHITE,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.Box(
+		tent,
+		"CrossH",
+		Vector3.new(1.9, 0.6, 0.14),
+		Vector3.new(tentX, crossY, tentFrontZ - 0.07),
+		MEDICAL_RED,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.Box(
+		tent,
+		"CrossV",
+		Vector3.new(0.6, 1.9, 0.14),
+		Vector3.new(tentX, crossY, tentFrontZ - 0.07),
+		MEDICAL_RED,
+		Enum.Material.SmoothPlastic
+	)
+
+	-- sideline heater at the west end, glowing grille aimed at the bench
+	local heater = BuildUtil.Child(ctx, "Heater")
+	local hx, hz = -35, seatZ
+	BuildUtil.Block(heater, "HeaterBody", Vector3.new(2.4, 3.2, 2.4), Vector3.new(hx, 0, hz), HEATER_GREY, Enum.Material.Metal, nil, matTop)
+	BuildUtil.Block(
+		heater,
+		"HeaterCap",
+		Vector3.new(2.6, 0.3, 2.6),
+		Vector3.new(hx, 0, hz),
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		nil,
+		matTop + 3.2
+	)
+	local grille = BuildUtil.Box(
+		heater,
+		"HeaterGrille",
+		Vector3.new(0.1, 1.8, 1.8),
+		Vector3.new(hx + 1.25, matTop + 1.8, hz),
+		HEATER_GLOW,
+		Enum.Material.Neon,
+		{ CastShadow = false }
+	)
+	BuildUtil.Light(grille, "PointLight", { Name = "HeaterGlow", Color = HEATER_GLOW, Range = 8, Brightness = 1 })
+end
+
+return Field
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="12">
+          <Properties>
+            <string name="Name">PlotBase</string>
+            <string name="Source"><![CDATA[--[[
+	PlotBase
+	The parts every plot has before anything is bought: the concrete slab, the walkway,
+	the entrance gate (touch it to claim the stadium), the cash vault and the collect pad.
+]]
+
+local BuildUtil = require(script.Parent.Parent.BuildUtil)
+
+local PlotBase = {}
+
+-- Returns references used by the PlotManager:
+--   ClaimTrigger, GateSignLabel, GateBackLabel, VaultLabel, CollectPad, SpawnCFrame (world)
+function PlotBase.PlotBase(ctx)
+	local L = ctx.config.Layout
+	local C = ctx.config.Colors
+	local team = ctx.colors
+
+	-- Slab: top surface at y = 0
+	BuildUtil.Box(ctx, "PlotSlab", Vector3.new(L.PlotWidth, 1, L.PlotDepth), Vector3.new(0, -0.5, 0), C.Concrete, Enum.Material.Concrete)
+
+	-- Team-coloured border around the edge of the plot
+	local halfW, halfD = L.PlotWidth / 2, L.PlotDepth / 2
+	local borderProps = { CanCollide = false }
+	BuildUtil.Box(
+		ctx,
+		"BorderFront",
+		Vector3.new(L.PlotWidth, 0.2, 2),
+		Vector3.new(0, 0.1, -halfD + 1),
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		borderProps
+	)
+	BuildUtil.Box(
+		ctx,
+		"BorderBack",
+		Vector3.new(L.PlotWidth, 0.2, 2),
+		Vector3.new(0, 0.1, halfD - 1),
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		borderProps
+	)
+	BuildUtil.Box(
+		ctx,
+		"BorderLeft",
+		Vector3.new(2, 0.2, L.PlotDepth - 4),
+		Vector3.new(-halfW + 1, 0.1, 0),
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		borderProps
+	)
+	BuildUtil.Box(
+		ctx,
+		"BorderRight",
+		Vector3.new(2, 0.2, L.PlotDepth - 4),
+		Vector3.new(halfW - 1, 0.1, 0),
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		borderProps
+	)
+
+	-- Walkway from the gate to the players' tunnel
+	local walkFront = L.PlazaFrontZ + 2
+	local walkBack = L.SurfaceMinZ
+	BuildUtil.Box(
+		ctx,
+		"Walkway",
+		Vector3.new(L.WalkwayHalfWidth * 2, 0.1, walkBack - walkFront),
+		Vector3.new(0, 0.05, (walkFront + walkBack) / 2),
+		C.Walkway,
+		Enum.Material.Pavement
+	)
+
+	-- Entrance gate ------------------------------------------------------------------------
+	local gateZ = L.GateZ
+	local pillarX = L.GateHalfWidth + 1.5
+	for _, side in ipairs({ -1, 1 }) do
+		BuildUtil.Block(ctx, "GatePillar", Vector3.new(3, 20, 3), Vector3.new(side * pillarX, 0, gateZ), team.Primary, Enum.Material.Brick)
+		BuildUtil.Ball(ctx, {
+			Name = "GatePillarBall",
+			Diameter = 3.4,
+			Position = Vector3.new(side * pillarX, 26.7, gateZ),
+			Color = C.Gold,
+			Material = Enum.Material.Metal,
+		})
+	end
+	local beam = BuildUtil.Box(
+		ctx,
+		"GateBeam",
+		Vector3.new(pillarX * 2 + 6, 5, 3),
+		Vector3.new(0, 22.5, gateZ),
+		team.Secondary,
+		Enum.Material.SmoothPlastic
+	)
+	local _, gateSign = BuildUtil.SurfaceText(beam, Enum.NormalId.Front, "CLAIM THIS STADIUM", {
+		LabelName = "GateSign",
+		TextColor3 = team.Trim,
+		BackgroundColor3 = team.Primary,
+		BackgroundTransparency = 0,
+		PixelsPerStud = 25,
+	})
+	local _, gateBack = BuildUtil.SurfaceText(beam, Enum.NormalId.Back, "GRIDIRON STADIUM", {
+		LabelName = "GateBackSign",
+		TextColor3 = team.Trim,
+		BackgroundColor3 = team.Primary,
+		BackgroundTransparency = 0,
+		PixelsPerStud = 25,
+	})
+
+	local claimTrigger = BuildUtil.Box(
+		ctx,
+		"ClaimTrigger",
+		Vector3.new(L.GateHalfWidth * 2 - 1, 19, 1.5),
+		Vector3.new(0, 9.5, gateZ),
+		C.ClaimGate,
+		Enum.Material.Neon,
+		{ Transparency = 0.55, CanCollide = false, CastShadow = false }
+	)
+
+	-- Cash vault + collect pad --------------------------------------------------------------
+	local vaultPos = L.VaultPosition
+	local vault = BuildUtil.Block(ctx, "Vault", Vector3.new(12, 12, 10), vaultPos, C.Vault, Enum.Material.DiamondPlate)
+	BuildUtil.Block(ctx, "VaultRoof", Vector3.new(13, 1, 11), vaultPos, team.Secondary, Enum.Material.SmoothPlastic, nil, 12)
+	BuildUtil.SurfaceText(vault, Enum.NormalId.Left, "$ VAULT $", {
+		LabelName = "VaultTitle",
+		TextColor3 = C.Gold,
+		PixelsPerStud = 20,
+	})
+	local _, vaultLabel = BuildUtil.Billboard(vault, "$0", {
+		LabelName = "VaultAmount",
+		Size = UDim2.new(14, 0, 3.5, 0),
+		StudsOffset = Vector3.new(0, 9.5, 0),
+		TextColor3 = Color3.fromRGB(90, 255, 120),
+		MaxDistance = 120,
+	})
+
+	local padPos = L.CollectPadPosition
+	local collectPad =
+		BuildUtil.Box(ctx, "CollectPad", Vector3.new(8, 0.4, 8), Vector3.new(padPos.X, 0.2, padPos.Z), C.CollectPad, Enum.Material.Neon)
+	BuildUtil.Billboard(collectPad, "STEP HERE TO COLLECT", {
+		LabelName = "CollectHint",
+		Size = UDim2.new(10, 0, 2, 0),
+		StudsOffset = Vector3.new(0, 3, 0),
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		MaxDistance = 80,
+	})
+
+	local spawnLocal = CFrame.new(L.SpawnPosition + Vector3.new(0, 4, 0)) * CFrame.Angles(0, math.pi, 0)
+
+	return {
+		ClaimTrigger = claimTrigger,
+		GateSignLabel = gateSign,
+		GateBackLabel = gateBack,
+		VaultLabel = vaultLabel,
+		CollectPad = collectPad,
+		SpawnCFrame = ctx.origin * spawnLocal,
+	}
+end
+
+return PlotBase
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="13">
+          <Properties>
+            <string name="Name">Stands</string>
+            <string name="Source"><![CDATA[--[[
+	Stands
+	The seating bowl: the lower stands on both sidelines and behind both end zones, plus the
+	two sideline upper decks.
+
+	Every stand is built in its own "stand space": a CFrame at ground level on the front-centre
+	edge of the first row (the edge nearest the field) whose LookVector points AWAY from the field
+	(the same StartCFrame BuildUtil.Rows uses). In stand space:
+	  x  runs along the rows
+	  y  is up (y = 0 is the plot surface)
+	  d  is the distance away from the field (stand-local -Z): d = 0 is the field-side face of
+	     row 1 and d = rows * RowDepth is the back wall of the stand.
+	Faces: Enum.NormalId.Back faces the field, Enum.NormalId.Front faces away from it.
+]]
+
+local BuildUtil = require(script.Parent.Parent.BuildUtil)
+
+local Stands = {}
+
+local TOWARD_FIELD = Enum.NormalId.Back
+local AWAY_FROM_FIELD = Enum.NormalId.Front
+
+local FIELD_WALL_HEIGHT = 3.5
+local FACADE_BOTTOM = 12.8 -- just above the seat strips on the lower bowl's top row
+local FACADE_TOP = 17 -- one stud above the upper deck's first row (acts as its front parapet)
+local GATE_DARK = Color3.fromRGB(28, 28, 34)
+
+---------------------------------------------------------------------------------------------
+-- Small helpers
+---------------------------------------------------------------------------------------------
+
+local function shade(color, factor)
+	return Color3.new(math.clamp(color.R * factor, 0, 1), math.clamp(color.G * factor, 0, 1), math.clamp(color.B * factor, 0, 1))
+end
+
+local function luminance(color)
+	return 0.299 * color.R + 0.587 * color.G + 0.114 * color.B
+end
+
+-- Returns `preferred` when it reads well on `background`, otherwise near-white or near-black.
+local function readable(background, preferred)
+	if math.abs(luminance(background) - luminance(preferred)) >= 0.3 then
+		return preferred
+	end
+	if luminance(background) > 0.55 then
+		return Color3.fromRGB(20, 20, 26)
+	end
+	return Color3.fromRGB(250, 250, 250)
+end
+
+-- Stand space -> plot-local CFrame.
+local function at(frame, x, y, d)
+	return frame * CFrame.new(x, y, -d)
+end
+
+-- Block in stand space. size = (along the rows, height, depth); y and d are the centre.
+local function standBox(ctx, frame, name, size, x, y, d, color, material, extra)
+	local props = extra and table.clone(extra) or {}
+	props.Name = name
+	props.Size = size
+	props.CFrame = at(frame, x, y, d)
+	props.Color = color
+	props.Material = material or Enum.Material.SmoothPlastic
+	return BuildUtil.Part(ctx, props)
+end
+
+local function addText(part, face, text, textColor, pixelsPerStud)
+	return BuildUtil.SurfaceText(part, face, text, {
+		LabelName = part.Name .. "Text",
+		TextColor3 = textColor,
+		PixelsPerStud = pixelsPerStud or 20,
+		Font = Enum.Font.GothamBlack,
+	})
+end
+
+---------------------------------------------------------------------------------------------
+-- Stand pieces (all in stand space)
+---------------------------------------------------------------------------------------------
+
+-- The stepped seating itself.
+local function seating(ctx, frame, spec)
+	local L = ctx.config.Layout
+	return BuildUtil.Rows(ctx, {
+		Name = spec.name or "Row",
+		StartCFrame = frame,
+		Length = spec.length,
+		Rows = spec.rows or L.LowerRows,
+		FirstHeight = spec.firstHeight or L.RowRise,
+		Colors = spec.rowColors,
+		SeatColor = spec.seatColor,
+		Material = Enum.Material.Concrete,
+	})
+end
+
+-- Padded wall along the turf edge in front of the first row, with sign panels facing the field.
+-- panels = { { x = <stand x>, width = <studs>, text = "...", color = <Color3?> }, ... }
+local function fieldWall(ctx, frame, length, panels)
+	local team = ctx.colors
+	standBox(
+		ctx,
+		frame,
+		"FieldWall",
+		Vector3.new(length, FIELD_WALL_HEIGHT, 0.8),
+		0,
+		FIELD_WALL_HEIGHT / 2,
+		-0.4,
+		team.Primary,
+		Enum.Material.Fabric
+	)
+	standBox(
+		ctx,
+		frame,
+		"FieldWallCap",
+		Vector3.new(length, 0.3, 1),
+		0,
+		FIELD_WALL_HEIGHT + 0.15,
+		-0.4,
+		team.Trim,
+		Enum.Material.SmoothPlastic
+	)
+	for index, panel in ipairs(panels) do
+		local background = panel.color or team.Secondary
+		local sign = standBox(
+			ctx,
+			frame,
+			"WallSign" .. index,
+			Vector3.new(panel.width, 2.3, 0.2),
+			panel.x,
+			1.85,
+			-0.9,
+			background,
+			Enum.Material.SmoothPlastic,
+			{ CanCollide = false }
+		)
+		addText(sign, TOWARD_FIELD, panel.text, readable(background, team.Primary))
+	end
+end
+
+-- Aisles: a light concrete ramp per aisle laid over the rows. Its top passes through the front
+-- edge of every row (so it reads as a stair strip cutting through the seats) and players can
+-- walk straight up it to the top row.
+local function aisles(ctx, frame, xs, firstHeight, rows, color)
+	local L = ctx.config.Layout
+	local depth = (rows - 1) * L.RowDepth
+	local rise = (rows - 1) * L.RowRise
+	for _, x in ipairs(xs) do
+		BuildUtil.Wedge(ctx, {
+			Name = "Aisle",
+			Size = Vector3.new(3, rise, depth),
+			-- turned around so the slope climbs away from the field
+			CFrame = at(frame, x, firstHeight + rise / 2, depth / 2) * CFrame.Angles(0, math.pi, 0),
+			Color = color,
+			Material = Enum.Material.Concrete,
+		})
+	end
+end
+
+-- Sloped side wall closing off the stepped end of a stand at stand x = `x`.
+-- Its sloping top passes through the front edge of every row.
+local function endCap(ctx, frame, x, firstHeight, rows, color)
+	local L = ctx.config.Layout
+	local depth = rows * L.RowDepth
+	local slope = rows * L.RowRise
+	-- 0.1 stud deeper than the rows at the back so the back faces don't z-fight
+	standBox(ctx, frame, "EndCap", Vector3.new(1, firstHeight, depth + 0.2), x, firstHeight / 2, depth / 2, color, Enum.Material.Concrete)
+	BuildUtil.Wedge(ctx, {
+		Name = "EndCapSlope",
+		Size = Vector3.new(1, slope, depth),
+		-- turned around so the tall face is at the back of the stand and the slope runs down to the field
+		CFrame = at(frame, x, firstHeight + slope / 2, depth / 2 + 0.1) * CFrame.Angles(0, math.pi, 0),
+		Color = color,
+		Material = Enum.Material.Concrete,
+	})
+end
+
+-- Caps both (or some) ends of a stand of `length`. sides = list of -1 / 1.
+local function endCaps(ctx, frame, length, sides, firstHeight, rows, color)
+	for _, side in ipairs(sides) do
+		-- 0.2 stud proud of the row ends so the faces are not coplanar (no z-fighting)
+		endCap(ctx, frame, side * (length / 2 - 0.3), firstHeight, rows, color)
+	end
+end
+
+-- Glass safety rail along the top back edge of a stand.
+local function backRail(ctx, frame, length, topHeight, depth)
+	standBox(
+		ctx,
+		frame,
+		"BackRail",
+		Vector3.new(length, 1.6, 0.25),
+		0,
+		topHeight + 0.8,
+		depth - 0.125,
+		ctx.config.Colors.Glass,
+		Enum.Material.Glass,
+		{ Transparency = 0.4 }
+	)
+end
+
+-- A horizontal band on the outside (back) wall of a stand. `face` = d of the wall surface.
+local function backBand(ctx, frame, length, bottom, height, face, color, name)
+	return standBox(
+		ctx,
+		frame,
+		name or "BackBand",
+		Vector3.new(length, height, 0.3),
+		0,
+		bottom + height / 2,
+		face + 0.15,
+		color,
+		Enum.Material.SmoothPlastic,
+		{ CanCollide = false }
+	)
+end
+
+-- A concourse gate on the outside (back) wall of a stand. `face` = d of the wall surface.
+local function gate(ctx, frame, x, face, label)
+	local team = ctx.colors
+	standBox(
+		ctx,
+		frame,
+		"GateOpening",
+		Vector3.new(8, 8, 0.2),
+		x,
+		4,
+		face + 0.1,
+		GATE_DARK,
+		Enum.Material.SmoothPlastic,
+		{ CanCollide = false }
+	)
+	standBox(
+		ctx,
+		frame,
+		"GateFrame",
+		Vector3.new(9.2, 0.6, 0.3),
+		x,
+		8.3,
+		face + 0.15,
+		team.Trim,
+		Enum.Material.SmoothPlastic,
+		{ CanCollide = false }
+	)
+	local sign = standBox(ctx, frame, "GateSign", Vector3.new(9.2, 2.2, 0.4), x, 9.7, face + 0.2, team.Primary, Enum.Material.SmoothPlastic)
+	addText(sign, AWAY_FROM_FIELD, label, readable(team.Primary, team.Trim))
+end
+
+-- Gates on the front (plaza) side are lettered A-D from left to right as seen from the plaza
+-- (the plaza looks toward +Z, so the left is +X).
+local function plazaGateLabel(worldX)
+	if worldX > 60 then
+		return "GATE A"
+	elseif worldX > 0 then
+		return "GATE B"
+	elseif worldX > -60 then
+		return "GATE C"
+	end
+	return "GATE D"
+end
+
+-- A team flag on a pole standing at stand position (x, d) on a surface at height `baseY`.
+-- `side` (-1 / 1) is the direction the flag flies along the rows.
+local function flag(ctx, frame, x, d, baseY, height, side, color)
+	local C = ctx.config.Colors
+	local polePos = at(frame, x, baseY + height / 2, d).Position
+	BuildUtil.Cylinder(
+		ctx,
+		{
+			Name = "FlagPole",
+			Position = polePos,
+			Height = height,
+			Diameter = 0.4,
+			Axis = "Y",
+			Color = C.Metal,
+			Material = Enum.Material.Metal,
+		}
+	)
+	BuildUtil.Ball(
+		ctx,
+		{
+			Name = "FlagPoleTop",
+			Position = polePos + Vector3.new(0, height / 2 + 0.3, 0),
+			Diameter = 0.8,
+			Color = C.Gold,
+			Material = Enum.Material.Metal,
+		}
+	)
+	standBox(
+		ctx,
+		frame,
+		"Flag",
+		Vector3.new(4.5, 2.8, 0.15),
+		x + side * 2.45,
+		baseY + height - 1.7,
+		d,
+		color,
+		Enum.Material.Fabric,
+		{ CanCollide = false }
+	)
+end
+
+-- A complete lower (ground level) stand: rows, field wall + signs, aisles, end caps and a trim
+-- stripe along the top of its outside wall.
+local function lowerStand(ctx, frame, spec)
+	local L = ctx.config.Layout
+	local C = ctx.config.Colors
+	seating(ctx, frame, spec)
+	fieldWall(ctx, frame, spec.length, spec.panels)
+	aisles(ctx, frame, spec.aisles, L.RowRise, L.LowerRows, C.Walkway)
+	endCaps(ctx, frame, spec.length, spec.caps, L.RowRise, L.LowerRows, spec.capColor or C.ConcreteDark)
+	backBand(ctx, frame, spec.length, L.LowerTopHeight - 1, 1, L.LowerDepth, ctx.colors.Trim, "BackStripe")
+end
+
+---------------------------------------------------------------------------------------------
+-- Lower bowl
+---------------------------------------------------------------------------------------------
+
+local SIDELINE_AISLES = { -80, -40, 0, 40, 80 } -- shared by the lower and upper decks so they line up
+
+function Stands.bleachers_home(ctx)
+	local L = ctx.config.Layout
+	local team = ctx.colors
+	local name = ctx.teamName
+	local frame = CFrame.new(0, 0, L.SurfaceMaxZ) * CFrame.Angles(0, math.pi, 0)
+	local length = L.SidelineStandsHalfLength * 2
+
+	lowerStand(ctx, frame, {
+		length = length,
+		rowColors = { team.Primary, shade(team.Primary, 0.8) },
+		seatColor = team.Secondary,
+		aisles = SIDELINE_AISLES,
+		caps = { -1, 1 },
+		panels = {
+			{ x = -90, width = 40, text = name },
+			{ x = -30, width = 40, text = "GO " .. name .. "!", color = team.Trim },
+			{ x = 30, width = 40, text = "DE-FENSE!", color = team.Trim },
+			{ x = 90, width = 40, text = name },
+		},
+	})
+end
+
+function Stands.bleachers_visitor(ctx)
+	local L = ctx.config.Layout
+	local C = ctx.config.Colors
+	local team = ctx.colors
+	local name = ctx.teamName
+	local tunnel = L.TunnelHalfWidth
+	local outer = L.SidelineStandsHalfLength
+	local length = outer - tunnel
+	local depth = L.LowerDepth
+	local centre = (tunnel + outer) / 2
+
+	-- Two sections either side of the players' tunnel (side = -1 west, 1 east)
+	for _, side in ipairs({ -1, 1 }) do
+		local sectionCtx = BuildUtil.Child(ctx, side < 0 and "WestSection" or "EastSection")
+		local frame = CFrame.new(side * centre, 0, L.SurfaceMinZ) -- stand x == world x offset here
+		lowerStand(sectionCtx, frame, {
+			length = length,
+			rowColors = { C.Concrete, C.ConcreteDark },
+			seatColor = team.Secondary,
+			aisles = { -26, 26 },
+			caps = { side }, -- the tunnel end gets the tunnel wall instead
+			panels = {
+				{ x = side * 26, width = 40, text = name },
+				{ x = -side * 26, width = 40, text = "VISITORS", color = team.Trim },
+			},
+		})
+		-- concourse gates on the plaza-facing outside wall
+		for _, x in ipairs({ -26, 26 }) do
+			gate(sectionCtx, frame, x, depth, plazaGateLabel(side * centre + x))
+		end
+	end
+
+	-- Players' tunnel ------------------------------------------------------------------------
+	local tunnelCtx = BuildUtil.Child(ctx, "PlayersTunnel")
+	local frontZ = L.SurfaceMinZ
+	local backZ = L.FrontLowerOuterZ
+	local midZ = (frontZ + backZ) / 2
+	local wallHeight = L.LowerTopHeight + 1
+	local wallInner = tunnel - 0.4 -- a little proud of the row ends so their faces don't z-fight
+	local wallOuter = tunnel + 0.8
+	local wallX = (wallInner + wallOuter) / 2
+	for _, side in ipairs({ -1, 1 }) do
+		BuildUtil.Box(
+			tunnelCtx,
+			"TunnelWall",
+			Vector3.new(wallOuter - wallInner, wallHeight, depth),
+			Vector3.new(side * wallX, wallHeight / 2, midZ),
+			team.Primary,
+			Enum.Material.Brick
+		)
+		-- LED strip along the inside of each wall (above head height)
+		BuildUtil.Box(
+			tunnelCtx,
+			"TunnelLED",
+			Vector3.new(0.15, 0.5, depth - 1),
+			Vector3.new(side * (wallInner - 0.075), 10, midZ),
+			team.Secondary,
+			Enum.Material.Neon,
+			{ CanCollide = false, CastShadow = false }
+		)
+		BuildUtil.Box(
+			tunnelCtx,
+			"TunnelWallCap",
+			Vector3.new(wallOuter - wallInner + 0.4, 0.4, depth),
+			Vector3.new(side * wallX, wallHeight + 0.2, midZ),
+			team.Trim,
+			Enum.Material.SmoothPlastic
+		)
+	end
+
+	-- Header beam over the tunnel mouth (well above head height)
+	local headerBottom = wallHeight + 0.4
+	local headerHeight = 6
+	local headerWidth = wallOuter * 2
+	local header = BuildUtil.Box(
+		tunnelCtx,
+		"TunnelHeader",
+		Vector3.new(headerWidth, headerHeight, 2),
+		Vector3.new(0, headerBottom + headerHeight / 2, frontZ - 1),
+		team.Secondary,
+		Enum.Material.SmoothPlastic
+	)
+	addText(header, Enum.NormalId.Back, "WELCOME TO " .. name .. " STADIUM", readable(team.Secondary, team.Primary), 16)
+	addText(header, Enum.NormalId.Front, "PLAYERS' TUNNEL", readable(team.Secondary, team.Primary), 16)
+	BuildUtil.Light(header, "SurfaceLight", { Name = "TunnelLight", Face = Enum.NormalId.Bottom, Range = 16, Brightness = 1.5, Angle = 80 })
+	BuildUtil.Box(
+		tunnelCtx,
+		"TunnelHeaderTrim",
+		Vector3.new(headerWidth, 0.5, 2.3),
+		Vector3.new(0, headerBottom + headerHeight + 0.25, frontZ - 1),
+		team.Trim,
+		Enum.Material.SmoothPlastic
+	)
+
+	-- Team-coloured runway on the tunnel floor (flat, non-collidable, above the walkway)
+	BuildUtil.Box(
+		tunnelCtx,
+		"TunnelRunway",
+		Vector3.new(16, 0.12, depth - 0.5),
+		Vector3.new(0, 0.16, midZ - 0.25),
+		team.Primary,
+		Enum.Material.Fabric,
+		{ CanCollide = false }
+	)
+end
+
+local function endZoneStand(ctx, side, chant)
+	local L = ctx.config.Layout
+	local team = ctx.colors
+	local name = ctx.teamName
+	-- west (side -1): rows step toward -X; east (side 1): rows step toward +X
+	local frame = CFrame.new(side * L.SurfaceHalfX, 0, L.FieldCenterZ) * CFrame.Angles(0, -side * math.pi / 2, 0)
+	local length = L.FieldWidth
+
+	lowerStand(ctx, frame, {
+		length = length,
+		rowColors = { shade(team.Primary, 0.92), shade(team.Primary, 0.72) },
+		seatColor = team.Trim,
+		aisles = { -26, 26 },
+		caps = { -1, 1 },
+		panels = {
+			{ x = -36, width = 26, text = name },
+			{ x = 0, width = 30, text = chant, color = team.Trim },
+			{ x = 36, width = 26, text = name },
+		},
+	})
+
+	-- team flags at the two back corners
+	local top = L.LowerTopHeight
+	local back = L.LowerDepth - 1.2
+	flag(ctx, frame, -(length / 2 - 1.5), back, top, 12, 1, team.Primary)
+	flag(ctx, frame, length / 2 - 1.5, back, top, 12, -1, team.Secondary)
+end
+
+function Stands.endzone_stands_west(ctx)
+	endZoneStand(ctx, -1, "DE-FENSE!")
+end
+
+function Stands.endzone_stands_east(ctx)
+	endZoneStand(ctx, 1, "TOUCHDOWN!")
+end
+
+---------------------------------------------------------------------------------------------
+-- Upper decks
+---------------------------------------------------------------------------------------------
+
+-- Team-coloured facade band on the front face of an upper deck, filling the gap between the
+-- lower bowl's top row (12) and the upper deck's first row (16), plus a parapet cap.
+local function facade(ctx, frame, length, text)
+	local team = ctx.colors
+	local height = FACADE_TOP - FACADE_BOTTOM
+	local band = standBox(
+		ctx,
+		frame,
+		"Facade",
+		Vector3.new(length, height, 0.4),
+		0,
+		FACADE_BOTTOM + height / 2,
+		-0.2,
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	addText(band, TOWARD_FIELD, text, readable(team.Primary, team.Trim), 12)
+	standBox(ctx, frame, "FacadeCap", Vector3.new(length, 0.3, 0.7), 0, FACADE_TOP + 0.15, -0.2, team.Trim, Enum.Material.SmoothPlastic)
+	standBox(
+		ctx,
+		frame,
+		"FacadeStripe",
+		Vector3.new(length, 0.35, 0.1),
+		0,
+		FACADE_BOTTOM + 0.6,
+		-0.45,
+		team.Secondary,
+		Enum.Material.SmoothPlastic,
+		{ CanCollide = false }
+	)
+end
+
+-- Upper-deck rows + aisles + end caps + back rail (no facade).
+local function upperStand(ctx, frame, spec)
+	local L = ctx.config.Layout
+	local C = ctx.config.Colors
+	seating(ctx, frame, {
+		name = "UpperRow",
+		length = spec.length,
+		rows = L.UpperRows,
+		firstHeight = L.UpperStartHeight,
+		rowColors = spec.rowColors,
+		seatColor = spec.seatColor,
+	})
+	aisles(ctx, frame, spec.aisles, L.UpperStartHeight, L.UpperRows, C.Walkway)
+	endCaps(ctx, frame, spec.length, spec.caps, L.UpperStartHeight, L.UpperRows, spec.capColor or C.ConcreteDark)
+	backRail(ctx, frame, spec.length, L.UpperTopHeight, L.UpperDepth)
+end
+
+function Stands.upper_home(ctx)
+	local L = ctx.config.Layout
+	local C = ctx.config.Colors
+	local team = ctx.colors
+	local name = ctx.teamName
+	local frame = CFrame.new(0, 0, L.BackLowerOuterZ) * CFrame.Angles(0, math.pi, 0)
+	local length = L.SidelineStandsHalfLength * 2
+	local depth = L.UpperDepth
+	local top = L.UpperTopHeight
+
+	upperStand(ctx, frame, {
+		length = length,
+		rowColors = { team.Secondary, shade(team.Secondary, 0.82) },
+		seatColor = team.Primary,
+		aisles = SIDELINE_AISLES,
+		caps = { -1, 1 },
+	})
+	facade(ctx, frame, length, name .. "      HOME OF THE " .. name .. "      " .. name)
+
+	-- Outside (back) wall: concrete cladding, team bands, stadium name and concourse gates
+	local cladding = 0.3
+	standBox(
+		ctx,
+		frame,
+		"BackCladding",
+		Vector3.new(length, top, cladding),
+		0,
+		top / 2,
+		depth + cladding / 2,
+		C.Concrete,
+		Enum.Material.Concrete
+	)
+	local face = depth + cladding
+	backBand(ctx, frame, length, 11.2, 1.4, face, team.Primary, "ConcourseBand")
+	local nameBand = backBand(ctx, frame, length, 18.5, 4, face, team.Primary, "NameBand")
+	addText(nameBand, AWAY_FROM_FIELD, name .. " STADIUM", readable(team.Primary, team.Trim), 12)
+	backBand(ctx, frame, length, top - 1.2, 1.2, face, team.Secondary, "TopBand")
+	gate(ctx, frame, -80, face, "GATE E")
+	gate(ctx, frame, 0, face, "GATE F")
+	gate(ctx, frame, 80, face, "GATE G")
+
+	-- flags along the top (clear of the press box in the middle)
+	for index, x in ipairs({ -110, -70, 70, 110 }) do
+		flag(ctx, frame, x, depth - 1.2, top, 9, x < 0 and 1 or -1, index % 2 == 0 and team.Secondary or team.Primary)
+	end
+end
+
+function Stands.upper_visitor(ctx)
+	local L = ctx.config.Layout
+	local C = ctx.config.Colors
+	local team = ctx.colors
+	local name = ctx.teamName
+	local tunnel = L.TunnelHalfWidth
+	local outer = L.SidelineStandsHalfLength
+	local length = outer - tunnel
+	local centre = (tunnel + outer) / 2
+	local depth = L.UpperDepth
+	local top = L.UpperTopHeight
+	-- the last colour is the top row, whose back face is the plaza-facing outside wall
+	local rowColors = { C.ConcreteDark, C.Concrete }
+	local seatColor = team.Secondary
+
+	for _, side in ipairs({ -1, 1 }) do
+		local sectionCtx = BuildUtil.Child(ctx, side < 0 and "WestSection" or "EastSection")
+		local frame = CFrame.new(side * centre, 0, L.FrontLowerOuterZ) -- stand x == world x offset here
+		upperStand(sectionCtx, frame, {
+			length = length,
+			rowColors = rowColors,
+			seatColor = seatColor,
+			aisles = { -26, 26 },
+			caps = { side },
+		})
+		-- plaza-facing outside wall: bands, gates and hanging team banners
+		backBand(sectionCtx, frame, length, 11.2, 1.4, depth, team.Primary, "ConcourseBand")
+		backBand(sectionCtx, frame, length, top - 2, 2, depth, team.Secondary, "TopBand")
+		for _, x in ipairs({ -26, 26 }) do
+			gate(sectionCtx, frame, x, depth, plazaGateLabel(side * centre + x))
+		end
+		for index, x in ipairs({ -40, 0, 40 }) do
+			standBox(
+				sectionCtx,
+				frame,
+				"Banner",
+				Vector3.new(6, 9.5, 0.2),
+				x,
+				18.25,
+				depth + 0.1,
+				index == 2 and team.Secondary or team.Primary,
+				Enum.Material.Fabric,
+				{ CanCollide = false }
+			)
+		end
+	end
+
+	-- Bridge over the players' tunnel (only above the lower bowl's top, so the tunnel stays open)
+	local bridgeCtx = BuildUtil.Child(ctx, "TunnelBridge")
+	local bridgeBottom = L.LowerTopHeight
+	local frontZ = L.FrontLowerOuterZ
+	local backZ = L.FrontUpperOuterZ
+	for row = 1, L.UpperRows do
+		local rowTop = L.UpperStartHeight + (row - 1) * L.RowRise
+		local z = frontZ - (row - 0.5) * L.RowDepth
+		BuildUtil.Box(
+			bridgeCtx,
+			"BridgeRow" .. row,
+			Vector3.new(tunnel * 2, rowTop - bridgeBottom, L.RowDepth),
+			Vector3.new(0, (rowTop + bridgeBottom) / 2, z),
+			rowColors[(row - 1) % #rowColors + 1],
+			Enum.Material.Concrete
+		)
+		BuildUtil.Box(
+			bridgeCtx,
+			"BridgeRow" .. row .. "Seats",
+			Vector3.new(tunnel * 2 + 1, 0.8, 1),
+			Vector3.new(0, rowTop + 0.4, z - (L.RowDepth / 2 - 0.5)),
+			seatColor,
+			Enum.Material.SmoothPlastic
+		)
+	end
+	backRail(bridgeCtx, CFrame.new(0, 0, frontZ), tunnel * 2, top, depth)
+	local lintel = BuildUtil.Box(
+		bridgeCtx,
+		"TunnelLintel",
+		Vector3.new(tunnel * 2, 3.6, 0.4),
+		Vector3.new(0, bridgeBottom + 1.8, backZ - 0.2),
+		team.Secondary,
+		Enum.Material.SmoothPlastic
+	)
+	addText(lintel, Enum.NormalId.Front, "PLAYERS' TUNNEL", readable(team.Secondary, team.Primary))
+	local nameSign = BuildUtil.Box(
+		bridgeCtx,
+		"StadiumSign",
+		Vector3.new(tunnel * 2, 9, 0.4),
+		Vector3.new(0, bridgeBottom + 8.5, backZ - 0.2),
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	addText(nameSign, Enum.NormalId.Front, name .. " STADIUM", readable(team.Primary, team.Trim))
+	-- tunnel walls under the bridge (a little proud of the row ends) + the runway continues
+	for _, side in ipairs({ -1, 1 }) do
+		BuildUtil.Box(
+			bridgeCtx,
+			"TunnelWall",
+			Vector3.new(0.4, bridgeBottom, depth),
+			Vector3.new(side * (tunnel - 0.2), bridgeBottom / 2, (frontZ + backZ) / 2),
+			team.Primary,
+			Enum.Material.Brick
+		)
+	end
+	BuildUtil.Box(
+		bridgeCtx,
+		"TunnelRunway",
+		Vector3.new(16, 0.12, depth),
+		Vector3.new(0, 0.16, (frontZ + backZ) / 2),
+		team.Primary,
+		Enum.Material.Fabric,
+		{ CanCollide = false }
+	)
+
+	-- Facade across the whole front face (both sections and the bridge)
+	facade(ctx, CFrame.new(0, 0, frontZ), outer * 2, "WELCOME TO " .. name .. " STADIUM")
+end
+
+return Stands
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Script" referent="14">
+        <Properties>
+          <string name="Name">Main</string>
+          <token name="RunContext">0</token>
+          <string name="Source"><![CDATA[--[[
+	Gridiron Stadium Tycoon - server entry point.
+
+	Builds the world and the plots, loads/saves player data and starts the game loops.
+	Tweak gameplay numbers in ReplicatedStorage > TycoonShared > Config and Items.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local Config = require(ReplicatedStorage:WaitForChild("TycoonShared"):WaitForChild("Config"))
+local World = require(script.Parent.World)
+local PlayerData = require(script.Parent.PlayerData)
+local PlotManager = require(script.Parent.PlotManager)
+
+-- Remote used to show messages on players' screens
+local remotes = Instance.new("Folder")
+remotes.Name = "TycoonRemotes"
+local notifyRemote = Instance.new("RemoteEvent")
+notifyRemote.Name = "Notify"
+notifyRemote.Parent = remotes
+remotes.Parent = ReplicatedStorage
+
+-- World + plots
+World.Build(Config)
+local tycoonsFolder = Instance.new("Folder")
+tycoonsFolder.Name = "Tycoons"
+tycoonsFolder.Parent = Workspace
+PlotManager.Init(tycoonsFolder, notifyRemote)
+World.StartDayNight(Config, PlotManager.SetNight)
+
+-- Players
+local function onPlayerAdded(player)
+	PlotManager.OnPlayerAdded(player)
+	local profile = PlayerData.Load(player)
+	if profile and not profile.CanSave and Config.SaveEnabled then
+		notifyRemote:FireClient(player, "Saving is off in this server, so progress won't be kept.", "info")
+	end
+end
+
+Players.PlayerAdded:Connect(onPlayerAdded)
+for _, player in ipairs(Players:GetPlayers()) do
+	task.spawn(onPlayerAdded, player)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+	PlotManager.Release(player) -- pays out the vault into the player's cash
+	PlayerData.Release(player) -- final save
+end)
+
+game:BindToClose(function()
+	PlotManager.DepositAllVaults()
+	PlayerData.ReleaseAll(25)
+end)
+
+PlayerData.StartAutosave()
+PlotManager.Start()
+
+print(("[%s] Ready with %d stadium plots."):format(Config.GameTitle, Config.PlotCount))
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="15">
+        <Properties>
+          <string name="Name">PlayerData</string>
+          <string name="Source"><![CDATA[--[[
+	PlayerData
+	Loads, holds and saves each player's progress (cash + which stadium pieces they own).
+
+	Saving uses a DataStore. It only works when:
+	  * the place is published (File > Publish to Roblox), and
+	  * in Studio: Game Settings > Security > "Enable Studio Access to API Services" is ON.
+	If saving is not available the game still works, progress just isn't kept.
+
+	A light "session lock" stops two servers from overwriting each other's saves when a player
+	quickly hops from one server to another.
+
+	Player attributes set here (read by the HUD):
+	  Cash        current cash
+	  SaveStatus  "loading" | "on" | "off"
+]]
+
+local DataStoreService = game:GetService("DataStoreService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
+local Config = require(Shared:WaitForChild("Config"))
+local Items = require(Shared:WaitForChild("Items"))
+
+local PlayerData = {}
+
+local DATA_VERSION = 1
+local LOCK_TIMEOUT = 300 -- a session lock older than this (seconds) is considered dead
+local LOCK_WAIT_ATTEMPTS = 6 -- how many times to wait for another server to release the lock
+local LOCK_WAIT_SECONDS = 4
+local REQUEST_RETRIES = 3
+
+local profiles = {} -- [Player] = profile
+local store = nil
+
+if Config.SaveEnabled then
+	if game.GameId == 0 then
+		warn(
+			"[PlayerData] This place is not published, so progress will NOT be saved. Publish it and enable Studio API access to test saving."
+		)
+	else
+		local ok, result = pcall(function()
+			return DataStoreService:GetDataStore(Config.DataStoreName)
+		end)
+		if ok then
+			store = result
+		else
+			warn("[PlayerData] DataStores unavailable, progress will NOT be saved: " .. tostring(result))
+		end
+	end
+end
+
+local function keyFor(userId)
+	return "Player_" .. tostring(userId)
+end
+
+local function newProfile(userId)
+	return {
+		Key = keyFor(userId),
+		Cash = Config.StartingCash,
+		Owned = {},
+		CanSave = false,
+		Changes = 0, -- bumped on every change
+		SavedChanges = 0, -- value of Changes at the last successful save
+		Saving = false,
+		Released = false,
+	}
+end
+
+local function isNumber(value)
+	return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
+end
+
+-- Copies saved data into a fresh profile, ignoring anything unexpected.
+local function applySavedData(profile, data)
+	if type(data) ~= "table" then
+		return
+	end
+	if isNumber(data.Cash) and data.Cash >= 0 then
+		profile.Cash = math.floor(data.Cash)
+	end
+	if type(data.Owned) == "table" then
+		for _, id in ipairs(data.Owned) do
+			if type(id) == "string" and Items.ById[id] then
+				profile.Owned[id] = true
+			end
+		end
+	end
+end
+
+local function serialize(profile)
+	local owned = {}
+	for id in pairs(profile.Owned) do
+		table.insert(owned, id)
+	end
+	table.sort(owned)
+	return {
+		Version = DATA_VERSION,
+		Cash = math.floor(profile.Cash),
+		Owned = owned,
+		SavedAt = os.time(),
+	}
+end
+
+local function lockIsHeldByOtherServer(data)
+	if type(data) ~= "table" or type(data.Session) ~= "table" then
+		return false
+	end
+	local session = data.Session
+	if session.JobId == game.JobId then
+		return false
+	end
+	return isNumber(session.Time) and os.time() - session.Time < LOCK_TIMEOUT
+end
+
+-- Errors that will never go away by retrying (e.g. Studio API access is switched off).
+local function isPermanentError(message)
+	message = tostring(message)
+	return message:find("StudioAccessToApisNotAllowed", 1, true) ~= nil
+		or message:find("API Services", 1, true) ~= nil
+		or message:find("403", 1, true) ~= nil
+		or message:find("publish", 1, true) ~= nil
+end
+
+-- Runs a DataStore request with retries. Returns success, result.
+local function withRetries(description, callback)
+	local lastError
+	for attempt = 1, REQUEST_RETRIES do
+		local ok, result = pcall(callback)
+		if ok then
+			return true, result
+		end
+		lastError = result
+		warn(("[PlayerData] %s failed (attempt %d/%d): %s"):format(description, attempt, REQUEST_RETRIES, tostring(result)))
+		if isPermanentError(result) then
+			warn(
+				"[PlayerData] Saving is turned off for this server. In Studio, enable Game Settings > Security > 'Enable Studio Access to API Services'."
+			)
+			store = nil
+			break
+		end
+		if attempt < REQUEST_RETRIES then
+			task.wait(attempt * 2)
+		end
+	end
+	return false, lastError
+end
+
+-- Loads (and session-locks) a player's data. Yields. Returns the profile, or nil if the player left.
+function PlayerData.Load(player)
+	if profiles[player] then
+		return profiles[player]
+	end
+	player:SetAttribute("SaveStatus", "loading")
+	local profile = newProfile(player.UserId)
+
+	if store then
+		local loaded = false
+		local requestFailed = false
+		for lockAttempt = 1, LOCK_WAIT_ATTEMPTS + 1 do
+			local forceSteal = lockAttempt > LOCK_WAIT_ATTEMPTS
+			local lockedElsewhere = false
+			local savedData = nil
+			local ok = withRetries("Load " .. profile.Key, function()
+				return store:UpdateAsync(profile.Key, function(old)
+					if not forceSteal and lockIsHeldByOtherServer(old) then
+						lockedElsewhere = true
+						return nil -- don't write; another server still owns this data
+					end
+					lockedElsewhere = false
+					local data = type(old) == "table" and old or {}
+					data.Session = { JobId = game.JobId, Time = os.time() }
+					savedData = data
+					return data
+				end)
+			end)
+			if not ok then
+				requestFailed = true
+				break
+			end
+			if not lockedElsewhere then
+				applySavedData(profile, savedData)
+				loaded = true
+				break
+			end
+			if player.Parent == nil then
+				break
+			end
+			task.wait(LOCK_WAIT_SECONDS)
+		end
+		profile.CanSave = loaded and not requestFailed
+	end
+
+	if player.Parent == nil then
+		-- The player left while we were loading: give the lock back without touching their data.
+		if profile.CanSave then
+			profile.Released = true
+			task.spawn(function()
+				withRetries("Unlock " .. profile.Key, function()
+					return store:UpdateAsync(profile.Key, function(old)
+						if type(old) == "table" and type(old.Session) == "table" and old.Session.JobId == game.JobId then
+							old.Session = nil
+							return old
+						end
+						return nil
+					end)
+				end)
+			end)
+		end
+		return nil
+	end
+
+	profiles[player] = profile
+	player:SetAttribute("Cash", profile.Cash)
+	player:SetAttribute("SaveStatus", profile.CanSave and "on" or "off")
+	return profile
+end
+
+-- Saves a profile. `release` = true also gives up the session lock (used when the player leaves).
+local function saveProfile(profile, release)
+	if not store or not profile.CanSave then
+		return false
+	end
+	while profile.Saving do
+		task.wait(0.1)
+	end
+	profile.Saving = true
+	local changesAtSave = profile.Changes
+	local data = serialize(profile)
+	local stolen = false
+	local ok = withRetries("Save " .. profile.Key, function()
+		return store:UpdateAsync(profile.Key, function(old)
+			if lockIsHeldByOtherServer(old) then
+				stolen = true
+				return nil -- another server took over this player's data; don't overwrite it
+			end
+			stolen = false
+			data.Session = (not release) and { JobId = game.JobId, Time = os.time() } or nil
+			return data
+		end)
+	end)
+	profile.Saving = false
+	if ok and not stolen then
+		profile.SavedChanges = math.max(profile.SavedChanges, changesAtSave)
+		return true
+	end
+	if stolen then
+		warn("[PlayerData] " .. profile.Key .. " is now owned by another server; this server will stop saving it.")
+		profile.CanSave = false
+	end
+	return false
+end
+
+-- Waits (up to timeout seconds) for a player's profile to finish loading.
+function PlayerData.WaitForProfile(player, timeout)
+	local deadline = os.clock() + (timeout or 30)
+	while not profiles[player] and player.Parent ~= nil and os.clock() < deadline do
+		task.wait(0.1)
+	end
+	return profiles[player]
+end
+
+function PlayerData.GetProfile(player)
+	return profiles[player]
+end
+
+function PlayerData.GetCash(player)
+	local profile = profiles[player]
+	return profile and profile.Cash or 0
+end
+
+local function markChanged(player, profile)
+	profile.Changes += 1
+	player:SetAttribute("Cash", profile.Cash)
+end
+
+function PlayerData.AddCash(player, amount)
+	local profile = profiles[player]
+	if not profile or not isNumber(amount) then
+		return false
+	end
+	profile.Cash = math.max(0, math.floor(profile.Cash + amount))
+	markChanged(player, profile)
+	return true
+end
+
+-- Takes `amount` from the player's cash if they have enough. Returns true on success.
+function PlayerData.TrySpend(player, amount)
+	local profile = profiles[player]
+	if not profile or not isNumber(amount) or amount < 0 or profile.Cash < amount then
+		return false
+	end
+	profile.Cash -= amount
+	markChanged(player, profile)
+	return true
+end
+
+function PlayerData.SetOwned(player, itemId)
+	local profile = profiles[player]
+	if not profile then
+		return false
+	end
+	profile.Owned[itemId] = true
+	markChanged(player, profile)
+	return true
+end
+
+function PlayerData.Save(player)
+	local profile = profiles[player]
+	if not profile then
+		return false
+	end
+	return saveProfile(profile, false)
+end
+
+-- Final save + unlock when a player leaves.
+function PlayerData.Release(player)
+	local profile = profiles[player]
+	if not profile or profile.Released then
+		return
+	end
+	profile.Released = true
+	saveProfile(profile, true)
+	profiles[player] = nil
+end
+
+-- Saves everyone in parallel and waits up to `timeout` seconds (used when the server shuts down).
+-- Also waits for saves that PlayerRemoving already started, so the server doesn't close mid-save.
+function PlayerData.ReleaseAll(timeout)
+	for player, profile in pairs(profiles) do
+		if not profile.Released then
+			task.spawn(PlayerData.Release, player)
+		end
+	end
+	local deadline = os.clock() + (timeout or 25)
+	while next(profiles) ~= nil and os.clock() < deadline do
+		task.wait(0.1)
+	end
+end
+
+-- Periodically saves every profile (this also refreshes the session lock).
+function PlayerData.StartAutosave()
+	if not store then
+		return
+	end
+	task.spawn(function()
+		while true do
+			task.wait(Config.AutosaveSeconds)
+			for _, profile in pairs(profiles) do
+				if not profile.Released and profile.CanSave then
+					task.spawn(saveProfile, profile, false)
+				end
+			end
+		end
+	end)
+end
+
+function PlayerData.IsSavingAvailable()
+	return store ~= nil
+end
+
+return PlayerData
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="16">
+        <Properties>
+          <string name="Name">PlotManager</string>
+          <string name="Source"><![CDATA[--[[
+	PlotManager
+	Owns every stadium plot: claiming, buy buttons, purchases, building pieces, the vault /
+	collect pad, and the live displays (scoreboard, jumbotron, flood lights).
+
+	Player attributes set here (read by the HUD):
+	  PlotIndex   number of the plot the player owns (nil = none yet)
+	  Income      cash per second the player's stadium earns
+	  Built       how many stadium pieces the player owns
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
+local Config = require(Shared:WaitForChild("Config"))
+local Items = require(Shared:WaitForChild("Items"))
+local Format = require(Shared:WaitForChild("Format"))
+
+local BuildUtil = require(script.Parent.BuildUtil)
+local Builders = require(script.Parent.Builders)
+local PlayerData = require(script.Parent.PlayerData)
+local World = require(script.Parent.World)
+
+local PlotManager = {}
+
+local plots = {} -- array of plot tables
+local plotByPlayer = {} -- [Player] = plot
+local claiming = {} -- [Player] = true while waiting for their data
+local cooldowns = {} -- [Player] = { [key] = os.clock() }
+local notifyRemote = nil
+local isNight = false
+local rng = Random.new()
+
+local LAST_ITEM_ID = Items.List[#Items.List].Id
+local UNCLAIMED_TRIGGER_TRANSPARENCY = 0.55
+
+---------------------------------------------------------------------------------------------
+-- Helpers
+---------------------------------------------------------------------------------------------
+
+local function notify(player, message, kind)
+	if notifyRemote and player and player.Parent then
+		notifyRemote:FireClient(player, message, kind or "info")
+	end
+end
+
+-- Returns true (and starts the cooldown) if `key` hasn't fired for this player in `seconds`.
+local function cooldownReady(player, key, seconds)
+	local now = os.clock()
+	local map = cooldowns[player]
+	if not map then
+		map = {}
+		cooldowns[player] = map
+	end
+	if map[key] and now - map[key] < seconds then
+		return false
+	end
+	map[key] = now
+	return true
+end
+
+-- The living player whose character touched `hit`, or nil.
+local function playerFromHit(hit)
+	local character = hit:FindFirstAncestorOfClass("Model")
+	if not character then
+		return nil
+	end
+	local player = Players:GetPlayerFromCharacter(character)
+	if not player then
+		return nil
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid or humanoid.Health <= 0 then
+		return nil
+	end
+	return player
+end
+
+-- "Sam_The-Builder 99" -> "SAMTHEBUILDER9" (letters/digits only, max 14 chars)
+local function makeTeamName(player)
+	local name = string.upper(player.DisplayName):gsub("[^%w]", "")
+	if #name == 0 then
+		name = string.upper(player.Name):gsub("[^%w]", "")
+	end
+	if #name == 0 then
+		name = "HOME"
+	end
+	return string.sub(name, 1, 14)
+end
+
+local function countOwned(plot)
+	local count = 0
+	for _ in pairs(plot.Owned) do
+		count += 1
+	end
+	return count
+end
+
+---------------------------------------------------------------------------------------------
+-- Displays
+---------------------------------------------------------------------------------------------
+
+local function findLabel(plot, itemId, labelName)
+	local model = plot.ItemModels[itemId]
+	if not model then
+		return nil
+	end
+	local label = model:FindFirstChild(labelName, true)
+	if label and label:IsA("TextLabel") then
+		return label
+	end
+	return nil
+end
+
+local function updateVault(plot)
+	local label = plot.Refs.VaultLabel
+	if plot.Owner then
+		label.Text = Format.MoneyExact(math.floor(plot.Vault))
+	else
+		label.Text = "$0"
+	end
+end
+
+local function attendance(plot)
+	return plot.Income * Config.AttendancePerIncome
+end
+
+local function updateScoreboard(plot)
+	local title = findLabel(plot, "scoreboard", "ScoreboardTitle")
+	if title then
+		title.Text = plot.TeamName .. " STADIUM"
+	end
+	local score = findLabel(plot, "scoreboard", "ScoreboardScore")
+	if score then
+		score.Text = ("HOME %d  -  AWAY %d"):format(plot.HomeScore, plot.AwayScore)
+	end
+	local crowd = findLabel(plot, "scoreboard", "ScoreboardAttendance")
+	if crowd then
+		crowd.Text = "ATTENDANCE " .. Format.Commas(attendance(plot))
+	end
+end
+
+local function applyLights(plot)
+	local model = plot.ItemModels.lights
+	if not model then
+		return
+	end
+	for _, descendant in ipairs(model:GetDescendants()) do
+		if descendant:IsA("SpotLight") or descendant:IsA("PointLight") or descendant:IsA("SurfaceLight") then
+			if descendant.Name == "FloodLight" then
+				descendant.Enabled = isNight
+			end
+		elseif descendant:IsA("BasePart") and descendant.Name == "FloodPanel" then
+			descendant.Material = isNight and Enum.Material.Neon or Enum.Material.SmoothPlastic
+		end
+	end
+end
+
+local function updateButtonColors(plot)
+	if not plot.Owner then
+		return
+	end
+	local cash = PlayerData.GetCash(plot.Owner)
+	for itemId, button in pairs(plot.Buttons) do
+		local item = Items.ById[itemId]
+		button.Color = (cash >= item.Cost) and Config.Colors.ButtonAffordable or Config.Colors.ButtonTooExpensive
+	end
+end
+
+local function updateOwnerAttributes(plot)
+	local owner = plot.Owner
+	if owner then
+		owner:SetAttribute("Income", plot.Income * Config.IncomeMultiplier)
+		owner:SetAttribute("Built", countOwned(plot))
+	end
+end
+
+local function recalcIncome(plot)
+	plot.Income = Items.TotalIncome(plot.Owned)
+	updateOwnerAttributes(plot)
+	updateScoreboard(plot)
+end
+
+---------------------------------------------------------------------------------------------
+-- Building pieces
+---------------------------------------------------------------------------------------------
+
+-- Parts start below their final spot and invisible, then rise into place.
+local function animateIn(model)
+	local parts = {}
+	for _, descendant in ipairs(model:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			table.insert(parts, descendant)
+		end
+	end
+	if #parts == 0 then
+		return
+	end
+	local minY, maxY = math.huge, -math.huge
+	for _, part in ipairs(parts) do
+		local y = part.CFrame.Position.Y
+		minY = math.min(minY, y)
+		maxY = math.max(maxY, y)
+	end
+	local heightRange = math.max(maxY - minY, 1)
+	for _, part in ipairs(parts) do
+		local targetCFrame = part.CFrame
+		local targetTransparency = part.Transparency
+		local delayTime = (targetCFrame.Position.Y - minY) / heightRange * 0.5
+		part.CFrame = targetCFrame - Vector3.new(0, 6, 0)
+		part.Transparency = 1
+		local tween = TweenService:Create(
+			part,
+			TweenInfo.new(0.55, Enum.EasingStyle.Back, Enum.EasingDirection.Out, 0, false, delayTime),
+			{ CFrame = targetCFrame, Transparency = targetTransparency }
+		)
+		tween:Play()
+	end
+end
+
+local function buildItem(plot, item, animate)
+	local builder = Builders[item.Id]
+	if not builder then
+		warn("[PlotManager] No builder for item " .. item.Id)
+		return
+	end
+	local model = Instance.new("Model")
+	model.Name = item.Id
+	local ctx = BuildUtil.NewContext(plot.Origin, model, plot.Palette, plot.TeamName, Config)
+	local ok, err = pcall(builder, ctx)
+	if not ok then
+		warn(("[PlotManager] Builder '%s' failed: %s"):format(item.Id, tostring(err)))
+	end
+	model.Parent = plot.ItemsFolder
+	plot.ItemModels[item.Id] = model
+	if animate and Config.BuildAnimation then
+		local animated, animationError = pcall(animateIn, model)
+		if not animated then
+			warn("[PlotManager] Build animation failed: " .. tostring(animationError))
+		end
+	end
+
+	if item.Id == "lights" then
+		applyLights(plot)
+	elseif item.Id == "scoreboard" then
+		updateScoreboard(plot)
+	elseif item.Id == "jumbotron" then
+		local screen = findLabel(plot, "jumbotron", "JumbotronText")
+		if screen then
+			screen.Text = plot.TeamName
+		end
+	end
+end
+
+---------------------------------------------------------------------------------------------
+-- Buttons
+---------------------------------------------------------------------------------------------
+
+local onButtonTouched -- forward declaration
+
+local function createButton(plot, item)
+	local pad = Instance.new("Part")
+	pad.Name = "Buy_" .. item.Id
+	pad.Anchored = true
+	pad.CanCollide = true
+	pad.Size = Vector3.new(6, 0.6, 6)
+	pad.CFrame = plot.Origin * CFrame.new(item.Button.X, item.Button.Y + 0.3, item.Button.Z)
+	pad.Material = Enum.Material.Neon
+	pad.Color = Config.Colors.ButtonTooExpensive
+	pad.TopSurface = Enum.SurfaceType.Smooth
+	pad.BottomSurface = Enum.SurfaceType.Smooth
+
+	local gui = Instance.new("BillboardGui")
+	gui.Name = "Info"
+	gui.Size = UDim2.new(11, 0, 4, 0)
+	gui.StudsOffset = Vector3.new(0, 4.5, 0)
+	gui.MaxDistance = 160
+	gui.LightInfluence = 0
+	gui.Parent = pad
+
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Name = "ItemName"
+	nameLabel.Size = UDim2.new(1, 0, 0.55, 0)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Font = Enum.Font.GothamBlack
+	nameLabel.TextScaled = true
+	nameLabel.TextColor3 = Color3.new(1, 1, 1)
+	nameLabel.TextStrokeTransparency = 0.3
+	nameLabel.Text = item.Name
+	nameLabel.Parent = gui
+
+	local priceLabel = Instance.new("TextLabel")
+	priceLabel.Name = "Price"
+	priceLabel.Position = UDim2.new(0, 0, 0.55, 0)
+	priceLabel.Size = UDim2.new(1, 0, 0.45, 0)
+	priceLabel.BackgroundTransparency = 1
+	priceLabel.Font = Enum.Font.GothamBold
+	priceLabel.TextScaled = true
+	priceLabel.TextColor3 = Color3.fromRGB(255, 225, 90)
+	priceLabel.TextStrokeTransparency = 0.3
+	local price = item.Cost == 0 and "FREE" or Format.MoneyExact(item.Cost)
+	priceLabel.Text = ("%s   +%s/s"):format(price, Format.Short(item.Income * Config.IncomeMultiplier))
+	priceLabel.Parent = gui
+
+	pad.Touched:Connect(function(hit)
+		onButtonTouched(plot, item, hit)
+	end)
+	pad.Parent = plot.ButtonsFolder
+	plot.Buttons[item.Id] = pad
+end
+
+-- Shows exactly the buttons for pieces that are unlocked but not yet owned.
+local function refreshButtons(plot)
+	for _, item in ipairs(Items.List) do
+		local shouldShow = plot.Owner ~= nil and not plot.Owned[item.Id] and Items.IsUnlocked(item, plot.Owned)
+		local existing = plot.Buttons[item.Id]
+		if shouldShow and not existing then
+			createButton(plot, item)
+		elseif not shouldShow and existing then
+			existing:Destroy()
+			plot.Buttons[item.Id] = nil
+		end
+	end
+	updateButtonColors(plot)
+end
+
+function PlotManager.Purchase(plot, item)
+	local player = plot.Owner
+	if not player or plot.Owned[item.Id] or not Items.IsUnlocked(item, plot.Owned) then
+		return false
+	end
+	if not PlayerData.TrySpend(player, item.Cost) then
+		if cooldownReady(player, "cash_" .. item.Id, 2) then
+			local missing = item.Cost - PlayerData.GetCash(player)
+			notify(player, ("You need %s more for %s"):format(Format.MoneyExact(missing), item.Name), "error")
+		end
+		return false
+	end
+	PlayerData.SetOwned(player, item.Id) -- plot.Owned is the same table as the profile's Owned
+	buildItem(plot, item, true)
+	recalcIncome(plot)
+	refreshButtons(plot)
+	notify(player, ("Built %s!  +%s/s"):format(item.Name, Format.Short(item.Income * Config.IncomeMultiplier)), "success")
+	if item.Id == LAST_ITEM_ID then
+		notify(player, "Your stadium is complete. You're a champion!", "success")
+	end
+	return true
+end
+
+onButtonTouched = function(plot, item, hit)
+	local player = playerFromHit(hit)
+	if not player then
+		return
+	end
+	if player ~= plot.Owner then
+		if cooldownReady(player, "not_owner", 3) then
+			notify(player, "This isn't your stadium! Claim an empty one at a gold gate.", "error")
+		end
+		return
+	end
+	if plot.Buttons[item.Id] == nil then
+		return
+	end
+	PlotManager.Purchase(plot, item)
+end
+
+---------------------------------------------------------------------------------------------
+-- Claiming / releasing
+---------------------------------------------------------------------------------------------
+
+local function setGateClaimed(plot, player)
+	local refs = plot.Refs
+	if player then
+		refs.ClaimTrigger.Transparency = 1
+		refs.GateSignLabel.Text = string.upper(player.DisplayName) .. "'S STADIUM"
+		refs.GateBackLabel.Text = plot.TeamName .. " STADIUM"
+	else
+		refs.ClaimTrigger.Transparency = UNCLAIMED_TRIGGER_TRANSPARENCY
+		refs.GateSignLabel.Text = "CLAIM THIS STADIUM"
+		refs.GateBackLabel.Text = "GRIDIRON STADIUM"
+	end
+end
+
+function PlotManager.Claim(plot, player, profile)
+	plot.Owner = player
+	plot.Owned = profile.Owned
+	plot.TeamName = makeTeamName(player)
+	plot.Vault = 0
+	plot.HomeScore, plot.AwayScore = 0, 0
+	plotByPlayer[player] = plot
+	setGateClaimed(plot, player)
+
+	for _, item in ipairs(Items.List) do
+		if plot.Owned[item.Id] then
+			buildItem(plot, item, false)
+		end
+	end
+	recalcIncome(plot)
+	refreshButtons(plot)
+	updateVault(plot)
+	player:SetAttribute("PlotIndex", plot.Index)
+
+	local built = countOwned(plot)
+	if built > 0 then
+		notify(player, ("Welcome back! Your stadium has %d of %d pieces."):format(built, #Items.List), "success")
+	else
+		notify(player, "Stadium claimed! Step on the glowing button to start building.", "success")
+	end
+end
+
+local function onClaimTouched(plot, hit)
+	if plot.Owner then
+		return
+	end
+	local player = playerFromHit(hit)
+	if not player then
+		return
+	end
+	local ownedPlot = plotByPlayer[player]
+	if ownedPlot then
+		if ownedPlot ~= plot and cooldownReady(player, "already_owner", 4) then
+			notify(player, "You already own a stadium!", "error")
+		end
+		return
+	end
+	if claiming[player] then
+		return
+	end
+	claiming[player] = true
+	local profile = PlayerData.GetProfile(player)
+	if not profile then
+		notify(player, "Loading your saved stadium...", "info")
+		profile = PlayerData.WaitForProfile(player, 45)
+	end
+	claiming[player] = nil
+	if not profile or player.Parent == nil then
+		if player.Parent then
+			notify(player, "Couldn't load your data yet. Try the gate again in a moment.", "error")
+		end
+		return
+	end
+	if plot.Owner or plotByPlayer[player] then
+		return -- someone else claimed it while we waited, or the player claimed another plot
+	end
+	PlotManager.Claim(plot, player, profile)
+end
+
+-- Frees the player's plot (their vault is paid out to them first so nothing is lost).
+function PlotManager.Release(player)
+	claiming[player] = nil
+	cooldowns[player] = nil
+	local plot = plotByPlayer[player]
+	if not plot then
+		return
+	end
+	local payout = math.floor(plot.Vault)
+	if payout > 0 then
+		PlayerData.AddCash(player, payout)
+	end
+	plotByPlayer[player] = nil
+	plot.Owner = nil
+	plot.Owned = {}
+	plot.Income = 0
+	plot.Vault = 0
+	plot.TeamName = ""
+	plot.ItemsFolder:ClearAllChildren()
+	plot.ItemModels = {}
+	for _, button in pairs(plot.Buttons) do
+		button:Destroy()
+	end
+	plot.Buttons = {}
+	setGateClaimed(plot, nil)
+	updateVault(plot)
+end
+
+-- Pays every vault out to its owner (used right before the server shuts down).
+function PlotManager.DepositAllVaults()
+	for _, plot in ipairs(plots) do
+		if plot.Owner then
+			local payout = math.floor(plot.Vault)
+			if payout > 0 and PlayerData.AddCash(plot.Owner, payout) then
+				plot.Vault -= payout
+				updateVault(plot)
+			end
+		end
+	end
+end
+
+---------------------------------------------------------------------------------------------
+-- Vault + collect pad
+---------------------------------------------------------------------------------------------
+
+local function collect(plot)
+	local player = plot.Owner
+	local amount = math.floor(plot.Vault)
+	if not player or amount <= 0 then
+		return
+	end
+	if PlayerData.AddCash(player, amount) then
+		plot.Vault -= amount
+		updateVault(plot)
+		updateButtonColors(plot)
+		notify(player, "+" .. Format.MoneyExact(amount), "cash")
+	end
+end
+
+local function onCollectTouched(plot, hit)
+	local player = playerFromHit(hit)
+	if player and player == plot.Owner and cooldownReady(player, "collect", 0.5) then
+		collect(plot)
+	end
+end
+
+-- True if the owner is standing on their collect pad right now.
+local function ownerIsOnPad(plot)
+	local character = plot.Owner and plot.Owner.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return false
+	end
+	local offset = plot.Refs.CollectPad.CFrame:PointToObjectSpace(root.CFrame.Position)
+	return math.abs(offset.X) <= 4.5 and math.abs(offset.Z) <= 4.5 and offset.Y > -1 and offset.Y < 8
+end
+
+---------------------------------------------------------------------------------------------
+-- Night lights, game simulation and jumbotron
+---------------------------------------------------------------------------------------------
+
+function PlotManager.SetNight(night)
+	isNight = night
+	for _, plot in ipairs(plots) do
+		applyLights(plot)
+	end
+end
+
+local function jumbotronMessages(plot)
+	return {
+		{ plot.TeamName, plot.Palette.Primary },
+		{ "MAKE SOME NOISE!", plot.Palette.Secondary },
+		{ "ATTENDANCE " .. Format.Commas(attendance(plot)), Color3.fromRGB(15, 15, 20) },
+		{ "GO " .. plot.TeamName .. "!", plot.Palette.Primary },
+		{ ("HOME %d - AWAY %d"):format(plot.HomeScore, plot.AwayScore), Color3.fromRGB(15, 15, 20) },
+	}
+end
+
+local function showOnJumbotron(plot, text, color)
+	local screen = findLabel(plot, "jumbotron", "JumbotronText")
+	if screen then
+		screen.Text = text
+		screen.BackgroundColor3 = color
+		screen.TextColor3 = plot.Palette.Trim
+	end
+end
+
+-- Every so often one of the teams scores, so the scoreboard and jumbotron feel alive.
+local function simulateGame(plot)
+	if not plot.ItemModels.scoreboard then
+		return
+	end
+	local homeScores = rng:NextNumber() < 0.6
+	local points = rng:NextNumber() < 0.7 and 7 or 3
+	if homeScores then
+		plot.HomeScore += points
+	else
+		plot.AwayScore += points
+	end
+	if plot.HomeScore >= 49 or plot.AwayScore >= 49 then
+		plot.HomeScore, plot.AwayScore = 0, 0
+	end
+	updateScoreboard(plot)
+	if homeScores and plot.ItemModels.jumbotron then
+		plot.JumbotronHoldUntil = os.clock() + 4
+		showOnJumbotron(plot, points == 7 and "TOUCHDOWN!" or "FIELD GOAL!", Color3.fromRGB(255, 196, 37))
+	end
+end
+
+---------------------------------------------------------------------------------------------
+-- Setup
+---------------------------------------------------------------------------------------------
+
+function PlotManager.Init(parentFolder, remote)
+	notifyRemote = remote
+	for index, origin in ipairs(World.GetPlotOrigins(Config)) do
+		local palette = Config.TeamColors[(index - 1) % #Config.TeamColors + 1]
+
+		local model = Instance.new("Model")
+		model.Name = "Plot" .. index
+		model:SetAttribute("PlotIndex", index)
+		local baseFolder = Instance.new("Folder")
+		baseFolder.Name = "Base"
+		baseFolder.Parent = model
+		local itemsFolder = Instance.new("Folder")
+		itemsFolder.Name = "Items"
+		itemsFolder.Parent = model
+		local buttonsFolder = Instance.new("Folder")
+		buttonsFolder.Name = "Buttons"
+		buttonsFolder.Parent = model
+
+		local ctx = BuildUtil.NewContext(origin, baseFolder, palette, "", Config)
+		local refs = Builders.PlotBase(ctx)
+
+		local plot = {
+			Index = index,
+			Origin = origin,
+			Palette = palette,
+			Model = model,
+			Refs = refs,
+			ItemsFolder = itemsFolder,
+			ButtonsFolder = buttonsFolder,
+			Owner = nil,
+			Owned = {},
+			ItemModels = {},
+			Buttons = {},
+			Income = 0,
+			Vault = 0,
+			TeamName = "",
+			HomeScore = 0,
+			AwayScore = 0,
+			JumbotronStep = 0,
+			JumbotronHoldUntil = 0,
+		}
+		plots[index] = plot
+		model.Parent = parentFolder
+
+		refs.ClaimTrigger.Touched:Connect(function(hit)
+			onClaimTouched(plot, hit)
+		end)
+		refs.CollectPad.Touched:Connect(function(hit)
+			onCollectTouched(plot, hit)
+		end)
+	end
+end
+
+-- Respawn owners at their own stadium.
+function PlotManager.OnPlayerAdded(player)
+	player.CharacterAdded:Connect(function(character)
+		if not Config.RespawnAtPlot then
+			return
+		end
+		local plot = plotByPlayer[player]
+		if not plot then
+			return
+		end
+		local root = character:WaitForChild("HumanoidRootPart", 10)
+		task.wait(0.1)
+		if root and character.Parent and plotByPlayer[player] == plot then
+			character:PivotTo(plot.Refs.SpawnCFrame)
+		end
+	end)
+end
+
+function PlotManager.GetPlot(player)
+	return plotByPlayer[player]
+end
+
+-- Starts the income loop and the display loops.
+function PlotManager.Start()
+	-- income -> vault (+ auto-collect while the owner stands on the pad)
+	task.spawn(function()
+		while true do
+			task.wait(Config.IncomeTickSeconds)
+			for _, plot in ipairs(plots) do
+				if plot.Owner then
+					plot.Vault += plot.Income * Config.IncomeMultiplier * Config.IncomeTickSeconds
+					if ownerIsOnPad(plot) then
+						collect(plot)
+					else
+						updateVault(plot)
+					end
+					updateButtonColors(plot)
+				end
+			end
+		end
+	end)
+
+	-- jumbotron slideshow
+	task.spawn(function()
+		while true do
+			task.wait(3)
+			for _, plot in ipairs(plots) do
+				if plot.Owner and plot.ItemModels.jumbotron and os.clock() >= plot.JumbotronHoldUntil then
+					local messages = jumbotronMessages(plot)
+					plot.JumbotronStep = plot.JumbotronStep % #messages + 1
+					local message = messages[plot.JumbotronStep]
+					showOnJumbotron(plot, message[1], message[2])
+				end
+			end
+		end
+	end)
+
+	-- pretend football game
+	task.spawn(function()
+		while true do
+			task.wait(25)
+			for _, plot in ipairs(plots) do
+				if plot.Owner then
+					simulateGame(plot)
+				end
+			end
+		end
+	end)
+end
+
+return PlotManager
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="17">
+        <Properties>
+          <string name="Name">World</string>
+          <string name="Source"><![CDATA[--[[
+	World
+	Lays out the plots along a central street, builds the street + spawn decorations,
+	and runs the day/night cycle.
+]]
+
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+
+local World = {}
+
+-- Plot origins: plots sit in two rows facing a central street that runs along X.
+-- Odd plots are on the +Z side, even plots on the -Z side; every plot's front (-Z local) faces the street.
+function World.GetPlotOrigins(config)
+	local L = config.Layout
+	local count = math.clamp(math.floor(config.PlotCount), 1, 6)
+	local perSide = math.ceil(count / 2)
+	local spacing = L.PlotWidth + L.PlotGap
+	local zOffset = L.StreetWidth / 2 + L.PlotDepth / 2
+	local origins = {}
+	for index = 1, count do
+		local onSouthSide = (index % 2 == 0)
+		local column = math.floor((index - 1) / 2)
+		local x = (column - (perSide - 1) / 2) * spacing
+		local origin
+		if onSouthSide then
+			origin = CFrame.new(x, 1, -zOffset) * CFrame.Angles(0, math.pi, 0)
+		else
+			origin = CFrame.new(x, 1, zOffset)
+		end
+		origins[index] = origin
+	end
+	return origins
+end
+
+local function makePart(props)
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	for key, value in pairs(props) do
+		if key ~= "Parent" then
+			part[key] = value
+		end
+	end
+	part.Parent = props.Parent
+	return part
+end
+
+local function addSurfaceText(part, face, text, textColor, backgroundColor)
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 25
+	gui.LightInfluence = 0
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, 0, 1, 0)
+	label.BackgroundColor3 = backgroundColor
+	label.BackgroundTransparency = 0
+	label.BorderSizePixel = 0
+	label.Font = Enum.Font.GothamBlack
+	label.TextScaled = true
+	label.TextColor3 = textColor
+	label.Text = text
+	label.Parent = gui
+	gui.Parent = part
+end
+
+-- Ground, street, spawn and the welcome sign.
+function World.Build(config)
+	local L = config.Layout
+	local count = math.clamp(math.floor(config.PlotCount), 1, 6)
+	local perSide = math.ceil(count / 2)
+	local streetLength = perSide * (L.PlotWidth + L.PlotGap) + 200
+
+	local folder = Instance.new("Folder")
+	folder.Name = "World"
+
+	if not Workspace:FindFirstChild("Ground") then
+		local groundWidth = math.min(2048, streetLength + 400)
+		makePart({
+			Name = "Ground",
+			Size = Vector3.new(groundWidth, 4, math.min(2048, L.StreetWidth + L.PlotDepth * 2 + 400)),
+			CFrame = CFrame.new(0, -2, 0),
+			Color = Color3.fromRGB(76, 140, 66),
+			Material = Enum.Material.Grass,
+			Parent = Workspace,
+		})
+	end
+
+	if not Workspace:FindFirstChildOfClass("SpawnLocation") then
+		local spawn = Instance.new("SpawnLocation")
+		spawn.Name = "SpawnLocation"
+		spawn.Anchored = true
+		spawn.Size = Vector3.new(12, 1, 12)
+		spawn.CFrame = CFrame.new(0, 0.5, 0)
+		spawn.Neutral = true
+		spawn.Duration = 0
+		spawn.Parent = Workspace
+	end
+
+	makePart({
+		Name = "Street",
+		Size = Vector3.new(streetLength, 0.2, L.StreetWidth),
+		CFrame = CFrame.new(0, 0.1, 0),
+		Color = config.Colors.Asphalt,
+		Material = Enum.Material.Asphalt,
+		Parent = folder,
+	})
+
+	-- dashed centre line (with a gap around the spawn pad)
+	local dash = 10
+	local x = -streetLength / 2 + dash
+	while x < streetLength / 2 - dash do
+		if math.abs(x) > 12 then
+			makePart({
+				Name = "StreetDash",
+				Size = Vector3.new(dash, 0.05, 0.8),
+				CFrame = CFrame.new(x, 0.225, 0),
+				Color = Color3.fromRGB(255, 214, 10),
+				Material = Enum.Material.SmoothPlastic,
+				CanCollide = false,
+				Parent = folder,
+			})
+		end
+		x += dash * 2
+	end
+
+	-- welcome arch over the spawn
+	local gold = config.Colors.Gold
+	for _, side in ipairs({ -1, 1 }) do
+		makePart({
+			Name = "WelcomePost",
+			Size = Vector3.new(2, 20, 2),
+			CFrame = CFrame.new(side * 18, 10, 0),
+			Color = Color3.fromRGB(40, 40, 46),
+			Material = Enum.Material.Metal,
+			Parent = folder,
+		})
+	end
+	local sign = makePart({
+		Name = "WelcomeSign",
+		Size = Vector3.new(40, 6, 1),
+		CFrame = CFrame.new(0, 22, 0),
+		Color = Color3.fromRGB(20, 20, 26),
+		Material = Enum.Material.SmoothPlastic,
+		Parent = folder,
+	})
+	local title = string.upper(config.GameTitle)
+	addSurfaceText(sign, Enum.NormalId.Front, title, gold, Color3.fromRGB(20, 20, 26))
+	addSurfaceText(sign, Enum.NormalId.Back, title, gold, Color3.fromRGB(20, 20, 26))
+
+	folder.Parent = Workspace
+	return folder
+end
+
+function World.IsNight(config, clockTime)
+	return clockTime >= config.NightStartsAt or clockTime < config.NightEndsAt
+end
+
+-- Advances Lighting.ClockTime and calls onNightChanged(isNight) whenever night starts or ends.
+function World.StartDayNight(config, onNightChanged)
+	local wasNight = World.IsNight(config, Lighting.ClockTime)
+	onNightChanged(wasNight)
+	if not config.DayNightCycle then
+		return
+	end
+	local hoursPerSecond = 24 / math.max(config.DayLengthSeconds, 10)
+	task.spawn(function()
+		local last = os.clock()
+		while true do
+			task.wait(0.5)
+			local now = os.clock()
+			Lighting.ClockTime = (Lighting.ClockTime + (now - last) * hoursPerSecond) % 24
+			last = now
+			local isNight = World.IsNight(config, Lighting.ClockTime)
+			if isNight ~= wasNight then
+				wasNight = isNight
+				onNightChanged(isNight)
+			end
+		end
+	end)
+end
+
+return World
+]]></string>
+        </Properties>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="StarterPlayer" referent="18">
+    <Properties>
+      <string name="Name">StarterPlayer</string>
+    </Properties>
+    <Item class="StarterPlayerScripts" referent="19">
+      <Properties>
+        <string name="Name">StarterPlayerScripts</string>
+      </Properties>
+      <Item class="Folder" referent="20">
+        <Properties>
+          <string name="Name">TycoonClient</string>
+        </Properties>
+        <Item class="LocalScript" referent="21">
+          <Properties>
+            <string name="Name">HUD</string>
+            <string name="Source"><![CDATA[--[[
+	HUD
+	Shows the player's cash, income per second, build progress, save status and pop-up messages.
+	Everything it shows comes from player attributes set by the server (Cash, Income, Built,
+	PlotIndex, SaveStatus) and from the TycoonRemotes.Notify RemoteEvent.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
+local Format = require(Shared:WaitForChild("Format"))
+local Items = require(Shared:WaitForChild("Items"))
+local notifyRemote = ReplicatedStorage:WaitForChild("TycoonRemotes"):WaitForChild("Notify")
+
+local TOAST_COLORS = {
+	success = Color3.fromRGB(34, 150, 80),
+	error = Color3.fromRGB(190, 52, 52),
+	cash = Color3.fromRGB(205, 150, 20),
+	info = Color3.fromRGB(45, 100, 190),
+}
+local MAX_TOASTS = 5
+local TOAST_SECONDS = 3.5
+
+local function create(className, props, children)
+	local instance = Instance.new(className)
+	for key, value in pairs(props) do
+		if key ~= "Parent" then
+			instance[key] = value
+		end
+	end
+	for _, child in ipairs(children or {}) do
+		child.Parent = instance
+	end
+	instance.Parent = props.Parent
+	return instance
+end
+
+local function corner(radius)
+	return create("UICorner", { CornerRadius = UDim.new(0, radius) })
+end
+
+---------------------------------------------------------------------------------------------
+-- Layout
+---------------------------------------------------------------------------------------------
+local screen = create("ScreenGui", {
+	Name = "TycoonHUD",
+	ResetOnSpawn = false,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	Parent = player:WaitForChild("PlayerGui"),
+})
+
+local cashScale = create("UIScale", { Scale = 1 })
+local cashPanel = create("Frame", {
+	Name = "CashPanel",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 8),
+	Size = UDim2.new(0, 270, 0, 78),
+	BackgroundColor3 = Color3.fromRGB(18, 22, 30),
+	BackgroundTransparency = 0.2,
+	Parent = screen,
+}, {
+	corner(14),
+	create("UIStroke", { Color = Color3.fromRGB(255, 196, 37), Thickness = 2, Transparency = 0.2 }),
+	cashScale,
+})
+
+local cashLabel = create("TextLabel", {
+	Name = "Cash",
+	Position = UDim2.new(0, 12, 0, 4),
+	Size = UDim2.new(1, -24, 0, 46),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBlack,
+	Text = "$0",
+	TextColor3 = Color3.fromRGB(110, 255, 140),
+	TextScaled = true,
+	Parent = cashPanel,
+})
+
+local incomeLabel = create("TextLabel", {
+	Name = "Income",
+	Position = UDim2.new(0, 12, 0, 50),
+	Size = UDim2.new(1, -24, 0, 22),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBold,
+	Text = "+$0/s",
+	TextColor3 = Color3.fromRGB(230, 230, 235),
+	TextScaled = true,
+	Parent = cashPanel,
+})
+
+local progressLabel = create("TextLabel", {
+	Name = "Progress",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 90),
+	Size = UDim2.new(0, 270, 0, 22),
+	BackgroundColor3 = Color3.fromRGB(18, 22, 30),
+	BackgroundTransparency = 0.35,
+	Font = Enum.Font.GothamBold,
+	Text = "",
+	TextColor3 = Color3.fromRGB(255, 220, 120),
+	TextScaled = true,
+	Visible = false,
+	Parent = screen,
+}, { corner(8) })
+
+local hintLabel = create("TextLabel", {
+	Name = "Hint",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 92),
+	Size = UDim2.new(0.9, 0, 0, 34),
+	BackgroundColor3 = Color3.fromRGB(255, 196, 37),
+	BackgroundTransparency = 0.1,
+	Font = Enum.Font.GothamBlack,
+	Text = "Walk through a glowing GOLD GATE to claim your stadium!",
+	TextColor3 = Color3.fromRGB(25, 25, 30),
+	TextScaled = true,
+	Parent = screen,
+}, {
+	corner(10),
+	create("UISizeConstraint", { MaxSize = Vector2.new(620, 34) }),
+	create("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }),
+})
+
+local saveLabel = create("TextLabel", {
+	Name = "SaveStatus",
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.new(0, 10, 1, -10),
+	Size = UDim2.new(0, 190, 0, 20),
+	BackgroundColor3 = Color3.fromRGB(18, 22, 30),
+	BackgroundTransparency = 0.4,
+	Font = Enum.Font.GothamBold,
+	Text = "Loading save...",
+	TextColor3 = Color3.fromRGB(220, 220, 225),
+	TextScaled = true,
+	Parent = screen,
+}, { corner(6) })
+
+local toastContainer = create("Frame", {
+	Name = "Toasts",
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -12, 0, 130),
+	Size = UDim2.new(0, 330, 0.6, 0),
+	BackgroundTransparency = 1,
+	Parent = screen,
+}, {
+	create("UIListLayout", {
+		Padding = UDim.new(0, 6),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = Enum.HorizontalAlignment.Right,
+	}),
+})
+
+---------------------------------------------------------------------------------------------
+-- Cash (counts up smoothly) / income / progress / save status
+---------------------------------------------------------------------------------------------
+local shownCash = Instance.new("NumberValue")
+shownCash.Value = player:GetAttribute("Cash") or 0
+shownCash.Changed:Connect(function(value)
+	cashLabel.Text = Format.MoneyExact(value)
+end)
+cashLabel.Text = Format.MoneyExact(shownCash.Value)
+
+local cashTween = nil
+local function onCashChanged()
+	local cash = player:GetAttribute("Cash") or 0
+	if cashTween then
+		cashTween:Cancel()
+	end
+	local increased = cash > shownCash.Value
+	cashTween = TweenService:Create(shownCash, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Value = cash })
+	cashTween:Play()
+	if increased then
+		cashScale.Scale = 1.08
+		TweenService:Create(cashScale, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	end
+end
+
+local function onIncomeChanged()
+	local income = player:GetAttribute("Income") or 0
+	incomeLabel.Text = ("+%s/s"):format(Format.Money(income))
+end
+
+local function onPlotChanged()
+	local hasPlot = player:GetAttribute("PlotIndex") ~= nil
+	hintLabel.Visible = not hasPlot
+	progressLabel.Visible = hasPlot
+end
+
+local function onBuiltChanged()
+	local built = player:GetAttribute("Built") or 0
+	local total = #Items.List
+	if built >= total then
+		progressLabel.Text = ("STADIUM COMPLETE  %d/%d"):format(built, total)
+	else
+		progressLabel.Text = ("Stadium pieces built: %d / %d"):format(built, total)
+	end
+end
+
+local function onSaveStatusChanged()
+	local status = player:GetAttribute("SaveStatus")
+	if status == "on" then
+		saveLabel.Text = "Progress saving: ON"
+		saveLabel.TextColor3 = Color3.fromRGB(140, 255, 160)
+	elseif status == "off" then
+		saveLabel.Text = "Progress saving: OFF"
+		saveLabel.TextColor3 = Color3.fromRGB(255, 150, 150)
+	else
+		saveLabel.Text = "Loading save..."
+		saveLabel.TextColor3 = Color3.fromRGB(220, 220, 225)
+	end
+end
+
+player:GetAttributeChangedSignal("Cash"):Connect(onCashChanged)
+player:GetAttributeChangedSignal("Income"):Connect(onIncomeChanged)
+player:GetAttributeChangedSignal("PlotIndex"):Connect(onPlotChanged)
+player:GetAttributeChangedSignal("Built"):Connect(onBuiltChanged)
+player:GetAttributeChangedSignal("SaveStatus"):Connect(onSaveStatusChanged)
+onCashChanged()
+onIncomeChanged()
+onPlotChanged()
+onBuiltChanged()
+onSaveStatusChanged()
+
+---------------------------------------------------------------------------------------------
+-- Toast notifications
+---------------------------------------------------------------------------------------------
+local toastOrder = 0
+
+local function fadeOut(toast)
+	local tweenInfo = TweenInfo.new(0.4)
+	for _, descendant in ipairs(toast:GetDescendants()) do
+		if descendant:IsA("TextLabel") then
+			TweenService:Create(descendant, tweenInfo, { TextTransparency = 1 }):Play()
+		end
+	end
+	local tween = TweenService:Create(toast, tweenInfo, { BackgroundTransparency = 1 })
+	tween:Play()
+	tween.Completed:Wait()
+	toast:Destroy()
+end
+
+local function showToast(message, kind)
+	toastOrder += 1
+	local toast = create("Frame", {
+		Name = "Toast",
+		LayoutOrder = toastOrder,
+		Size = UDim2.new(1, 0, 0, 40),
+		BackgroundColor3 = TOAST_COLORS[kind] or TOAST_COLORS.info,
+		BackgroundTransparency = 0.1,
+		Parent = toastContainer,
+	}, {
+		corner(10),
+		create("TextLabel", {
+			Size = UDim2.new(1, -16, 1, -8),
+			Position = UDim2.new(0, 8, 0, 4),
+			BackgroundTransparency = 1,
+			Font = Enum.Font.GothamBold,
+			Text = tostring(message),
+			TextColor3 = Color3.new(1, 1, 1),
+			TextScaled = true,
+			TextWrapped = true,
+		}),
+	})
+
+	-- keep only the newest few
+	local toasts = {}
+	for _, child in ipairs(toastContainer:GetChildren()) do
+		if child:IsA("Frame") then
+			table.insert(toasts, child)
+		end
+	end
+	table.sort(toasts, function(a, b)
+		return a.LayoutOrder < b.LayoutOrder
+	end)
+	for index = 1, #toasts - MAX_TOASTS do
+		toasts[index]:Destroy()
+	end
+
+	task.delay(TOAST_SECONDS, function()
+		if toast.Parent then
+			fadeOut(toast)
+		end
+	end)
+end
+
+notifyRemote.OnClientEvent:Connect(showToast)
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+    </Item>
+  </Item>
+  <Item class="Workspace" referent="22">
+    <Properties>
+      <string name="Name">Workspace</string>
+      <bool name="NeedsPivotMigration">false</bool>
+      <bool name="StreamingEnabled">false</bool>
+    </Properties>
+    <Item class="Part" referent="23">
+      <Properties>
+        <string name="Name">Ground</string>
+        <bool name="Anchored">true</bool>
+        <token name="BottomSurface">0</token>
+        <CoordinateFrame name="CFrame">
+          <X>0</X>
+          <Y>-2</Y>
+          <Z>0</Z>
+          <R00>1</R00>
+          <R01>0</R01>
+          <R02>0</R02>
+          <R10>0</R10>
+          <R11>1</R11>
+          <R12>0</R12>
+          <R20>0</R20>
+          <R21>0</R21>
+          <R22>1</R22>
+        </CoordinateFrame>
+        <Color3uint8 name="Color3uint8">5016642</Color3uint8>
+        <bool name="Locked">true</bool>
+        <token name="Material">1280</token>
+        <Vector3 name="size">
+          <X>2048</X>
+          <Y>4</Y>
+          <Z>2048</Z>
+        </Vector3>
+        <token name="TopSurface">0</token>
+      </Properties>
+    </Item>
+    <Item class="SpawnLocation" referent="24">
+      <Properties>
+        <string name="Name">SpawnLocation</string>
+        <bool name="Anchored">true</bool>
+        <token name="BottomSurface">0</token>
+        <CoordinateFrame name="CFrame">
+          <X>0</X>
+          <Y>0.5</Y>
+          <Z>0</Z>
+          <R00>1</R00>
+          <R01>0</R01>
+          <R02>0</R02>
+          <R10>0</R10>
+          <R11>1</R11>
+          <R12>0</R12>
+          <R20>0</R20>
+          <R21>0</R21>
+          <R22>1</R22>
+        </CoordinateFrame>
+        <Color3uint8 name="Color3uint8">16761893</Color3uint8>
+        <int name="Duration">0</int>
+        <token name="Material">272</token>
+        <bool name="Neutral">true</bool>
+        <Vector3 name="size">
+          <X>12</X>
+          <Y>1</Y>
+          <Z>12</Z>
+        </Vector3>
+        <token name="TopSurface">0</token>
+      </Properties>
+    </Item>
+  </Item>
+</roblox>

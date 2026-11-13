@@ -1,0 +1,5 @@
+tools/out/
+tools/preview/node_modules/
+roblox.yml
+roblox.toml
+*.rbxlx.lock

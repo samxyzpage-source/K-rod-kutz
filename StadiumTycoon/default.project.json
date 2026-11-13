@@ -1,0 +1,82 @@
+{
+  "name": "GridironStadiumTycoon",
+  "tree": {
+    "$className": "DataModel",
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false
+      },
+      "Ground": {
+        "$className": "Part",
+        "$properties": {
+          "Anchored": true,
+          "Locked": true,
+          "Size": [2048, 4, 2048],
+          "CFrame": {
+            "CFrame": {
+              "position": [0, -2, 0],
+              "orientation": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+            }
+          },
+          "Color": [0.298, 0.549, 0.259],
+          "Material": "Grass",
+          "TopSurface": "Smooth",
+          "BottomSurface": "Smooth"
+        }
+      },
+      "SpawnLocation": {
+        "$className": "SpawnLocation",
+        "$properties": {
+          "Anchored": true,
+          "Neutral": true,
+          "Duration": 0,
+          "Size": [12, 1, 12],
+          "CFrame": {
+            "CFrame": {
+              "position": [0, 0.5, 0],
+              "orientation": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+            }
+          },
+          "Color": [1.0, 0.769, 0.145],
+          "Material": "SmoothPlastic",
+          "TopSurface": "Smooth",
+          "BottomSurface": "Smooth"
+        }
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "ClockTime": 14,
+        "Brightness": 2,
+        "GlobalShadows": true,
+        "Technology": "ShadowMap",
+        "OutdoorAmbient": [0.5, 0.5, 0.5],
+        "Ambient": [0.27, 0.27, 0.3]
+      },
+      "Atmosphere": {
+        "$className": "Atmosphere",
+        "$properties": {
+          "Density": 0.25,
+          "Offset": 0.1
+        }
+      }
+    },
+    "ReplicatedStorage": {
+      "TycoonShared": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "TycoonServer": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "TycoonClient": {
+          "$path": "src/client"
+        }
+      }
+    }
+  }
+}

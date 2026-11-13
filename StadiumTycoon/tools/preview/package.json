@@ -1,0 +1,8 @@
+{
+  "name": "stadium-tycoon-preview",
+  "private": true,
+  "description": "Renders tools/out/parts.json (from render_plot.luau) to PNG previews with three.js + Playwright",
+  "dependencies": {
+    "three": "0.149.0"
+  }
+}
