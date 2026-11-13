@@ -58,6 +58,27 @@ local screen = create("ScreenGui", {
 	Parent = player:WaitForChild("PlayerGui"),
 })
 
+-- Cash panel, progress, hint and game-day banner sit in one top-centre stack that shrinks on
+-- short (landscape phone) screens so it never covers the middle of the screen.
+local topScale = create("UIScale", { Scale = 1 })
+local topStack = create("Frame", {
+	Name = "TopStack",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 0),
+	Size = UDim2.new(0, 640, 0, 170),
+	BackgroundTransparency = 1,
+	Parent = screen,
+}, { topScale })
+
+local function fitTopStack()
+	local ok, size = pcall(function()
+		return screen.AbsoluteSize
+	end)
+	if ok and size.Y > 0 then
+		topScale.Scale = size.Y < 500 and 0.7 or 1
+	end
+end
+
 local cashScale = create("UIScale", { Scale = 1 })
 local cashPanel = create("Frame", {
 	Name = "CashPanel",
@@ -66,7 +87,7 @@ local cashPanel = create("Frame", {
 	Size = UDim2.new(0, 270, 0, 78),
 	BackgroundColor3 = Color3.fromRGB(18, 22, 30),
 	BackgroundTransparency = 0.2,
-	Parent = screen,
+	Parent = topStack,
 }, {
 	corner(14),
 	create("UIStroke", { Color = Color3.fromRGB(255, 196, 37), Thickness = 2, Transparency = 0.2 }),
@@ -109,7 +130,7 @@ local progressLabel = create("TextLabel", {
 	TextColor3 = Color3.fromRGB(255, 220, 120),
 	TextScaled = true,
 	Visible = false,
-	Parent = screen,
+	Parent = topStack,
 }, { corner(8) })
 
 local hintLabel = create("TextLabel", {
@@ -123,7 +144,7 @@ local hintLabel = create("TextLabel", {
 	Text = CLAIM_HINT,
 	TextColor3 = Color3.fromRGB(25, 25, 30),
 	TextScaled = true,
-	Parent = screen,
+	Parent = topStack,
 }, {
 	corner(10),
 	create("UISizeConstraint", { MaxSize = Vector2.new(620, 34) }),
@@ -133,8 +154,8 @@ local hintLabel = create("TextLabel", {
 local gameDayLabel = create("TextLabel", {
 	Name = "GameDay",
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 132),
-	Size = UDim2.new(0, 270, 0, 26),
+	Position = UDim2.new(0.5, 0, 0, 118),
+	Size = UDim2.new(0, 270, 0, 24),
 	BackgroundColor3 = Color3.fromRGB(18, 22, 30),
 	BackgroundTransparency = 0.35,
 	Font = Enum.Font.GothamBold,
@@ -142,7 +163,7 @@ local gameDayLabel = create("TextLabel", {
 	TextColor3 = Color3.fromRGB(220, 220, 225),
 	TextScaled = true,
 	Visible = false,
-	Parent = screen,
+	Parent = topStack,
 }, { corner(8), create("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }) })
 
 local saveLabel = create("TextLabel", {
@@ -177,6 +198,9 @@ local toastContainer = create("Frame", {
 		VerticalAlignment = Enum.VerticalAlignment.Bottom,
 	}),
 })
+
+fitTopStack()
+screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitTopStack)
 
 ---------------------------------------------------------------------------------------------
 -- Cash (counts up smoothly) / income / progress / save status
@@ -306,6 +330,9 @@ local toastOrder = 0
 local cashToast = nil -- the current "+$X" toast, reused so collecting doesn't stack up toasts
 
 local function fadeOut(toast)
+	if cashToast == toast then
+		cashToast = nil -- a new collect during the fade gets a fresh toast
+	end
 	local tweenInfo = TweenInfo.new(0.4)
 	for _, descendant in ipairs(toast:GetDescendants()) do
 		if descendant:IsA("TextLabel") then

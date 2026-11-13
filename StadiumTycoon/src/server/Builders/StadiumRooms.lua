@@ -39,6 +39,7 @@ local CEILING = Color3.fromRGB(226, 226, 222)
 local HOME_WALL = Color3.fromRGB(178, 180, 186)
 local HOME_CARPET = Color3.fromRGB(50, 52, 60)
 local COOLER_ORANGE = Color3.fromRGB(255, 120, 20)
+local LOCKER_LIT = Color3.fromRGB(214, 218, 226)
 
 local VISITOR_WALL = Color3.fromRGB(150, 150, 156)
 local VISITOR_BAND = Color3.fromRGB(92, 94, 102)
@@ -255,7 +256,7 @@ end
 --[[
 	A bank of open locker stalls against a wall. `frame` is a plot-local CFrame at floor level on
 	the wall face in the middle of the bank, its LookVector pointing into the room.
-	o: Name, Length, Stalls, Height, Depth, BackColor, FrameColor, ShelfColor, SeatColor,
+	o: Name, Length, Stalls, Height, Depth, BackColor, BackMaterial, FrameColor, ShelfColor, SeatColor,
 	   Jerseys (colours, cycled), Numbers (cycled), NumberColor, EndPanels, HelmetEvery,
 	   HelmetColor, Team
 ]]
@@ -264,7 +265,7 @@ local function lockerBank(ctx, frame, o)
 	local n, len, H, D = o.Stalls, o.Length, o.Height, o.Depth
 	local w = len / n
 	local inner = D - 0.4 -- depth in front of the back panel
-	lblock(bank, frame, "LockerBack", Vector3.new(len, H, 0.4), 0, 0, -0.2, o.BackColor, Enum.Material.Wood)
+	lblock(bank, frame, "LockerBack", Vector3.new(len, H, 0.4), 0, 0, -0.2, o.BackColor, o.BackMaterial or Enum.Material.Wood)
 	lblock(bank, frame, "LockerSeat", Vector3.new(len, 1.6, inner), 0, 0, -0.4 - inner / 2, o.SeatColor, Enum.Material.Fabric)
 	lblock(
 		bank,
@@ -403,7 +404,9 @@ function StadiumRooms.home_lockerroom(ctx)
 			Stalls = stalls,
 			Height = lockerH,
 			Depth = lockerD,
-			BackColor = shade(team.Primary, 0.35),
+			-- a light, "lit" back panel so the team-colour home jerseys stand out in every palette
+			BackColor = LOCKER_LIT,
+			BackMaterial = Enum.Material.SmoothPlastic,
 			FrameColor = team.Primary,
 			ShelfColor = team.Secondary,
 			SeatColor = shade(team.Primary, 0.7),

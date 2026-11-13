@@ -13,7 +13,6 @@
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
@@ -25,6 +24,7 @@ local Crowd = require(script.Parent.Crowd)
 local GameDay = {}
 
 local FAN_TAG = "TycoonFan" -- Effects.client.lua makes these cheer
+local WALKER_TAG = "TycoonWalker" -- Effects.client.lua walks these in from the gate
 local CROWD_FOLDER = "GameDayFans"
 local WALK_SPEED = 12 -- studs per second
 
@@ -50,6 +50,8 @@ function GameDay.ClearCrowd(plot)
 	end
 end
 
+-- Walking fans are created here but MOVED by each client (Effects.client.lua lerps the root
+-- from WalkFrom to WalkTo), so the parade is smooth and costs no network traffic.
 local function spawnWalkers(plot, folder, ctx)
 	local L = Config.Layout
 	for index = 1, settings.WalkingFans do
@@ -63,17 +65,22 @@ local function spawnWalkers(plot, folder, ctx)
 			local finish = CFrame.new(x * 0.6, 0, L.SurfaceMinZ - 2) * facingStadium
 			local jersey = (rng:NextNumber() < 0.6) and plot.Palette.Primary or plot.Palette.Secondary
 			local skin = Crowd.SkinTones[rng:NextInteger(1, #Crowd.SkinTones)]
-			local model, root = Crowd.Walker(ctx, start, jersey, skin, index)
-			local distance = (finish.Position - start.Position).Magnitude
-			local tween = TweenService:Create(
-				root,
-				TweenInfo.new(distance / WALK_SPEED, Enum.EasingStyle.Linear),
-				{ CFrame = plot.Origin * finish * CFrame.new(0, 3, 0) }
-			)
-			tween.Completed:Connect(function()
+			-- build into an unparented holder so the attributes arrive together with the parts
+			local holder = Instance.new("Folder")
+			local holderCtx = table.clone(ctx)
+			holderCtx.parent = holder
+			local model, root = Crowd.Walker(holderCtx, start, jersey, skin, index)
+			local duration = (finish.Position - start.Position).Magnitude / WALK_SPEED
+			root:SetAttribute("WalkFrom", plot.Origin * start * CFrame.new(0, 3, 0))
+			root:SetAttribute("WalkTo", plot.Origin * finish * CFrame.new(0, 3, 0))
+			root:SetAttribute("WalkStart", serverNow())
+			root:SetAttribute("WalkDuration", duration)
+			CollectionService:AddTag(model, WALKER_TAG)
+			model.Parent = folder
+			holder:Destroy()
+			task.delay(duration + 0.5, function()
 				model:Destroy()
 			end)
-			tween:Play()
 		end)
 	end
 end
@@ -134,12 +141,18 @@ function GameDay.Start()
 		return
 	end
 	task.spawn(function()
+		-- a game day STARTS every IntervalSeconds (the first one after IntervalSeconds)
+		local wait = settings.IntervalSeconds
 		while true do
-			tycoonsFolder:SetAttribute("NextGameDayAt", serverNow() + settings.IntervalSeconds)
-			task.wait(settings.IntervalSeconds)
-			beginGameDay()
+			tycoonsFolder:SetAttribute("NextGameDayAt", serverNow() + wait)
+			task.wait(wait)
+			local ok, err = pcall(beginGameDay)
+			if not ok then
+				warn("[GameDay] Couldn't start the game day: " .. tostring(err))
+			end
 			task.wait(settings.DurationSeconds)
-			endGameDay()
+			pcall(endGameDay)
+			wait = math.max(settings.IntervalSeconds - settings.DurationSeconds, 1)
 		end
 	end)
 end

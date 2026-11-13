@@ -830,6 +830,7 @@ local ICE_BLUE = Color3.fromRGB(220, 240, 255)
 local COLD_SIGN = Color3.fromRGB(40, 110, 200)
 local THEATRE_WALL = Color3.fromRGB(46, 48, 56)
 local THEATRE_STEP = Color3.fromRGB(36, 38, 46)
+local THEATRE_LAMP = Color3.fromRGB(92, 78, 60)
 local MARQUEE_BLACK = Color3.fromRGB(24, 24, 30)
 local MARQUEE_GLOW = Color3.fromRGB(255, 214, 90)
 local BEAM_WHITE = Color3.fromRGB(255, 250, 222)
@@ -928,7 +929,8 @@ end
 	o: Width, Depth, WallH, Thickness, WallColor, WallMaterial, FloorColor, FloorMaterial,
 	   OpeningTop, Openings = { { From, To, Bottom, Mullions } } (local x, sorted; Bottom = 0 is
 	   an open doorway, otherwise a window with a sill), GlassColor, GlassTransparency,
-	   BandColor, BandH, RoofColor, CeilingColor, LightBrightness
+	   BandColor, BandH, RoofColor, CeilingColor, LampColor (the glowing ceiling panel),
+	   LightBrightness
 	Returns the team-coloured roof band (its Front face is a good place for the team name).
 ]]
 local function campusShell(ctx, frame, o)
@@ -1017,7 +1019,18 @@ local function campusShell(ctx, frame, o)
 		o.CeilingColor or CEILING,
 		Enum.Material.SmoothPlastic
 	)
-	local lamp = lblock(ctx, frame, "CeilingLight", Vector3.new(W * 0.4, 0.2, D * 0.3), 0, H - 0.45, D / 2, LAMP, Enum.Material.Neon, PAINT)
+	local lamp = lblock(
+		ctx,
+		frame,
+		"CeilingLight",
+		Vector3.new(W * 0.4, 0.2, D * 0.3),
+		0,
+		H - 0.45,
+		D / 2,
+		o.LampColor or LAMP,
+		Enum.Material.Neon,
+		PAINT
+	)
 	BuildUtil.Light(lamp, "PointLight", {
 		Name = "RoomLight",
 		Range = math.min(math.max(W, D) * 0.8, 60),
@@ -2017,6 +2030,8 @@ function CampusBuildings.weightroom(ctx)
 		for _, s in ipairs({ -1, 1 }) do
 			xCylinder(dumbbells, "DumbbellHead", Vector3.new(rackX + s * 0.6, headY, z), 0.55, 1.1, IRON, Enum.Material.Metal)
 		end
+		-- the chrome grip between the two heads (pokes 0.05 into each head)
+		xCylinder(dumbbells, "DumbbellGrip", Vector3.new(rackX, headY, z), 0.75, 0.32, CHROME, Enum.Material.Metal)
 	end
 
 	-- Mirror wall (east), motivation banner over the racks, kettlebells
@@ -2146,6 +2161,28 @@ function CampusBuildings.trainingroom(ctx)
 				Enum.Material.Fabric,
 				nil,
 				FLOOR_TOP + 1
+			)
+			-- curtain track on top, hung from the ceiling by a rod (so the curtain doesn't float)
+			local trackY = FLOOR_TOP + 8
+			BuildUtil.Block(
+				tables,
+				"CurtainTrack",
+				Vector3.new(0.3, 0.25, 6.9),
+				Vector3.new(tx + 4, 0, tableZ),
+				CHROME,
+				Enum.Material.Metal,
+				nil,
+				trackY
+			)
+			BuildUtil.Block(
+				tables,
+				"CurtainRod",
+				Vector3.new(0.15, H - 0.25 - trackY - 0.25, 0.15),
+				Vector3.new(tx + 4, 0, tableZ),
+				CHROME,
+				Enum.Material.Metal,
+				nil,
+				trackY + 0.25
 			)
 		end
 	end
@@ -2389,6 +2426,7 @@ function CampusBuildings.filmroom(ctx)
 		BandColor = team.Primary,
 		BandH = 1.6,
 		CeilingColor = THEATRE_STEP,
+		LampColor = THEATRE_LAMP, -- a dim house light, so the theatre stays dark around the screen
 		LightBrightness = 0.6,
 	})
 	sign(band, { Enum.NormalId.Front }, ctx.teamName, team.Primary, team, { InsetY = 0.1 })
@@ -7577,6 +7615,7 @@ local CEILING = Color3.fromRGB(226, 226, 222)
 local HOME_WALL = Color3.fromRGB(178, 180, 186)
 local HOME_CARPET = Color3.fromRGB(50, 52, 60)
 local COOLER_ORANGE = Color3.fromRGB(255, 120, 20)
+local LOCKER_LIT = Color3.fromRGB(214, 218, 226)
 
 local VISITOR_WALL = Color3.fromRGB(150, 150, 156)
 local VISITOR_BAND = Color3.fromRGB(92, 94, 102)
@@ -7793,7 +7832,7 @@ end
 --[[
 	A bank of open locker stalls against a wall. `frame` is a plot-local CFrame at floor level on
 	the wall face in the middle of the bank, its LookVector pointing into the room.
-	o: Name, Length, Stalls, Height, Depth, BackColor, FrameColor, ShelfColor, SeatColor,
+	o: Name, Length, Stalls, Height, Depth, BackColor, BackMaterial, FrameColor, ShelfColor, SeatColor,
 	   Jerseys (colours, cycled), Numbers (cycled), NumberColor, EndPanels, HelmetEvery,
 	   HelmetColor, Team
 ]]
@@ -7802,7 +7841,7 @@ local function lockerBank(ctx, frame, o)
 	local n, len, H, D = o.Stalls, o.Length, o.Height, o.Depth
 	local w = len / n
 	local inner = D - 0.4 -- depth in front of the back panel
-	lblock(bank, frame, "LockerBack", Vector3.new(len, H, 0.4), 0, 0, -0.2, o.BackColor, Enum.Material.Wood)
+	lblock(bank, frame, "LockerBack", Vector3.new(len, H, 0.4), 0, 0, -0.2, o.BackColor, o.BackMaterial or Enum.Material.Wood)
 	lblock(bank, frame, "LockerSeat", Vector3.new(len, 1.6, inner), 0, 0, -0.4 - inner / 2, o.SeatColor, Enum.Material.Fabric)
 	lblock(
 		bank,
@@ -7941,7 +7980,9 @@ function StadiumRooms.home_lockerroom(ctx)
 			Stalls = stalls,
 			Height = lockerH,
 			Depth = lockerD,
-			BackColor = shade(team.Primary, 0.35),
+			-- a light, "lit" back panel so the team-colour home jerseys stand out in every palette
+			BackColor = LOCKER_LIT,
+			BackMaterial = Enum.Material.SmoothPlastic,
 			FrameColor = team.Primary,
 			ShelfColor = team.Secondary,
 			SeatColor = shade(team.Primary, 0.7),
@@ -9544,6 +9585,10 @@ local SKIN_TONES = {
 	Color3.fromRGB(95, 60, 30),
 }
 local VISITOR_COLOR = Color3.fromRGB(150, 150, 158)
+local SEAT_SPACING = 2.6 -- fans are 2 studs wide
+local FAN_HALF_WIDTH = 1.2 -- half a fan + a little margin, used to pad the gaps below
+local AISLE_HALF_WIDTH = 1.5 -- the stair aisles in Stands.lua are 3 studs wide
+local AISLE_OFFSET = 26 -- Stands.lua puts an aisle 26 studs either side of each section centre
 
 --[[
 	Seat sections for each stands item, derived from Config.Layout. Every section has:
@@ -9570,10 +9615,29 @@ function Crowd.SeatSections(layout, owned)
 	end
 	local lower, upper = L.LowerRows, L.UpperRows
 	local sideLength = L.CornerStartX * 2
-	local frontTunnel = { { -L.TunnelHalfWidth - 1, L.TunnelHalfWidth + 1 } }
+	local function tunnelGap(halfWidth)
+		return { -halfWidth - 0.8 - FAN_HALF_WIDTH, halfWidth + 0.8 + FAN_HALF_WIDTH } -- tunnel walls are 0.8 thick
+	end
+	local function withAisles(gaps, aisleXs)
+		local out = table.clone(gaps)
+		for _, x in ipairs(aisleXs) do
+			table.insert(out, { x - AISLE_HALF_WIDTH - FAN_HALF_WIDTH, x + AISLE_HALF_WIDTH + FAN_HALF_WIDTH })
+		end
+		return out
+	end
+	local sectionCentre = (L.TunnelHalfWidth + L.CornerStartX) / 2 -- centre of each half of a sideline deck
+	local sideAisles = {
+		-sectionCentre - AISLE_OFFSET,
+		-sectionCentre + AISLE_OFFSET,
+		sectionCentre - AISLE_OFFSET,
+		sectionCentre + AISLE_OFFSET,
+	}
+	local endAisles = { -AISLE_OFFSET, AISLE_OFFSET }
+	local frontTunnel = withAisles({ tunnelGap(L.TunnelHalfWidth) }, sideAisles)
+	local homeTunnel = withAisles({ tunnelGap(L.BackTunnelHalfWidth or L.TunnelHalfWidth) }, sideAisles)
 	-- the TV broadcast booth sits on the visitor upper deck above the tunnel: keep fans out from under it
-	local boothGap = owned.broadcast_booth and { { -23, 23 } } or frontTunnel
-	local homeTunnel = { { -(L.BackTunnelHalfWidth or 0) - 1, (L.BackTunnelHalfWidth or 0) + 1 } }
+	local boothGap = owned.broadcast_booth and withAisles({ { -22 - FAN_HALF_WIDTH, 22 + FAN_HALF_WIDTH } }, sideAisles) or frontTunnel
+	local endGaps = withAisles({}, endAisles)
 	local endLength = L.FieldWidth
 	local back = CFrame.Angles(0, math.pi, 0)
 	local east = CFrame.Angles(0, -math.pi / 2, 0) -- rows step toward +X
@@ -9585,10 +9649,10 @@ function Crowd.SeatSections(layout, owned)
 	add("bleachers_visitor", CFrame.new(0, 0, L.SurfaceMinZ), sideLength, L.RowRise, lower, frontTunnel, true)
 	add("upper_visitor", CFrame.new(0, 0, L.FrontLowerOuterZ), sideLength, L.UpperStartHeight, upper, boothGap, true)
 	-- end zones
-	add("endzone_stands_east", CFrame.new(L.SurfaceHalfX, 0, L.FieldCenterZ) * east, endLength, L.RowRise, lower)
-	add("endzone_stands_west", CFrame.new(-L.SurfaceHalfX, 0, L.FieldCenterZ) * west, endLength, L.RowRise, lower)
-	add("upper_bowl_ends", CFrame.new(L.EndLowerOuterX, 0, L.FieldCenterZ) * east, endLength, L.UpperStartHeight, upper)
-	add("upper_bowl_ends", CFrame.new(-L.EndLowerOuterX, 0, L.FieldCenterZ) * west, endLength, L.UpperStartHeight, upper)
+	add("endzone_stands_east", CFrame.new(L.SurfaceHalfX, 0, L.FieldCenterZ) * east, endLength, L.RowRise, lower, endGaps)
+	add("endzone_stands_west", CFrame.new(-L.SurfaceHalfX, 0, L.FieldCenterZ) * west, endLength, L.RowRise, lower, endGaps)
+	add("upper_bowl_ends", CFrame.new(L.EndLowerOuterX, 0, L.FieldCenterZ) * east, endLength, L.UpperStartHeight, upper, endGaps)
+	add("upper_bowl_ends", CFrame.new(-L.EndLowerOuterX, 0, L.FieldCenterZ) * west, endLength, L.UpperStartHeight, upper, endGaps)
 
 	-- corners: only the part of each corner band that every row covers is used for seats
 	-- (kept ~3 studs away from the diagonal corner aisle)
@@ -9658,9 +9722,16 @@ local function inGap(offset, gaps)
 end
 
 -- One seated fan: a jersey block and a head, sitting on top of a row, facing the field.
+local function quiet(part)
+	-- fans are decoration only: no touches, no raycasts (they move every frame on clients)
+	part.CanTouch = false
+	part.CanQuery = false
+	return part
+end
+
 local function seatedFan(ctx, seatCFrame, jersey, skin, number)
 	local fanCtx, model = BuildUtil.Child(ctx, "Fan" .. number)
-	BuildUtil.Part(fanCtx, {
+	quiet(BuildUtil.Part(fanCtx, {
 		Name = "Body",
 		Size = Vector3.new(2, 2.4, 1.2),
 		CFrame = seatCFrame * CFrame.new(0, 1.2, 0),
@@ -9668,8 +9739,8 @@ local function seatedFan(ctx, seatCFrame, jersey, skin, number)
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		CastShadow = false,
-	})
-	BuildUtil.Part(fanCtx, {
+	}))
+	quiet(BuildUtil.Part(fanCtx, {
 		Name = "Head",
 		Size = Vector3.new(1.3, 1.3, 1.3),
 		CFrame = seatCFrame * CFrame.new(0, 3.05, 0),
@@ -9677,7 +9748,7 @@ local function seatedFan(ctx, seatCFrame, jersey, skin, number)
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		CastShadow = false,
-	})
+	}))
 	return model
 end
 
@@ -9705,11 +9776,14 @@ function Crowd.SeatedFans(ctx, owned, maxFans, rng)
 		local placed = 0
 		local attempts = 0
 		local used = {}
+		-- seats are SEAT_SPACING apart along each row, so two fans can never overlap
+		local seats = math.max(1, math.floor((section.length - 2) / SEAT_SPACING))
 		while placed < perSection and attempts < perSection * 6 do
 			attempts += 1
 			local row = rng:NextInteger(1, section.rows)
-			local offset = (rng:NextNumber() - 0.5) * math.max(section.length - 4, 1)
-			local slot = row .. ":" .. math.floor(offset / 2.6)
+			local seatIndex = rng:NextInteger(0, seats - 1)
+			local offset = (seatIndex + 0.5 - seats / 2) * SEAT_SPACING
+			local slot = row .. ":" .. seatIndex
 			if not inGap(offset, section.gaps) and not used[slot] then
 				used[slot] = true
 				local top = section.firstHeight + (row - 1) * L.RowRise
@@ -9741,6 +9815,7 @@ end
 	startCFrame is plot-local.
 ]]
 function Crowd.Walker(ctx, startCFrame, jersey, skin, number)
+	-- (GameDay moves walkers on each client, see Effects.client.lua)
 	local fanCtx, model = BuildUtil.Child(ctx, "Walker" .. number)
 	local root = BuildUtil.Part(fanCtx, {
 		Name = "Root",
@@ -9799,7 +9874,6 @@ return Crowd
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
@@ -9811,6 +9885,7 @@ local Crowd = require(script.Parent.Crowd)
 local GameDay = {}
 
 local FAN_TAG = "TycoonFan" -- Effects.client.lua makes these cheer
+local WALKER_TAG = "TycoonWalker" -- Effects.client.lua walks these in from the gate
 local CROWD_FOLDER = "GameDayFans"
 local WALK_SPEED = 12 -- studs per second
 
@@ -9836,6 +9911,8 @@ function GameDay.ClearCrowd(plot)
 	end
 end
 
+-- Walking fans are created here but MOVED by each client (Effects.client.lua lerps the root
+-- from WalkFrom to WalkTo), so the parade is smooth and costs no network traffic.
 local function spawnWalkers(plot, folder, ctx)
 	local L = Config.Layout
 	for index = 1, settings.WalkingFans do
@@ -9849,17 +9926,22 @@ local function spawnWalkers(plot, folder, ctx)
 			local finish = CFrame.new(x * 0.6, 0, L.SurfaceMinZ - 2) * facingStadium
 			local jersey = (rng:NextNumber() < 0.6) and plot.Palette.Primary or plot.Palette.Secondary
 			local skin = Crowd.SkinTones[rng:NextInteger(1, #Crowd.SkinTones)]
-			local model, root = Crowd.Walker(ctx, start, jersey, skin, index)
-			local distance = (finish.Position - start.Position).Magnitude
-			local tween = TweenService:Create(
-				root,
-				TweenInfo.new(distance / WALK_SPEED, Enum.EasingStyle.Linear),
-				{ CFrame = plot.Origin * finish * CFrame.new(0, 3, 0) }
-			)
-			tween.Completed:Connect(function()
+			-- build into an unparented holder so the attributes arrive together with the parts
+			local holder = Instance.new("Folder")
+			local holderCtx = table.clone(ctx)
+			holderCtx.parent = holder
+			local model, root = Crowd.Walker(holderCtx, start, jersey, skin, index)
+			local duration = (finish.Position - start.Position).Magnitude / WALK_SPEED
+			root:SetAttribute("WalkFrom", plot.Origin * start * CFrame.new(0, 3, 0))
+			root:SetAttribute("WalkTo", plot.Origin * finish * CFrame.new(0, 3, 0))
+			root:SetAttribute("WalkStart", serverNow())
+			root:SetAttribute("WalkDuration", duration)
+			CollectionService:AddTag(model, WALKER_TAG)
+			model.Parent = folder
+			holder:Destroy()
+			task.delay(duration + 0.5, function()
 				model:Destroy()
 			end)
-			tween:Play()
 		end)
 	end
 end
@@ -9920,12 +10002,18 @@ function GameDay.Start()
 		return
 	end
 	task.spawn(function()
+		-- a game day STARTS every IntervalSeconds (the first one after IntervalSeconds)
+		local wait = settings.IntervalSeconds
 		while true do
-			tycoonsFolder:SetAttribute("NextGameDayAt", serverNow() + settings.IntervalSeconds)
-			task.wait(settings.IntervalSeconds)
-			beginGameDay()
+			tycoonsFolder:SetAttribute("NextGameDayAt", serverNow() + wait)
+			task.wait(wait)
+			local ok, err = pcall(beginGameDay)
+			if not ok then
+				warn("[GameDay] Couldn't start the game day: " .. tostring(err))
+			end
 			task.wait(settings.DurationSeconds)
-			endGameDay()
+			pcall(endGameDay)
+			wait = math.max(settings.IntervalSeconds - settings.DurationSeconds, 1)
 		end
 	end)
 end
@@ -10050,6 +10138,7 @@ local MAX_UNKNOWN_IDS = 200
 
 local profiles = {} -- [Player] = profile
 local releasing = {} -- [userId] = true while that user's final save / unlock is running
+local inFlight = 0 -- loads + unlocks still talking to the DataStore (shutdown waits for these)
 local store = nil
 
 if Config.SaveEnabled then
@@ -10209,6 +10298,7 @@ local function withRetries(description, callback)
 end
 
 -- Gives the session lock back without changing anything else (only if we still hold it).
+-- (the caller raises inFlight before spawning this)
 local function unlock(profile)
 	releasing[profile.UserId] = true
 	withRetries("Unlock " .. profile.Key, function()
@@ -10221,13 +10311,27 @@ local function unlock(profile)
 		end)
 	end)
 	releasing[profile.UserId] = nil
+	inFlight -= 1
 end
+
+local loadProfile -- defined below
 
 -- Loads (and session-locks) a player's data. Yields. Returns the profile, or nil if the player left.
 function PlayerData.Load(player)
 	if profiles[player] then
 		return profiles[player]
 	end
+	inFlight += 1
+	local ok, result = pcall(loadProfile, player)
+	inFlight -= 1
+	if not ok then
+		warn("[PlayerData] Loading failed: " .. tostring(result))
+		return nil
+	end
+	return result
+end
+
+loadProfile = function(player)
 	player:SetAttribute("SaveStatus", "loading")
 	local profile = newProfile(player.UserId)
 
@@ -10235,6 +10339,9 @@ function PlayerData.Load(player)
 	-- so we read the newest data.
 	while releasing[player.UserId] and player.Parent ~= nil do
 		task.wait(0.1)
+	end
+	if player.Parent == nil then
+		return nil -- left before we even started: don't take a lock
 	end
 
 	if store then
@@ -10288,10 +10395,12 @@ function PlayerData.Load(player)
 		-- The player left while we were loading: give the lock back without touching their data.
 		if profile.CanSave then
 			profile.Released = true
+			inFlight += 1
 			task.spawn(unlock, profile)
 		end
 		return nil
 	end
+	profile.Player = player
 
 	profiles[player] = profile
 	player:SetAttribute("Cash", profile.Cash)
@@ -10337,6 +10446,9 @@ local function saveProfile(profile, release)
 	if lost then
 		warn("[PlayerData] " .. profile.Key .. " is owned by another session now; this server will stop saving it.")
 		profile.CanSave = false
+		if profile.Player and profile.Player.Parent ~= nil then
+			profile.Player:SetAttribute("SaveStatus", "off")
+		end
 	end
 	return false
 end
@@ -10425,7 +10537,7 @@ function PlayerData.ReleaseAll(timeout)
 		end
 	end
 	local deadline = os.clock() + (timeout or 25)
-	while next(profiles) ~= nil and os.clock() < deadline do
+	while (next(profiles) ~= nil or inFlight > 0) and os.clock() < deadline do
 		task.wait(0.1)
 	end
 end
@@ -11651,9 +11763,19 @@ CollectionService:GetInstanceRemovedSignal(FAN_TAG):Connect(function(model)
 	fans[model] = nil
 end)
 
+local FAN_UPDATE_INTERVAL = 1 / 20 -- cheering doesn't need 60 updates a second
+local nextFanUpdate = 0
+local movedParts, movedCFrames = {}, {}
+
 local function animateFans(now)
+	if now < nextFanUpdate then
+		return
+	end
+	nextFanUpdate = now + FAN_UPDATE_INTERVAL
 	local camera = Workspace.CurrentCamera
 	local cameraPosition = camera and camera.CFrame.Position or Vector3.new()
+	table.clear(movedParts)
+	table.clear(movedCFrames)
 	for model, entry in pairs(fans) do
 		if model.Parent == nil then
 			fans[model] = nil
@@ -11663,10 +11785,58 @@ local function animateFans(now)
 			end
 			local first = entry.parts[1]
 			if first and (first[2].Position - cameraPosition).Magnitude < FAN_ANIMATE_DISTANCE then
-				local lift = math.max(0, math.sin(now * entry.speed + entry.phase)) * 0.9
-				for _, pair in ipairs(entry.parts) do
-					pair[1].CFrame = pair[2] + Vector3.new(0, lift, 0)
+				local lift = math.floor(math.max(0, math.sin(now * entry.speed + entry.phase)) * 9) / 10
+				if lift ~= entry.lift then
+					entry.lift = lift
+					for _, pair in ipairs(entry.parts) do
+						table.insert(movedParts, pair[1])
+						table.insert(movedCFrames, pair[2] + Vector3.new(0, lift, 0))
+					end
 				end
+			end
+		end
+	end
+	if #movedParts > 0 then
+		Workspace:BulkMoveTo(movedParts, movedCFrames, Enum.BulkMoveMode.FireCFrameChanged)
+	end
+end
+
+---------------------------------------------------------------------------------------------
+-- Walking fans (game-day parade): the server sets WalkFrom/WalkTo/WalkStart/WalkDuration on
+-- each walker's Root and every client moves it locally, so the walk is smooth.
+---------------------------------------------------------------------------------------------
+local WALKER_TAG = "TycoonWalker"
+local walkers = {} -- [Model] = true
+
+local function trackWalker(model)
+	if model:IsA("Model") then
+		walkers[model] = true
+	end
+end
+for _, model in ipairs(CollectionService:GetTagged(WALKER_TAG)) do
+	trackWalker(model)
+end
+CollectionService:GetInstanceAddedSignal(WALKER_TAG):Connect(trackWalker)
+CollectionService:GetInstanceRemovedSignal(WALKER_TAG):Connect(function(model)
+	walkers[model] = nil
+end)
+
+local function animateWalkers()
+	local now = Workspace:GetServerTimeNow()
+	for model in pairs(walkers) do
+		local root = model.Parent and model:FindFirstChild("Root")
+		if not root then
+			if model.Parent == nil then
+				walkers[model] = nil
+			end
+		else
+			local from, to = root:GetAttribute("WalkFrom"), root:GetAttribute("WalkTo")
+			local start, duration = root:GetAttribute("WalkStart"), root:GetAttribute("WalkDuration")
+			if from and to and start and duration and duration > 0 then
+				local alpha = math.clamp((now - start) / duration, 0, 1)
+				-- a little bounce in the step
+				local bob = math.abs(math.sin(alpha * duration * 8)) * 0.3
+				root.CFrame = from:Lerp(to, alpha) + Vector3.new(0, bob, 0)
 			end
 		end
 	end
@@ -11674,6 +11844,7 @@ end
 
 RunService.RenderStepped:Connect(function()
 	animateFans(os.clock())
+	animateWalkers()
 	local wave = (math.sin(os.clock() * 4) + 1) / 2 -- 0..1
 	for pad in pairs(buttons) do
 		if pad.Parent then
@@ -11691,6 +11862,18 @@ end)
 ---------------------------------------------------------------------------------------------
 -- Guide beam to the next goal
 ---------------------------------------------------------------------------------------------
+-- The beam and its two attachments live under Terrain (which is never destroyed) and are moved
+-- every frame, so destroyed buttons or respawned characters can never break the guide.
+local guideAnchor = Workspace:FindFirstChildOfClass("Terrain") or Workspace
+
+local characterAttachment = Instance.new("Attachment")
+characterAttachment.Name = "TycoonGuideStart"
+characterAttachment.Parent = guideAnchor
+
+local targetAttachment = Instance.new("Attachment")
+targetAttachment.Name = "TycoonGuideEnd"
+targetAttachment.Parent = guideAnchor
+
 local beam = Instance.new("Beam")
 beam.Name = "TycoonGuide"
 beam.FaceCamera = true
@@ -11705,17 +11888,12 @@ beam.Transparency = NumberSequence.new({
 	NumberSequenceKeypoint.new(1, 0.6),
 })
 beam.Enabled = false
-
-local characterAttachment = Instance.new("Attachment")
-characterAttachment.Name = "TycoonGuideStart"
-characterAttachment.Position = Vector3.new(0, -1.5, 0)
-
-local targetAttachment = Instance.new("Attachment")
-targetAttachment.Name = "TycoonGuideEnd"
-targetAttachment.Position = Vector3.new(0, 1, 0)
-
 beam.Attachment0 = characterAttachment
 beam.Attachment1 = targetAttachment
+beam.Parent = guideAnchor
+
+local guideRoot = nil -- the character's HumanoidRootPart
+local guidePad = nil -- the button the beam points at
 
 local function findGoalButton()
 	local goal = player:GetAttribute("NextGoal")
@@ -11729,29 +11907,35 @@ local function findGoalButton()
 	return folder and folder:FindFirstChild("Buy_" .. tostring(goal))
 end
 
-local function updateGuide()
+-- Works out what the beam connects (4 times a second).
+local function updateGuideTargets()
 	local character = player.Character
-	local root = character and character:FindFirstChild("HumanoidRootPart")
-	local pad = Config.ShowGuideBeam and findGoalButton() or nil
-	if not root or not pad then
+	guideRoot = character and character:FindFirstChild("HumanoidRootPart")
+	guidePad = Config.ShowGuideBeam and findGoalButton() or nil
+end
+
+-- Moves the beam ends (every frame, cheap: two property writes).
+local function updateGuidePositions()
+	local root, pad = guideRoot, guidePad
+	if not root or not pad or root.Parent == nil or pad.Parent == nil then
 		beam.Enabled = false
 		return
 	end
-	if characterAttachment.Parent ~= root then
-		characterAttachment.Parent = root
-	end
-	if targetAttachment.Parent ~= pad then
-		targetAttachment.Parent = pad
-	end
-	if beam.Parent ~= root then
-		beam.Parent = root
-	end
-	beam.Enabled = (root.CFrame.Position - pad.CFrame.Position).Magnitude > GUIDE_HIDE_DISTANCE
+	local from = root.CFrame.Position + Vector3.new(0, -1.5, 0)
+	local to = pad.CFrame.Position + Vector3.new(0, 1, 0)
+	characterAttachment.Position = from
+	targetAttachment.Position = to
+	beam.Enabled = (from - to).Magnitude > GUIDE_HIDE_DISTANCE
 end
+
+RunService.RenderStepped:Connect(updateGuidePositions)
 
 task.spawn(function()
 	while true do
-		updateGuide()
+		local ok, err = pcall(updateGuideTargets)
+		if not ok then
+			warn("[Effects] guide beam: " .. tostring(err))
+		end
 		task.wait(0.25)
 	end
 end)
@@ -11855,6 +12039,27 @@ local screen = create("ScreenGui", {
 	Parent = player:WaitForChild("PlayerGui"),
 })
 
+-- Cash panel, progress, hint and game-day banner sit in one top-centre stack that shrinks on
+-- short (landscape phone) screens so it never covers the middle of the screen.
+local topScale = create("UIScale", { Scale = 1 })
+local topStack = create("Frame", {
+	Name = "TopStack",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 0),
+	Size = UDim2.new(0, 640, 0, 170),
+	BackgroundTransparency = 1,
+	Parent = screen,
+}, { topScale })
+
+local function fitTopStack()
+	local ok, size = pcall(function()
+		return screen.AbsoluteSize
+	end)
+	if ok and size.Y > 0 then
+		topScale.Scale = size.Y < 500 and 0.7 or 1
+	end
+end
+
 local cashScale = create("UIScale", { Scale = 1 })
 local cashPanel = create("Frame", {
 	Name = "CashPanel",
@@ -11863,7 +12068,7 @@ local cashPanel = create("Frame", {
 	Size = UDim2.new(0, 270, 0, 78),
 	BackgroundColor3 = Color3.fromRGB(18, 22, 30),
 	BackgroundTransparency = 0.2,
-	Parent = screen,
+	Parent = topStack,
 }, {
 	corner(14),
 	create("UIStroke", { Color = Color3.fromRGB(255, 196, 37), Thickness = 2, Transparency = 0.2 }),
@@ -11906,7 +12111,7 @@ local progressLabel = create("TextLabel", {
 	TextColor3 = Color3.fromRGB(255, 220, 120),
 	TextScaled = true,
 	Visible = false,
-	Parent = screen,
+	Parent = topStack,
 }, { corner(8) })
 
 local hintLabel = create("TextLabel", {
@@ -11920,7 +12125,7 @@ local hintLabel = create("TextLabel", {
 	Text = CLAIM_HINT,
 	TextColor3 = Color3.fromRGB(25, 25, 30),
 	TextScaled = true,
-	Parent = screen,
+	Parent = topStack,
 }, {
 	corner(10),
 	create("UISizeConstraint", { MaxSize = Vector2.new(620, 34) }),
@@ -11930,8 +12135,8 @@ local hintLabel = create("TextLabel", {
 local gameDayLabel = create("TextLabel", {
 	Name = "GameDay",
 	AnchorPoint = Vector2.new(0.5, 0),
-	Position = UDim2.new(0.5, 0, 0, 132),
-	Size = UDim2.new(0, 270, 0, 26),
+	Position = UDim2.new(0.5, 0, 0, 118),
+	Size = UDim2.new(0, 270, 0, 24),
 	BackgroundColor3 = Color3.fromRGB(18, 22, 30),
 	BackgroundTransparency = 0.35,
 	Font = Enum.Font.GothamBold,
@@ -11939,7 +12144,7 @@ local gameDayLabel = create("TextLabel", {
 	TextColor3 = Color3.fromRGB(220, 220, 225),
 	TextScaled = true,
 	Visible = false,
-	Parent = screen,
+	Parent = topStack,
 }, { corner(8), create("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }) })
 
 local saveLabel = create("TextLabel", {
@@ -11974,6 +12179,9 @@ local toastContainer = create("Frame", {
 		VerticalAlignment = Enum.VerticalAlignment.Bottom,
 	}),
 })
+
+fitTopStack()
+screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitTopStack)
 
 ---------------------------------------------------------------------------------------------
 -- Cash (counts up smoothly) / income / progress / save status
@@ -12103,6 +12311,9 @@ local toastOrder = 0
 local cashToast = nil -- the current "+$X" toast, reused so collecting doesn't stack up toasts
 
 local function fadeOut(toast)
+	if cashToast == toast then
+		cashToast = nil -- a new collect during the fade gets a fresh toast
+	end
 	local tweenInfo = TweenInfo.new(0.4)
 	for _, descendant in ipairs(toast:GetDescendants()) do
 		if descendant:IsA("TextLabel") then

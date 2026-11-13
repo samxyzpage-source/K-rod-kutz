@@ -96,8 +96,13 @@ roblox.implementMethod("Model", "PivotTo", function(model, cf)
 		root.CFrame = cf
 	end
 end)
-roblox.implementMethod("NumberValue", "GetPropertyChangedSignal", function(inst, name)
+roblox.implementMethod("Instance", "GetPropertyChangedSignal", function(inst, name)
 	return instanceSignal(inst, "Prop" .. name)
+end)
+roblox.implementMethod("Workspace", "BulkMoveTo", function(_, parts, cframes)
+	for index, part in ipairs(parts) do
+		part.CFrame = cframes[index]
+	end
 end)
 roblox.implementProperty("ValueBase", "Changed", function(inst)
 	return instanceSignal(inst, "Changed")
@@ -944,6 +949,13 @@ local function runTests()
 		end
 	end
 	check(seated > 0 and seated <= Config.GameDay.SeatedFans, ("fans fill the stands (%d seated)"):format(seated))
+	task.wait(0.1)
+	local walkerTagged = CollectionServiceMock:GetTagged("TycoonWalker")[1]
+	local walkerRootPart = walkerTagged and walkerTagged:FindFirstChild("Root")
+	check(
+		walkerRootPart ~= nil and walkerRootPart:GetAttribute("WalkTo") ~= nil and walkerRootPart:GetAttribute("WalkDuration") ~= nil,
+		"walking fans carry their path for the client to animate"
+	)
 	check(#CollectionServiceMock:GetTagged("TycoonFan") >= seated, "fans are tagged for the cheering animation")
 	local hankPlot = PlotManager.GetPlot(hank)
 	local hankCrowd = hankPlot.Model:FindFirstChild("GameDayFans")
@@ -1052,10 +1064,11 @@ local function runTests()
 	local okFx, fxErr = pcall(runScript, "StarterPlayer/StarterPlayerScripts/TycoonClient/Effects")
 	check(okFx, "Effects script runs: " .. tostring(fxErr))
 	task.wait(0.4)
-	local beam = viewer.Character.HumanoidRootPart:FindFirstChild("TycoonGuide")
-	check(beam ~= nil and beam.Enabled, "guide beam points at the next goal")
 	RunServiceMock.RenderStepped:Fire(0.016)
 	task.wait(0.05)
+	local beam = workspace:FindFirstChild("TycoonGuide", true)
+	check(beam ~= nil and beam.Enabled, "guide beam points at the next goal")
+
 	local pulsing = false
 	for _, pad in ipairs(CollectionServiceMock:GetTagged("TycoonBuyButton")) do
 		local ok, value = pcall(function()
@@ -1066,6 +1079,15 @@ local function runTests()
 		end
 	end
 	check(pulsing, "buy buttons pulse")
+	-- the guide survives its target button being destroyed (e.g. after buying it)
+	local goalPad = plotModel(2).Buttons:FindFirstChild("Buy_frontoffice")
+	if goalPad then
+		goalPad:Destroy()
+	end
+	task.wait(0.35)
+	RunServiceMock.RenderStepped:Fire(0.016)
+	task.wait(0.05)
+	check(beam.Parent ~= nil and beam.Enabled == false, "guide hides (and keeps working) when its button is gone")
 	-- a fan in front of the camera bounces
 	local fanFolder = Instance.new("Folder")
 	fanFolder.Parent = workspace
@@ -1090,6 +1112,25 @@ local function runTests()
 		end
 	end
 	check(moved, "fans bounce and cheer")
+	-- a walking fan moves along its path on the client
+	local walkerFolder = Instance.new("Folder")
+	walkerFolder.Parent = workspace
+	local walkerModel = Instance.new("Model")
+	local walkerRoot = Instance.new("Part")
+	walkerRoot.Name = "Root"
+	walkerRoot.CFrame = CFrame.new(0, 3, 0)
+	walkerRoot.Parent = walkerModel
+	walkerRoot:SetAttribute("WalkFrom", CFrame.new(0, 3, 0))
+	walkerRoot:SetAttribute("WalkTo", CFrame.new(0, 3, 100))
+	walkerRoot:SetAttribute("WalkStart", os.clock() - 5)
+	walkerRoot:SetAttribute("WalkDuration", 10)
+	walkerModel.Parent = walkerFolder
+	CollectionServiceMock:AddTag(walkerModel, "TycoonWalker")
+	task.wait(0.05)
+	RunServiceMock.RenderStepped:Fire(0.016)
+	task.wait(0.05)
+	local walkedZ = walkerRoot.CFrame.Position.Z
+	check(walkedZ > 40 and walkedZ < 60, ("walking fans move along their path (z=%.1f, expected ~50)"):format(walkedZ))
 	notifyRemote.OnClientEvent:Fire("Built X", "success")
 	task.wait(0.05)
 	check(table.find(playedSounds, "Purchase") ~= nil, "purchase sound plays")

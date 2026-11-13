@@ -22,6 +22,10 @@ local SKIN_TONES = {
 	Color3.fromRGB(95, 60, 30),
 }
 local VISITOR_COLOR = Color3.fromRGB(150, 150, 158)
+local SEAT_SPACING = 2.6 -- fans are 2 studs wide
+local FAN_HALF_WIDTH = 1.2 -- half a fan + a little margin, used to pad the gaps below
+local AISLE_HALF_WIDTH = 1.5 -- the stair aisles in Stands.lua are 3 studs wide
+local AISLE_OFFSET = 26 -- Stands.lua puts an aisle 26 studs either side of each section centre
 
 --[[
 	Seat sections for each stands item, derived from Config.Layout. Every section has:
@@ -48,10 +52,29 @@ function Crowd.SeatSections(layout, owned)
 	end
 	local lower, upper = L.LowerRows, L.UpperRows
 	local sideLength = L.CornerStartX * 2
-	local frontTunnel = { { -L.TunnelHalfWidth - 1, L.TunnelHalfWidth + 1 } }
+	local function tunnelGap(halfWidth)
+		return { -halfWidth - 0.8 - FAN_HALF_WIDTH, halfWidth + 0.8 + FAN_HALF_WIDTH } -- tunnel walls are 0.8 thick
+	end
+	local function withAisles(gaps, aisleXs)
+		local out = table.clone(gaps)
+		for _, x in ipairs(aisleXs) do
+			table.insert(out, { x - AISLE_HALF_WIDTH - FAN_HALF_WIDTH, x + AISLE_HALF_WIDTH + FAN_HALF_WIDTH })
+		end
+		return out
+	end
+	local sectionCentre = (L.TunnelHalfWidth + L.CornerStartX) / 2 -- centre of each half of a sideline deck
+	local sideAisles = {
+		-sectionCentre - AISLE_OFFSET,
+		-sectionCentre + AISLE_OFFSET,
+		sectionCentre - AISLE_OFFSET,
+		sectionCentre + AISLE_OFFSET,
+	}
+	local endAisles = { -AISLE_OFFSET, AISLE_OFFSET }
+	local frontTunnel = withAisles({ tunnelGap(L.TunnelHalfWidth) }, sideAisles)
+	local homeTunnel = withAisles({ tunnelGap(L.BackTunnelHalfWidth or L.TunnelHalfWidth) }, sideAisles)
 	-- the TV broadcast booth sits on the visitor upper deck above the tunnel: keep fans out from under it
-	local boothGap = owned.broadcast_booth and { { -23, 23 } } or frontTunnel
-	local homeTunnel = { { -(L.BackTunnelHalfWidth or 0) - 1, (L.BackTunnelHalfWidth or 0) + 1 } }
+	local boothGap = owned.broadcast_booth and withAisles({ { -22 - FAN_HALF_WIDTH, 22 + FAN_HALF_WIDTH } }, sideAisles) or frontTunnel
+	local endGaps = withAisles({}, endAisles)
 	local endLength = L.FieldWidth
 	local back = CFrame.Angles(0, math.pi, 0)
 	local east = CFrame.Angles(0, -math.pi / 2, 0) -- rows step toward +X
@@ -63,10 +86,10 @@ function Crowd.SeatSections(layout, owned)
 	add("bleachers_visitor", CFrame.new(0, 0, L.SurfaceMinZ), sideLength, L.RowRise, lower, frontTunnel, true)
 	add("upper_visitor", CFrame.new(0, 0, L.FrontLowerOuterZ), sideLength, L.UpperStartHeight, upper, boothGap, true)
 	-- end zones
-	add("endzone_stands_east", CFrame.new(L.SurfaceHalfX, 0, L.FieldCenterZ) * east, endLength, L.RowRise, lower)
-	add("endzone_stands_west", CFrame.new(-L.SurfaceHalfX, 0, L.FieldCenterZ) * west, endLength, L.RowRise, lower)
-	add("upper_bowl_ends", CFrame.new(L.EndLowerOuterX, 0, L.FieldCenterZ) * east, endLength, L.UpperStartHeight, upper)
-	add("upper_bowl_ends", CFrame.new(-L.EndLowerOuterX, 0, L.FieldCenterZ) * west, endLength, L.UpperStartHeight, upper)
+	add("endzone_stands_east", CFrame.new(L.SurfaceHalfX, 0, L.FieldCenterZ) * east, endLength, L.RowRise, lower, endGaps)
+	add("endzone_stands_west", CFrame.new(-L.SurfaceHalfX, 0, L.FieldCenterZ) * west, endLength, L.RowRise, lower, endGaps)
+	add("upper_bowl_ends", CFrame.new(L.EndLowerOuterX, 0, L.FieldCenterZ) * east, endLength, L.UpperStartHeight, upper, endGaps)
+	add("upper_bowl_ends", CFrame.new(-L.EndLowerOuterX, 0, L.FieldCenterZ) * west, endLength, L.UpperStartHeight, upper, endGaps)
 
 	-- corners: only the part of each corner band that every row covers is used for seats
 	-- (kept ~3 studs away from the diagonal corner aisle)
@@ -136,9 +159,16 @@ local function inGap(offset, gaps)
 end
 
 -- One seated fan: a jersey block and a head, sitting on top of a row, facing the field.
+local function quiet(part)
+	-- fans are decoration only: no touches, no raycasts (they move every frame on clients)
+	part.CanTouch = false
+	part.CanQuery = false
+	return part
+end
+
 local function seatedFan(ctx, seatCFrame, jersey, skin, number)
 	local fanCtx, model = BuildUtil.Child(ctx, "Fan" .. number)
-	BuildUtil.Part(fanCtx, {
+	quiet(BuildUtil.Part(fanCtx, {
 		Name = "Body",
 		Size = Vector3.new(2, 2.4, 1.2),
 		CFrame = seatCFrame * CFrame.new(0, 1.2, 0),
@@ -146,8 +176,8 @@ local function seatedFan(ctx, seatCFrame, jersey, skin, number)
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		CastShadow = false,
-	})
-	BuildUtil.Part(fanCtx, {
+	}))
+	quiet(BuildUtil.Part(fanCtx, {
 		Name = "Head",
 		Size = Vector3.new(1.3, 1.3, 1.3),
 		CFrame = seatCFrame * CFrame.new(0, 3.05, 0),
@@ -155,7 +185,7 @@ local function seatedFan(ctx, seatCFrame, jersey, skin, number)
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		CastShadow = false,
-	})
+	}))
 	return model
 end
 
@@ -183,11 +213,14 @@ function Crowd.SeatedFans(ctx, owned, maxFans, rng)
 		local placed = 0
 		local attempts = 0
 		local used = {}
+		-- seats are SEAT_SPACING apart along each row, so two fans can never overlap
+		local seats = math.max(1, math.floor((section.length - 2) / SEAT_SPACING))
 		while placed < perSection and attempts < perSection * 6 do
 			attempts += 1
 			local row = rng:NextInteger(1, section.rows)
-			local offset = (rng:NextNumber() - 0.5) * math.max(section.length - 4, 1)
-			local slot = row .. ":" .. math.floor(offset / 2.6)
+			local seatIndex = rng:NextInteger(0, seats - 1)
+			local offset = (seatIndex + 0.5 - seats / 2) * SEAT_SPACING
+			local slot = row .. ":" .. seatIndex
 			if not inGap(offset, section.gaps) and not used[slot] then
 				used[slot] = true
 				local top = section.firstHeight + (row - 1) * L.RowRise
@@ -219,6 +252,7 @@ end
 	startCFrame is plot-local.
 ]]
 function Crowd.Walker(ctx, startCFrame, jersey, skin, number)
+	-- (GameDay moves walkers on each client, see Effects.client.lua)
 	local fanCtx, model = BuildUtil.Child(ctx, "Walker" .. number)
 	local root = BuildUtil.Part(fanCtx, {
 		Name = "Root",

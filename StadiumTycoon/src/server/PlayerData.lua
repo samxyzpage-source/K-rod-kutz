@@ -35,6 +35,7 @@ local MAX_UNKNOWN_IDS = 200
 
 local profiles = {} -- [Player] = profile
 local releasing = {} -- [userId] = true while that user's final save / unlock is running
+local inFlight = 0 -- loads + unlocks still talking to the DataStore (shutdown waits for these)
 local store = nil
 
 if Config.SaveEnabled then
@@ -194,6 +195,7 @@ local function withRetries(description, callback)
 end
 
 -- Gives the session lock back without changing anything else (only if we still hold it).
+-- (the caller raises inFlight before spawning this)
 local function unlock(profile)
 	releasing[profile.UserId] = true
 	withRetries("Unlock " .. profile.Key, function()
@@ -206,13 +208,27 @@ local function unlock(profile)
 		end)
 	end)
 	releasing[profile.UserId] = nil
+	inFlight -= 1
 end
+
+local loadProfile -- defined below
 
 -- Loads (and session-locks) a player's data. Yields. Returns the profile, or nil if the player left.
 function PlayerData.Load(player)
 	if profiles[player] then
 		return profiles[player]
 	end
+	inFlight += 1
+	local ok, result = pcall(loadProfile, player)
+	inFlight -= 1
+	if not ok then
+		warn("[PlayerData] Loading failed: " .. tostring(result))
+		return nil
+	end
+	return result
+end
+
+loadProfile = function(player)
 	player:SetAttribute("SaveStatus", "loading")
 	local profile = newProfile(player.UserId)
 
@@ -220,6 +236,9 @@ function PlayerData.Load(player)
 	-- so we read the newest data.
 	while releasing[player.UserId] and player.Parent ~= nil do
 		task.wait(0.1)
+	end
+	if player.Parent == nil then
+		return nil -- left before we even started: don't take a lock
 	end
 
 	if store then
@@ -273,10 +292,12 @@ function PlayerData.Load(player)
 		-- The player left while we were loading: give the lock back without touching their data.
 		if profile.CanSave then
 			profile.Released = true
+			inFlight += 1
 			task.spawn(unlock, profile)
 		end
 		return nil
 	end
+	profile.Player = player
 
 	profiles[player] = profile
 	player:SetAttribute("Cash", profile.Cash)
@@ -322,6 +343,9 @@ local function saveProfile(profile, release)
 	if lost then
 		warn("[PlayerData] " .. profile.Key .. " is owned by another session now; this server will stop saving it.")
 		profile.CanSave = false
+		if profile.Player and profile.Player.Parent ~= nil then
+			profile.Player:SetAttribute("SaveStatus", "off")
+		end
 	end
 	return false
 end
@@ -410,7 +434,7 @@ function PlayerData.ReleaseAll(timeout)
 		end
 	end
 	local deadline = os.clock() + (timeout or 25)
-	while next(profiles) ~= nil and os.clock() < deadline do
+	while (next(profiles) ~= nil or inFlight > 0) and os.clock() < deadline do
 		task.wait(0.1)
 	end
 end

@@ -80,6 +80,7 @@ local ICE_BLUE = Color3.fromRGB(220, 240, 255)
 local COLD_SIGN = Color3.fromRGB(40, 110, 200)
 local THEATRE_WALL = Color3.fromRGB(46, 48, 56)
 local THEATRE_STEP = Color3.fromRGB(36, 38, 46)
+local THEATRE_LAMP = Color3.fromRGB(92, 78, 60)
 local MARQUEE_BLACK = Color3.fromRGB(24, 24, 30)
 local MARQUEE_GLOW = Color3.fromRGB(255, 214, 90)
 local BEAM_WHITE = Color3.fromRGB(255, 250, 222)
@@ -178,7 +179,8 @@ end
 	o: Width, Depth, WallH, Thickness, WallColor, WallMaterial, FloorColor, FloorMaterial,
 	   OpeningTop, Openings = { { From, To, Bottom, Mullions } } (local x, sorted; Bottom = 0 is
 	   an open doorway, otherwise a window with a sill), GlassColor, GlassTransparency,
-	   BandColor, BandH, RoofColor, CeilingColor, LightBrightness
+	   BandColor, BandH, RoofColor, CeilingColor, LampColor (the glowing ceiling panel),
+	   LightBrightness
 	Returns the team-coloured roof band (its Front face is a good place for the team name).
 ]]
 local function campusShell(ctx, frame, o)
@@ -267,7 +269,18 @@ local function campusShell(ctx, frame, o)
 		o.CeilingColor or CEILING,
 		Enum.Material.SmoothPlastic
 	)
-	local lamp = lblock(ctx, frame, "CeilingLight", Vector3.new(W * 0.4, 0.2, D * 0.3), 0, H - 0.45, D / 2, LAMP, Enum.Material.Neon, PAINT)
+	local lamp = lblock(
+		ctx,
+		frame,
+		"CeilingLight",
+		Vector3.new(W * 0.4, 0.2, D * 0.3),
+		0,
+		H - 0.45,
+		D / 2,
+		o.LampColor or LAMP,
+		Enum.Material.Neon,
+		PAINT
+	)
 	BuildUtil.Light(lamp, "PointLight", {
 		Name = "RoomLight",
 		Range = math.min(math.max(W, D) * 0.8, 60),
@@ -1267,6 +1280,8 @@ function CampusBuildings.weightroom(ctx)
 		for _, s in ipairs({ -1, 1 }) do
 			xCylinder(dumbbells, "DumbbellHead", Vector3.new(rackX + s * 0.6, headY, z), 0.55, 1.1, IRON, Enum.Material.Metal)
 		end
+		-- the chrome grip between the two heads (pokes 0.05 into each head)
+		xCylinder(dumbbells, "DumbbellGrip", Vector3.new(rackX, headY, z), 0.75, 0.32, CHROME, Enum.Material.Metal)
 	end
 
 	-- Mirror wall (east), motivation banner over the racks, kettlebells
@@ -1396,6 +1411,28 @@ function CampusBuildings.trainingroom(ctx)
 				Enum.Material.Fabric,
 				nil,
 				FLOOR_TOP + 1
+			)
+			-- curtain track on top, hung from the ceiling by a rod (so the curtain doesn't float)
+			local trackY = FLOOR_TOP + 8
+			BuildUtil.Block(
+				tables,
+				"CurtainTrack",
+				Vector3.new(0.3, 0.25, 6.9),
+				Vector3.new(tx + 4, 0, tableZ),
+				CHROME,
+				Enum.Material.Metal,
+				nil,
+				trackY
+			)
+			BuildUtil.Block(
+				tables,
+				"CurtainRod",
+				Vector3.new(0.15, H - 0.25 - trackY - 0.25, 0.15),
+				Vector3.new(tx + 4, 0, tableZ),
+				CHROME,
+				Enum.Material.Metal,
+				nil,
+				trackY + 0.25
 			)
 		end
 	end
@@ -1639,6 +1676,7 @@ function CampusBuildings.filmroom(ctx)
 		BandColor = team.Primary,
 		BandH = 1.6,
 		CeilingColor = THEATRE_STEP,
+		LampColor = THEATRE_LAMP, -- a dim house light, so the theatre stays dark around the screen
 		LightBrightness = 0.6,
 	})
 	sign(band, { Enum.NormalId.Front }, ctx.teamName, team.Primary, team, { InsetY = 0.1 })
