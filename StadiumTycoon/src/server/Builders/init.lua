@@ -12,18 +12,27 @@ local Builders = {}
 
 local MODULES = {
 	"PlotBase",
+	-- stadium (V5)
 	"Field",
-	"Stands",
+	"Stands", -- lower bowl
+	"UpperDeck", -- club seats + upper deck
+	"Concourse", -- main + upper concourse
+	"ConcourseShops", -- food, restrooms, merch on the main concourse
+	"StadiumRooms", -- locker rooms under the stands
+	"ClubLevel", -- club lounge, suites, press box, broadcast booth
+	"Exterior", -- gates, escalators, facade
+	"Features", -- video boards, lights, roof
 	"Plaza",
-	"Features",
-	"PressLevel",
-	"StadiumRooms",
-	"CampusFields",
+	"FanZone",
+	-- team HQ + campus
 	"HQRoomsFront",
 	"HQRoomsBack",
+	"HQRoomsUpperFront",
+	"HQRoomsUpperBack",
+	"CampusFields",
 	"HallOfFame",
-	"FanZone",
 	"Garage",
+	"CampusLinks",
 	"Staff",
 }
 
