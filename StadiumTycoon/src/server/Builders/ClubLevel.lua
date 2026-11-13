@@ -29,14 +29,15 @@
 	                                           skirt at offset 84 (down to the main concourse) and an
 	                                           outer girder, the outer wall (offset 107.2..108) with
 	                                           16-wide escalator openings + lit GATE signs (look) on the
-	                                           gate axes, lounge ceilings + light strips over the ends,
-	                                           corners and side lounges, 8 bars (soda / sports drink /
-	                                           smoothie)
+	                                           gate axes, lounge carpets, ceilings + light strips over
+	                                           the ends, corners and side lounges, 8 bars (soda /
+	                                           sports drink / smoothie)
 	                   2 Buffet                buffet islands in both end lounges (tray + hot dogs),
 	                                           popcorn carts, food stations in the corners
 	                   3 Lounge Seating        drink rails with stools along the front (one CLUB LOUNGE
 	                                           CAM stool per end + corner), sofas, armchairs, coffee
-	                                           tables, rugs, high-top tables, painted CLUB floor logos
+	                                           tables, rugs, standing high-top tables, painted CLUB
+	                                           floor logos
 	                   4 Club Screens          live screens over the bars and above the buffets, CLUB
 	                                           signs, a wall of fame (look) and trophy cases (look)
 	  suites           1 Suite Corridor        corridor ceiling, room-row ceilings, carpet with a team
@@ -50,9 +51,11 @@
 	                                           light per block (a PointLight over every suite), number
 	                                           sign (look); the Owner's Suite + Legends Suite get
 	                                           extras (owner's chair, popcorn machine, signed-ball case)
-	  pressbox         1 Press Box Shell       walls, glass front, ceiling, lights, double door, signs
+	  pressbox         1 Press Box Shell       walls, glass front, ceiling, lights, sliding glass double
+	                                           door, signs
 	                   2 Press Row             desk with 6 PRESS BOX CAM seats + live monitors +
-	                                           nameplates, PA microphone, a second row on a riser, stat
+	                                           nameplates, PA microphone, a second row on two risers
+	                                           either side of a centre aisle from the door, stat
 	                                           boards, game clock, coffee & soda bar, cooler, copier,
 	                                           credentials
 	                   3 Coaches' Booths       home + visiting coaches' booths (|x| 29.3..44): glass,
@@ -69,7 +72,8 @@
 	                   3 Satellite Dish        an uplink deck over the club seats with the dish (look),
 	                                           uplink box and an antenna with a beacon
 
-	Flat layers: ring floor top 54 (corners 53.96); carpets 54.05; corridor stripe + rugs 54.08.
+	Flat layers: ring floor top 54 (corners 53.96); carpets 54.05 (corners 54.01); corridor stripe +
+	rugs 54.08 (corners 54.04).
 	Ceilings 65.3..66 (corners 65.34..65.96) end at the outer wall's inner face (107.2); headers of
 	the glass fronts 80..80.6 run up to 66, so the room ceilings start behind them at 80.6. The roof
 	visors (press box, TV uplink deck) reach out over the club seats' top rows (offsets 75.4..80,
@@ -142,6 +146,7 @@ local WALL_LIGHT = Color3.fromRGB(230, 226, 218)
 local CEILING = Color3.fromRGB(236, 236, 232)
 local CARPET = Color3.fromRGB(54, 56, 66)
 local SUITE_CARPET = Color3.fromRGB(86, 74, 66)
+local LOUNGE_CARPET = Color3.fromRGB(70, 74, 84)
 local WOOD = Color3.fromRGB(150, 105, 60)
 local DARK_WOOD = Color3.fromRGB(92, 62, 40)
 local WALNUT = Color3.fromRGB(70, 48, 34)
@@ -445,6 +450,7 @@ local function roomDoor(ctx, seg, x0, x1, fy, props)
 		Size = Vector3.new(x1 - x0, DOOR_H, 0.3),
 		CFrame = at(seg, (x0 + x1) / 2, fy + DOOR_H / 2, (BACK_IN + BACK_OUT) / 2) * TURN,
 		Double = props.Double,
+		Slide = props.Slide,
 		Hinge = "Left",
 		Window = props.Window,
 		Color = props.Color,
@@ -625,6 +631,13 @@ local function sofaSet(ctx, seg, x, o, team, opts)
 	end
 end
 
+-- A standing high-top table (marble top on a slim post) at (x, o).
+local function highTop(ctx, seg, x, o)
+	local fy = seg.floor
+	post(ctx, seg, "HighTopPost", x, o, fy, fy + 3.4, 0.5, DARK_METAL, Enum.Material.Metal)
+	return post(ctx, seg, "HighTopTable", x, o, fy + 3.4, fy + 3.65, 2.8, MARBLE, Enum.Material.Marble)
+end
+
 -- A drink rail along the front edge (offset 80.3..81.1) from x0 to x1 with stools behind it.
 -- camIndex = which stool (if any) is a CLUB LOUNGE CAM seat.
 local function drinkRail(ctx, seg, L, x0, x1, stools, team, camIndex)
@@ -725,12 +738,27 @@ function M.club_lounge(ctx)
 		end
 	end
 
-	-- lounge ceilings + light strips: ends, corners and the side lounges
+	-- lounge carpets, ceilings + light strips: ends, corners and the side lounges (the carpets run
+	-- the full length of the floor slab, so the straight ones also cover the corner joints)
 	local lounge = BuildUtil.Child(ctx, "Lounges")
 	for _, seg in ipairs(segs) do
 		local k = seg.sink
 		if seg.kind ~= "side" then
 			local half = seg.len(RING_OUT) / 2
+			span(
+				lounge,
+				seg,
+				"LoungeCarpet",
+				-half,
+				half,
+				RING_IN,
+				WALL_IN,
+				seg.floor,
+				seg.floor + 0.05,
+				LOUNGE_CARPET,
+				Enum.Material.Carpet,
+				PAINT
+			)
 			span(lounge, seg, "LoungeCeiling", -half, half, RING_IN, WALL_IN, CEIL_BOTTOM + k, CEIL_TOP - k, CEILING)
 			if seg.kind == "end" then
 				lightStrip(lounge, seg, -92, 92, 86, 6, 26, 1.4)
@@ -741,6 +769,20 @@ function M.club_lounge(ctx)
 		else
 			local half = seg.len(RING_OUT) / 2
 			for _, s in ipairs({ -1, 1 }) do
+				span(
+					lounge,
+					seg,
+					"LoungeCarpet",
+					s * LOUNGE_X,
+					s * half,
+					RING_IN,
+					WALL_IN,
+					FLOOR,
+					FLOOR + 0.05,
+					LOUNGE_CARPET,
+					Enum.Material.Carpet,
+					PAINT
+				)
 				span(lounge, seg, "LoungeCeiling", s * LOUNGE_X, s * half, RING_IN, WALL_IN, CEIL_BOTTOM, CEIL_TOP, CEILING)
 				lightStrip(lounge, seg, s * (LOUNGE_X + 2), s * 174, 93, 3, 26, 1.3)
 			end
@@ -873,6 +915,9 @@ function M.club_lounge(ctx)
 				-- the lounge's camera seat)
 				drinkRail(seating, seg, L, s * 31, s * 73, 4, team, s > 0 and 2 or nil)
 				sofaSet(seating, seg, s * 58, 90.8, team)
+				-- standing high-tops fill the far ends of the lounge (clear of the aisle at 78)
+				highTop(seating, seg, s * 84, 86.5)
+				highTop(seating, seg, s * 92, 91)
 			end
 			local welcome =
 				span(seating, seg, "ClubFloorLogo", -10, 10, 96.5, 103.5, seg.floor, seg.floor + 0.08, team.Primary, Enum.Material.Carpet, {
@@ -888,7 +933,7 @@ function M.club_lounge(ctx)
 		elseif seg.kind == "corner" then
 			drinkRail(seating, seg, L, 6, 30, 3, team, 2)
 			sofaSet(seating, seg, 18, 91, team, { Armchairs = false })
-			post(seating, seg, "HighTopTable", -18, 84.5, seg.floor, seg.floor + 3.6, 2.4, MARBLE, Enum.Material.Marble)
+			highTop(seating, seg, -18, 84.5)
 			local logo =
 				span(seating, seg, "ClubFloorLogo", -7, 7, 95, 103, seg.floor, seg.floor + 0.08, team.Primary, Enum.Material.Carpet, {
 					CanCollide = false,
@@ -992,7 +1037,7 @@ local SUITE_INFO = {
 	{ "Legends Suite", "Old game balls and team photos everywhere. Rumour says a famous kicker carved his initials in the mini-bar." },
 	{
 		"Owner's Suite",
-		"The best seats in the stadium, right beside the coaches' booth on the 50-yard line. Only the owner gets the big chair!",
+		"The best seats in the stadium, right next to the coaches' booth near midfield. Only the owner gets the big gold chair!",
 	},
 	{ "Family Suite", "Kid-sized seats and a never-ending popcorn supply. Perfect for game day with the whole family." },
 	{ "Sponsors' Suite", "Fancy snacks for the team's partners. They clap politely after every touchdown." },
@@ -1164,7 +1209,9 @@ function M.suites(ctx)
 			local back = {}
 			for _, suite in ipairs(suitesOf[seg.name]) do
 				if suite.s == s then
-					if (suite.xa + suite.xb) / 2 * s > 60 then
+					-- (sorted by where the suite's DOOR is: that is what people walk to)
+					local d0, d1 = suiteDoorway(suite)
+					if (d0 + d1) / 2 * s > 60 then
 						table.insert(out, suite.n)
 					else
 						table.insert(back, suite.n)
@@ -1319,8 +1366,11 @@ function M.suites(ctx)
 				Height = 0.68,
 			})
 			BuildUtil.Look(plate, title, info[2], { LookKey = suite.owner and "owner" or nil, Distance = 8 })
-			-- stadium chairs at the glass (the middle one is the suite's TV camera seat)
-			for index, dx in ipairs({ -2.4, 0, 2.4 }) do
+			-- stadium chairs at the glass (the middle one is the suite's TV camera seat); the two
+			-- big suites get a row of five
+			local spots = suite.big and { -4.8, -2.4, 0, 2.4, 4.8 } or { -2.4, 0, 2.4 }
+			local middle = (#spots + 1) / 2
+			for index, dx in ipairs(spots) do
 				BuildUtil.Seat(c, {
 					Name = "SuiteChair",
 					Size = Vector3.new(2, 1.8, 1.8),
@@ -1328,11 +1378,12 @@ function M.suites(ctx)
 					Color = team.Primary,
 					Material = Enum.Material.Fabric,
 					Object = "Suite Seat",
-					NoPrompt = index ~= 2,
-					Camera = index == 2 and fieldView(L, seg, xm, fy + 8, 74, 52, "SUITE " .. suite.n .. " - LIVE") or nil,
+					NoPrompt = index ~= middle,
+					Camera = index == middle and fieldView(L, seg, xm, fy + 8, 74, 52, "SUITE " .. suite.n .. " - LIVE") or nil,
 				})
 			end
-			span(c, seg, "ChairBacks", xm - 3.4, xm + 3.4, 83.4, 83.8, fy + 1.8, fy + 4.2, team.Primary, Enum.Material.Fabric)
+			local backHalf = spots[#spots] + 1
+			span(c, seg, "ChairBacks", xm - backHalf, xm + backHalf, 83.4, 83.8, fy + 1.8, fy + 4.2, team.Primary, Enum.Material.Fabric)
 			-- sofa facing the field, live score TV on the -x wall, mini-bar in the -x back corner
 			chair(c, seg, xa + 4.8, 89.5, fy, "field", suite.owner and LEATHER or team.Secondary, {
 				Width = 7,
@@ -1458,17 +1509,19 @@ function M.pressbox(ctx)
 	span(shell, seg, "PressCarpet", -inner, inner, FRONT_IN, BACK_IN, fy, fy + 0.05, CARPET, Enum.Material.Carpet, PAINT)
 	lightStrip(shell, seg, -19, 19, 84.5, 3, 22, 1.4)
 	lightStrip(shell, seg, -19, 19, 92, 3, 22, 1.3)
+	-- sliding glass doors: open leaves never block the walkway behind the second row
 	local door = roomDoor(shell, seg, -doorHalf, doorHalf, fy, {
 		Name = "PressBoxDoor",
 		Double = true,
-		Window = true,
-		Color = DARK_WOOD,
-		Material = Enum.Material.Wood,
+		Slide = true,
+		Color = GLASS_TINT,
+		Material = Enum.Material.Glass,
+		Transparency = 0.35,
 		Object = "Press Box",
 		Title = "Press Box",
 		Info = "Reporters only! Well... and team owners. The rule up here: NO CHEERING in the press box!",
 	})
-	doorText(door, { "PRESS", "BOX" }, WHITE, nil)
+	doorText(door, { "PRESS", "BOX" }, ink(team.Primary, team), team.Primary)
 	local rules = span(shell, seg, "PressRules", -inner, -inner + 0.15, 84.5, 89.5, fy + 3.4, fy + 7.4, CREAM, nil, PAINT)
 	write(rules, Enum.NormalId.Right, "PRESS BOX RULES\n1. NO CHEERING\n2. NO AUTOGRAPHS\n3. SNACKS ARE FREE", INK, {
 		Font = Enum.Font.GothamBold,
@@ -1517,7 +1570,8 @@ function M.pressbox(ctx)
 			BackColor = team.Primary,
 			Material = Enum.Material.Leather,
 			Object = "Press Row Seat",
-			Camera = fieldView(L, seg, x * 0.6, fy + 10, 76, 50, "PRESS BOX CAM"),
+			-- (just in front of the roof visor, 75.4..80 from y 63.8, so the view never starts inside it)
+			Camera = fieldView(L, seg, x * 0.6, fy + 8.6, 75, 50, "PRESS BOX CAM"),
 		})
 	end
 	local mic = post(room, seg, "PAMicrophone", 0, 82.2, fy + 2.9, fy + 4.1, 0.25, DARK_METAL, Enum.Material.Metal)
@@ -1534,23 +1588,24 @@ function M.pressbox(ctx)
 		"Fresh stats are printed every quarter: yards, tackles, touchdowns - and your team's record.",
 		{ LookKey = "record", Distance = 6 }
 	)
-	-- the second row on a riser (one step up)
+	-- the second row on two risers (one step up) either side of a centre aisle that runs from the
+	-- door straight down to the window; 4+ wide walkways stay free behind the risers (91..95.25)
+	-- and between the risers and the side walls
 	local riserTop = fy + 1
-	-- (4+ wide walkways stay free between the riser and the side walls)
-	span(room, seg, "PressRiser", -15.5, 15.5, 87.4, 92.2, fy, riserTop, CARPET, Enum.Material.Carpet)
-	span(room, seg, "PressDesk2", -13.6, 13.6, 87.6, 89.2, riserTop + 2.6, riserTop + 2.9, WOOD, Enum.Material.Wood)
-	span(room, seg, "PressDeskPanel2", -13.6, 13.6, 87.6, 88, riserTop, riserTop + 2.6, DARK_WOOD, Enum.Material.Wood)
-	for index, x in ipairs({ -7.5, 7.5 }) do
-		local monitor = span(room, seg, "Monitor2", x - 1.5, x + 1.5, 88.2, 88.5, riserTop + 2.9, riserTop + 4.4, SCREEN)
+	for index, s in ipairs({ -1, 1 }) do
+		span(room, seg, "PressRiser", s * 4.5, s * 15.5, 87.2, 91, fy, riserTop, CARPET, Enum.Material.Carpet)
+		span(room, seg, "PressDesk2", s * 5, s * 15, 87.4, 88.8, riserTop + 2.6, riserTop + 2.9, WOOD, Enum.Material.Wood)
+		span(room, seg, "PressDeskPanel2", s * 5, s * 15, 87.4, 87.8, riserTop, riserTop + 2.6, DARK_WOOD, Enum.Material.Wood)
+		local monitor = span(room, seg, "Monitor2", s * 8.5, s * 11.5, 87.9, 88.2, riserTop + 2.9, riserTop + 4.4, SCREEN)
 		liveScreen(ctx, monitor, OUTWARD, index == 1 and "team" or "score", { PPS = 40 })
-	end
-	for index, x in ipairs({ -11, -4, 4, 11 }) do
-		chair(room, seg, x, 90.4, riserTop, "field", LEATHER, {
-			BackColor = team.Primary,
-			Material = Enum.Material.Leather,
-			Object = "Press Seat",
-			NoPrompt = index == 2 or index == 3,
-		})
+		for _, x in ipairs({ 7, 13 }) do
+			chair(room, seg, s * x, 89.8, riserTop, "field", LEATHER, {
+				BackColor = team.Primary,
+				Material = Enum.Material.Leather,
+				Object = "Press Seat",
+				NoPrompt = x == 7,
+			})
+		end
 	end
 	-- the back of the room: stat boards either side of the door
 	local statLeft = span(room, seg, "StatBoard", -20, -6.5, BACK_IN - 0.3, BACK_IN, fy + 2.6, fy + 8.6, SCREEN)
@@ -1813,9 +1868,17 @@ function M.broadcast_booth(ctx)
 			Glow = true,
 		})
 	end
+	-- (the lintel stays black inside so the red ON AIR light stands out; the corridor side gets a
+	-- red name plate)
 	local lintel = backWall(shell, seg, "BoothBackWall", -PRESS_HALF, PRESS_HALF, fy, { { -doorHalf, doorHalf } }, CAMERA_BLACK)
-	lintel.Color = ON_AIR_RED
-	write(lintel, OUTWARD, name .. " TV  -  BROADCAST BOOTH", WHITE, { Left = 0.2, Width = 0.6, Top = 0.12, Height = 0.76, Glow = true })
+	write(lintel, OUTWARD, name .. " TV  -  BROADCAST BOOTH", WHITE, {
+		Left = 0.2,
+		Width = 0.6,
+		Top = 0.1,
+		Height = 0.8,
+		Glow = true,
+		Background = ON_AIR_RED,
+	})
 	local header = glassFront(shell, seg, -PRESS_HALF, PRESS_HALF, fy, team.Secondary, CAMERA_BLACK, false)
 	write(header, TOWARD_FIELD, name .. " TV  -  BROADCAST BOOTH", ink(CAMERA_BLACK, team), {
 		Left = 0.2,
