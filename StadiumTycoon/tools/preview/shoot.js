@@ -18,23 +18,33 @@ const partsFile = args[0] || "tools/out/parts.json";
 const outDir = args[1] || "tools/out";
 const viewArg = args[2] || "all";
 const showButtons = flags.includes("--buttons");
+const noRoofFlag = flags.includes("--noroof");
 
 // Camera views in plot-local studs (-Z = front/plaza, +Z = back).
 const VIEWS = {
   aerial: { pos: [-330, 250, -390], target: [0, 0, 10], fov: 45 },
   aerial_back: { pos: [340, 240, 380], target: [0, 0, 0], fov: 45 },
-  aerial_far: { pos: [-470, 380, -470], target: [0, 0, 80], fov: 45 },
+  aerial_far: { pos: [-620, 520, -560], target: [0, 0, 200], fov: 45 },
   top: { ortho: true, half: 225, center: [0, 0] },
-  top_full: { ortho: true, half: 300, center: [0, 80] },
+  top_full: { ortho: true, half: 420, center: [0, 200] },
   plaza: { pos: [0, 10, -232], target: [0, 14, -100], fov: 70 },
   field: { pos: [0, 7, -30], target: [0, 16, 110], fov: 85 },
   endzone: { pos: [-128, 9, 30], target: [180, 22, 30], fov: 80 },
-  campus: { pos: [60, 55, 150], target: [-20, 5, 290], fov: 70 },
   crowd: { pos: [0, 30, -20], target: [0, 18, 120], fov: 75 },
+  campus: { pos: [-60, 160, 150], target: [-40, 0, 420], fov: 65 },
+  hq_top: { ortho: true, half: 190, center: [-75, 280], noroof: true },
+  hq_inside: { pos: [-100, 9, 205], target: [-100, 6, 300], fov: 85, noroof: true },
+  hq_front: { pos: [-100, 30, 120], target: [-100, 10, 260], fov: 70 },
+  fields: { pos: [10, 90, 330], target: [10, 0, 470], fov: 75 },
+  hall_garage: { pos: [60, 60, 170], target: [195, 10, 300], fov: 70 },
+  fanzone: { pos: [150, 50, -230], target: [244, 5, -20], fov: 70 },
+  staff: { pos: [-148, 22, 345], target: [-148, 4, 392], fov: 90 },
+  vendors: { pos: [-62, 9, -138], target: [-86, 3, -138], fov: 75 },
 };
 
 function render(payload) {
-  const { data, view, showButtons } = payload;
+  const { data, view, showButtons, noRoof } = payload;
+  const roofPattern = /roof|ceiling|skylight|canopy|clerestory/i;
   const THREE = window.THREE;
   const width = 1400;
   const height = 900;
@@ -85,6 +95,7 @@ function render(payload) {
 
   for (const part of data.parts) {
     if (part.transparency >= 0.99) continue;
+    if (noRoof && roofPattern.test(part.name)) continue;
     const color = new THREE.Color(part.color[0], part.color[1], part.color[2]);
     const isNeon = part.material === "Neon";
     const material = new THREE.MeshLambertMaterial({
@@ -162,7 +173,7 @@ function render(payload) {
     page.on("pageerror", (e) => console.error("page error:", e.message));
     await page.setContent("<!doctype html><html><body></body></html>");
     await page.addScriptTag({ path: threePath });
-    await page.evaluate(render, { data, view, showButtons });
+    await page.evaluate(render, { data, view, showButtons, noRoof: noRoofFlag || !!view.noroof });
     const file = path.join(outDir, `${name}.png`);
     await page.screenshot({ path: file });
     await page.close();

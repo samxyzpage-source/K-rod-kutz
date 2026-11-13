@@ -29,6 +29,10 @@ local GameDay = require(script.Parent.GameDay)
 -- Other modules can react when a step of a piece is built (e.g. golf carts): [pieceId] = fn(plot, item)
 local pieceHooks = {}
 local releaseHooks = {} -- fn(plot) when a plot is released
+local purchaseHooks = {} -- fn(player, plot, item) after a step is bought
+local collectHooks = {} -- fn(player, amount) after vault money is collected
+local teamHooks = {} -- fn(plot) after a plot's team colours / name change
+local teamProvider = nil -- fn(player, profile) -> palette, teamName (Franchise.lua)
 local PlayerData = require(script.Parent.PlayerData)
 local World = require(script.Parent.World)
 
@@ -261,6 +265,9 @@ local function buildItem(plot, item, animate)
 	local builder = Builders[item.PieceId]
 	if not builder then
 		warn("[PlotManager] No builder for piece " .. item.PieceId)
+		for _, hook in ipairs(pieceHooks[item.PieceId] or {}) do
+			task.spawn(hook, plot, item) -- gameplay (e.g. golf carts) doesn't depend on the geometry
+		end
 		return
 	end
 	local model = Instance.new("Model")
@@ -291,8 +298,8 @@ local function buildItem(plot, item, animate)
 			screen.Text = plot.TeamName
 		end
 	end
-	if pieceHooks[pieceId] then
-		task.spawn(pieceHooks[pieceId], plot, item)
+	for _, hook in ipairs(pieceHooks[pieceId] or {}) do
+		task.spawn(hook, plot, item)
 	end
 end
 
@@ -426,6 +433,9 @@ function PlotManager.Purchase(plot, item)
 	buildItem(plot, item, true)
 	recalcIncome(plot)
 	local unlocked = refreshButtons(plot)
+	for _, hook in ipairs(purchaseHooks) do
+		task.spawn(hook, player, plot, item)
+	end
 	local message = ("Built %s!  +%s/s"):format(item.Name, Format.Short(item.Income * Config.IncomeMultiplier))
 	local names = {}
 	for _, newItem in ipairs(unlocked) do
@@ -513,7 +523,12 @@ end
 function PlotManager.Claim(plot, player, profile)
 	plot.Owner = player
 	plot.Owned = profile.Owned
-	plot.TeamName = makeTeamName(player)
+	local chosenPalette, chosenName = nil, nil
+	if teamProvider then
+		chosenPalette, chosenName = teamProvider(player, profile)
+	end
+	plot.Palette = chosenPalette or plot.BasePalette
+	plot.TeamName = chosenName or makeTeamName(player)
 	plot.Vault = 0
 	plot.HomeScore, plot.AwayScore = 0, 0
 	plotByPlayer[player] = plot
@@ -609,6 +624,7 @@ function PlotManager.Release(player)
 	plot.Income = 0
 	plot.Vault = 0
 	plot.TeamName = ""
+	plot.Palette = plot.BasePalette
 	plot.ItemsFolder:ClearAllChildren()
 	plot.ItemModels = {}
 	for _, button in pairs(plot.Buttons) do
@@ -659,6 +675,9 @@ local function collect(plot, silent)
 		updateButtonColors(plot)
 		if not silent then
 			notify(player, "+" .. Format.MoneyExact(amount), "cash")
+		end
+		for _, hook in ipairs(collectHooks) do
+			task.spawn(hook, player, amount)
 		end
 	end
 end
@@ -789,6 +808,7 @@ function PlotManager.Init(parentFolder, remote)
 			Index = index,
 			Origin = origin,
 			Palette = palette,
+			BasePalette = palette,
 			Model = model,
 			Refs = refs,
 			ItemsFolder = itemsFolder,
@@ -913,7 +933,64 @@ end
 -- fn(plot, item) is called (in its own thread) whenever a step of `pieceId` is built,
 -- including when a returning player's plot is rebuilt.
 function PlotManager.OnPieceBuilt(pieceId, fn)
-	pieceHooks[pieceId] = fn
+	pieceHooks[pieceId] = pieceHooks[pieceId] or {}
+	table.insert(pieceHooks[pieceId], fn)
+end
+
+-- Puts a final score on the plot's scoreboard / jumbotron.
+function PlotManager.SetScore(plot, home, away)
+	plot.HomeScore, plot.AwayScore = home, away
+	updateScoreboard(plot)
+end
+
+-- fn(player, plot, item) is called after a player buys a step.
+function PlotManager.OnPurchase(fn)
+	table.insert(purchaseHooks, fn)
+end
+
+-- fn(player, amount) is called after a player collects vault money.
+function PlotManager.OnCollect(fn)
+	table.insert(collectHooks, fn)
+end
+
+-- fn(player, profile) -> palette, teamName decides a new owner's team colours and name.
+function PlotManager.SetTeamProvider(fn)
+	teamProvider = fn
+end
+
+-- The player's income per second right now (including multipliers).
+function PlotManager.GetIncome(player)
+	local plot = plotByPlayer[player]
+	return plot and plot.Income * Config.IncomeMultiplier * incomeBoost or 0
+end
+
+-- Re-colours / re-names a player's whole franchise (rebuilds every owned step).
+function PlotManager.ApplyTeam(player, palette, teamName)
+	local plot = plotByPlayer[player]
+	if not plot then
+		return false
+	end
+	plot.Palette = palette or plot.Palette
+	plot.TeamName = teamName or plot.TeamName
+	plot.ItemsFolder:ClearAllChildren()
+	plot.ItemModels = {}
+	for _, item in ipairs(Items.List) do
+		if plot.Owned[item.Id] then
+			buildItem(plot, item, false)
+		end
+	end
+	setGateClaimed(plot, player)
+	updateScoreboard(plot)
+	applyLights(plot)
+	for _, hook in ipairs(teamHooks) do
+		task.spawn(hook, plot)
+	end
+	return true
+end
+
+-- fn(plot) runs after ApplyTeam re-coloured a plot (e.g. to repaint the golf carts).
+function PlotManager.OnTeamApplied(fn)
+	table.insert(teamHooks, fn)
 end
 
 -- fn(plot) is called when a plot is released (its owner left).

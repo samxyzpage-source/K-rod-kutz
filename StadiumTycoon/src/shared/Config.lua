@@ -45,6 +45,61 @@ Config.GameDay = {
 	WalkingFans = 8, -- fans that walk in through the gate at kick-off
 }
 
+-- Team identity: owners pick a palette (TeamColors above) and a nickname when they claim.
+Config.TeamNicknames = {
+	"Comets",
+	"Thunderhawks",
+	"Ironclads",
+	"Mammoths",
+	"Stingrays",
+	"Wildfire",
+	"Bulldogs",
+	"Dragons",
+	"Rhinos",
+	"Cyclones",
+	"Gladiators",
+	"Yetis",
+}
+
+-- Owner's Bonus: a free cash gift every IntervalSeconds (claimed from the HUD).
+Config.OwnerBonus = {
+	IntervalSeconds = 480,
+	MinimumCash = 250,
+	IncomeSeconds = 90, -- the bonus is worth this many seconds of income (or MinimumCash)
+}
+
+-- Draft + roster: draft players from the Front Office's draft board.
+Config.Draft = {
+	Positions = { "QB", "RB", "WR", "OL", "DEF", "K" },
+	BaseRating = 50, -- worst possible draft pick
+	RatingSpread = 22, -- random extra rating 0..RatingSpread
+	CostIncomeSeconds = 60, -- a draft pick costs this many seconds of income (or MinimumCost)
+	MinimumCost = 400,
+	BenchSize = 12, -- players kept besides the starters
+	EmptyPositionRating = 35,
+}
+
+-- Field goal challenge (stadium field, once the goal posts are finished).
+Config.KickGame = {
+	CooldownSeconds = 3,
+	-- difficulty: aim (-1..1) must land within AimTolerance of the centre, power (0..1) must reach
+	-- PowerNeeded. Both get harder with distance:
+	--   AimTolerance = max(AimMin, AimBase - yards * AimPerYard)
+	--   PowerNeeded  = min(PowerMax, PowerBase + yards * PowerPerYard)
+	AimBase = 0.32,
+	AimPerYard = 0.0035,
+	AimMin = 0.1,
+	PowerBase = 0.35,
+	PowerPerYard = 0.0105,
+	PowerMax = 0.95,
+	MeterSeconds = 1.6, -- how long one sweep of the aim / power meter takes
+	Spots = {
+		{ Name = "SHORT", Yards = 25, Position = Vector3.new(70, 0, 30) },
+		{ Name = "MEDIUM", Yards = 40, Position = Vector3.new(40, 0, 30) },
+		{ Name = "LONG", Yards = 55, Position = Vector3.new(10, 0, 30) },
+	},
+}
+
 -- Sounds (client only). Set Id = "" to turn one off, or paste your own "rbxassetid://123..." ids.
 Config.Sounds = {
 	Purchase = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.6, Speed = 1 },
@@ -193,6 +248,13 @@ L.HQ = { MinX = -250, MaxX = 100, MinZ = 200, MaxZ = 360, Height = 30 }
 L.HQCorridor = { MinX = -248, MaxX = 98, MinZ = 264, MaxZ = 278 } -- must stay walkable
 L.HQSpawn = Vector3.new(-100, 0, 210) -- owners appear here (facing into the building)
 L.HQSafePosition = Vector3.new(-75, 0, 212) -- collect pad in the lobby (the safe block sits 9 studs to +X)
+
+-- Staff characters (one per hired step): plot-local feet positions
+L.StaffSpots = {
+	staff_coaches = { Vector3.new(-182, 0, 391), Vector3.new(-194, 0, 391), Vector3.new(-206, 0, 391) },
+	staff_trainers = { Vector3.new(-90, 0, 391), Vector3.new(-102, 0, 391), Vector3.new(-114, 0, 391) },
+	staff_vendors = { Vector3.new(-85, 0, -150), Vector3.new(-85, 0, -138), Vector3.new(-85, 0, -126) },
+}
 
 -- Golf carts spawn here (in front of the garage, facing -X)
 L.CartPads = {

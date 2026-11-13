@@ -10,6 +10,7 @@ local fs = require("@lune/fs")
 local luau = require("@lune/luau")
 local process = require("@lune/process")
 local roblox = require("@lune/roblox")
+local serde = require("@lune/serde")
 local task = require("@lune/task")
 
 local Instance = roblox.Instance
@@ -268,6 +269,19 @@ local function makePlayer(name, userId)
 	function player:WaitForChild(childName)
 		return self[childName]
 	end
+	-- leaderstats can't be parented to a fake (table) player, so the test makes it up front
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "leaderstats"
+	for _, statName in ipairs({ "Wins", "Rating" }) do
+		local value = Instance.new("IntValue")
+		value.Name = statName
+		value.Parent = leaderstats
+	end
+	player.leaderstats = leaderstats
+	function player:FindFirstChild(childName)
+		local child = rawget(self, childName)
+		return typeof(child) == "Instance" and child or nil
+	end
 	player.Character = makeCharacter(name .. "Character")
 	table.insert(Players.list, player)
 	return player
@@ -379,6 +393,12 @@ function RunServiceMock:IsStudio()
 end
 local guidCounter = 0
 local HttpServiceMock = {}
+function HttpServiceMock:JSONEncode(value)
+	return serde.encode("json", value)
+end
+function HttpServiceMock:JSONDecode(text)
+	return serde.decode("json", text)
+end
 function HttpServiceMock:GenerateGUID()
 	guidCounter += 1
 	return "guid-" .. guidCounter
@@ -426,12 +446,44 @@ soundService.Name = "SoundService"
 roblox.implementMethod("Folder", "PlayLocalSound", function(_, sound)
 	table.insert(playedSounds, sound.Name)
 end)
+local networkOwners = {}
+roblox.implementMethod("BasePart", "SetNetworkOwner", function(part, owner)
+	networkOwners[instanceKey(part)] = owner or false
+end)
 roblox.implementMethod("Workspace", "GetServerTimeNow", function()
 	return os.clock()
 end)
 roblox.implementMethod("Instance", "GetAttributeChangedSignal", function(inst, name)
 	return instanceSignal(inst, "Attr" .. name)
 end)
+-- Remotes: FireServer/InvokeServer come from Players.LocalPlayer, FireClient is recorded
+local clientFires = {} -- { remote = name, player = p, args = { ... } }
+roblox.implementProperty("RemoteEvent", "OnServerEvent", function(inst)
+	return instanceSignal(inst, "OnServerEvent")
+end)
+roblox.implementProperty("RemoteEvent", "OnClientEvent", function(inst)
+	return instanceSignal(inst, "OnClientEvent")
+end)
+roblox.implementMethod("RemoteEvent", "FireServer", function(inst, ...)
+	instanceSignal(inst, "OnServerEvent"):Fire(Players.LocalPlayer, ...)
+end)
+roblox.implementMethod("RemoteEvent", "FireClient", function(inst, player, ...)
+	table.insert(clientFires, { remote = inst.Name, player = player, args = { ... } })
+	instanceSignal(inst, "OnClientEvent"):Fire(...)
+end)
+local serverInvokes = {} -- [remote key] = fn
+roblox.implementProperty("RemoteFunction", "OnServerInvoke", function(inst)
+	return serverInvokes[instanceKey(inst)]
+end, function(inst, fn)
+	serverInvokes[instanceKey(inst)] = fn
+end)
+roblox.implementMethod("RemoteFunction", "InvokeServer", function(inst, ...)
+	return serverInvokes[instanceKey(inst)](Players.LocalPlayer, ...)
+end)
+roblox.implementProperty("GuiButton", "Activated", function(inst)
+	return instanceSignal(inst, "Activated")
+end)
+local UserInputServiceMock = { InputBegan = Signal.new(), TouchEnabled = false, KeyboardEnabled = true }
 
 local services = {
 	Players = Players,
@@ -441,6 +493,7 @@ local services = {
 	HttpService = HttpServiceMock,
 	CollectionService = CollectionServiceMock,
 	SoundService = soundService,
+	UserInputService = UserInputServiceMock,
 }
 local lighting = Instance.new("Lighting")
 function fakeGame:GetService(name)
@@ -492,6 +545,7 @@ local function makeEnv(scriptPath)
 		"ColorSequenceKeypoint",
 		"ColorSequence",
 		"NumberRange",
+		"PhysicalProperties",
 		"Font",
 		"Rect",
 	}) do
@@ -584,6 +638,25 @@ local function runTests()
 
 	section("Plot setup")
 	PlotManager.Init(tycoons, notifyRemote)
+	local Vehicles = requireNode("ServerScriptService/TycoonServer/Vehicles")
+	Vehicles.Init(PlotManager)
+	local remoteInstances = Instance.new("Folder")
+	remoteInstances.Name = "TycoonRemotes"
+	local Franchise = requireNode("ServerScriptService/TycoonServer/Franchise")
+	local KickGame = requireNode("ServerScriptService/TycoonServer/KickGame")
+	Franchise.Init(PlotManager, remoteInstances, notifyRemote)
+	KickGame.Init(PlotManager, remoteInstances, notifyRemote, Franchise)
+	for _, remote in ipairs(remoteInstances:GetChildren()) do
+		remotesFolder[remote.Name] = remote
+	end
+	check(
+		remotesFolder.ChooseTeam
+			and remotesFolder.ClaimBonus
+			and remotesFolder.Draft
+			and remotesFolder.KickStart
+			and remotesFolder.KickAttempt,
+		"team + kick remotes are created"
+	)
 	check(countChildren(tycoons) == Config.PlotCount, "one model per plot")
 	for i = 1, Config.PlotCount do
 		check(claimTrigger(i) ~= nil and countChildren(plotModel(i).Buttons) == 0, ("plot %d has a claim trigger and no buttons"):format(i))
@@ -599,6 +672,12 @@ local function runTests()
 	check(aliceProfile ~= nil and aliceProfile.CanSave, "profile loads with saving on")
 	check(alice:GetAttribute("Cash") == Config.StartingCash, "Cash attribute starts at StartingCash")
 	check(alice:GetAttribute("SaveStatus") == "on", "SaveStatus = on")
+	Franchise.OnPlayerLoaded(alice)
+	Franchise.OnPlayerLoaded(bob)
+	local firstQuests = HttpServiceMock:JSONDecode(alice:GetAttribute("Quests") or "[]")
+	check(#firstQuests == 3 and firstQuests[1].Text ~= nil, ("3 quests are shown to start with (%d)"):format(#firstQuests))
+	check(alice:GetAttribute("TeamChosen") == false, "no team picked yet (the client opens the team picker)")
+	check(alice:GetAttribute("QuestsTotal") == #Franchise.GetQuests(), "QuestsTotal attribute")
 	check(
 		dataStore.data.Player_1001 and dataStore.data.Player_1001.Session and dataStore.data.Player_1001.Session.JobId == "server-A",
 		"session lock written on load"
@@ -610,13 +689,13 @@ local function runTests()
 	check(claimTrigger(1).Transparency == 1, "claim trigger hidden after claim")
 	local gateLabel = plotModel(1).Base:FindFirstChild("GateSign", true)
 	check(gateLabel and gateLabel.Text == "ALICE'S STADIUM", "gate sign shows owner: " .. tostring(gateLabel and gateLabel.Text))
-	check(button(1, "frontoffice") ~= nil, "Front Office button appears first")
+	check(button(1, "hq_lobby:1") ~= nil, "the HQ lobby reception desk is the first button")
 	check(countChildren(plotModel(1).Buttons) == 1, "only the first button is visible")
 	check(
-		alice:GetAttribute("NextGoal") == "frontoffice",
+		alice:GetAttribute("NextGoal") == "hq_lobby:1",
 		"NextGoal points at the cheapest button: " .. tostring(alice:GetAttribute("NextGoal"))
 	)
-	check(CollectionServiceMock:HasTag(button(1, "frontoffice"), "TycoonBuyButton"), "buy buttons are tagged for the client effects")
+	check(CollectionServiceMock:HasTag(button(1, "hq_lobby:1"), "TycoonBuyButton"), "buy buttons are tagged for the client effects")
 	check(tycoons:GetAttribute("FreePlots") == Config.PlotCount - 1, "FreePlots attribute counts free plots")
 	touch(claimTrigger(2), alice)
 	check(alice:GetAttribute("PlotIndex") == 1 and claimTrigger(2).Transparency < 1, "can't claim a second plot")
@@ -626,33 +705,79 @@ local function runTests()
 	check(lastNotification(bob) and lastNotification(bob).message:find("Alice's stadium") ~= nil, "Bob is told whose stadium it is")
 
 	section("Buying")
-	touch(button(1, "frontoffice"), bob)
-	check(not aliceProfile.Owned.frontoffice, "Bob can't buy on Alice's plot")
+	touch(button(1, "hq_lobby:1"), bob)
+	check(not aliceProfile.Owned["hq_lobby:1"], "Bob can't buy on Alice's plot")
 	check(
 		lastNotification(bob) and lastNotification(bob).message:find("Alice's stadium") ~= nil,
 		"Bob (no stadium) is pointed to a free gate"
 	)
-	touch(button(1, "frontoffice"), alice)
 	check(
-		lastNotification(alice).message:find("Unlocked") ~= nil,
-		"purchase message lists unlocked pieces: " .. lastNotification(alice).message
+		(alice.Character.HumanoidRootPart.CFrame.Position - PlotManager.GetPlot(alice).Refs.SpawnCFrame.Position).Magnitude < 0.01,
+		"claiming takes the owner into their Team HQ lobby"
 	)
-	check(aliceProfile.Owned.frontoffice == true, "free Front Office bought")
-	check(button(1, "frontoffice") == nil, "Front Office button removed after buying")
-	check(plotModel(1).Items:FindFirstChild("frontoffice") ~= nil, "Front Office model built")
-	check(#plotModel(1).Items.frontoffice:GetDescendants() > 0, "Front Office model has parts")
+	touch(button(1, "hq_lobby:1"), alice)
+	check(aliceProfile.Owned["hq_lobby:1"] == true, "free first step (lobby reception desk) bought")
+	check(button(1, "hq_lobby:1") == nil, "first step's button removed after buying")
+	check(plotModel(1).Items:FindFirstChild("hq_lobby:1") ~= nil, "step 1 model built")
+	check(#plotModel(1).Items["hq_lobby:1"]:GetDescendants() > 0, "step 1 model has parts")
+	check(button(1, "hq_lobby:2") ~= nil, "the next step of the same piece appears on the same spot")
+	local stepLabel = button(1, "hq_lobby:2"):FindFirstChild("Step", true)
 	check(
-		button(1, "practice_field") ~= nil and button(1, "turf") == nil,
-		"the practice field unlocks next and the stadium waits for the practice facility"
+		stepLabel ~= nil and stepLabel.Text:find("Step 2/") ~= nil,
+		"button shows the step number: " .. tostring(stepLabel and stepLabel.Text)
 	)
-	check(button(1, "practice_gear") == nil, "locked buttons stay hidden")
-	check(alice:GetAttribute("Income") == Items.ById.frontoffice.Income * Config.IncomeMultiplier, "Income attribute updated")
+	check(button(1, "turf:1") == nil and button(1, "hq_frontoffice:1") == nil, "other pieces wait until the lobby is finished")
+	check(alice:GetAttribute("Income") == Items.ById["hq_lobby:1"].Income * Config.IncomeMultiplier, "Income attribute updated")
 	check(alice:GetAttribute("Built") == 1, "Built attribute = 1")
-	local yardButton = button(1, "practice_field")
+	local yardButton = button(1, "hq_lobby:2")
 	check(yardButton.Color == Config.Colors.ButtonTooExpensive, "unaffordable button is red")
 	touch(yardButton, alice)
-	check(not aliceProfile.Owned.yardlines, "can't buy without enough cash")
+	check(not aliceProfile.Owned["hq_lobby:2"], "can't buy without enough cash")
 	check(lastNotification(alice).message:find("need") ~= nil, "told how much more cash is needed")
+
+	section("Quests, team picker, Owner's Bonus")
+	task.wait(0.05)
+	check((alice:GetAttribute("QuestsDone") or 0) >= 1, "buying the reception desk completes the first quest")
+	check(
+		PlayerData.GetCash(alice) == 100 and lastNotification(alice).message:find("QUEST COMPLETE") ~= nil,
+		("quest reward paid ($%d)"):format(PlayerData.GetCash(alice))
+	)
+	Franchise._onChooseTeam(alice, 99, 1)
+	Franchise._onChooseTeam(alice, 1, "x")
+	check(alice:GetAttribute("TeamChosen") == false, "bad team choices are ignored")
+	Franchise._onChooseTeam(alice, 3, 5)
+	task.wait(0.05)
+	local alicePlot = PlotManager.GetPlot(alice)
+	check(alice:GetAttribute("TeamChosen") == true, "team picked")
+	check(alice:GetAttribute("TeamNickname") == Config.TeamNicknames[5], "TeamNickname attribute")
+	check(alicePlot.Palette == Config.TeamColors[3], "the plot takes the team colours")
+	check(alicePlot.TeamName == string.upper(Config.TeamNicknames[5]), "the plot takes the team name: " .. alicePlot.TeamName)
+	check(plotModel(1).Items:FindFirstChild("hq_lobby:1") ~= nil, "owned steps are rebuilt in the new colours")
+	check(aliceProfile.Franchise.Team and aliceProfile.Franchise.Team.Palette == 3, "the team choice is saved in the profile")
+	Franchise._onChooseTeam(alice, 2, 2)
+	check(alicePlot.Palette == Config.TeamColors[3], "changing the team again is rate limited")
+	local cashBeforeBonus = PlayerData.GetCash(alice)
+	Franchise._onClaimBonus(alice)
+	check(
+		PlayerData.GetCash(alice) >= cashBeforeBonus + Config.OwnerBonus.MinimumCash,
+		("Owner's Bonus pays at least $%d"):format(Config.OwnerBonus.MinimumCash)
+	)
+	check(
+		(alice:GetAttribute("BonusReadyAt") or 0) > workspace:GetServerTimeNow() + Config.OwnerBonus.IntervalSeconds - 5,
+		"next bonus time is published"
+	)
+	Franchise._resetCooldowns(alice)
+	local cashAfterBonus = PlayerData.GetCash(alice)
+	Franchise._onClaimBonus(alice)
+	check(PlayerData.GetCash(alice) == cashAfterBonus, "the bonus can't be claimed again until the timer runs out")
+	Franchise._onClaimBonus(bob)
+	check(PlayerData.GetCash(bob) == 0, "no bonus without a stadium")
+	local lockedDraft = Franchise._onDraft(alice)
+	check(
+		lockedDraft and lockedDraft.ok == false and lockedDraft.message:find("Draft Board") ~= nil,
+		"the draft is locked until the Draft Board is built"
+	)
+	check(alice:GetAttribute("DraftUnlocked") == false, "DraftUnlocked attribute = false")
 
 	section("Income + collecting")
 	PlotManager.Start()
@@ -689,9 +814,17 @@ local function runTests()
 	PlayerData.AddCash(alice, 10000000)
 	check(yardButton.Parent ~= nil, "yard button still visible")
 	task.wait(0.1)
-	check(button(1, "practice_field").Color == Config.Colors.ButtonAffordable, "affordable button turns green")
+	check(button(1, "hq_lobby:2").Color == Config.Colors.ButtonAffordable, "affordable button turns green")
+	touch(button(1, "hq_lobby:2"), alice)
+	touch(button(1, "hq_lobby:3"), alice)
+	touch(button(1, "hq_lobby:4"), alice)
+	touch(button(1, "hq_lobby:5"), alice)
+	check(
+		lastNotification(alice).message:find("Unlocked") ~= nil,
+		"finishing a piece lists the newly unlocked pieces: " .. lastNotification(alice).message
+	)
 	local safety = 0
-	while safety < 200 do
+	while safety < 500 do
 		safety += 1
 		local nextButton = nil
 		for _, child in ipairs(plotModel(1).Buttons:GetChildren()) do
@@ -718,11 +851,178 @@ local function runTests()
 	end
 	check(lastNotification(alice).message:find("complete") ~= nil, "completion message on the last item")
 
+	section("Golf carts")
+	task.wait(0.2)
+	local cartsFolder = plotModel(1):FindFirstChild("Carts")
+	local cartCount = cartsFolder and #cartsFolder:GetChildren() or 0
+	check(cartCount == 3, ("the golf cart garage spawns 3 drivable carts (%d)"):format(cartCount))
+	local cart = cartsFolder and cartsFolder:FindFirstChild("GolfCart1")
+	local cartSeat = cart and cart:FindFirstChild("DriverSeat")
+	local chassis = cart and cart.PrimaryPart
+	check(cartSeat ~= nil and cartSeat.ClassName == "VehicleSeat", "carts have a driver's VehicleSeat")
+	check(
+		chassis ~= nil and chassis:FindFirstChild("DriveVelocity") ~= nil and chassis:FindFirstChild("DriveTurn") ~= nil,
+		"carts have drive constraints"
+	)
+	check(CollectionServiceMock:HasTag(cart, "TycoonCart"), "carts are tagged for the drive controller")
+	check(chassis and chassis.Color == Config.TeamColors[3].Primary, "carts come in the team colours")
+	Vehicles.Recolor(cart, Config.TeamColors[1])
+	check(chassis and chassis.Color == Config.TeamColors[1].Primary, "carts can be repainted for a new team")
+	Vehicles.Recolor(cart, Config.TeamColors[3])
+	local unanchored = true
+	for _, d in ipairs(cart:GetDescendants()) do
+		if d:IsA("BasePart") and d.Anchored then
+			unanchored = false
+		end
+	end
+	check(unanchored, "cart parts are unanchored (physics) and welded")
+	-- someone sits down: they get network ownership; getting up gives it back to the server
+	local sitter = alice.Character:FindFirstChildOfClass("Humanoid")
+	local okSit = pcall(function()
+		cartSeat.Occupant = sitter
+	end)
+	instanceSignal(cartSeat, "PropOccupant"):Fire()
+	task.wait(0.05)
+	check(okSit and networkOwners[instanceKey(chassis)] == alice, "the driver gets network ownership")
+	pcall(function()
+		cartSeat.Occupant = nil
+	end)
+	instanceSignal(cartSeat, "PropOccupant"):Fire()
+	task.wait(0.05)
+	check(networkOwners[instanceKey(chassis)] == false, "the server takes the cart back when the driver leaves")
+	-- an abandoned cart far away goes back to its pad
+	local carts1 = Vehicles.GetCarts(PlotManager.GetPlot(alice))
+	local info1 = carts1[1]
+	cart:PivotTo(info1.home * CFrame.new(0, 0, 200))
+	info1.lastUsed = -1000
+	local moved = Vehicles.Tidy(os.clock())
+	check(moved >= 1 and (cart.PrimaryPart.CFrame.Position - info1.home.Position).Magnitude < 5, "abandoned carts drive themselves home")
+
+	section("Draft + roster")
+	check(alice:GetAttribute("DraftUnlocked") == true, "the Draft Board unlocks the draft")
+	local cashBeforeDraft = PlayerData.GetCash(alice)
+	local draftCost = alice:GetAttribute("DraftCost")
+	local firstPick = Franchise._onDraft(alice)
+	check(firstPick and firstPick.ok and firstPick.player ~= nil, "drafting works")
+	check(PlayerData.GetCash(alice) == cashBeforeDraft - draftCost, ("a pick costs DraftCost ($%d)"):format(draftCost or -1))
+	check(
+		firstPick.player.Rating >= 1 and firstPick.player.Rating <= 99 and table.find(Config.Draft.Positions, firstPick.player.Pos) ~= nil,
+		("drafted %s %s (%d)"):format(firstPick.player.Pos, firstPick.player.Name, firstPick.player.Rating)
+	)
+	local tooFast = Franchise._onDraft(alice)
+	check(tooFast.ok == false, "drafting is rate limited")
+	for _ = 1, 30 do
+		Franchise._resetCooldowns(alice)
+		Franchise._onDraft(alice)
+	end
+	local roster = aliceProfile.Franchise.Roster
+	check(#roster <= #Config.Draft.Positions + Config.Draft.BenchSize, ("roster is trimmed to starters + bench (%d)"):format(#roster))
+	local shownRoster = HttpServiceMock:JSONDecode(alice:GetAttribute("Roster"))
+	local filled = 0
+	for _, entry in ipairs(shownRoster) do
+		if entry.Name ~= "" then
+			filled += 1
+		end
+	end
+	check(filled == #Config.Draft.Positions, ("every position has a starter after 31 picks (%d)"):format(filled))
+	local rating = alice:GetAttribute("TeamRating")
+	check(rating and rating > Config.Draft.BaseRating and rating <= 99, "team rating: " .. tostring(rating))
+	check(alice.leaderstats.Rating.Value == rating, "leaderboard shows the team rating")
+	local spent = PlayerData.GetCash(alice)
+	PlayerData.TrySpend(alice, spent)
+	Franchise._resetCooldowns(alice)
+	local broke = Franchise._onDraft(alice)
+	check(broke.ok == false and broke.message:find("costs") ~= nil, "can't draft without the cash")
+	PlayerData.AddCash(alice, spent)
+
+	section("Field goals")
+	check(KickGame.Judge(25, 0, 0.7) == true, "a straight 25-yard kick with enough power is good")
+	check(select(2, KickGame.Judge(55, 0, 0.8)) == "short", "a weak 55-yard kick falls short")
+	check(select(2, KickGame.Judge(40, -0.6, 1)) == "wide left", "a hooked kick is wide left")
+	check(select(2, KickGame.Judge(40, 0.6, 1)) == "wide right", "a sliced kick is wide right")
+	local pads = KickGame.GetPads(alicePlot)
+	check(pads and #pads == #Config.KickGame.Spots, "the goal posts add kick spots to the field")
+	check(plotModel(1):FindFirstChild("KickSpots") ~= nil, "kick spots are in the plot model")
+	Config.KickGame.CooldownSeconds = 0
+	local function kickFrom(index, aim, power)
+		alice.Character.HumanoidRootPart.CFrame = pads[index].CFrame * CFrame.new(0, 3, 0)
+		local firesBefore = #clientFires
+		touch(pads[index], alice)
+		local fire = clientFires[#clientFires]
+		local offered = #clientFires > firesBefore and fire.remote == "KickStart" and fire.player == alice
+		KickGame._onAttempt(alice, index, aim, power)
+		return offered, fire
+	end
+	local cashBeforeKick = PlayerData.GetCash(alice)
+	local offered, fire = kickFrom(3, 0, 1)
+	check(offered and fire.args[1] == 3 and fire.args[2] == 55, "stepping on a spot opens the kick meter (spot 3, 55 yards)")
+	check(PlayerData.GetCash(alice) > cashBeforeKick, "a good kick pays")
+	check(
+		lastNotification(alice).message:find("IT'S GOOD") ~= nil or lastNotification(alice).message:find("QUEST") ~= nil,
+		"told it's good"
+	)
+	check(alicePlot.Model:FindFirstChild("KickedBall") ~= nil, "the ball flies")
+	check((aliceProfile.Franchise.Stats.LongestFG or 0) == 55, "longest field goal is recorded")
+	check(aliceProfile.Franchise.Quests.kick50 == true, "the 55-yard quest completes")
+	local cashNoOffer = PlayerData.GetCash(alice)
+	KickGame._onAttempt(alice, 3, 0, 1)
+	check(PlayerData.GetCash(alice) == cashNoOffer, "a kick that wasn't offered is ignored")
+	kickFrom(1, 0.95, 1)
+	check(lastNotification(alice).message:find("wide right") ~= nil, "missed wide right: " .. lastNotification(alice).message)
+	kickFrom(2, 0, 0.1)
+	check(lastNotification(alice).message:find("short") ~= nil, "missed short: " .. lastNotification(alice).message)
+	alice.Character.HumanoidRootPart.CFrame = pads[1].CFrame * CFrame.new(0, 3, 0)
+	touch(pads[1], alice)
+	alice.Character.HumanoidRootPart.CFrame = CFrame.new(0, 3, 0)
+	local cashFar = PlayerData.GetCash(alice)
+	KickGame._onAttempt(alice, 1, 0, 1)
+	check(PlayerData.GetCash(alice) == cashFar, "walking away from the spot cancels the kick")
+	touch(pads[1], bob)
+	check(clientFires[#clientFires].player ~= bob, "only the owner can kick on their field")
+	Config.KickGame.CooldownSeconds = 3
+
+	section("Staff + game-day results")
+	local coaches = plotModel(1).Items:FindFirstChild("staff_coaches:1")
+	check(coaches ~= nil and #coaches:GetDescendants() > 5, "the hired head coach stands on the practice field")
+	check(plotModel(1).Items:FindFirstChild("staff_vendors:3") ~= nil, "food vendors are on the plaza")
+	local wins0 = aliceProfile.Franchise.Stats.Wins or 0
+	local losses0 = aliceProfile.Franchise.Stats.Losses or 0
+	local cashBeforeGame = PlayerData.GetCash(alice)
+	Franchise.PlayGameDay()
+	local wins1 = aliceProfile.Franchise.Stats.Wins or 0
+	local losses1 = aliceProfile.Franchise.Stats.Losses or 0
+	check(wins1 + losses1 == wins0 + losses0 + 1, "every game day is a win or a loss")
+	check(alice:GetAttribute("Record") == ("%d-%d"):format(wins1, losses1), "record attribute: " .. tostring(alice:GetAttribute("Record")))
+	check(alice.leaderstats.Wins.Value == wins1, "leaderboard shows wins")
+	check(PlayerData.GetCash(alice) > cashBeforeGame, "game days pay a prize either way")
+	local finalNote = false
+	for index = #notifications, math.max(1, #notifications - 6), -1 do
+		if notifications[index].player == alice and notifications[index].message:find("FINAL:") then
+			finalNote = true
+		end
+	end
+	check(finalNote, "the final score is announced")
+	check(
+		alicePlot.HomeScore ~= alicePlot.AwayScore and math.max(alicePlot.HomeScore, alicePlot.AwayScore) >= 14,
+		("the scoreboard shows the result (%d-%d)"):format(alicePlot.HomeScore, alicePlot.AwayScore)
+	)
+	for _ = 1, 40 do
+		Franchise.PlayGameDay()
+	end
+	check(
+		(alice:GetAttribute("QuestsDone") or 0) >= 15,
+		("most quests done by a finished franchise (%d)"):format(alice:GetAttribute("QuestsDone") or 0)
+	)
+	check(aliceProfile.Franchise.Quests.champion == true, "the trophy quest completes")
+
 	section("Live displays")
 	local title = plotModel(1).Items:FindFirstChild("ScoreboardTitle", true)
 	local attendance = plotModel(1).Items:FindFirstChild("ScoreboardAttendance", true)
 	local score = plotModel(1).Items:FindFirstChild("ScoreboardScore", true)
-	check(title and title.Text == "ALICE STADIUM", "scoreboard title: " .. tostring(title and title.Text))
+	check(
+		title and title.Text == string.upper(Config.TeamNicknames[5]) .. " STADIUM",
+		"scoreboard title uses the team name: " .. tostring(title and title.Text)
+	)
 	check(
 		attendance and attendance.Text:find("ATTENDANCE") ~= nil and attendance.Text:find("%d") ~= nil,
 		"scoreboard attendance: " .. tostring(attendance and attendance.Text)
@@ -731,7 +1031,7 @@ local function runTests()
 	local jumbo = plotModel(1).Items:FindFirstChild("JumbotronText", true)
 	check(jumbo ~= nil, "jumbotron label exists")
 	PlotManager.SetNight(true)
-	local lightsModel = plotModel(1).Items:FindFirstChild("lights")
+	local lightsModel = plotModel(1).Items
 	local lightsOn, panelsNeon, lightCount, panelCount = true, true, 0, 0
 	for _, d in ipairs(lightsModel and lightsModel:GetDescendants() or {}) do
 		if d.ClassName == "SpotLight" and d.Name == "FloodLight" then
@@ -815,7 +1115,7 @@ local function runTests()
 
 	section("Session lock")
 	-- Another server holds Carol's data: we wait, then it releases and we load the fresh data.
-	dataStore.data.Player_2001 = { Version = 1, Cash = 777, Owned = { "turf" }, Session = { JobId = "server-B", Time = os.time() } }
+	dataStore.data.Player_2001 = { Version = 1, Cash = 777, Owned = { "turf:1" }, Session = { JobId = "server-B", Time = os.time() } }
 	local carol = makePlayer("Carol", 2001)
 	local carolProfile = nil
 	task.spawn(function()
@@ -823,10 +1123,10 @@ local function runTests()
 	end)
 	task.wait(0.5)
 	check(carolProfile == nil, "load waits while another server holds the lock")
-	dataStore.data.Player_2001 = { Version = 1, Cash = 999, Owned = { "turf", "yardlines" } } -- other server saved + released
+	dataStore.data.Player_2001 = { Version = 1, Cash = 999, Owned = { "turf:1", "yardlines:1" } } -- other server saved + released
 	task.wait(5)
 	check(
-		carolProfile ~= nil and carolProfile.Cash == 999 and carolProfile.Owned.yardlines,
+		carolProfile ~= nil and carolProfile.Cash == 999 and carolProfile.Owned["yardlines:1"],
 		"loads the other server's final save after it releases"
 	)
 	-- A stale lock (server crashed long ago) is taken over immediately
@@ -844,11 +1144,11 @@ local function runTests()
 	)
 
 	section("Bad saved data is sanitised")
-	dataStore.data.Player_3001 = { Cash = -50, Owned = { "turf", "not_a_real_item", 42 } }
+	dataStore.data.Player_3001 = { Cash = -50, Owned = { "turf:1", "not_a_real_item", 42 } }
 	local erin = makePlayer("Erin", 3001)
 	local erinProfile = PlayerData.Load(erin)
 	check(erinProfile.Cash == Config.StartingCash, "negative cash ignored")
-	check(erinProfile.Owned.turf and not erinProfile.Owned.not_a_real_item, "unknown item ids aren't built")
+	check(erinProfile.Owned["turf:1"] and not erinProfile.Owned.not_a_real_item, "unknown item ids aren't built")
 	check(
 		#erinProfile.UnknownOwned == 1 and erinProfile.UnknownOwned[1] == "not_a_real_item",
 		"unknown item ids are remembered (non-strings dropped)"
@@ -883,7 +1183,7 @@ local function runTests()
 	check(PlayerData.IsSavingAvailable(), "saving stays available after a temporary error")
 
 	section("Save from a newer game version")
-	dataStore.data.Player_3003 = { Version = 99, Cash = 50, Owned = { "turf" }, FutureField = true }
+	dataStore.data.Player_3003 = { Version = 99, Cash = 50, Owned = { "turf:1" }, FutureField = true }
 	local ivy = makePlayer("Ivy", 3003)
 	local ivyProfile = PlayerData.Load(ivy)
 	check(ivyProfile and ivyProfile.Cash == 50 and ivyProfile.CanSave == false, "newer-version save is loaded read-only")
@@ -1058,9 +1358,146 @@ local function runTests()
 		check(cashFrames == 1, ("cash pop-ups reuse one toast (%d)"):format(cashFrames))
 	end
 
+	section("Team screens (client)")
+	viewer:SetAttribute("TeamChosen", false)
+	viewer:SetAttribute(
+		"Quests",
+		HttpServiceMock:JSONEncode({
+			{ Text = "Build the reception desk", Progress = 0, Goal = 1, Reward = 100 },
+			{ Text = "Collect $2,000 from your safe", Progress = 500, Goal = 2000, Reward = 500 },
+		})
+	)
+	viewer:SetAttribute("QuestsDone", 2)
+	viewer:SetAttribute("QuestsTotal", 24)
+	viewer:SetAttribute("BonusReadyAt", workspace:GetServerTimeNow() - 1)
+	local okTeamUi, teamUiErr = pcall(runScript, "StarterPlayer/StarterPlayerScripts/TycoonClient/Franchise")
+	check(okTeamUi, "Franchise UI script runs: " .. tostring(teamUiErr))
+	local teamUi = playerGui:FindFirstChild("FranchiseUI")
+	check(teamUi ~= nil, "team ScreenGui created")
+	if teamUi then
+		local picker = teamUi:FindFirstChild("TeamPicker")
+		check(picker and picker.Visible, "the team picker opens by itself for a new owner")
+		instanceSignal(picker:FindFirstChild("Palette2", true), "Activated"):Fire()
+		instanceSignal(picker:FindFirstChild("Nickname4", true), "Activated"):Fire()
+		task.wait(0.02)
+		local preview = picker:FindFirstChild("Preview")
+		check(
+			preview.BackgroundColor3 == Config.TeamColors[2].Primary and preview.Text:find(string.upper(Config.TeamNicknames[4])) ~= nil,
+			"the preview shows the picked colours + name: " .. preview.Text
+		)
+		local chosen = nil
+		instanceSignal(remotesFolder.ChooseTeam, "OnServerEvent"):Connect(function(who, paletteIndex, nicknameIndex)
+			chosen = { who, paletteIndex, nicknameIndex }
+		end)
+		instanceSignal(picker:FindFirstChild("Confirm"), "Activated"):Fire()
+		task.wait(0.02)
+		check(chosen and chosen[1] == viewer and chosen[2] == 2 and chosen[3] == 4, "confirming sends the choice to the server")
+		check(not picker.Visible, "the picker closes after confirming")
+		local quests = teamUi:FindFirstChild("Quests")
+		local questText = quests and quests:FindFirstChild("Quest2") and quests.Quest2.Text.Text
+		check(
+			quests and quests.Visible and questText == "Collect $2,000 from your safe",
+			"quest tracker shows quests: " .. tostring(questText)
+		)
+		check(quests.Title.Text:find("2/24") ~= nil, "quest tracker shows the count: " .. quests.Title.Text)
+		check(quests.Quest2.Track.Fill.Size.X.Scale == 0.25, "quest progress bar")
+		task.wait(0.3)
+		local bonus = teamUi:FindFirstChild("Bonus", true)
+		check(bonus and bonus.Text:find("CLAIM") ~= nil, "bonus button says CLAIM when ready: " .. tostring(bonus and bonus.Text))
+		viewer:SetAttribute("BonusReadyAt", workspace:GetServerTimeNow() + 95)
+		task.wait(0.3)
+		check(bonus.Text:find("1:3") ~= nil, "bonus button counts down: " .. bonus.Text)
+		viewer:SetAttribute(
+			"Roster",
+			HttpServiceMock:JSONEncode({
+				{ Pos = "QB", Name = "Test Passer", Rating = 88 },
+				{ Pos = "RB", Name = "", Rating = 0 },
+			})
+		)
+		viewer:SetAttribute("TeamRating", 72)
+		viewer:SetAttribute("Record", "3-1")
+		viewer:SetAttribute("DraftUnlocked", true)
+		viewer:SetAttribute("DraftCost", 5000)
+		instanceSignal(teamUi:FindFirstChild("Roster", true), "Activated"):Fire()
+		task.wait(0.05)
+		local rosterWindow = teamUi:FindFirstChild("RosterWindow")
+		check(rosterWindow and rosterWindow.Visible, "roster window opens")
+		local qbRow = rosterWindow:FindFirstChild("RowQB", true)
+		check(qbRow and qbRow.Name == "RowQB" and qbRow:FindFirstChild("Name").Text == "Test Passer", "roster shows the starters")
+		check(rosterWindow:FindFirstChild("RowRB", true):FindFirstChild("Name").Text:find("empty") ~= nil, "empty positions are marked")
+		check(rosterWindow:FindFirstChild("Record", true).Text == "RECORD 3-1", "record shown")
+		local draftButton = rosterWindow:FindFirstChild("DraftButton", true)
+		check(draftButton.Text:find("$5,000", 1, true) ~= nil, "draft button shows the price: " .. draftButton.Text)
+		instanceSignal(draftButton, "Activated"):Fire()
+		task.wait(0.05)
+		local draftInfo = rosterWindow:FindFirstChild("DraftInfo", true)
+		check(draftInfo.Text:find("Claim a stadium") ~= nil, "draft errors from the server are shown: " .. draftInfo.Text)
+	end
+
+	section("Kick meter (client)")
+	local okKick, kickErr = pcall(runScript, "StarterPlayer/StarterPlayerScripts/TycoonClient/KickGame")
+	check(okKick, "KickGame client script runs: " .. tostring(kickErr))
+	local meter = playerGui:FindFirstChild("KickMeter")
+	local attempt = nil
+	instanceSignal(remotesFolder.KickAttempt, "OnServerEvent"):Connect(function(who, spot, aim, power)
+		attempt = { who, spot, aim, power }
+	end)
+	instanceSignal(remotesFolder.KickStart, "OnClientEvent"):Fire(2, 40, "MEDIUM")
+	task.wait(0.05)
+	check(meter and meter.Enabled, "the kick meter opens")
+	check(meter and meter:FindFirstChild("Title", true).Text:find("40 YARDS") ~= nil, "meter shows the distance")
+	for _ = 1, 5 do
+		RunServiceMock.RenderStepped:Fire(0.016)
+		task.wait(0.03)
+	end
+	task.wait(0.1)
+	UserInputServiceMock.InputBegan:Fire({ KeyCode = Enum.KeyCode.Space }, false)
+	task.wait(0.2)
+	check(meter:FindFirstChild("Instruction", true).Text:find("POWER") ~= nil, "space locks the aim, then power")
+	instanceSignal(meter:FindFirstChild("Kick", true), "Activated"):Fire()
+	task.wait(0.05)
+	check(
+		attempt and attempt[1] == viewer and attempt[2] == 2 and math.abs(attempt[3]) <= 1 and attempt[4] >= 0 and attempt[4] <= 1,
+		"the kick is sent to the server (aim + power)"
+	)
+	instanceSignal(remotesFolder.KickStart, "OnClientEvent"):Fire(1, 25, "SHORT")
+	task.wait(0.05)
+	check(meter.Enabled, "a new kick opens the meter again")
+	viewer.Character.HumanoidRootPart.CFrame = CFrame.new(500, 3, 500)
+	RunServiceMock.RenderStepped:Fire(0.016)
+	task.wait(0.05)
+	check(not meter.Enabled, "walking away closes the meter")
+	viewer.Character.HumanoidRootPart.CFrame = CFrame.new(0, 3, 0)
+
+	section("Drive controller")
+	local driveCarts = Vehicles.GetCarts(PlotManager.GetPlot(alice2))
+	local driveInfo = driveCarts[1]
+	local driver = makeCharacter("ViewerCharacterDrive")
+	local driverHumanoid = driver:FindFirstChildOfClass("Humanoid")
+	viewer.Character = driver
+	local okSeat = pcall(function()
+		driverHumanoid.SeatPart = driveInfo.seat
+		driveInfo.seat.ThrottleFloat = 1
+		driveInfo.seat.SteerFloat = 1
+	end)
+	check(okSeat, "test can seat the driver")
+	local okDrive, driveErr = pcall(runScript, "StarterPlayer/StarterPlayerScripts/TycoonClient/Drive")
+	check(okDrive, "Drive script runs: " .. tostring(driveErr))
+	for _ = 1, 30 do
+		RunServiceMock.Heartbeat:Fire(1 / 30)
+	end
+	task.wait(0.1)
+	local driveChassis = driveInfo.model.PrimaryPart
+	local planeVelocity = driveChassis.DriveVelocity.PlaneVelocity
+	check(planeVelocity.Magnitude > 10, ("full throttle drives forward (%.1f studs/s)"):format(planeVelocity.Magnitude))
+	check(driveChassis.DriveTurn.AngularVelocity.Y < 0, "steering right turns the cart clockwise")
+	pcall(function()
+		driverHumanoid.SeatPart = nil
+	end)
+
 	section("Client effects")
 	viewer:SetAttribute("PlotIndex", 2)
-	viewer:SetAttribute("NextGoal", "frontoffice")
+	viewer:SetAttribute("NextGoal", "hq_lobby:1")
 	local okFx, fxErr = pcall(runScript, "StarterPlayer/StarterPlayerScripts/TycoonClient/Effects")
 	check(okFx, "Effects script runs: " .. tostring(fxErr))
 	task.wait(0.4)
@@ -1080,7 +1517,7 @@ local function runTests()
 	end
 	check(pulsing, "buy buttons pulse")
 	-- the guide survives its target button being destroyed (e.g. after buying it)
-	local goalPad = plotModel(2).Buttons:FindFirstChild("Buy_frontoffice")
+	local goalPad = plotModel(2).Buttons:FindFirstChild("Buy_hq_lobby:1")
 	if goalPad then
 		goalPad:Destroy()
 	end

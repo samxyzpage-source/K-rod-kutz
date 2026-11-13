@@ -32,6 +32,7 @@ local settings = Config.GameDay
 local tycoonsFolder = nil
 local plotManager = nil
 local active = false
+local endedHooks = {} -- fn() after every game day
 local rng = Random.new()
 
 local function serverNow()
@@ -115,6 +116,12 @@ local function beginGameDay()
 end
 
 local function endGameDay()
+	for _, hook in ipairs(endedHooks) do
+		local ok, err = pcall(hook)
+		if not ok then
+			warn("[GameDay] end hook failed: " .. tostring(err))
+		end
+	end
 	active = false
 	tycoonsFolder:SetAttribute("GameDayActive", false)
 	plotManager.SetGameDay(false, 1)
@@ -128,6 +135,11 @@ function GameDay.OnPlotClaimed(plot)
 	if active then
 		pcall(spawnCrowd, plot)
 	end
+end
+
+-- fn() runs when a game day ends (before the crowd leaves), e.g. to decide wins/losses.
+function GameDay.OnEnded(fn)
+	table.insert(endedHooks, fn)
 end
 
 function GameDay.Init(folder, manager)

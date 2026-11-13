@@ -23,6 +23,7 @@ local MODULES = {
 	"HallOfFame",
 	"FanZone",
 	"Garage",
+	"Staff",
 }
 
 for _, moduleName in ipairs(MODULES) do

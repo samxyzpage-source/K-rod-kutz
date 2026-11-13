@@ -14,6 +14,9 @@ local World = require(script.Parent.World)
 local PlayerData = require(script.Parent.PlayerData)
 local PlotManager = require(script.Parent.PlotManager)
 local GameDay = require(script.Parent.GameDay)
+local Vehicles = require(script.Parent.Vehicles)
+local Franchise = require(script.Parent.Franchise)
+local KickGame = require(script.Parent.KickGame)
 
 -- Remote used to show messages on players' screens
 local remotes = Instance.new("Folder")
@@ -30,12 +33,20 @@ tycoonsFolder.Name = "Tycoons"
 tycoonsFolder.Parent = Workspace
 PlotManager.Init(tycoonsFolder, notifyRemote)
 GameDay.Init(tycoonsFolder, PlotManager)
+Vehicles.Init(PlotManager)
+Franchise.Init(PlotManager, remotes, notifyRemote)
+KickGame.Init(PlotManager, remotes, notifyRemote, Franchise)
+GameDay.OnEnded(Franchise.PlayGameDay)
+Vehicles.OnDrive(Franchise.RecordDrive)
 World.StartDayNight(Config, PlotManager.SetNight)
 
 -- Players
 local function onPlayerAdded(player)
 	PlotManager.OnPlayerAdded(player)
 	local profile = PlayerData.Load(player)
+	if profile then
+		Franchise.OnPlayerLoaded(player)
+	end
 	if profile and profile.LoadFailed then
 		notifyRemote:FireClient(
 			player,
@@ -55,6 +66,7 @@ end
 Players.PlayerRemoving:Connect(function(player)
 	PlotManager.Release(player) -- pays out the vault into the player's cash
 	PlayerData.Release(player) -- final save
+	Franchise.OnPlayerRemoving(player)
 end)
 
 game:BindToClose(function()

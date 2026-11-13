@@ -145,6 +145,24 @@ local PIECES = {
 		{ "hq_coaches" },
 		Vector3.new(17, 0, HQ_FRONT_BUTTON_Z)
 	),
+	piece(
+		"staff_coaches",
+		"Coaching Staff",
+		{ "Offensive Coordinator", "Defensive Coordinator", "Special Teams Coach" },
+		13000,
+		54,
+		{ "hq_coaches", "practice_field" },
+		Vector3.new(-165, 0, 391)
+	),
+	piece(
+		"staff_trainers",
+		"Medical & Training Staff",
+		{ "Head Trainer", "Strength Coach", "Team Doctor" },
+		16000,
+		60,
+		{ "hq_trainingroom", "practice_field" },
+		Vector3.new(-75, 0, 391)
+	),
 
 	-- The stadium: field ---------------------------------------------------------------------------
 	piece(
@@ -211,6 +229,15 @@ local PIECES = {
 		100,
 		{ "ticketbooth" },
 		Vector3.new(-38, 0, -128)
+	),
+	piece(
+		"staff_vendors",
+		"Food Vendors",
+		{ "Hot Dog Vendor", "Popcorn Vendor", "Drinks Vendor" },
+		36000,
+		100,
+		{ "concessions" },
+		Vector3.new(-96, 0, -175)
 	),
 	piece(
 		"hq_lounge",

@@ -67,6 +67,7 @@ local function newProfile(userId)
 		Cash = Config.StartingCash,
 		Owned = {},
 		UnknownOwned = {}, -- saved item ids this server doesn't know (e.g. from a newer version); kept as-is
+		Franchise = {}, -- team choice, stats, quests, roster... (owned and validated by Franchise.lua)
 		CanSave = false,
 		LoadFailed = false,
 		Changes = 0, -- bumped on every change
@@ -87,6 +88,9 @@ local function applySavedData(profile, data)
 	end
 	if isNumber(data.Cash) and data.Cash >= 0 then
 		profile.Cash = math.floor(data.Cash)
+	end
+	if type(data.Franchise) == "table" then
+		profile.Franchise = data.Franchise
 	end
 	if type(data.Owned) == "table" then
 		for _, id in ipairs(data.Owned) do
@@ -120,6 +124,7 @@ local function serialize(profile, old)
 	end
 	table.sort(owned)
 	data.Version = DATA_VERSION
+	data.Franchise = profile.Franchise
 	data.Cash = math.floor(profile.Cash)
 	data.Owned = owned
 	data.SavedAt = os.time()
@@ -402,6 +407,14 @@ function PlayerData.SetOwned(player, itemId)
 	profile.Owned[itemId] = true
 	markChanged(player, profile)
 	return true
+end
+
+-- Call after changing profile.Franchise so the change gets saved.
+function PlayerData.MarkChanged(player)
+	local profile = profiles[player]
+	if profile then
+		profile.Changes += 1
+	end
 end
 
 function PlayerData.Save(player)
