@@ -4,27 +4,34 @@
 	Every piece is bought in STEPS (see Items.lua); BuildUtil.Stage(ctx, n) marks the parts of step n.
 
 	  ticketbooth  1 Booth            booth body with corner trim, roof, back door and an AC unit
-	               2 Window & Awning  ticket window + speaker grille, counter, striped awning and
-	                                  chrome queue posts with team-coloured belts along the counter
-	               3 Signs            BOX OFFICE panel, TICKETS roof sign, a glowing "GAME DAY
-	                                  TICKETS" screen for the street, OPEN sign, giant ADMIT ONE ticket
+	               2 Window & Awning  ticket window (look: next game day) + speaker grille, counter,
+	                                  striped awning and chrome queue posts with team-coloured belts
+	               3 Signs            BOX OFFICE panel, TICKETS roof sign, a live game-day countdown
+	                                  screen for the street, OPEN sign, giant ADMIT ONE ticket
 	  concessions  1 Stand            food stand on a patio, serving hatch, roof exhaust
-	               2 Counter & Awning counter with cups, sauces and a popcorn machine, awning,
-	                                  picnic tables with umbrellas, trash + recycling bins
-	               3 Menu & Giant Hot Dog  chalkboard menu, CONCESSIONS sign, soda vending machine,
-	                                  giant hot dog + soda cup on the roof
+	               2 Counter & Awning counter with sauces, cups (get a soda), the hatch (get a hot
+	                                  dog) and a popcorn machine (get popcorn), awning, picnic tables
+	                                  with umbrellas and benches you can sit on, trash + recycling bins
+	               3 Menu & Giant Hot Dog  chalkboard menu (look), CONCESSIONS sign, drinks vending
+	                                  machine (get a sports drink), giant hot dog + soda cup on the roof
 	  parking      1 Asphalt          asphalt, curbs, tree islands, "P" sign
 	               2 Parking Lines    stalls, accessible bays, arrows, crosswalk, bus bay, FAN PARKING
 	               3 Lamp Posts       six double lamp posts with team banners
-	               4 Cars             sedans, SUVs, pickups and the team bus
-	  teamstore    1 Building         walls, piers, roof with AC units, lit ceiling
-	               2 Glass Front & Doors  glass storefront, doors, canopy, mat, planters, side window
-	               3 Merch & Sign     TEAM STORE sign, mannequins, jersey racks, a giant foam finger,
-	                                  display table, checkout + till, jersey wall, roof football
-	  trophy       1 Plinth           stepped stone plinth, pedestal, corner flags
+	               4 Cars             sedans, SUVs, pickups and the team bus (the owner's car, a
+	                                  tailgate truck, a super fan's car and the bus have looks)
+	  teamstore    1 Building         walls, piers, roof with AC units, two lit ceiling panels; the
+	                                  front is open between the piers, so it is walk-in from step 1
+	               2 Glass Front & Doors  glass storefront with sliding glass double doors (7 wide),
+	                                  canopy, mat, planters, side window
+	               3 Merch & Sign     TEAM STORE sign, live team-name LED board, mannequins, jersey
+	                                  racks, a giant foam finger (grab one), display table, checkout +
+	                                  till, best-selling jersey wall, fitting bench, roof football
+	  trophy       1 Plinth           stepped stone plinth, pedestal, corner flags and a viewing bench
+	                                  (TV camera seat on the trophy)
 	               2 Trophy Base      black marble base with gold bands + team name, gold foot
-	               3 Golden Trophy    stem, cup, handles and a golden football
-	               4 Champions Plaque plaques on all sides, a lit neon ring and four confetti cannons
+	               3 Golden Trophy    stem, cup, handles and a golden football (look)
+	               4 Champions Plaque plaques on all sides (look: titles won), a lit neon ring and four
+	                                  confetti cannons
 
 	Every building stays inside its reserved footprint (the tables below; the concession patio
 	runs 6 studs further toward the street for the picnic tables). The walkway (X in [-12, 12])
@@ -160,6 +167,26 @@ local function sign(part, faces, text, background, team, opts)
 			label.TextWrapped = true
 		end
 	end
+end
+
+-- A dark LED screen whose text the server keeps up to date (BuildUtil.LiveText).
+local function liveScreen(part, face, live, placeholder, textColor)
+	local _, label = BuildUtil.LiveText(part, face, live, {
+		LabelName = "Live_" .. live,
+		Text = placeholder,
+		TextColor3 = textColor,
+		BackgroundColor3 = SCREEN,
+		BackgroundTransparency = 0,
+		LightInfluence = 0,
+		Font = Enum.Font.GothamBlack,
+		PixelsPerStud = 24,
+	})
+	label.TextWrapped = true
+	local pad = Instance.new("UIPadding")
+	local inset = UDim.new(0.08, 0)
+	pad.PaddingLeft, pad.PaddingRight, pad.PaddingTop, pad.PaddingBottom = inset, inset, inset, inset
+	pad.Parent = label
+	return label
 end
 
 -- A bright team colour for neon strips and glowing panels (a near-black secondary can't glow).
@@ -411,7 +438,7 @@ function Plaza.ticketbooth(ctx)
 		DARK_WINDOW,
 		Enum.Material.SmoothPlastic
 	)
-	BuildUtil.Box(
+	local windowGlass = BuildUtil.Box(
 		ctx,
 		"WindowGlass",
 		Vector3.new(0.1, 3.5, 6),
@@ -419,6 +446,12 @@ function Plaza.ticketbooth(ctx)
 		C.Glass,
 		Enum.Material.Glass,
 		{ Transparency = 0.55 }
+	)
+	BuildUtil.Look(
+		windowGlass,
+		"Ticket Window",
+		"Tickets for the next game day are sold right here. The more stands you build, the more fans fill your stadium!",
+		{ LookKey = "season", At = Vector3.new(0.9, -1, 0), Distance = 8 }
 	)
 	-- round speak-through grille in the glass
 	cylinderAt(
@@ -576,13 +609,8 @@ function Plaza.ticketbooth(ctx)
 		SCREEN,
 		Enum.Material.SmoothPlastic
 	)
-	sign(screen, { Enum.NormalId.Front }, "GAME DAY\nTICKETS", SCREEN, team, {
-		TextColor3 = textColorOn(SCREEN, { team.Secondary, team.Trim, C.Gold }),
-		Glow = true,
-		Wrap = true,
-		InsetX = 0.08,
-		InsetY = 0.1,
-	})
+	-- the server keeps it counting down: "NEXT GAME IN 2:15" / "GAME DAY! 0:42 LEFT"
+	liveScreen(screen, Enum.NormalId.Front, "gameday", "GAME DAY\nTICKETS", textColorOn(SCREEN, { team.Secondary, team.Trim, C.Gold }))
 	local ticker = BuildUtil.Box(
 		ctx,
 		"TickerStrip",
@@ -668,16 +696,15 @@ local function picnicTable(ctx, name, x, z, base, woodColor, umbrellaColor, umbr
 	local top = base + 2.55
 	BuildUtil.Block(ctx, name .. "Top", Vector3.new(5, 0.3, 2.4), Vector3.new(x, 0, z), woodColor, Enum.Material.WoodPlanks, nil, top)
 	for _, side in ipairs({ -1, 1 }) do
-		BuildUtil.Block(
-			ctx,
-			name .. "Bench",
-			Vector3.new(5, 0.3, 0.9),
-			Vector3.new(x, 0, z + side * 1.75),
-			woodColor,
-			Enum.Material.WoodPlanks,
-			nil,
-			base + 1.2
-		)
+		-- benches you can sit on, both facing the table (a seated player faces the seat's -Z)
+		BuildUtil.Seat(ctx, {
+			Name = name .. "Bench",
+			Size = Vector3.new(5, 0.3, 0.9),
+			CFrame = CFrame.new(x, base + 1.35, z + side * 1.75) * CFrame.Angles(0, side == 1 and 0 or math.pi, 0),
+			Color = woodColor,
+			Material = Enum.Material.WoodPlanks,
+			Object = "Picnic Bench",
+		})
 		BuildUtil.Block(
 			ctx,
 			name .. "Leg",
@@ -892,6 +919,14 @@ function Plaza.concessions(ctx)
 		3.55
 	)
 	BuildUtil.Light(counterTop, "PointLight", { Name = "CounterLight", Range = 14, Brightness = 1.2, Color = WARM_LIGHT })
+	-- hot dogs are handed out of the serving hatch (prompt over the counter in front of it)
+	BuildUtil.Use(ctx, counterTop, "hotdog", {
+		Object = "Hot Dog Stand",
+		Title = "Game Day Hot Dog",
+		Info = "Grilled, in a soft bun, with ketchup and mustard. The most popular snack in the stadium!",
+		At = Vector3.new(0.2, 0.9, windowZ + 1.2 - cz),
+		Distance = 6,
+	})
 	local counterY = 3.8
 	local itemX = frontX + 1.6
 	for i, color in ipairs({ KETCHUP, MUSTARD }) do
@@ -903,25 +938,33 @@ function Plaza.concessions(ctx)
 			Color = color,
 		})
 	end
-	for i, color in ipairs({ team.Primary, team.Secondary }) do
-		BuildUtil.Cylinder(ctx, {
-			Name = "CounterCup",
-			Position = Vector3.new(itemX, counterY + 0.5, windowZ + 0.6 + i * 0.85),
-			Height = 1,
-			Diameter = 0.7,
-			Color = color,
-		})
-	end
 	BuildUtil.Block(
 		ctx,
 		"NapkinBox",
 		Vector3.new(0.6, 0.8, 0.9),
-		Vector3.new(itemX, 0, windowZ + 3.1),
+		Vector3.new(itemX, 0, windowZ + 2.9),
 		C.Metal,
 		Enum.Material.Metal,
 		nil,
 		counterY
 	)
+	-- the drinks end of the counter: a stack of team cups (prompt for a soda)
+	local cups = {}
+	for i, color in ipairs({ team.Primary, team.Secondary }) do
+		cups[i] = BuildUtil.Cylinder(ctx, {
+			Name = "CounterCup",
+			Position = Vector3.new(itemX, counterY + 0.5, cz + 2.9 + i * 0.85),
+			Height = 1,
+			Diameter = 0.7,
+			Color = color,
+		})
+	end
+	BuildUtil.Use(ctx, cups[1], "soda", {
+		Object = "Drinks",
+		Title = "Fountain Soda",
+		Info = "Ice cold and fizzy, served in a cup with your team's colours on it.",
+		Distance = 6,
+	})
 	-- popcorn machine at the south end of the counter
 	local popX, popZ = frontX + 1.3, windowZ - 2
 	BuildUtil.Block(
@@ -934,7 +977,7 @@ function Plaza.concessions(ctx)
 		nil,
 		counterY
 	)
-	BuildUtil.Block(
+	local popcornGlass = BuildUtil.Block(
 		ctx,
 		"PopcornGlass",
 		Vector3.new(1.5, 1.6, 1.5),
@@ -944,6 +987,12 @@ function Plaza.concessions(ctx)
 		{ Transparency = 0.5 },
 		counterY + 0.5
 	)
+	BuildUtil.Use(ctx, popcornGlass, "popcorn", {
+		Object = "Popcorn Machine",
+		Title = "Fresh Popcorn",
+		Info = "Popped right here on the counter. Smell that butter!",
+		Distance = 6,
+	})
 	BuildUtil.Block(
 		ctx,
 		"Popcorn",
@@ -1011,6 +1060,12 @@ function Plaza.concessions(ctx)
 		InsetY = 0.08,
 		PixelsPerStud = 30,
 	})
+	BuildUtil.Look(
+		menu,
+		"Menu Board",
+		"Hot dogs, nachos, popcorn and soda. Today's special: the Touchdown Dog with extra mustard!",
+		{ At = Vector3.new(0.4, 1.3, -1.3), Distance = 6 }
+	)
 
 	-- Street-facing side panel
 	local sidePanel = BuildUtil.Box(
@@ -1045,7 +1100,7 @@ function Plaza.concessions(ctx)
 	-- Soda vending machine on the corner of the patio, facing the walkway
 	local sodaX, sodaZ = STAND.MaxX - 1.2, PATIO_MIN_Z + 1.5
 	local sodaFront = sodaX + 1.2
-	BuildUtil.Block(
+	local drinksMachine = BuildUtil.Block(
 		ctx,
 		"SodaMachine",
 		Vector3.new(2.4, 6.2, 2.6),
@@ -1066,11 +1121,18 @@ function Plaza.concessions(ctx)
 	sign(
 		sodaPanel,
 		{ Enum.NormalId.Right },
-		"ICE\nCOLD\nSODA",
+		"ICE\nCOLD\nDRINKS",
 		accent(team),
 		team,
 		{ Glow = true, Wrap = true, InsetX = 0.1, InsetY = 0.08 }
 	)
+	BuildUtil.Use(ctx, drinksMachine, "sportsdrink", {
+		Object = "Drinks Machine",
+		Title = "Sports Drink",
+		Info = "The same drink the players have on the sideline. Cold, fruity and full of energy!",
+		At = Vector3.new(1.6, 0.6, 0),
+		Distance = 8,
+	})
 	BuildUtil.Light(sodaPanel, "PointLight", { Name = "SodaGlow", Range = 8, Brightness = 0.8, Color = WARM_LIGHT })
 	BuildUtil.Box(
 		ctx,
@@ -1243,33 +1305,35 @@ local function carLights(ctx, name, frame, width, y, length)
 	)
 end
 
--- Vehicles stand on the asphalt and face local -Z of `frame`.
+-- Vehicles stand on the asphalt and face local -Z of `frame`; each returns its body part.
 local VEHICLES = {}
 
 function VEHICLES.Sedan(ctx, name, frame, color)
 	local w, l = 4.6, 9.2
-	boxAt(ctx, name .. "Body", Vector3.new(w, 1.6, l), frame * CFrame.new(0, 1.4, 0), color)
+	local body = boxAt(ctx, name .. "Body", Vector3.new(w, 1.6, l), frame * CFrame.new(0, 1.4, 0), color)
 	boxAt(ctx, name .. "Cabin", Vector3.new(w - 0.4, 1.3, 4.6), frame * CFrame.new(0, 2.85, 0.4), CAR_GLASS, Enum.Material.Glass)
 	boxAt(ctx, name .. "Roof", Vector3.new(w - 0.3, 0.25, 3.8), frame * CFrame.new(0, 3.625, 0.6), color)
 	axle(ctx, name, frame, -3, w, 2)
 	axle(ctx, name, frame, 3, w, 2)
 	carLights(ctx, name, frame, w, 1.8, l)
+	return body
 end
 
 function VEHICLES.SUV(ctx, name, frame, color)
 	local w, l = 4.8, 9.6
-	boxAt(ctx, name .. "Body", Vector3.new(w, 1.9, l), frame * CFrame.new(0, 1.85, 0), color)
+	local body = boxAt(ctx, name .. "Body", Vector3.new(w, 1.9, l), frame * CFrame.new(0, 1.85, 0), color)
 	boxAt(ctx, name .. "Cabin", Vector3.new(w - 0.3, 1.5, 6.4), frame * CFrame.new(0, 3.55, 1), CAR_GLASS, Enum.Material.Glass)
 	boxAt(ctx, name .. "Roof", Vector3.new(w - 0.2, 0.25, 6), frame * CFrame.new(0, 4.425, 1.2), color)
 	boxAt(ctx, name .. "RoofRack", Vector3.new(w - 1, 0.25, 4.4), frame * CFrame.new(0, 4.675, 1.2), DARK_METAL, Enum.Material.Metal)
 	axle(ctx, name, frame, -3.1, w, 2.4)
 	axle(ctx, name, frame, 3.1, w, 2.4)
 	carLights(ctx, name, frame, w, 2.3, l)
+	return body
 end
 
 function VEHICLES.Pickup(ctx, name, frame, color, cargoColor)
 	local w, l = 4.8, 10
-	boxAt(ctx, name .. "Body", Vector3.new(w, 1.5, l), frame * CFrame.new(0, 1.75, 0), color)
+	local body = boxAt(ctx, name .. "Body", Vector3.new(w, 1.5, l), frame * CFrame.new(0, 1.75, 0), color)
 	boxAt(ctx, name .. "Cab", Vector3.new(w - 0.3, 1.5, 3.4), frame * CFrame.new(0, 3.25, -0.9), CAR_GLASS, Enum.Material.Glass)
 	boxAt(ctx, name .. "CabRoof", Vector3.new(w - 0.2, 0.3, 3.2), frame * CFrame.new(0, 4.15, -0.8), color)
 	-- open bed: two side walls and a tailgate on top of the body
@@ -1284,12 +1348,13 @@ function VEHICLES.Pickup(ctx, name, frame, color, cargoColor)
 	axle(ctx, name, frame, -3.2, w, 2.4)
 	axle(ctx, name, frame, 3.2, w, 2.4)
 	carLights(ctx, name, frame, w, 2.1, l)
+	return body
 end
 
 -- The team bus: team-coloured body, window band, white roof, name stripe on both sides.
 function VEHICLES.Bus(ctx, name, frame, team, label)
 	local w, l = 6.6, 26
-	boxAt(ctx, name .. "Body", Vector3.new(w, 6.4, l), frame * CFrame.new(0, 4.4, 0), team.Primary)
+	local body = boxAt(ctx, name .. "Body", Vector3.new(w, 6.4, l), frame * CFrame.new(0, 4.4, 0), team.Primary)
 	boxAt(ctx, name .. "Windows", Vector3.new(w + 0.1, 2.2, l - 1.6), frame * CFrame.new(0, 5.9, 0.4), CAR_GLASS, Enum.Material.Glass)
 	boxAt(ctx, name .. "Roof", Vector3.new(w - 0.4, 0.5, l - 0.6), frame * CFrame.new(0, 7.85, 0), team.Trim)
 	boxAt(
@@ -1331,6 +1396,7 @@ function VEHICLES.Bus(ctx, name, frame, team, label)
 		Enum.Material.Neon
 	)
 	boxAt(ctx, name .. "TailLights", Vector3.new(w - 1.2, 0.5, 0.1), frame * CFrame.new(0, 2, l / 2 + 0.05), TAIL_RED, Enum.Material.Neon)
+	return body
 end
 
 function Plaza.parking(ctx)
@@ -1612,6 +1678,12 @@ function Plaza.parking(ctx)
 		{ 2, 8, -1, false, "Sedan", CAR_COLORS.Yellow },
 		{ 2, 6, 1, true, "SUV", CAR_COLORS.Green },
 	}
+	-- "look" cards for a few of them: [index in `parked`] = { title, info, LookKey }
+	local looks = {
+		[2] = { "The Owner's Car", "Painted in the team colours, parked in the best spot, and always first in the lot.", "owner" },
+		[3] = { "Tailgate Truck", "A cooler full of snacks in the back: these fans arrived four hours before kick-off!" },
+		[6] = { "Super Fan's Car", "Backed in so the trunk faces the party. It has 27 team stickers on the bumper." },
+	}
 	for index, spec in ipairs(parked) do
 		local row, stall, half, noseIn, kind = spec[1], spec[2], spec[3], spec[4], spec[5]
 		local x = firstX + (stall - 0.5) * STALL_WIDTH
@@ -1619,18 +1691,28 @@ function Plaza.parking(ctx)
 		-- a vehicle faces -Z at yaw 0; nose-in vehicles point at the centre line
 		local facesPlusZ = (half == -1) == noseIn
 		local frame = CFrame.new(x, LOT_TOP, z) * CFrame.Angles(0, facesPlusZ and math.pi or 0, 0)
-		VEHICLES[kind](cars, kind .. index, frame, spec[6], spec[7])
+		local body = VEHICLES[kind](cars, kind .. index, frame, spec[6], spec[7])
+		local look = looks[index]
+		if look then
+			BuildUtil.Look(body, look[1], look[2], { LookKey = look[3] })
+		end
 	end
 	-- the team bus waits in its bay, nose toward the exit (+X)
 	local busFrame = CFrame.new(busBay.MinX + 15, LOT_TOP, busZ) * CFrame.Angles(0, -math.pi / 2, 0)
-	VEHICLES.Bus(cars, "TeamBus", busFrame, team, teamText(ctx, " TEAM BUS", "TEAM BUS"))
+	local bus = VEHICLES.Bus(cars, "TeamBus", busFrame, team, teamText(ctx, " TEAM BUS", "TEAM BUS"))
+	BuildUtil.Look(
+		bus,
+		"Team Bus",
+		"Takes the players to every away game. Comfy seats, a snack fridge and the loudest horn in the league.",
+		{ LookKey = "team", At = Vector3.new(0, -2, 0) }
+	)
 end
 
 ---------------------------------------------------------------------------------------------
 -- Team store
 ---------------------------------------------------------------------------------------------
 
--- Shop mannequin on a round stand, facing -X. headwear: "helmet" | "cap"
+-- Shop mannequin on a round stand, facing -X. headwear: "helmet" | "cap". Returns the jersey.
 local function mannequin(ctx, name, x, z, floorTop, team, jerseyColor, number, headwear)
 	BuildUtil.Cylinder(ctx, {
 		Name = name .. "Stand",
@@ -1706,9 +1788,10 @@ local function mannequin(ctx, name, x, z, floorTop, team, jerseyColor, number, h
 			Enum.Material.SmoothPlastic
 		)
 	end
+	return torso
 end
 
--- Rolling clothes rack along X with jerseys hanging off the rail.
+-- Rolling clothes rack along X with jerseys hanging off the rail. Returns the rail.
 local function jerseyRack(ctx, name, x, z, floorTop, colors)
 	local length = 5
 	BuildUtil.Block(
@@ -1734,7 +1817,7 @@ local function jerseyRack(ctx, name, x, z, floorTop, colors)
 		)
 	end
 	local railY = floorTop + 5
-	BuildUtil.Cylinder(ctx, {
+	local rail = BuildUtil.Cylinder(ctx, {
 		Name = name .. "Rail",
 		Position = Vector3.new(x, railY, z),
 		Axis = "X",
@@ -1755,9 +1838,10 @@ local function jerseyRack(ctx, name, x, z, floorTop, colors)
 			NO_COLLIDE
 		)
 	end
+	return rail
 end
 
--- Giant foam "#1" finger on a round plinth, facing -X.
+-- Giant foam "#1" finger on a round plinth, facing -X. Returns the hand.
 local function foamFinger(ctx, name, x, z, floorTop, team)
 	BuildUtil.Cylinder(ctx, {
 		Name = name .. "Plinth",
@@ -1802,6 +1886,7 @@ local function foamFinger(ctx, name, x, z, floorTop, team)
 		Color = foam,
 		Material = Enum.Material.Foil,
 	})
+	return palm
 end
 
 function Plaza.teamstore(ctx)
@@ -1818,7 +1903,7 @@ function Plaza.teamstore(ctx)
 	local wallH = 12
 	local floorTop = 0.25
 	local glassTop = 9
-	local doorTop = 7.75
+	local doorTop = 8.4 -- the doorway is 8.15 tall and 7 wide
 	local openMinZ, openMaxZ = southZ + 4, northZ - 4 -- storefront opening between the corner piers
 	local openWidth = openMaxZ - openMinZ
 	local glassX = frontX + 0.5
@@ -1908,21 +1993,24 @@ function Plaza.teamstore(ctx)
 			Material = Enum.Material.Metal,
 		})
 	end
-	local ceiling = BuildUtil.Box(
-		ctx,
-		"CeilingLight",
-		Vector3.new(18, 0.15, 3),
-		Vector3.new(midX, wallH - 0.1, cz),
-		WARM_LIGHT,
-		Enum.Material.Neon,
-		NO_COLLIDE
-	)
-	BuildUtil.Light(ceiling, "PointLight", { Name = "StoreLight", Range = 28, Brightness = 1.2, Color = WARM_LIGHT })
+	-- two light panels in the ceiling: the sales floor by the doors and the racks at the back
+	for i, x in ipairs({ midX - 6, midX + 8 }) do
+		local ceiling = BuildUtil.Box(
+			ctx,
+			"CeilingLight",
+			Vector3.new(10, 0.15, 3),
+			Vector3.new(x, wallH - 0.1, cz),
+			WARM_LIGHT,
+			Enum.Material.Neon,
+			NO_COLLIDE
+		)
+		BuildUtil.Light(ceiling, "PointLight", { Name = "StoreLight" .. i, Range = 22, Brightness = 1.2, Color = WARM_LIGHT })
+	end
 
 	---------------------------------------------------------------- step 2: glass front and doors
 	BuildUtil.Stage(ctx, 2)
 	local storefront = BuildUtil.Child(ctx, "Storefront")
-	local doorMinZ, doorMaxZ = cz - 2, cz + 2
+	local doorMinZ, doorMaxZ = cz - 3.5, cz + 3.5
 	local paneHeight = glassTop - floorTop
 	local glassProps = { Transparency = 0.45 }
 	for _, range in ipairs({ { openMinZ, doorMinZ }, { doorMaxZ, openMaxZ } }) do
@@ -1936,37 +2024,22 @@ function Plaza.teamstore(ctx)
 			glassProps
 		)
 	end
-	-- transom starts on top of the transom bar (sharing its bottom face made it flicker)
-	local transomBottom = doorTop + 0.3
-	BuildUtil.Box(
-		storefront,
-		"Transom",
-		Vector3.new(0.3, glassTop - transomBottom, doorMaxZ - doorMinZ),
-		Vector3.new(glassX, (transomBottom + glassTop) / 2, cz),
-		C.Glass,
-		Enum.Material.Glass,
-		glassProps
-	)
-	for _, side in ipairs({ -1, 1 }) do
-		BuildUtil.Box(
-			storefront,
-			"Door",
-			Vector3.new(0.25, doorTop - floorTop, 1.95),
-			Vector3.new(glassX, (floorTop + doorTop) / 2, cz + side),
-			C.Glass,
-			Enum.Material.Glass,
-			{ Transparency = 0.5, CanCollide = false }
-		)
-		BuildUtil.Box(
-			storefront,
-			"DoorHandle",
-			Vector3.new(0.15, 2.4, 0.2),
-			Vector3.new(glassX - 0.2, 4.2, cz + side * 0.35),
-			C.Metal,
-			Enum.Material.Metal,
-			NO_COLLIDE
-		)
-	end
+	-- sliding glass doors (press E; they close again by themselves): they slide open behind the
+	-- window panes, just inside the glass line
+	BuildUtil.Door(storefront, {
+		Name = "StoreDoors",
+		Size = Vector3.new(doorMaxZ - doorMinZ, doorTop - floorTop, 0.2),
+		CFrame = CFrame.new(glassX + 0.4, (floorTop + doorTop) / 2, cz) * CFrame.Angles(0, math.pi / 2, 0),
+		Double = true,
+		Slide = true,
+		Color = C.Glass,
+		Material = Enum.Material.Glass,
+		Transparency = 0.5,
+		Object = "Team Store",
+		Title = "Team Store",
+		Info = "Jerseys, caps, helmets and giant foam fingers. Come in and gear up for game day!",
+		Distance = 8,
+	})
 	for _, z in ipairs({ doorMinZ, doorMaxZ }) do
 		BuildUtil.Box(
 			storefront,
@@ -1980,8 +2053,8 @@ function Plaza.teamstore(ctx)
 	BuildUtil.Box(
 		storefront,
 		"TransomBar",
-		Vector3.new(0.4, 0.3, openWidth),
-		Vector3.new(glassX, doorTop + 0.15, cz),
+		Vector3.new(0.4, glassTop - doorTop, openWidth),
+		Vector3.new(glassX, (doorTop + glassTop) / 2, cz),
 		DARK_METAL,
 		Enum.Material.Metal
 	)
@@ -1998,7 +2071,7 @@ function Plaza.teamstore(ctx)
 	BuildUtil.Box(
 		ctx,
 		"WelcomeMat",
-		Vector3.new(2.6, 0.05, 4.6),
+		Vector3.new(2.6, 0.05, 6.6),
 		Vector3.new(frontX - 1.4, 0.025, cz),
 		team.Primary,
 		Enum.Material.Fabric,
@@ -2063,6 +2136,14 @@ function Plaza.teamstore(ctx)
 		local torso =
 			BuildUtil.Box(interior, "Jersey", Vector3.new(0.3, 4.2, 3.4), Vector3.new(jerseyX, 6.2, z), color, Enum.Material.Fabric)
 		sign(torso, { Enum.NormalId.Left }, number, color, team, { InsetX = 0.2, InsetY = 0.22 })
+		if z == cz then
+			BuildUtil.Look(
+				torso,
+				"Best-Selling Jersey",
+				"Everybody wants the starting quarterback's number. This wall gets restocked twice a day!",
+				{ LookKey = "roster:QB", At = Vector3.new(-0.8, -1.5, 0), Distance = 8 }
+			)
+		end
 		for _, side in ipairs({ -1, 1 }) do
 			BuildUtil.Part(interior, {
 				Name = "JerseySleeve",
@@ -2073,13 +2154,34 @@ function Plaza.teamstore(ctx)
 			})
 		end
 	end
-	local banner =
-		BuildUtil.Box(interior, "GearBanner", Vector3.new(0.15, 1.6, 15), Vector3.new(jerseyX, 9.7, cz), team.Primary, Enum.Material.Fabric)
-	sign(banner, { Enum.NormalId.Left }, "OFFICIAL GEAR", team.Primary, team, { InsetY = 0.12 })
+	-- LED sign over the jersey wall: the server keeps the owner's team name on it
+	local teamBoard =
+		BuildUtil.Box(interior, "TeamBoard", Vector3.new(0.2, 1.8, 15), Vector3.new(jerseyX, 9.7, cz), SCREEN, Enum.Material.SmoothPlastic)
+	liveScreen(
+		teamBoard,
+		Enum.NormalId.Left,
+		"team",
+		teamText(ctx, "", "TEAM STORE"),
+		textColorOn(SCREEN, { team.Secondary, team.Trim, C.Gold })
+	)
 
 	-- window displays: a giant foam finger in the south pane, a mannequin in the north pane
-	foamFinger(interior, "FoamFinger", glassX + 3.6, (openMinZ + doorMinZ) / 2, floorTop, team)
-	mannequin(interior, "WindowMannequin", glassX + 2.6, (doorMaxZ + openMaxZ) / 2, floorTop, team, team.Primary, "12", "helmet")
+	local hand = foamFinger(interior, "FoamFinger", glassX + 3.6, (openMinZ + doorMinZ) / 2, floorTop, team)
+	BuildUtil.Use(interior, hand, "foamfinger", {
+		Object = "Foam Finger Stand",
+		Title = "Giant Foam Finger",
+		Info = "The number one souvenir in the store. Wave it in the stands and the TV cameras will find you!",
+		At = Vector3.new(1.2, 0, 0),
+		Distance = 8,
+	})
+	local windowTorso =
+		mannequin(interior, "WindowMannequin", glassX + 2.6, (doorMaxZ + openMaxZ) / 2, floorTop, team, team.Primary, "12", "helmet")
+	BuildUtil.Look(
+		windowTorso,
+		"Window Display",
+		"This season's home kit: helmet, shoulder pads and the #12 jersey. Players get theirs for free, fans buy them here!",
+		{ At = Vector3.new(1, 0, 0), Distance = 8 }
+	)
 	mannequin(interior, "ShopMannequin", frontX + 11, southZ + 2.9, floorTop, team, WHITE, "7", "cap")
 
 	-- display table straight ahead of the doors: folded shirts and two helmets
@@ -2108,7 +2210,14 @@ function Plaza.teamstore(ctx)
 		)
 	end
 	local helmetPos = Vector3.new(tableX + 1.3, shirtTop + 0.9, cz)
-	BuildUtil.Ball(interior, { Name = "Helmet", Position = helmetPos, Diameter = 1.8, Color = team.Primary, Reflectance = 0.1 })
+	local helmet =
+		BuildUtil.Ball(interior, { Name = "Helmet", Position = helmetPos, Diameter = 1.8, Color = team.Primary, Reflectance = 0.1 })
+	BuildUtil.Look(
+		helmet,
+		"Replica Helmet",
+		"A full-size copy of the team helmet, signed by the whole roster. Folded fan shirts are on the table next to it.",
+		{ Distance = 8 }
+	)
 	BuildUtil.Box(
 		interior,
 		"Facemask",
@@ -2120,8 +2229,25 @@ function Plaza.teamstore(ctx)
 
 	-- two jersey racks toward the back
 	local rackX = backX - 9.5
-	jerseyRack(interior, "RackSouth", rackX, southZ + 4.5, floorTop, { team.Primary, WHITE, team.Primary, altJersey })
-	jerseyRack(interior, "RackNorth", rackX, northZ - 4.5, floorTop, { altJersey, team.Primary, WHITE, altJersey })
+	local southRack = jerseyRack(interior, "RackSouth", rackX, southZ + 4.5, floorTop, { team.Primary, WHITE, team.Primary, altJersey })
+	BuildUtil.Look(southRack, "Jersey Rack", "Home and away jerseys in every size, from tiny tots to offensive linemen.", {
+		At = Vector3.new(0, -1.5, 0),
+		Distance = 8,
+	})
+	local northRack = jerseyRack(interior, "RackNorth", rackX, northZ - 4.5, floorTop, { altJersey, team.Primary, WHITE, altJersey })
+	BuildUtil.Look(northRack, "Throwback Rack", "Retro jerseys from the team's early years. The old colours are back in style!", {
+		At = Vector3.new(0, -1.5, 0),
+		Distance = 8,
+	})
+	-- a bench to try on new sneakers, between the south rack and the back wall (facing the room)
+	BuildUtil.Seat(interior, {
+		Name = "FittingBench",
+		Size = Vector3.new(4, 1.6, 1.4),
+		CFrame = CFrame.new(backX - 4.5, floorTop + 0.8, southZ + 1.9) * CFrame.Angles(0, math.pi, 0),
+		Color = team.Primary,
+		Material = Enum.Material.Fabric,
+		Object = "Fitting Bench",
+	})
 
 	-- checkout counter along the north wall with the till (register, screen, card reader)
 	local checkoutX = frontX + 11.5
@@ -2147,7 +2273,7 @@ function Plaza.teamstore(ctx)
 		nil,
 		counterTop
 	)
-	BuildUtil.Block(
+	local till = BuildUtil.Block(
 		interior,
 		"Till",
 		Vector3.new(1.4, 0.8, 1.2),
@@ -2156,6 +2282,12 @@ function Plaza.teamstore(ctx)
 		Enum.Material.Metal,
 		nil,
 		counterTop + 0.2
+	)
+	BuildUtil.Look(
+		till,
+		"Till",
+		"Every jersey, cap and foam finger sold here helps pay for your next upgrade. Ka-ching!",
+		{ At = Vector3.new(0, 0, -1.4), Distance = 8 }
 	)
 	BuildUtil.Part(interior, {
 		Name = "TillScreen",
@@ -2258,6 +2390,16 @@ function Plaza.trophy(ctx)
 	local stepsTop = y
 	BuildUtil.Block(ctx, "Pedestal", Vector3.new(half * 2, pedestalTop - y, half * 2), center, STONE_LIGHT, Enum.Material.Marble, nil, y)
 	BuildUtil.Block(ctx, "PedestalCap", Vector3.new(9.8, 0.6, 9.8), center, C.Gold, Enum.Material.Metal, gold, pedestalTop)
+	-- a stone viewing bench on the bottom step (street side): a TV camera seat on the trophy
+	BuildUtil.Seat(ctx, {
+		Name = "ViewingBench",
+		Size = Vector3.new(8, 1.4, 1.8),
+		CFrame = CFrame.new(cx, 1.2 + 0.7, cz - 12.6) * CFrame.Angles(0, math.pi, 0),
+		Color = STONE_LIGHT,
+		Material = Enum.Material.Marble,
+		Object = "Viewing Bench",
+		Camera = { From = Vector3.new(cx - 16, 9, cz - 38), To = Vector3.new(cx, 19, cz), Fov = 50, Label = "TROPHY CAM" },
+	})
 
 	-- Team flags on the corners of the bottom step
 	local poleInset = 11.5
@@ -2336,7 +2478,14 @@ function Plaza.trophy(ctx)
 	---------------------------------------------------------------- step 3: the golden trophy
 	BuildUtil.Stage(ctx, 3)
 	goldCylinder("Stem", base + 6.1, 7, 1.8)
-	goldBall("Knob", base + 5.8, 3)
+	local knob = goldBall("Knob", base + 5.8, 3)
+	-- (the prompt hangs at eye level in front of the street side of the pedestal)
+	BuildUtil.Look(
+		knob,
+		"Championship Trophy",
+		"Solid gold and taller than a giraffe! Win the championship game and your team's name joins the legends.",
+		{ LookKey = "season", At = Vector3.new(0, -12.4, -5.6), Distance = 9 }
+	)
 	goldBall("Bowl", base + 13.4, 9)
 	local cup = goldCylinder("Cup", base + 15.9, 5, 9)
 	goldCylinder("Rim", base + 18.7, 0.6, 9.8)
@@ -2389,6 +2538,14 @@ function Plaza.trophy(ctx)
 		BuildUtil.Box(ctx, "PlaqueFrame", frameSize, surface + normal * 0.075, C.Gold, Enum.Material.Metal, gold)
 		local plate = BuildUtil.Box(ctx, "Plaque", plateSize, surface + normal * 0.225, team.Primary, Enum.Material.Metal)
 		sign(plate, { face }, plaqueText, team.Primary, team, { TextColor3 = plaqueTextColor, Wrap = true, InsetX = 0.08, InsetY = 0.12 })
+		if normal.X < 0 then
+			-- the plaque facing the walkway
+			BuildUtil.Look(plate, "Champions Plaque", "Every championship this franchise wins is engraved here in gold letters.", {
+				LookKey = "titles",
+				At = normal * 0.6,
+				Distance = 12,
+			})
+		end
 	end
 
 	-- lit neon ring set into the top step around the pedestal, with uplights on the trophy

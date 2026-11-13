@@ -1,55 +1,61 @@
 --[[
 	StadiumRooms
-	The two game-day locker rooms beside the players' tunnels. Both are bought in three steps
-	(see Items.lua); BuildUtil.Stage(ctx, n) marks the parts of step n.
+	The two game-day locker rooms. Both are real walk-in rooms bought in three steps (see
+	Items.lua); BuildUtil.Stage(ctx, n) marks the parts of step n.
 
-	  home_lockerroom     behind the home stands, east of the back walk (X[-12, 12]) that runs
-	                      from the home tunnel to the campus road. Entrance, window and the
-	                      HOME LOCKER ROOM sign face the back walk (-X); the team name faces the
-	                      campus road (+Z) under a strip of clerestory windows.
-	                        1 Building            shell, door frame, lamps, signs outside
-	                        2 Lockers             a U of team lockers: jerseys, nameplates, helmets
-	                        3 Logo & Whiteboard   carpet logo, whiteboard, banner, TV, clock, cooler
-	                                              and the PLAY LIKE A CHAMPION TODAY sign
-	  visitor_lockerroom  in the plaza beside the front tunnel / walkway. Entrance, window and the
-	                      VISITORS sign face the walkway (+X). Spartan on purpose.
-	                        1 Building            shell, door frame, VISITORS sign
-	                        2 Lockers             grey lockers with white away jerseys + helmets
-	                        3 Bench & Signs       one bench, mat, bin, a CRT on an AV cart that shows
-	                                              NO SIGNAL, a leaky ceiling + bucket and some
-	                                              not-so-welcoming signs
+	  home_lockerroom     behind the home stands, east of the press box. The double doors face
+	                      the campus road (+Z); inside, the coach's corner is at the west end
+	                      (whiteboard, podium, live screens), the lockers line the north + south
+	                      walls, the showers fill the east end.
+	                        1 Building            shell + ceiling lights, double doors, signs,
+	                                              the showers behind a partition (look)
+	                        2 Lockers             16 lockers, each with its own door (opening it
+	                                              shows whose locker it is) and a jersey inside,
+	                                              three rows of benches facing the podium (two
+	                                              camera seats: TEAM TALK CAM + TUNNEL CAM)
+	                        3 Logo & Whiteboard   floor logo (look), coach's whiteboard with the
+	                                              live starters, podium (pre-game speech), live
+	                                              summary / record / season screens, sports-drink
+	                                              cooler, trophy shelf (titles), motto banners
+	  visitor_lockerroom  in the plaza beside the front walkway. The door faces the walkway (+X).
+	                      Smaller and plainer on purpose.
+	                        1 Building            shell, door, VISITORS sign, AWAY TEAM plaque (look)
+	                        2 Lockers             grey open stalls with white away jerseys (looks)
+	                        3 Bench & Signs       a squeaky bench, a CRT on an AV cart with the live
+	                                              score, a lukewarm soda cooler, a leaky ceiling +
+	                                              bucket and some not-so-welcoming signs
 
-	Both rooms share one shell (roomShell) built in a local frame whose -Z points out of the
-	front wall, so the same code faces -X (home) or +X (visitors). Lockers are open stalls
-	(lockerBank): back panel, seat, top shelf with nameplates, dividers and a numbered jersey.
+	Everything is built in plot-local studs; box() takes min / max corners so the room plans
+	below read like a floor plan.
 ]]
 
 local BuildUtil = require(script.Parent.Parent.BuildUtil)
 
 local StadiumRooms = {}
 
--- Reserved footprints (plot-local studs; Config.Layout has no values for these)
-local HOME_ROOM = { MinX = 45, MaxX = 110, MinZ = 146, MaxZ = 170 }
-local VISITOR_ROOM = { MinX = -52, MaxX = -20, MinZ = -120, MaxZ = -98 }
-
 local FLOOR_TOP = 0.3
 
 local PAINT = { CanCollide = false, CastShadow = false }
+local DECOR = { CanCollide = false }
 
 local WHITE = Color3.fromRGB(248, 248, 248)
 local INK = Color3.fromRGB(22, 22, 26)
 local DARK_METAL = Color3.fromRGB(62, 64, 70)
+local CHROME = Color3.fromRGB(200, 204, 210)
 local WARM_LIGHT = Color3.fromRGB(255, 236, 200)
 local LAMP = Color3.fromRGB(255, 248, 232)
 local CEILING = Color3.fromRGB(226, 226, 222)
-local SCREEN_BLACK = Color3.fromRGB(14, 16, 22)
-local SCREEN_BLUE = Color3.fromRGB(26, 52, 110)
+local SCREEN_BLACK = Color3.fromRGB(12, 14, 20)
+local LED_TEXT = Color3.fromRGB(255, 226, 120)
+local LED_GREEN = Color3.fromRGB(120, 255, 150)
 local FACEMASK_GREY = Color3.fromRGB(80, 82, 90)
+local GOLD = Color3.fromRGB(232, 184, 52)
+local WOOD = Color3.fromRGB(120, 84, 52)
 
 local HOME_WALL = Color3.fromRGB(178, 180, 186)
 local HOME_CARPET = Color3.fromRGB(50, 52, 60)
+local TILE = Color3.fromRGB(214, 228, 236)
 local COOLER_ORANGE = Color3.fromRGB(255, 120, 20)
-local LOCKER_LIT = Color3.fromRGB(214, 218, 226)
 local MARKER_BLUE = Color3.fromRGB(30, 60, 160)
 
 local VISITOR_WALL = Color3.fromRGB(150, 150, 156)
@@ -62,18 +68,49 @@ local LOCKER_GREY_MID = Color3.fromRGB(118, 120, 126)
 local AWAY_NUMBER = Color3.fromRGB(70, 72, 80)
 local AWAY_HELMET = Color3.fromRGB(236, 236, 240)
 local CRT_BEIGE = Color3.fromRGB(196, 186, 162)
-local STATIC_GREY = Color3.fromRGB(150, 156, 160)
 local BUCKET_BLUE = Color3.fromRGB(60, 110, 170)
 local WATER_BLUE = Color3.fromRGB(110, 170, 230)
 local STAIN_BROWN = Color3.fromRGB(150, 122, 74)
 local CAUTION_YELLOW = Color3.fromRGB(255, 208, 30)
 local DUFFEL_GREY = Color3.fromRGB(70, 74, 82)
+local COOLER_BLUE = Color3.fromRGB(40, 96, 170)
 
-local HOME_NUMBERS = { "1", "12", "23", "34", "45", "56", "67", "78", "89", "10", "21", "32" }
-local AWAY_NUMBERS = { "2", "14", "27", "38", "50", "61", "73", "84", "95", "11" }
-local HOME_NAMES = { "CARTER", "BROOKS", "HAYES", "REED", "WALKER", "PRICE", "BELL", "COLE", "GRANT", "MILLS" }
-local SOUTH_NAMES = { "ROSS", "HUNT", "FORD", "LANE", "WEST", "STONE", "KING", "WOODS" }
+-- Home locker room plan (plot-local studs). Outer wall faces X[47, 108] Z[146, 170]: east of the
+-- press box (x <= 44), behind the upper deck's outside wall (z <= 143.7), off the campus road
+-- (z >= 172). Walls are 1 thick, so the room inside is X[48, 107] Z[147, 169].
+local HOME = { MinX = 47, MaxX = 108, MinZ = 146, MaxZ = 170 }
+local HOME_H = 12.5 -- wall height (the roof band sits on top)
+local HOME_CEILING = 12 -- underside of the ceiling
+local HOME_MID_Z = 158
+local HOME_DOOR = { MinX = 52, MaxX = 60, Top = 9.5 } -- double doors in the north wall
+local HOME_WINDOW = { MinX = 63, MaxX = 105, Top = 11.7 } -- clerestory strip over the north lockers
+local SHOWER_X = 95 -- the shower partition spans x[95, 96]; showers behind it
+local SHOWER_DOOR = { MinZ = 154.5, MaxZ = 161.5, Top = 9.3 }
+local HOME_LOCKERS = { MinX = 64, Count = 8, Width = 3.5, Depth = 2.6 } -- per wall (north + south)
+local BENCH_ROWS = { 70, 76, 82 } -- x of the bench rows; they face the podium (-X)
+local PODIUM_X = 52.5
+local SPEAKER_HEAD = Vector3.new(50.3, 5.4, HOME_MID_Z) -- where a player at the podium stands
+
+-- Visitor locker room plan. Outer wall faces X[-50, -22] Z[-118, -100]; inside X[-49, -23]
+-- Z[-117, -101]. The door is in the east wall (facing the front walkway).
+local VISITOR = { MinX = -50, MaxX = -22, MinZ = -118, MaxZ = -100 }
+local VISITOR_H = 10.5
+local VISITOR_CEILING = 10
+local VISITOR_DOOR = { MinZ = -108, MaxZ = -102, Top = 8.8 }
+local VISITOR_WINDOW = { MinZ = -116, MaxZ = -111, Bottom = 3 }
+
+-- Jersey numbers hanging in the home lockers (locker n wears HOME_NUMBERS[n])
+local HOME_NUMBERS = { "1", "7", "12", "22", "24", "33", "44", "52", "55", "62", "74", "81", "88", "90", "95", "99" }
+local AWAY_NUMBERS = { "2", "14", "27", "38", "50", "61", "73", "84" }
 local AWAY_NAMES = { "VISITOR", "GUEST", "AWAY", "TBD", "ROOKIE", "BACKUP", "NEW GUY", "SUB" }
+
+-- Funny descriptions for some of the visitors' stalls (by stall number, west bank then south bank)
+local AWAY_STALL_INFO = {
+	[1] = "A tiny stall with one wobbly hook. The away team has to share hangers!",
+	[3] = "This one smells like old gym socks. Nobody knows why, and nobody wants to find out.",
+	[5] = "The name tag just says 'NEW GUY'. The home team printed them in a hurry... on purpose.",
+	[7] = "The seat squeaks every time you sit down. Good luck sneaking out early!",
+}
 
 ---------------------------------------------------------------------------------------------
 -- Helpers
@@ -111,26 +148,57 @@ local function textColorOn(background, candidates)
 	return INK
 end
 
+-- Insets a TextLabel inside its SurfaceGui (fractions of the face left empty around it).
+local function inset(label, insetX, insetY)
+	label.Size = UDim2.new(1 - 2 * insetX, 0, 1 - 2 * insetY, 0)
+	label.Position = UDim2.new(insetX, 0, insetY, 0)
+end
+
 --[[
 	Writes `text` on each face in `faces` of `part`, coloured to read well on `background`.
 	opts: TextColor3, Font, PixelsPerStud, InsetX / InsetY (fraction of the face left empty
 	      around the text, default 0.06 / 0.12)
+	Returns the last TextLabel.
 ]]
 local function sign(part, faces, text, background, team, opts)
 	opts = opts or {}
 	local color = opts.TextColor3 or textColorOn(background, { team.Trim, team.Primary, team.Secondary })
-	local insetX = opts.InsetX or 0.06
-	local insetY = opts.InsetY or 0.12
+	local label
 	for _, face in ipairs(faces) do
-		local _, label = BuildUtil.SurfaceText(part, face, text, {
+		_, label = BuildUtil.SurfaceText(part, face, text, {
 			LabelName = part.Name .. face.Name,
 			TextColor3 = color,
 			Font = opts.Font or Enum.Font.GothamBlack,
 			PixelsPerStud = opts.PixelsPerStud or 20,
 		})
-		label.Size = UDim2.new(1 - 2 * insetX, 0, 1 - 2 * insetY, 0)
-		label.Position = UDim2.new(insetX, 0, insetY, 0)
+		inset(label, opts.InsetX or 0.06, opts.InsetY or 0.12)
 	end
+	return label
+end
+
+--[[
+	A live screen (BuildUtil.LiveText) the server keeps up to date with the owner's team: dark
+	background, bright text, readable in the dark (LightInfluence 0). Returns the TextLabel.
+	opts: LabelName, TextColor3, BackgroundColor3, BackgroundTransparency, Font, PixelsPerStud,
+	      InsetX / InsetY
+]]
+local function liveScreen(part, face, live, placeholder, opts)
+	opts = opts or {}
+	local _, label = BuildUtil.LiveText(part, face, live, {
+		LabelName = opts.LabelName or ("Live_" .. live),
+		Text = placeholder,
+		TextColor3 = opts.TextColor3 or LED_TEXT,
+		BackgroundColor3 = opts.BackgroundColor3 or SCREEN_BLACK,
+		BackgroundTransparency = opts.BackgroundTransparency or 0,
+		LightInfluence = 0,
+		Font = opts.Font or Enum.Font.GothamBold,
+		PixelsPerStud = opts.PixelsPerStud or 24,
+	})
+	local pad = Instance.new("UIPadding")
+	local px, py = UDim.new(opts.InsetX or 0.05, 0), UDim.new(opts.InsetY or 0.08, 0)
+	pad.PaddingLeft, pad.PaddingRight, pad.PaddingTop, pad.PaddingBottom = px, px, py, py
+	pad.Parent = label
+	return label
 end
 
 local function shade(color, factor)
@@ -145,6 +213,17 @@ local function displayName(ctx)
 	return "HOME TEAM"
 end
 
+-- Axis-aligned block from its min corner (x0, y0, z0) to its max corner (x1, y1, z1).
+local function box(ctx, name, x0, y0, z0, x1, y1, z1, color, material, extra)
+	local props = extra and table.clone(extra) or {}
+	props.Name = name
+	props.Size = Vector3.new(x1 - x0, y1 - y0, z1 - z0)
+	props.Position = Vector3.new((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)
+	props.Color = color
+	props.Material = material or Enum.Material.SmoothPlastic
+	return BuildUtil.Part(ctx, props)
+end
+
 -- Block in a local `frame`: bottom at local height y0, centred on local (x, z).
 local function lblock(ctx, frame, name, size, x, y0, z, color, material, extra)
 	local props = extra and table.clone(extra) or {}
@@ -152,7 +231,7 @@ local function lblock(ctx, frame, name, size, x, y0, z, color, material, extra)
 	props.Size = size
 	props.CFrame = frame * CFrame.new(x, y0 + size.Y / 2, z)
 	props.Color = color
-	props.Material = material
+	props.Material = material or Enum.Material.SmoothPlastic
 	return BuildUtil.Part(ctx, props)
 end
 
@@ -168,180 +247,130 @@ local function strut(ctx, name, a, b, thickness, color, material)
 	})
 end
 
---[[
-	One-storey room shell. `frame` is a plot-local CFrame at ground level in the middle of the
-	front wall's OUTER face, its LookVector pointing out of the building (so every part's Front
-	face is the entrance side). The room spans local x in [-Width/2, Width/2], z in [0, Depth].
-	o: Width, Depth, WallH, Thickness, WallColor, WallMaterial, FloorColor, FloorMaterial,
-	   OpeningTop, Openings = { { From, To, Bottom, Mullions } } (local x, sorted; Bottom = 0 is
-	   an open doorway, otherwise a window with a sill), BandColor, BandH, RoofColor,
-	   Clerestory = { Side = -1 | 1, Bottom, Mullions } (that side wall gets a glass strip on top)
-]]
-local function roomShell(ctx, frame, o)
-	local C = ctx.config.Colors
-	local W, D, H = o.Width, o.Depth, o.WallH
-	local t = o.Thickness or 1
-	local top = o.OpeningTop
-	local wallColor, wallMaterial = o.WallColor, o.WallMaterial
-	local glassProps = { Transparency = 0.4 }
+-- A glowing ceiling panel (w along X, d along Z) hanging under the ceiling at `ceilingY`,
+-- centred on (x, z), with the room's PointLight.
+local function ceilingLight(ctx, x, z, w, d, ceilingY, range, brightness)
+	local lamp =
+		box(ctx, "CeilingLight", x - w / 2, ceilingY - 0.2, z - d / 2, x + w / 2, ceilingY, z + d / 2, LAMP, Enum.Material.Neon, PAINT)
+	BuildUtil.Light(lamp, "PointLight", { Name = "RoomLight", Range = range, Brightness = brightness or 1.4, Color = WARM_LIGHT })
+	return lamp
+end
 
-	-- the floor stops 0.05 inside the outer wall faces so its edges never share their plane
-	lblock(ctx, frame, "Floor", Vector3.new(W - 0.1, FLOOR_TOP, D - 0.1), 0, 0, D / 2, o.FloorColor, o.FloorMaterial)
-	lblock(ctx, frame, "BackWall", Vector3.new(W, H, t), 0, 0, D - t / 2, wallColor, wallMaterial)
-	for _, s in ipairs({ -1, 1 }) do
-		local wallX = s * (W / 2 - t / 2)
-		local clerestory = o.Clerestory
-		if clerestory and clerestory.Side == s then
-			local glassH = H - clerestory.Bottom
-			lblock(ctx, frame, "SideWall", Vector3.new(t, clerestory.Bottom, D - 2 * t), wallX, 0, D / 2, wallColor, wallMaterial)
-			lblock(
-				ctx,
-				frame,
-				"Clerestory",
-				Vector3.new(0.3, glassH, D - 2 * t),
-				wallX,
-				clerestory.Bottom,
-				D / 2,
-				C.Glass,
-				Enum.Material.Glass,
-				glassProps
-			)
-			local n = clerestory.Mullions or 0
-			for m = 1, n do
-				lblock(
-					ctx,
-					frame,
-					"ClerestoryMullion",
-					Vector3.new(t * 0.6, glassH, 0.3),
-					wallX,
-					clerestory.Bottom,
-					t + m * (D - 2 * t) / (n + 1),
-					DARK_METAL,
-					Enum.Material.Metal
-				)
-			end
-		else
-			lblock(ctx, frame, "SideWall", Vector3.new(t, H, D - 2 * t), wallX, 0, D / 2, wallColor, wallMaterial)
-		end
-	end
-
-	-- front wall: a lintel over all openings, piers between them, sill + glass under each window
-	lblock(ctx, frame, "Lintel", Vector3.new(W, H - top, t), 0, top, t / 2, wallColor, wallMaterial)
-	local function pier(a, b)
-		if b - a > 0.01 then
-			lblock(ctx, frame, "Pier", Vector3.new(b - a, top, t), (a + b) / 2, 0, t / 2, wallColor, wallMaterial)
-		end
-	end
-	local x = -W / 2
-	for _, op in ipairs(o.Openings) do
-		pier(x, op.From)
-		local w = op.To - op.From
-		local mid = (op.From + op.To) / 2
-		if op.Bottom > 0 then
-			lblock(ctx, frame, "Sill", Vector3.new(w, op.Bottom, t), mid, 0, t / 2, wallColor, wallMaterial)
-			lblock(
-				ctx,
-				frame,
-				"Window",
-				Vector3.new(w, top - op.Bottom, 0.3),
-				mid,
-				op.Bottom,
-				t / 2,
-				C.Glass,
-				Enum.Material.Glass,
-				glassProps
-			)
-			local n = op.Mullions or 0
-			for m = 1, n do
-				lblock(
-					ctx,
-					frame,
-					"Mullion",
-					Vector3.new(0.3, top - op.Bottom, t * 0.6),
-					op.From + m * w / (n + 1),
-					op.Bottom,
-					t / 2,
-					DARK_METAL,
-					Enum.Material.Metal
-				)
-			end
-		else
-			-- door frame: two jambs standing proud of the outer wall face
-			for _, jx in ipairs({ op.From - 0.2, op.To + 0.2 }) do
-				lblock(
-					ctx,
-					frame,
-					"DoorJamb",
-					Vector3.new(0.4, (o.JambTop or top) - FLOOR_TOP, 0.3),
-					jx,
-					FLOOR_TOP,
-					-0.15,
-					o.JambColor or DARK_METAL,
-					Enum.Material.SmoothPlastic
-				)
-			end
-		end
-		x = op.To
-	end
-	pier(x, W / 2)
-
-	-- roof: coloured band (also the ceiling inside), concrete cap, one big ceiling light
-	local bandH = o.BandH or 1.6
-	local band = lblock(ctx, frame, "RoofBand", Vector3.new(W + 0.6, bandH, D + 0.6), 0, H, D / 2, o.BandColor, Enum.Material.SmoothPlastic)
+-- A football helmet (shell + facemask) resting at local `frame` position; the facemask points
+-- along the frame's -Z.
+local function helmet(ctx, frame, diameter, color)
+	BuildUtil.Ball(ctx, {
+		Name = "Helmet",
+		CFrame = frame * CFrame.new(0, diameter / 2, 0),
+		Diameter = diameter,
+		Color = color,
+		Material = Enum.Material.SmoothPlastic,
+		Reflectance = 0.1,
+		CanCollide = false,
+	})
 	lblock(
 		ctx,
 		frame,
-		"Roof",
-		Vector3.new(W + 1.2, 0.6, D + 1.2),
+		"Facemask",
+		Vector3.new(diameter * 0.62, diameter * 0.42, 0.25),
 		0,
-		H + bandH,
-		D / 2,
-		o.RoofColor or C.ConcreteDark,
-		Enum.Material.Concrete
+		0.08,
+		-diameter / 2 + 0.06,
+		FACEMASK_GREY,
+		Enum.Material.Metal,
+		DECOR
 	)
-	-- a plain ceiling just under the band (so the room isn't roofed in team colour) + light panel
-	lblock(ctx, frame, "Ceiling", Vector3.new(W - 2 * t, 0.2, D - 2 * t), 0, H - 0.25, D / 2, CEILING, Enum.Material.SmoothPlastic)
-	local lamp = lblock(ctx, frame, "CeilingLight", Vector3.new(W * 0.4, 0.2, D * 0.3), 0, H - 0.45, D / 2, LAMP, Enum.Material.Neon, PAINT)
-	BuildUtil.Light(
-		lamp,
-		"PointLight",
-		{ Name = "RoomLight", Range = math.min(math.max(W, D) * 0.8, 60), Brightness = 1.3, Color = WARM_LIGHT }
-	)
-	return band
 end
 
 --[[
-	A bank of open locker stalls against a wall. `frame` is a plot-local CFrame at floor level on
-	the wall face in the middle of the bank, its LookVector pointing into the room.
-	o: Name, Length, Stalls, Height, Depth, BackColor, BackMaterial, FrameColor, ShelfColor, SeatColor,
-	   Jerseys (colours, cycled), Numbers (cycled), NumberColor, Names (nameplates on the shelf,
-	   cycled), EndPanels, HelmetEvery, HelmetColor, HelmetDiameter, StripeColor, FacemaskColor, Team
+	A bank of closed lockers against a wall, each with its own door (BuildUtil.Door, Object
+	"Locker", LookKey "locker:<n>": opening it shows whose locker it is) and a numbered jersey
+	hanging inside. `frame` is a plot-local CFrame at floor level on the wall face in the middle of
+	the bank, its LookVector pointing into the room (the doors swing that way).
+	o: Name, Count, Width (per locker), Depth, DoorHeight, First (number of the first locker),
+	   FrameColor, HeaderColor, DoorColor, JerseyColor, NumberColor, PlateColor
 ]]
 local function lockerBank(ctx, frame, o)
+	local bank = BuildUtil.Child(ctx, o.Name)
+	local n, w, D = o.Count, o.Width, o.Depth
+	local len = n * w
+	local plinth, doorH, header = 0.5, o.DoorHeight, 1.3
+	local H = plinth + doorH + header
+	local midZ = -D / 2 -- the wall is the lockers' back
+	lblock(bank, frame, "LockerPlinth", Vector3.new(len, plinth, D), 0, 0, midZ, DARK_METAL, Enum.Material.Metal)
+	local headerPart = lblock(bank, frame, "LockerHeader", Vector3.new(len, header, D), 0, plinth + doorH, midZ, o.HeaderColor)
+	for i = 0, n do
+		lblock(bank, frame, "LockerDivider", Vector3.new(0.3, doorH, D), -len / 2 + i * w, plinth, midZ, o.FrameColor, Enum.Material.Metal)
+	end
+
+	-- number plates: one GUI on the header front (its GUI x runs toward the bank's local -X)
+	local plates = Instance.new("SurfaceGui")
+	plates.Name = "NumberPlatesGui"
+	plates.Face = Enum.NormalId.Front
+	plates.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	plates.PixelsPerStud = 24
+	plates.LightInfluence = 1
+	plates.Parent = headerPart
+
+	for i = 1, n do
+		local number = o.First + i - 1
+		local x = -len / 2 + (i - 0.5) * w
+		local jersey =
+			lblock(bank, frame, "Jersey", Vector3.new(w - 1.2, 3.2, 0.25), x, 3.6, -0.5, o.JerseyColor, Enum.Material.Fabric, DECOR)
+		sign(jersey, { Enum.NormalId.Front }, HOME_NUMBERS[(number - 1) % #HOME_NUMBERS + 1], o.JerseyColor, nil, {
+			TextColor3 = o.NumberColor,
+			InsetX = 0.2,
+			InsetY = 0.18,
+		})
+
+		local plateW = w - 1
+		local label = Instance.new("TextLabel")
+		label.Name = "LockerNumber"
+		label.BackgroundTransparency = 1
+		label.BorderSizePixel = 0
+		label.Position = UDim2.new((len / 2 - x - plateW / 2) / len, 0, 0.2, 0)
+		label.Size = UDim2.new(plateW / len, 0, 0.6, 0)
+		label.Font = Enum.Font.GothamBlack
+		label.Text = string.format("%02d", number)
+		label.TextColor3 = o.PlateColor
+		label.TextScaled = true
+		label.Parent = plates
+
+		BuildUtil.Door(bank, {
+			Name = "LockerDoor" .. number,
+			Size = Vector3.new(w - 0.3, doorH - 0.1, 0.2),
+			CFrame = frame * CFrame.new(x, plinth + doorH / 2, -D + 0.1),
+			Hinge = "Left",
+			Color = o.DoorColor,
+			Material = Enum.Material.Metal,
+			Object = "Locker",
+			Title = "Locker #" .. number,
+			Info = "A player's locker: game jersey, pads and a lucky photo from home. Players dress here before every game.",
+			LookKey = "locker:" .. number,
+			Distance = 6,
+		})
+	end
+	return H
+end
+
+--[[
+	A bank of open locker stalls (the visitors don't get doors). `frame` is a plot-local CFrame at
+	floor level on the wall face in the middle of the bank, its LookVector pointing into the room.
+	o: Name, Length, Stalls, Height, Depth, First (number of the first stall), BackColor,
+	   FrameColor, ShelfColor, SeatColor, JerseyColor, NumberColor, Names, HelmetEvery,
+	   HelmetColor, Looks = { [stall number] = info }, Team
+]]
+local function openStalls(ctx, frame, o)
 	local bank = BuildUtil.Child(ctx, o.Name)
 	local n, len, H, D = o.Stalls, o.Length, o.Height, o.Depth
 	local w = len / n
 	local inner = D - 0.4 -- depth in front of the back panel
-	lblock(bank, frame, "LockerBack", Vector3.new(len, H, 0.4), 0, 0, -0.2, o.BackColor, o.BackMaterial or Enum.Material.Wood)
+	lblock(bank, frame, "LockerBack", Vector3.new(len, H, 0.4), 0, 0, -0.2, o.BackColor, Enum.Material.Wood)
 	lblock(bank, frame, "LockerSeat", Vector3.new(len, 1.6, inner), 0, 0, -0.4 - inner / 2, o.SeatColor, Enum.Material.Fabric)
-	local shelf = lblock(
-		bank,
-		frame,
-		"LockerShelf",
-		Vector3.new(len, 1.2, inner),
-		0,
-		H - 1.2,
-		-0.4 - inner / 2,
-		o.ShelfColor,
-		Enum.Material.SmoothPlastic
-	)
-	-- dividers stand 0.15 proud of the seat + shelf fronts and stop 0.1 under the shelf top;
-	-- end panels poke 0.05 past the bank ends (no shared planes with the back/seat/shelf)
-	local first, last = 1, n - 1
-	if o.EndPanels then
-		first, last = 0, n
-	end
-	for i = first, last do
+	local shelf = lblock(bank, frame, "LockerShelf", Vector3.new(len, 1.2, inner), 0, H - 1.2, -0.4 - inner / 2, o.ShelfColor)
+	-- dividers stand 0.15 proud of the seat + shelf fronts and stop 0.1 under the shelf top; the
+	-- end panels poke 0.05 past the bank ends (no shared planes with the back / seat / shelf)
+	for i = 0, n do
 		local x = -len / 2 + i * w
 		if i == 0 then
 			x = -len / 2 + 0.1
@@ -362,506 +391,720 @@ local function lockerBank(ctx, frame, o)
 	end
 
 	-- nameplates: one GUI on the shelf front (its GUI x runs toward the bank's local -X)
-	local plates
-	if o.Names then
-		plates = Instance.new("SurfaceGui")
-		plates.Name = "NameplatesGui"
-		plates.Face = Enum.NormalId.Front
-		plates.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-		plates.PixelsPerStud = 24
-		plates.LightInfluence = 1
-		plates.Parent = shelf
-	end
-	local plateColor = textColorOn(o.ShelfColor, { o.Team.Trim, WHITE, INK })
+	local plates = Instance.new("SurfaceGui")
+	plates.Name = "NameplatesGui"
+	plates.Face = Enum.NormalId.Front
+	plates.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	plates.PixelsPerStud = 24
+	plates.LightInfluence = 1
+	plates.Parent = shelf
+	local plateColor = textColorOn(o.ShelfColor, { WHITE, INK })
 
-	local hd = o.HelmetDiameter or 1.7
-	local hz = -0.4 - inner / 2
+	local hd = 1.5
 	for i = 1, n do
+		local number = o.First + i - 1
 		local x = -len / 2 + (i - 0.5) * w
-		local color = o.Jerseys[(i - 1) % #o.Jerseys + 1]
-		local jersey =
-			lblock(bank, frame, "Jersey", Vector3.new(math.min(w - 1.4, 2.8), 3, 0.25), x, 3.3, -0.75, color, Enum.Material.Fabric)
-		local number = o.Numbers[(i - 1) % #o.Numbers + 1]
-		sign(jersey, { Enum.NormalId.Front }, number, color, o.Team, { InsetX = 0.22, InsetY = 0.18, TextColor3 = o.NumberColor })
-		if plates then
-			local plateW = w - 0.8
-			local label = Instance.new("TextLabel")
-			label.Name = "Nameplate"
-			label.BackgroundTransparency = 1
-			label.BorderSizePixel = 0
-			label.Position = UDim2.new((len / 2 - x - plateW / 2) / len, 0, 0.22, 0)
-			label.Size = UDim2.new(plateW / len, 0, 0.56, 0)
-			label.Font = Enum.Font.GothamBold
-			label.Text = o.Names[(i - 1) % #o.Names + 1]
-			label.TextColor3 = plateColor
-			label.TextScaled = true
-			label.Parent = plates
-		end
-		if o.HelmetEvery and i % o.HelmetEvery == 0 then
-			BuildUtil.Ball(bank, {
-				Name = "Helmet",
-				CFrame = frame * CFrame.new(x, H + hd / 2, hz),
-				Diameter = hd,
-				Color = o.HelmetColor,
-				Material = Enum.Material.SmoothPlastic,
-				Reflectance = 0.1,
-			})
-			if o.StripeColor then
-				-- a thin disk across the crown, front to back (cylinder axis = the bank's local X)
-				BuildUtil.Part(bank, {
-					Name = "HelmetStripe",
-					Shape = Enum.PartType.Cylinder,
-					Size = Vector3.new(0.26, hd + 0.04, hd + 0.04),
-					CFrame = frame * CFrame.new(x, H + hd / 2, hz),
-					Color = o.StripeColor,
-					Material = Enum.Material.SmoothPlastic,
-				})
-			end
-			lblock(
-				bank,
-				frame,
-				"Facemask",
-				Vector3.new(hd * 0.62, hd * 0.42, 0.25),
-				x,
-				H + 0.08,
-				hz - hd / 2 + 0.06,
-				o.FacemaskColor or FACEMASK_GREY,
-				Enum.Material.Metal
-			)
-		end
-	end
-end
-
--- Round wall clock on a wall face. `frame` sits on the wall face, LookVector into the room.
-local function wallClock(ctx, frame, rimColor)
-	-- cylinders run along their local X: turned 90 degrees so they stick out of the wall
-	BuildUtil.Part(ctx, {
-		Name = "ClockRim",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.12, 2, 2),
-		CFrame = frame * CFrame.new(0, 0, -0.06) * CFrame.Angles(0, math.pi / 2, 0),
-		Color = rimColor,
-		Material = Enum.Material.SmoothPlastic,
-	})
-	BuildUtil.Part(ctx, {
-		Name = "ClockFace",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.16, 1.7, 1.7),
-		CFrame = frame * CFrame.new(0, 0, -0.08) * CFrame.Angles(0, math.pi / 2, 0),
-		Color = WHITE,
-		Material = Enum.Material.SmoothPlastic,
-	})
-	-- hands at ten past ten (the classic catalogue time)
-	for _, hand in ipairs({ { length = 0.75, angle = 60 }, { length = 0.55, angle = -60 } }) do
-		local a = math.rad(hand.angle)
-		BuildUtil.Part(ctx, {
-			Name = "ClockHand",
-			Size = Vector3.new(0.1, hand.length, 0.05),
-			CFrame = frame * CFrame.new(0, 0, -0.18) * CFrame.Angles(0, 0, a) * CFrame.new(0, hand.length / 2, 0),
-			Color = INK,
-			Material = Enum.Material.SmoothPlastic,
-			CanCollide = false,
+		local jersey = lblock(
+			bank,
+			frame,
+			"Jersey",
+			Vector3.new(math.min(w - 1.4, 2.8), 3, 0.25),
+			x,
+			3.3,
+			-0.75,
+			o.JerseyColor,
+			Enum.Material.Fabric,
+			DECOR
+		)
+		sign(jersey, { Enum.NormalId.Front }, AWAY_NUMBERS[(number - 1) % #AWAY_NUMBERS + 1], o.JerseyColor, o.Team, {
+			InsetX = 0.22,
+			InsetY = 0.18,
+			TextColor3 = o.NumberColor,
 		})
+		local info = o.Looks and o.Looks[number]
+		if info then
+			BuildUtil.Look(jersey, "Visitors' Locker", info, { At = Vector3.new(0, -0.4, -0.8), Distance = 7 })
+		end
+		local plateW = w - 0.8
+		local label = Instance.new("TextLabel")
+		label.Name = "Nameplate"
+		label.BackgroundTransparency = 1
+		label.BorderSizePixel = 0
+		label.Position = UDim2.new((len / 2 - x - plateW / 2) / len, 0, 0.22, 0)
+		label.Size = UDim2.new(plateW / len, 0, 0.56, 0)
+		label.Font = Enum.Font.GothamBold
+		label.Text = o.Names[(number - 1) % #o.Names + 1]
+		label.TextColor3 = plateColor
+		label.TextScaled = true
+		label.Parent = plates
+		if o.HelmetEvery and i % o.HelmetEvery == 0 then
+			helmet(bank, frame * CFrame.new(x, H, -0.4 - inner / 2), hd, o.HelmetColor)
+		end
 	end
 end
 
 ---------------------------------------------------------------------------------------------
--- Home Locker Room (behind the home stands, entrance facing the back walk)
+-- Home Locker Room (behind the home stands; the double doors face the campus road)
 ---------------------------------------------------------------------------------------------
 
 function StadiumRooms.home_lockerroom(ctx)
 	local C = ctx.config.Colors
 	local team = ctx.colors
-	local fp = HOME_ROOM
 	local name = displayName(ctx)
-
-	-- Outer walls X[47, 108] Z[147, 169]; the roof overhang stays inside the footprint
-	local minX, maxX = fp.MinX + 2, fp.MaxX - 2
-	local minZ, maxZ = fp.MinZ + 1, fp.MaxZ - 1
-	local cz = (minZ + maxZ) / 2
-	local W, D = maxZ - minZ, maxX - minX
-	-- local +Z (into the room) = world +X, local +X = world -Z, so local x = cz - world z
-	local frame = CFrame.new(minX, 0, cz) * CFrame.Angles(0, math.pi / 2, 0)
-	local H, top = 12, 8.5
-	local doorMinZ, doorMaxZ = maxZ - 10.5, maxZ - 2.5 -- north end: clear of the press box (z <= 161)
-	local windowMinZ, windowMaxZ = minZ + 2, doorMinZ - 2
-	local innerMinX, innerMaxX = minX + 1, maxX - 1
-	local innerMinZ, innerMaxZ = minZ + 1, maxZ - 1
+	local x0, x1, z0, z1 = HOME.MinX, HOME.MaxX, HOME.MinZ, HOME.MaxZ
+	local H, ceil = HOME_H, HOME_CEILING
+	local door, win = HOME_DOOR, HOME_WINDOW
+	local midZ = HOME_MID_Z
+	local wallMat = Enum.Material.Concrete
 
 	-- Step 1: Building -----------------------------------------------------------------------
+	-- floor, walls (door gap + clerestory in the north wall), roof, ceiling + lights, the double
+	-- doors and the showers behind a partition at the east end
 	BuildUtil.Stage(ctx, 1)
-	roomShell(ctx, frame, {
-		Width = W,
-		Depth = D,
-		WallH = H,
-		OpeningTop = top,
-		WallColor = HOME_WALL,
-		WallMaterial = Enum.Material.Concrete,
-		FloorColor = HOME_CARPET,
-		FloorMaterial = Enum.Material.Carpet,
-		Openings = {
-			{ From = cz - doorMaxZ, To = cz - doorMinZ, Bottom = 0 },
-			{ From = cz - windowMaxZ, To = cz - windowMinZ, Bottom = 3, Mullions = 1 },
-		},
-		Clerestory = { Side = -1, Bottom = 9, Mullions = 3 }, -- the north wall (campus side)
-		BandColor = team.Primary,
-		BandH = 1.6,
-		JambColor = team.Secondary,
-		JambTop = top - 0.4, -- up to the canopy
+	local shell = BuildUtil.Child(ctx, "Building")
+	box(shell, "Floor", x0 + 0.05, 0, z0 + 0.05, x1 - 0.05, FLOOR_TOP, z1 - 0.05, HOME_CARPET, Enum.Material.Carpet)
+	box(shell, "SouthWall", x0, 0, z0, x1, H, z0 + 1, HOME_WALL, wallMat)
+	box(shell, "WestWall", x0, 0, z0 + 1, x0 + 1, H, z1 - 1, HOME_WALL, wallMat)
+	box(shell, "EastWall", x1 - 1, 0, z0 + 1, x1, H, z1 - 1, HOME_WALL, wallMat)
+	box(shell, "NorthWall", x0, 0, z1 - 1, door.MinX, H, z1, HOME_WALL, wallMat)
+	box(shell, "NorthWall", door.MaxX, 0, z1 - 1, x1, door.Top, z1, HOME_WALL, wallMat)
+	box(shell, "DoorLintel", door.MinX, door.Top, z1 - 1, win.MinX, H, z1, HOME_WALL, wallMat)
+	box(shell, "NorthWall", win.MaxX, door.Top, z1 - 1, x1, H, z1, HOME_WALL, wallMat)
+	box(shell, "WindowHead", win.MinX, win.Top, z1 - 1, win.MaxX, H, z1, HOME_WALL, wallMat)
+	box(shell, "ClerestoryGlass", win.MinX, door.Top, z1 - 0.65, win.MaxX, win.Top, z1 - 0.35, C.Glass, Enum.Material.Glass, {
+		Transparency = 0.4,
+	})
+	box(shell, "RoofBand", x0 - 0.3, H, z0 - 0.3, x1 + 0.3, H + 1.6, z1 + 0.3, team.Primary)
+	box(shell, "Roof", x0 - 0.6, H + 1.6, z0 - 0.6, x1 + 0.6, H + 2.2, z1 + 0.6, C.ConcreteDark, Enum.Material.Concrete)
+	box(shell, "Ceiling", x0 + 1, ceil, z0 + 1, x1 - 1, ceil + 0.2, z1 - 1, CEILING)
+	for _, lx in ipairs({ 56, 71, 86 }) do
+		ceilingLight(shell, lx, midZ, 8, 3, ceil, 26, 1.5)
+	end
+
+	-- Entrance (outside, facing the campus road): step, jambs, canopy, lamps, signs
+	local doorMid = (door.MinX + door.MaxX) / 2
+	box(shell, "DoorStep", door.MinX - 1.5, 0, z1, door.MaxX + 1.5, FLOOR_TOP, z1 + 1.6, C.Concrete, Enum.Material.Concrete)
+	for _, jx in ipairs({ door.MinX - 0.6, door.MaxX }) do
+		box(shell, "DoorJamb", jx, FLOOR_TOP, z1, jx + 0.6, door.Top, z1 + 0.35, team.Secondary)
+	end
+	box(shell, "DoorCanopy", door.MinX - 1.6, door.Top, z1, door.MaxX + 1.6, door.Top + 0.5, z1 + 1.8, team.Secondary)
+	for _, lx in ipairs({ door.MinX - 1.4, door.MaxX + 1.4 }) do
+		local lamp = box(shell, "WallLamp", lx - 0.3, 6.4, z1, lx + 0.3, 7.4, z1 + 0.4, LAMP, Enum.Material.Neon)
+		BuildUtil.Light(lamp, "PointLight", { Name = "EntranceLight", Range = 12, Brightness = 0.9, Color = WARM_LIGHT })
+	end
+	local signBoard = box(shell, "Sign", door.MinX - 3.5, door.Top + 0.75, z1, win.MinX - 0.5, H - 0.2, z1 + 0.4, team.Primary)
+	sign(signBoard, { Enum.NormalId.Back }, "HOME LOCKER ROOM", team.Primary, team, { InsetX = 0.04, InsetY = 0.12 })
+	local plaque = box(shell, "Plaque", x0 + 1.2, 3.4, z1, x0 + 2.8, 5.2, z1 + 0.15, team.Trim)
+	sign(plaque, { Enum.NormalId.Back }, "PLAYERS\n& STAFF\nONLY", team.Trim, team, { InsetX = 0.08, InsetY = 0.1 })
+	-- the team name under the clerestory, live (it follows the owner's team name)
+	local nameBoard = box(shell, "NameBoard", 66, 3.8, z1, 102, 8, z1 + 0.4, team.Primary)
+	local nameLabel = liveScreen(nameBoard, Enum.NormalId.Back, "team", name, {
+		TextColor3 = textColorOn(team.Primary, { team.Trim, team.Secondary }),
+		BackgroundColor3 = team.Primary,
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBlack,
+		InsetX = 0.04,
+		InsetY = 0.1,
+		PixelsPerStud = 16,
+	})
+	nameLabel.Name = "TeamName"
+
+	local doorH = door.Top - FLOOR_TOP - 0.1
+	BuildUtil.Door(shell, {
+		Name = "EntranceDoors",
+		Size = Vector3.new(door.MaxX - door.MinX, doorH, 0.4),
+		CFrame = CFrame.new(doorMid, FLOOR_TOP + 0.05 + doorH / 2, z1 - 0.5), -- swings in (toward -Z)
+		Double = true,
+		Window = true,
+		Color = team.Primary,
+		Material = Enum.Material.SmoothPlastic,
+		Object = "Home Locker Room",
+		Title = "Home Locker Room",
+		Info = "Players and staff only! Your team suits up in here before every home game.",
+		Distance = 8,
 	})
 
-	-- Entrance: step, canopy, wall lamps, the HOME LOCKER ROOM sign (on a trim-coloured backing)
-	local doorX = cz - (doorMinZ + doorMaxZ) / 2
-	local doorW = doorMaxZ - doorMinZ
-	lblock(ctx, frame, "FrontStep", Vector3.new(doorW + 2, FLOOR_TOP, 2), doorX, 0, -1, C.Concrete, Enum.Material.Concrete)
-	lblock(ctx, frame, "DoorCanopy", Vector3.new(doorW + 3, 0.4, 2), doorX, top - 0.4, -1, team.Secondary, Enum.Material.SmoothPlastic)
-	lblock(ctx, frame, "SignBacking", Vector3.new(W - 0.4, 3.2, 0.2), 0, top + 0.25, -0.1, team.Trim, Enum.Material.SmoothPlastic)
-	local board = lblock(ctx, frame, "Sign", Vector3.new(W - 1, 2.6, 0.4), 0, top + 0.55, -0.4, team.Primary, Enum.Material.SmoothPlastic)
-	sign(board, { Enum.NormalId.Front }, "HOME LOCKER ROOM", team.Primary, team, { InsetX = 0.03, InsetY = 0.1 })
-	-- the pier between the window and the door: a lamp over a PLAYERS ONLY plaque
-	local pierX = cz - (windowMaxZ + doorMinZ) / 2
-	for _, lx in ipairs({ pierX, doorX - doorW / 2 - 1.1 }) do
-		local lamp = lblock(ctx, frame, "WallLamp", Vector3.new(0.6, 0.9, 0.4), lx, 6.2, -0.2, LAMP, Enum.Material.Neon)
-		BuildUtil.Light(lamp, "PointLight", { Name = "EntranceLight", Range = 10, Brightness = 0.8, Color = WARM_LIGHT })
+	-- Showers: a partition with a wide archway, tiled floor + wall, four shower heads, own light
+	local sd = SHOWER_DOOR
+	box(shell, "ShowerWall", SHOWER_X, FLOOR_TOP, z0 + 1, SHOWER_X + 1, ceil, sd.MinZ, HOME_WALL, wallMat)
+	box(shell, "ShowerWall", SHOWER_X, FLOOR_TOP, sd.MaxZ, SHOWER_X + 1, ceil, z1 - 1, HOME_WALL, wallMat)
+	box(shell, "ShowerLintel", SHOWER_X, sd.Top, sd.MinZ, SHOWER_X + 1, ceil, sd.MaxZ, HOME_WALL, wallMat)
+	box(
+		shell,
+		"ShowerFloorTiles",
+		SHOWER_X + 1,
+		FLOOR_TOP,
+		z0 + 1,
+		x1 - 1,
+		FLOOR_TOP + 0.04,
+		z1 - 1,
+		TILE,
+		Enum.Material.CeramicTiles,
+		PAINT
+	)
+	local tiles =
+		box(shell, "ShowerWallTiles", x1 - 1.12, FLOOR_TOP + 0.04, z0 + 1, x1 - 1, 8.6, z1 - 1, TILE, Enum.Material.CeramicTiles, PAINT)
+	-- shower heads: chrome cones out of the tiles, tilted down toward the room
+	for _, hz in ipairs({ 150.5, 155.5, 160.5, 165.5 }) do
+		BuildUtil.Part(shell, {
+			Name = "ShowerHead",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(1.5, 0.75, 0.75),
+			CFrame = CFrame.new(x1 - 1.12 - 0.6, 7.4, hz) * CFrame.Angles(0, 0, math.rad(35)),
+			Color = CHROME,
+			Material = Enum.Material.Metal,
+			CanCollide = false,
+		})
 	end
-	local plaque =
-		lblock(ctx, frame, "Plaque", Vector3.new(1.3, 1.5, 0.15), pierX + 0.2, 3.4, -0.075, team.Trim, Enum.Material.SmoothPlastic)
-	sign(plaque, { Enum.NormalId.Front }, "PLAYERS\n& STAFF\nONLY", team.Trim, team, { InsetX = 0.08, InsetY = 0.1 })
-
-	-- Team name on the north wall, facing the campus road (+Z)
-	local nameX = (minX + maxX) / 2 + 3
-	BuildUtil.Box(
-		ctx,
-		"NameBacking",
-		Vector3.new(37, 4.4, 0.2),
-		Vector3.new(nameX, 5.2, maxZ + 0.1),
-		team.Secondary,
-		Enum.Material.SmoothPlastic
+	BuildUtil.Look(
+		tiles,
+		"Showers",
+		"Hot water, clouds of steam and the best singing echo in the whole stadium. The team hits the showers after every game.",
+		{ At = Vector3.new(-3.5, 0, 0), Distance = 9 }
 	)
-	local nameBoard = BuildUtil.Box(
-		ctx,
-		"NameBoard",
-		Vector3.new(36, 3.6, 0.4),
-		Vector3.new(nameX, 5.2, maxZ + 0.4),
-		team.Primary,
-		Enum.Material.SmoothPlastic
-	)
-	sign(nameBoard, { Enum.NormalId.Back }, name, team.Primary, team, { InsetX = 0.04, InsetY = 0.1 })
+	ceilingLight(shell, (SHOWER_X + 1 + x1 - 1) / 2, midZ, 4, 6, ceil, 20, 1.2)
 
 	-- Step 2: Lockers ------------------------------------------------------------------------
-	-- U of team lockers: north wall, south wall and the east end
+	-- 8 lockers on the north wall (1-8, west to east) and 8 on the south wall (9-16, east to
+	-- west), three rows of benches between them, facing the coach's corner
 	BuildUtil.Stage(ctx, 2)
-	local lockerH, lockerD = 8.5, 2.8
-	local bankMinX = innerMinX + 16 -- leaves an entry area by the door
-	local bankLen = innerMaxX - bankMinX
-	local bankX = (bankMinX + innerMaxX) / 2
-	local function lockerOpts(bankName, length, stalls, extra)
-		local o = {
-			Name = bankName,
-			Length = length,
-			Stalls = stalls,
-			Height = lockerH,
-			Depth = lockerD,
-			-- a light, "lit" back panel so the team-colour home jerseys stand out in every palette
-			BackColor = LOCKER_LIT,
-			BackMaterial = Enum.Material.SmoothPlastic,
-			FrameColor = team.Primary,
-			ShelfColor = team.Secondary,
-			SeatColor = shade(team.Primary, 0.7),
-			Jerseys = { team.Primary },
-			Numbers = HOME_NUMBERS,
-			Names = HOME_NAMES,
-			HelmetColor = team.Primary,
-			StripeColor = team.Secondary,
-			Team = team,
-		}
-		for k, v in pairs(extra or {}) do
-			o[k] = v
-		end
-		return o
+	local lockers = BuildUtil.Child(ctx, "Lockers")
+	local L = HOME_LOCKERS
+	local bankMidX = L.MinX + L.Count * L.Width / 2
+	local bankOpts = {
+		Count = L.Count,
+		Width = L.Width,
+		Depth = L.Depth,
+		DoorHeight = 7.2,
+		FrameColor = shade(team.Primary, 0.55),
+		HeaderColor = team.Secondary,
+		DoorColor = team.Primary,
+		JerseyColor = team.Primary,
+		NumberColor = textColorOn(team.Primary, { team.Trim, team.Secondary }),
+		PlateColor = textColorOn(team.Secondary, { team.Trim, team.Primary }),
+	}
+	local north = table.clone(bankOpts)
+	north.Name, north.First = "NorthLockers", 1
+	local lockerH = lockerBank(lockers, CFrame.new(bankMidX, FLOOR_TOP, z1 - 1), north)
+	local south = table.clone(bankOpts)
+	south.Name, south.First = "SouthLockers", L.Count + 1
+	lockerBank(lockers, CFrame.new(bankMidX, FLOOR_TOP, z0 + 1) * CFrame.Angles(0, math.pi, 0), south)
+	-- helmets on top of the south lockers (the north ones sit under the windows)
+	for _, hx in ipairs({ 71, 85 }) do
+		helmet(lockers, CFrame.new(hx, FLOOR_TOP + lockerH, z0 + 1 + L.Depth / 2) * CFrame.Angles(0, math.pi, 0), 1.7, team.Primary)
 	end
-	lockerBank(ctx, CFrame.new(bankX, FLOOR_TOP, innerMaxZ), lockerOpts("NorthLockers", bankLen, 8, { EndPanels = true, HelmetEvery = 2 }))
-	lockerBank(
-		ctx,
-		CFrame.new(bankX, FLOOR_TOP, innerMinZ) * CFrame.Angles(0, math.pi, 0),
-		lockerOpts("SouthLockers", bankLen, 8, {
-			EndPanels = true,
-			HelmetEvery = 2,
-			Numbers = { "99", "4", "15", "26", "37", "48", "59", "70" },
-			Names = SOUTH_NAMES,
-		})
-	)
-	local endLen = (innerMaxZ - lockerD) - (innerMinZ + lockerD)
-	lockerBank(
-		ctx,
-		CFrame.new(innerMaxX, FLOOR_TOP, cz) * CFrame.Angles(0, math.pi / 2, 0),
-		lockerOpts("EastLockers", endLen, 3, { Numbers = { "5", "17", "81" }, Names = { "CAPTAIN", "COACH", "LEGEND" } })
-	)
+
+	-- benches: a dark frame with three padded seats each; seated players face the podium (-X)
+	local seatColor = shade(team.Primary, 0.8)
+	local facePodium = CFrame.Angles(0, math.pi / 2, 0)
+	for row, bx in ipairs(BENCH_ROWS) do
+		box(lockers, "BenchFrame", bx - 0.6, FLOOR_TOP, midZ - 3.8, bx + 0.6, FLOOR_TOP + 1.25, midZ + 3.8, DARK_METAL, Enum.Material.Metal)
+		for i = -1, 1 do
+			local camera, object
+			if i == 0 and row == 1 then
+				object = "Bench - Team Talk Cam"
+				camera = { From = Vector3.new(66, 8.5, 151), To = SPEAKER_HEAD, Fov = 34, Label = "TEAM TALK CAM" }
+			elseif i == 0 and row == #BENCH_ROWS then
+				object = "Bench - Tunnel Cam"
+				camera = { From = Vector3.new(0, 7, 90), To = Vector3.new(0, 2, 30), Fov = 60, Label = "TUNNEL CAM - LIVE" }
+			end
+			BuildUtil.Seat(lockers, {
+				Name = "BenchSeat",
+				Size = Vector3.new(2.5, 0.5, 1.8),
+				CFrame = CFrame.new(bx, FLOOR_TOP + 1.5, midZ + i * 2.55) * facePodium,
+				Color = seatColor,
+				Material = Enum.Material.Fabric,
+				Object = object,
+				Camera = camera,
+				NoPrompt = camera == nil,
+			})
+		end
+	end
 
 	-- Step 3: Logo & Whiteboard ----------------------------------------------------------------
+	-- the coach's corner (west wall): live screens either side of the whiteboard, the podium in
+	-- front; the team logo on the carpet; cooler, trophy shelf and motto signs
 	BuildUtil.Stage(ctx, 3)
-	local banner = BuildUtil.Box(
-		ctx,
-		"Banner",
-		Vector3.new(0.2, 2.2, endLen + 2),
-		Vector3.new(innerMaxX - 0.1, 10.6, cz),
-		team.Secondary,
-		Enum.Material.Fabric
-	)
-	sign(banner, { Enum.NormalId.Left }, "PROTECT THIS HOUSE", team.Secondary, team, { InsetX = 0.04, InsetY = 0.14 })
+	local corner = BuildUtil.Child(ctx, "CoachCorner")
+	local wallX = x0 + 1 -- inner face of the west wall
 
-	-- Team logo on the carpet, reading from the door (-X)
-	local logoX = (bankMinX + innerMaxX - lockerD) / 2
-	local logoD = 12
-	BuildUtil.Cylinder(ctx, {
+	-- coach's whiteboard: the live starting lineup in marker blue under a GAME PLAN header
+	box(corner, "WhiteboardFrame", wallX, 2.7, midZ - 4.3, wallX + 0.12, 8.3, midZ + 4.3, team.Primary)
+	local whiteboard = box(corner, "Whiteboard", wallX + 0.12, 3, midZ - 4, wallX + 0.32, 8, midZ + 4, WHITE)
+	local rosterLabel = liveScreen(whiteboard, Enum.NormalId.Right, "roster", "QB\nRB\nWR\nOL\nDEF\nK", {
+		TextColor3 = MARKER_BLUE,
+		BackgroundColor3 = WHITE,
+		BackgroundTransparency = 1,
+		InsetX = 0.03,
+		InsetY = 0.02,
+		PixelsPerStud = 28,
+	})
+	rosterLabel.Size = UDim2.new(0.88, 0, 0.8, 0)
+	rosterLabel.Position = UDim2.new(0.06, 0, 0.18, 0)
+	local header = Instance.new("TextLabel")
+	header.Name = "WhiteboardHeader"
+	header.BackgroundTransparency = 1
+	header.BorderSizePixel = 0
+	header.Position = UDim2.new(0.06, 0, 0.03, 0)
+	header.Size = UDim2.new(0.88, 0, 0.14, 0)
+	header.Font = Enum.Font.GothamBlack
+	header.Text = "GAME PLAN - TODAY'S STARTERS"
+	header.TextColor3 = Color3.fromRGB(190, 30, 40)
+	header.TextScaled = true
+	header.Parent = rosterLabel.Parent
+	BuildUtil.Look(
+		whiteboard,
+		"Coach's Whiteboard",
+		"Today's starting lineup, in the coach's best handwriting. Train your players to raise their ratings!",
+		{ LookKey = "rating", At = Vector3.new(1.6, -1, -3.7), Distance = 7 }
+	)
+
+	-- live screens: the game summary (south of the board), record + season (north of it)
+	box(corner, "SummaryBezel", wallX, 5, 147.6, wallX + 0.3, 8.6, 153.2, SCREEN_BLACK)
+	local summary =
+		box(corner, "SummaryScreen", wallX + 0.3, 5.2, 147.8, wallX + 0.36, 8.4, 153, SCREEN_BLACK, Enum.Material.SmoothPlastic, PAINT)
+	liveScreen(summary, Enum.NormalId.Right, "summary", name .. "\n0 - 0\nRECORD 0-0\nSEASON 1", { PixelsPerStud = 30 })
+	box(corner, "RecordBezel", wallX, 5, 162.8, wallX + 0.3, 8.6, 168.4, SCREEN_BLACK)
+	local record =
+		box(corner, "RecordScreen", wallX + 0.3, 6.95, 163, wallX + 0.36, 8.4, 168.2, SCREEN_BLACK, Enum.Material.SmoothPlastic, PAINT)
+	liveScreen(record, Enum.NormalId.Right, "record", "RECORD 0-0", { TextColor3 = LED_GREEN })
+	local season =
+		box(corner, "SeasonScreen", wallX + 0.3, 5.2, 163, wallX + 0.36, 6.75, 168.2, SCREEN_BLACK, Enum.Material.SmoothPlastic, PAINT)
+	liveScreen(season, Enum.NormalId.Right, "season", "SEASON 1 - WEEK 1", { PixelsPerStud = 28 })
+
+	-- the podium: the coach's (or your) pre-game speech; the camera watches from the benches
+	local podium = box(corner, "Podium", PODIUM_X - 1.1, FLOOR_TOP, midZ - 1.5, PODIUM_X + 1.1, 4.1, midZ + 1.5, WOOD, Enum.Material.Wood)
+	box(corner, "PodiumTop", PODIUM_X - 1.3, 4.1, midZ - 1.7, PODIUM_X + 1.3, 4.4, midZ + 1.7, shade(WOOD, 0.8), Enum.Material.Wood)
+	local podiumFront = box(corner, "PodiumFront", PODIUM_X + 1.1, 1.2, midZ - 1.2, PODIUM_X + 1.22, 3.7, midZ + 1.2, team.Primary)
+	sign(podiumFront, { Enum.NormalId.Right }, name, team.Primary, team, { InsetX = 0.08, InsetY = 0.3 })
+	strut(
+		corner,
+		"PodiumMic",
+		Vector3.new(PODIUM_X + 0.4, 4.4, midZ),
+		Vector3.new(PODIUM_X - 0.3, 5.2, midZ),
+		0.12,
+		INK,
+		Enum.Material.Metal
+	)
+	BuildUtil.Use(corner, podium, "podium", {
+		Object = "Podium",
+		Title = "Pre-Game Speech",
+		Info = "Fire up the team before kickoff! Pick the best lines and your players run out ready to win.",
+		At = Vector3.new(-1.9, 1.8, 0), -- on the speaker's side
+		Distance = 7,
+		Camera = { From = Vector3.new(73, 6.2, midZ + 0.5), To = SPEAKER_HEAD, Fov = 28 },
+	})
+
+	-- the team logo on the carpet (reads from the benches, +X). Locker room rule: don't step on it!
+	local logoX, logoD = 60.5, 11
+	BuildUtil.Cylinder(corner, {
 		Name = "LogoRing",
-		Position = Vector3.new(logoX, FLOOR_TOP + 0.02, cz),
+		Position = Vector3.new(logoX, FLOOR_TOP + 0.02, midZ),
 		Height = 0.04,
 		Diameter = logoD,
 		Axis = "Y",
 		Color = team.Secondary,
-		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		CastShadow = false,
 	})
-	BuildUtil.Cylinder(ctx, {
+	BuildUtil.Cylinder(corner, {
 		Name = "LogoDisc",
-		Position = Vector3.new(logoX, FLOOR_TOP + 0.04, cz),
+		Position = Vector3.new(logoX, FLOOR_TOP + 0.04, midZ),
 		Height = 0.08,
 		Diameter = logoD - 1.6,
 		Axis = "Y",
 		Color = team.Primary,
-		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		CastShadow = false,
 	})
-	local logoName = BuildUtil.Part(ctx, {
+	local logoName = BuildUtil.Part(corner, {
 		Name = "LogoName",
 		Size = Vector3.new(logoD * 0.72, 0.02, logoD * 0.3),
-		CFrame = CFrame.new(logoX, FLOOR_TOP + 0.1, cz) * CFrame.Angles(0, -math.pi / 2, 0),
+		CFrame = CFrame.new(logoX, FLOOR_TOP + 0.1, midZ) * CFrame.Angles(0, math.pi / 2, 0),
 		Transparency = 1,
 		CanCollide = false,
 		CastShadow = false,
 	})
 	sign(logoName, { Enum.NormalId.Top }, name, team.Primary, team, { InsetX = 0.02, InsetY = 0.05, PixelsPerStud = 12 })
-
-	-- Coach's whiteboard (team-colour frame) on the north wall of the entry area, facing into the room
-	local boardX = innerMinX + 8
-	BuildUtil.Box(
-		ctx,
-		"WhiteboardFrame",
-		Vector3.new(10.6, 5.6, 0.12),
-		Vector3.new(boardX, 5.6, innerMaxZ - 0.06),
-		team.Primary,
-		Enum.Material.SmoothPlastic
-	)
-	local whiteboard = BuildUtil.Box(
-		ctx,
-		"Whiteboard",
-		Vector3.new(10, 5, 0.2),
-		Vector3.new(boardX, 5.6, innerMaxZ - 0.1),
-		WHITE,
-		Enum.Material.SmoothPlastic
-	)
-	BuildUtil.SurfaceText(whiteboard, Enum.NormalId.Front, "GAME PLAN\nX  X  X  X  X\nO    O    O\nWIN THE DAY!", {
-		LabelName = "WhiteboardText",
-		TextColor3 = MARKER_BLUE,
-		Font = Enum.Font.GothamBold,
-		PixelsPerStud = 20,
-	})
-	BuildUtil.Box(
-		ctx,
-		"MarkerTray",
-		Vector3.new(10, 0.25, 0.5),
-		Vector3.new(boardX, 2.95, innerMaxZ - 0.25),
-		DARK_METAL,
-		Enum.Material.Metal
+	BuildUtil.Look(
+		logoName,
+		"Team Logo",
+		"Your team's logo, right in the middle of the locker room. Team rule: nobody steps on the logo!",
+		{ LookKey = "team", At = Vector3.new(0, 3, 0), Distance = 8 }
 	)
 
-	-- TV on the south wall of the entry area showing the game-day screen
-	local tvX = innerMinX + 9
-	BuildUtil.Box(
-		ctx,
-		"TVBezel",
-		Vector3.new(6.6, 3.8, 0.3),
-		Vector3.new(tvX, 6.6, innerMinZ + 0.15),
-		SCREEN_BLACK,
-		Enum.Material.SmoothPlastic
-	)
-	local screen = BuildUtil.Box(
-		ctx,
-		"TVScreen",
-		Vector3.new(6.1, 3.3, 0.08),
-		Vector3.new(tvX, 6.6, innerMinZ + 0.33),
-		SCREEN_BLUE,
-		Enum.Material.Neon,
-		PAINT
-	)
-	sign(screen, { Enum.NormalId.Back }, "GAME DAY\n" .. name .. " vs AWAY", SCREEN_BLUE, team, {
-		TextColor3 = WHITE,
-		InsetX = 0.08,
-		InsetY = 0.16,
-		Font = Enum.Font.GothamBold,
-	})
-	BuildUtil.Light(screen, "SurfaceLight", { Name = "TVGlow", Face = Enum.NormalId.Back, Range = 8, Brightness = 0.6, Color = WHITE })
-
-	-- PLAY LIKE A CHAMPION TODAY over the inside of the door: players slap it on the way out
-	local champion = BuildUtil.Box(
-		ctx,
-		"ChampionSign",
-		Vector3.new(0.2, 1.8, doorW - 0.6),
-		Vector3.new(innerMinX + 0.1, top + 1.1, (doorMinZ + doorMaxZ) / 2),
-		team.Secondary,
-		Enum.Material.SmoothPlastic
-	)
-	sign(champion, { Enum.NormalId.Right }, "PLAY LIKE A CHAMPION TODAY", team.Secondary, team, { InsetX = 0.04, InsetY = 0.14 })
-
-	-- wall clock over the window
-	wallClock(ctx, CFrame.new(innerMinX, 10.2, (windowMinZ + windowMaxZ) / 2) * CFrame.Angles(0, -math.pi / 2, 0), team.Primary)
-
-	-- Sports-drink cooler with a cup dispenser in the south-west corner (seen through the window)
-	local coolerX, coolerZ = innerMinX + 2.5, innerMinZ + 2
-	BuildUtil.Cylinder(ctx, {
+	-- sports-drink cooler with a cup dispenser in the south-west corner (under the summary screen)
+	local coolerX, coolerZ = wallX + 2, 150
+	local cooler = BuildUtil.Cylinder(corner, {
 		Name = "Cooler",
-		Position = Vector3.new(coolerX, FLOOR_TOP + 1.8, coolerZ),
-		Height = 3.6,
+		Position = Vector3.new(coolerX, FLOOR_TOP + 1.7, coolerZ),
+		Height = 3.4,
 		Diameter = 2.2,
 		Axis = "Y",
 		Color = COOLER_ORANGE,
-		Material = Enum.Material.SmoothPlastic,
 	})
-	BuildUtil.Cylinder(ctx, {
+	BuildUtil.Cylinder(corner, {
 		Name = "CoolerLid",
-		Position = Vector3.new(coolerX, FLOOR_TOP + 3.8, coolerZ),
+		Position = Vector3.new(coolerX, FLOOR_TOP + 3.6, coolerZ),
 		Height = 0.4,
 		Diameter = 2.3,
 		Axis = "Y",
 		Color = WHITE,
-		Material = Enum.Material.SmoothPlastic,
 	})
-	BuildUtil.Cylinder(ctx, {
-		Name = "CupDispenser",
-		Position = Vector3.new(coolerX + 1.2, FLOOR_TOP + 2.2, coolerZ),
-		Height = 1.4,
-		Diameter = 0.4,
-		Axis = "Y",
-		Color = WHITE,
-		Material = Enum.Material.SmoothPlastic,
+	BuildUtil.Use(corner, cooler, "sportsdrink", {
+		Object = "Sports Drink Cooler",
+		Title = "Sports Drink Cooler",
+		Info = "Ice-cold and full of electrolytes. Grab a cup - every player hydrates before the big game!",
+		Distance = 8,
 	})
+
+	-- trophy shelf on the south wall of the coach's corner (lights up with your championships)
+	local shelfX0, shelfX1 = 53.5, 62.5
+	local backing = box(corner, "TrophyBacking", shelfX0, 3.2, z0 + 1, shelfX1, 8.8, z0 + 1.15, team.Secondary)
+	local title = sign(backing, { Enum.NormalId.Back }, "CHAMPIONS", team.Secondary, team)
+	title.Size = UDim2.new(0.8, 0, 0.16, 0) -- a header strip above the trophies
+	title.Position = UDim2.new(0.1, 0, 0.03, 0)
+	local shelf = box(corner, "TrophyShelf", shelfX0 + 0.2, 4.5, z0 + 1.15, shelfX1 - 0.2, 4.8, z0 + 2.3, WOOD, Enum.Material.Wood, DECOR)
+	for i, tx in ipairs({ 55.5, 58, 60.5 }) do
+		local size = i == 2 and 1.3 or 1
+		BuildUtil.Cylinder(corner, {
+			Name = "TrophyBase",
+			Position = Vector3.new(tx, 5.05, z0 + 1.75),
+			Height = 0.5,
+			Diameter = 0.9,
+			Axis = "Y",
+			Color = INK,
+			CanCollide = false,
+		})
+		BuildUtil.Ball(corner, {
+			Name = "TrophyCup",
+			Position = Vector3.new(tx, 5.3 + size * 0.75, z0 + 1.75),
+			Diameter = size * 1.5,
+			Color = GOLD,
+			Material = Enum.Material.Metal,
+			Reflectance = 0.2,
+			CanCollide = false,
+		})
+	end
+	BuildUtil.Look(
+		shelf,
+		"Trophy Shelf",
+		"Every championship your team wins earns a spot up here. Plenty of room for more!",
+		{ LookKey = "titles", At = Vector3.new(0, -0.4, 0.8), Distance = 8 }
+	)
+
+	-- players slap this sign over the doors on their way out to the field
+	local slap = box(corner, "LuckySign", door.MinX + 0.4, 9.75, z1 - 1.15, door.MaxX - 0.4, 11.6, z1 - 1, team.Secondary)
+	sign(slap, { Enum.NormalId.Front }, "BELIEVE. FIGHT. WIN.", team.Secondary, team, { InsetX = 0.05, InsetY = 0.14 })
+	BuildUtil.Look(
+		slap,
+		"Lucky Sign",
+		"Team tradition: every player jumps up and slaps this sign on the way out to the field. Don't forget yours!",
+		{ At = Vector3.new(0, -5.5, -3.2), Distance = 7 } -- shows just inside the doors
+	)
+	-- motto banner over the shower archway, facing the benches
+	local banner = box(corner, "MottoBanner", SHOWER_X - 0.15, sd.Top + 0.3, 149, SHOWER_X, 11.6, 167, team.Primary, Enum.Material.Fabric)
+	sign(banner, { Enum.NormalId.Left }, "LEAVE IT ALL ON THE FIELD", team.Primary, team, { InsetX = 0.04, InsetY = 0.14 })
 end
 
 ---------------------------------------------------------------------------------------------
--- Visitor Locker Room (plaza, entrance facing the walkway)
+-- Visitor Locker Room (plaza, entrance facing the front walkway)
 ---------------------------------------------------------------------------------------------
 
 function StadiumRooms.visitor_lockerroom(ctx)
 	local C = ctx.config.Colors
 	local team = ctx.colors
-	local fp = VISITOR_ROOM
-
-	-- Outer walls X[-50, -22] Z[-118, -100]
-	local minX, maxX = fp.MinX + 2, fp.MaxX - 2
-	local minZ, maxZ = fp.MinZ + 2, fp.MaxZ - 2
-	local cz = (minZ + maxZ) / 2
-	local W, D = maxZ - minZ, maxX - minX
-	-- local +Z (into the room) = world -X, local +X = world +Z, so local x = world z - cz
-	local frame = CFrame.new(maxX, 0, cz) * CFrame.Angles(0, -math.pi / 2, 0)
-	local H, top = 10.5, 8
-	local doorFrom, doorTo = 2, 8 -- local x: the north part of the front (toward the tunnel)
-	local floorFrame = frame * CFrame.new(0, FLOOR_TOP, 0)
-	local innerHalf = W / 2 - 1
-	local innerDepth = D - 1 -- local z of the back wall's inner face
-	local innerMinX, innerMaxX = minX + 1, maxX - 1
-	local innerMinZ, innerMaxZ = minZ + 1, maxZ - 1
+	local x0, x1, z0, z1 = VISITOR.MinX, VISITOR.MaxX, VISITOR.MinZ, VISITOR.MaxZ
+	local H, ceil = VISITOR_H, VISITOR_CEILING
+	local door, win = VISITOR_DOOR, VISITOR_WINDOW
+	local midZ = (z0 + z1) / 2
+	local wallMat = Enum.Material.Concrete
 
 	-- Step 1: Building -----------------------------------------------------------------------
 	BuildUtil.Stage(ctx, 1)
-	roomShell(ctx, frame, {
-		Width = W,
-		Depth = D,
-		WallH = H,
-		OpeningTop = top,
-		WallColor = VISITOR_WALL,
-		WallMaterial = Enum.Material.Concrete,
-		FloorColor = VISITOR_FLOOR,
-		FloorMaterial = Enum.Material.Concrete,
-		Openings = {
-			{ From = -W / 2 + 1, To = 0, Bottom = 3, Mullions = 1 },
-			{ From = doorFrom, To = doorTo, Bottom = 0 },
-		},
-		BandColor = VISITOR_BAND,
-		BandH = 1.4,
-		JambColor = LOCKER_GREY_DARK,
+	local shell = BuildUtil.Child(ctx, "Building")
+	box(shell, "Floor", x0 + 0.05, 0, z0 + 0.05, x1 - 0.05, FLOOR_TOP, z1 - 0.05, VISITOR_FLOOR, Enum.Material.Concrete)
+	box(shell, "SouthWall", x0, 0, z0, x1, H, z0 + 1, VISITOR_WALL, wallMat)
+	box(shell, "NorthWall", x0, 0, z1 - 1, x1, H, z1, VISITOR_WALL, wallMat)
+	box(shell, "WestWall", x0, 0, z0 + 1, x0 + 1, H, z1 - 1, VISITOR_WALL, wallMat)
+	-- east wall (the front): a window to the south, the door to the north
+	local ex = x1 - 1
+	box(shell, "EastWall", ex, 0, z0 + 1, x1, H, win.MinZ, VISITOR_WALL, wallMat)
+	box(shell, "WindowSill", ex, 0, win.MinZ, x1, win.Bottom, win.MaxZ, VISITOR_WALL, wallMat)
+	box(
+		shell,
+		"Window",
+		ex + 0.35,
+		win.Bottom,
+		win.MinZ,
+		x1 - 0.35,
+		door.Top,
+		win.MaxZ,
+		C.Glass,
+		Enum.Material.Glass,
+		{ Transparency = 0.4 }
+	)
+	local mz = (win.MinZ + win.MaxZ) / 2
+	box(shell, "Mullion", ex + 0.2, win.Bottom, mz - 0.15, x1 - 0.2, door.Top, mz + 0.15, DARK_METAL, Enum.Material.Metal)
+	box(shell, "EastWall", ex, 0, win.MaxZ, x1, door.Top, door.MinZ, VISITOR_WALL, wallMat)
+	box(shell, "EastWall", ex, 0, door.MaxZ, x1, H, z1 - 1, VISITOR_WALL, wallMat)
+	box(shell, "EastLintel", ex, door.Top, win.MinZ, x1, H, door.MaxZ, VISITOR_WALL, wallMat)
+	box(shell, "RoofBand", x0 - 0.3, H, z0 - 0.3, x1 + 0.3, H + 1.4, z1 + 0.3, VISITOR_BAND)
+	box(shell, "Roof", x0 - 0.6, H + 1.4, z0 - 0.6, x1 + 0.6, H + 2, z1 + 0.6, C.ConcreteDark, Enum.Material.Concrete)
+	box(shell, "Ceiling", x0 + 1, ceil, z0 + 1, x1 - 1, ceil + 0.2, z1 - 1, CEILING)
+	ceilingLight(shell, -42, midZ, 5, 2.4, ceil, 20, 1.1)
+	ceilingLight(shell, -30, midZ, 5, 2.4, ceil, 20, 1.1)
+
+	-- outside: step, VISITORS sign over the door + window, AWAY TEAM plaque (look)
+	local doorMid = (door.MinZ + door.MaxZ) / 2
+	box(shell, "FrontStep", x1, 0, door.MinZ - 0.8, x1 + 1.6, FLOOR_TOP, door.MaxZ + 0.8, C.Concrete, Enum.Material.Concrete)
+	local board = box(shell, "Sign", x1, door.Top + 0.15, win.MinZ, x1 + 0.4, H - 0.15, door.MaxZ, VISITOR_SIGN)
+	sign(board, { Enum.NormalId.Right }, "VISITORS", VISITOR_SIGN, team, { TextColor3 = WHITE, InsetX = 0.08, InsetY = 0.12 })
+	local plaque = box(shell, "Plaque", x1, 3.4, win.MaxZ + 0.8, x1 + 0.15, 4.9, door.MinZ - 0.8, WHITE)
+	sign(plaque, { Enum.NormalId.Right }, "AWAY\nTEAM", WHITE, team, { TextColor3 = VISITOR_SIGN, InsetX = 0.1, InsetY = 0.15 })
+	BuildUtil.Look(
+		plaque,
+		"Visitor Locker Room",
+		"The visitors' locker room - smaller on purpose! Squeaky benches, warm drinks and no Wi-Fi keep the away team from getting comfortable.",
+		{ At = Vector3.new(0.8, 0, 0), Distance = 8 }
+	)
+
+	local doorH = door.Top - FLOOR_TOP - 0.1
+	BuildUtil.Door(shell, {
+		Name = "EntranceDoor",
+		Size = Vector3.new(door.MaxZ - door.MinZ, doorH, 0.35),
+		-- the door's X runs south (its hinge on the north jamb), it swings in (toward -X)
+		CFrame = CFrame.new(x1 - 0.5, FLOOR_TOP + 0.05 + doorH / 2, doorMid) * CFrame.Angles(0, math.pi / 2, 0),
+		Hinge = "Left",
+		Window = true,
+		Color = LOCKER_GREY_DARK,
+		Material = Enum.Material.Metal,
+		Object = "Visitors' Door",
+		Title = "Visitor Locker Room",
+		Info = "Where the away team gets ready. Squeaky, dusty and a little too cozy.",
+		Distance = 8,
 	})
-	local doorX = (doorFrom + doorTo) / 2
-	lblock(ctx, frame, "FrontStep", Vector3.new(doorTo - doorFrom + 2, FLOOR_TOP, 2), doorX, 0, -1, C.Concrete, Enum.Material.Concrete)
-	local board = lblock(ctx, frame, "Sign", Vector3.new(15, 2.2, 0.4), 0, top + 0.15, -0.2, VISITOR_SIGN, Enum.Material.SmoothPlastic)
-	sign(board, { Enum.NormalId.Front }, "VISITORS", VISITOR_SIGN, team, { TextColor3 = WHITE, InsetX = 0.08, InsetY = 0.12 })
-	local plaque =
-		lblock(ctx, frame, "Plaque", Vector3.new(1.2, 1.5, 0.15), doorFrom / 2 - 0.15, 3.4, -0.075, WHITE, Enum.Material.SmoothPlastic)
-	sign(plaque, { Enum.NormalId.Front }, "AWAY\nTEAM", WHITE, team, { TextColor3 = VISITOR_SIGN, InsetX = 0.1, InsetY = 0.15 })
 
 	-- Step 2: Lockers ------------------------------------------------------------------------
-	-- plain grey U of lockers with white away jerseys
+	-- plain grey open stalls with white away jerseys: four on the west wall, four on the south
 	BuildUtil.Stage(ctx, 2)
 	local lockerH, lockerD = 8, 2.6
-	local function lockerOpts(bankName, length, stalls, extra)
-		local o = {
-			Name = bankName,
-			Length = length,
-			Stalls = stalls,
-			Height = lockerH,
-			Depth = lockerD,
-			BackColor = LOCKER_GREY_DARK,
-			FrameColor = LOCKER_GREY,
-			ShelfColor = LOCKER_GREY_MID,
-			SeatColor = LOCKER_GREY_MID,
-			Jerseys = { WHITE },
-			Numbers = AWAY_NUMBERS,
-			NumberColor = AWAY_NUMBER,
-			Names = AWAY_NAMES,
-			HelmetColor = AWAY_HELMET,
-			HelmetDiameter = 1.5,
-			Team = team,
-		}
-		for k, v in pairs(extra or {}) do
-			o[k] = v
-		end
-		return o
-	end
-	lockerBank(ctx, floorFrame * CFrame.new(0, 0, innerDepth), lockerOpts("BackLockers", innerHalf * 2, 3))
-	local sideStart, sideEnd = 7, innerDepth - lockerD
-	local sideZ = (sideStart + sideEnd) / 2
-	lockerBank(
-		ctx,
-		floorFrame * CFrame.new(-innerHalf, 0, sideZ) * CFrame.Angles(0, -math.pi / 2, 0),
-		lockerOpts("SideLockers", sideEnd - sideStart, 4, { EndPanels = true, HelmetEvery = 2 })
-	)
-	lockerBank(
-		ctx,
-		floorFrame * CFrame.new(innerHalf, 0, sideZ) * CFrame.Angles(0, math.pi / 2, 0),
-		lockerOpts("SideLockers", sideEnd - sideStart, 4, {
-			EndPanels = true,
-			HelmetEvery = 2,
-			Numbers = { "6", "19", "33", "42" },
-			Names = { "EXTRA", "SPARE", "WALK-ON", "TRYOUT" },
-		})
-	)
+	local stallOpts = {
+		Height = lockerH,
+		Depth = lockerD,
+		Stalls = 4,
+		BackColor = LOCKER_GREY_DARK,
+		FrameColor = LOCKER_GREY,
+		ShelfColor = LOCKER_GREY_MID,
+		SeatColor = LOCKER_GREY_MID,
+		JerseyColor = WHITE,
+		NumberColor = AWAY_NUMBER,
+		Names = AWAY_NAMES,
+		HelmetEvery = 2,
+		HelmetColor = AWAY_HELMET,
+		Looks = AWAY_STALL_INFO,
+		Team = team,
+	}
+	local west = table.clone(stallOpts)
+	west.Name, west.First, west.Length = "WestLockers", 1, 15.2
+	openStalls(ctx, CFrame.new(x0 + 1, FLOOR_TOP, midZ) * CFrame.Angles(0, -math.pi / 2, 0), west)
+	local south = table.clone(stallOpts)
+	south.Name, south.First, south.Length = "SouthLockers", 5, 14.4
+	openStalls(ctx, CFrame.new(-39, FLOOR_TOP, z0 + 1) * CFrame.Angles(0, math.pi, 0), south)
 
 	-- Step 3: Bench & Signs ------------------------------------------------------------------
 	BuildUtil.Stage(ctx, 3)
-	-- one plain bench with somebody's duffel bag and a towel on it
-	local benchLen = sideEnd - sideStart - 4
-	lblock(ctx, floorFrame, "BenchBase", Vector3.new(1, 1.2, benchLen - 2), 0, 0, sideZ, DARK_METAL, Enum.Material.Metal)
-	lblock(ctx, floorFrame, "BenchSeat", Vector3.new(1.8, 0.5, benchLen), 0, 1.2, sideZ, LOCKER_GREY_MID, Enum.Material.WoodPlanks)
-	lblock(ctx, floorFrame, "DuffelBag", Vector3.new(1.3, 1, 2.6), 0, 1.7, sideZ + 3.5, DUFFEL_GREY, Enum.Material.Fabric)
-	lblock(ctx, floorFrame, "Towel", Vector3.new(1.6, 0.12, 1.4), 0.1, 1.7, sideZ - 3, WHITE, Enum.Material.Fabric)
+	local stuff = BuildUtil.Child(ctx, "BenchAndSigns")
 
-	-- a painted VISITORS mat by the door, a bin
-	local mat = BuildUtil.Part(ctx, {
+	-- one squeaky bench in the middle; sitters face the old TV on the north wall. It leaves >= 4
+	-- studs to the west + south stalls and to the TV cart, so players can walk all the way round.
+	local benchX, benchZ = -38.3, -109.3
+	box(
+		stuff,
+		"BenchFrame",
+		benchX - 3.9,
+		FLOOR_TOP,
+		benchZ - 0.5,
+		benchX + 3.9,
+		FLOOR_TOP + 1.2,
+		benchZ + 0.5,
+		DARK_METAL,
+		Enum.Material.Metal
+	)
+	for i = -1, 1 do
+		BuildUtil.Seat(stuff, {
+			Name = "BenchSeat",
+			Size = Vector3.new(2.55, 0.5, 1.8),
+			CFrame = CFrame.new(benchX + i * 2.6, FLOOR_TOP + 1.45, benchZ) * CFrame.Angles(0, math.pi, 0),
+			Color = LOCKER_GREY_MID,
+			Material = Enum.Material.WoodPlanks,
+			Object = "Squeaky Bench",
+			NoPrompt = i ~= 0,
+		})
+	end
+	box(
+		stuff,
+		"DuffelBag",
+		benchX + 4.6,
+		FLOOR_TOP,
+		benchZ - 1.3,
+		benchX + 6,
+		FLOOR_TOP + 1.1,
+		benchZ + 1.3,
+		DUFFEL_GREY,
+		Enum.Material.Fabric
+	)
+	box(
+		stuff,
+		"Towel",
+		benchX + 3.9,
+		FLOOR_TOP + 0.5,
+		benchZ - 0.55,
+		benchX + 4,
+		FLOOR_TOP + 1.25,
+		benchZ + 0.55,
+		WHITE,
+		Enum.Material.Fabric,
+		PAINT
+	)
+
+	-- an old CRT TV on an AV cart against the north wall: it shows the live score (bunny ears and all)
+	local tvX, tvZ = benchX, z1 - 2.2
+	box(stuff, "AVCart", tvX - 1.4, FLOOR_TOP, tvZ - 1.2, tvX + 1.4, FLOOR_TOP + 2.6, tvZ + 1.2, DARK_METAL, Enum.Material.Metal)
+	local crtBottom = FLOOR_TOP + 2.6
+	local crt = box(stuff, "CRT", tvX - 1.5, crtBottom, tvZ - 1.1, tvX + 1.5, crtBottom + 2.4, tvZ + 1.1, CRT_BEIGE)
+	local crtScreen = box(
+		stuff,
+		"CRTScreen",
+		tvX - 1.15,
+		crtBottom + 0.3,
+		tvZ - 1.18,
+		tvX + 1.15,
+		crtBottom + 2.1,
+		tvZ - 1.1,
+		SCREEN_BLACK,
+		Enum.Material.SmoothPlastic,
+		PAINT
+	)
+	liveScreen(crtScreen, Enum.NormalId.Front, "score", "HOME 0 - 0 VISITORS", { TextColor3 = LED_GREEN, PixelsPerStud = 30 })
+	for _, s in ipairs({ -1, 1 }) do
+		local base = Vector3.new(tvX, crtBottom + 2.4, tvZ + 0.3)
+		strut(stuff, "BunnyEar", base, base + Vector3.new(s * 0.8, 1.5, 0.3), 0.06, DARK_METAL, Enum.Material.Metal)
+	end
+	BuildUtil.Look(
+		crt,
+		"Old TV",
+		"An ancient TV on a wobbly cart. It only gets one channel: the score of today's game.",
+		{ At = Vector3.new(0, -0.6, -1.6), Distance = 7 }
+	)
+
+	-- a cooler of lukewarm soda, a bin beside it (clear of the door's swing) and a sad WI-FI sign
+	local cx, cz = -33, z1 - 2
+	local coolerBox = box(stuff, "SodaCooler", cx - 1.2, FLOOR_TOP, cz - 0.9, cx + 1.2, FLOOR_TOP + 1.8, cz + 0.9, COOLER_BLUE)
+	box(stuff, "SodaCoolerLid", cx - 1.3, FLOOR_TOP + 1.8, cz - 1, cx + 1.3, FLOOR_TOP + 2.1, cz + 1, WHITE)
+	BuildUtil.Use(stuff, coolerBox, "soda", {
+		Object = "Soda Cooler",
+		Title = "Lukewarm Soda Cooler",
+		Info = "The ice melted hours ago. The home team says that's 'just how it works'.",
+		Distance = 8,
+	})
+	BuildUtil.Cylinder(stuff, {
+		Name = "Bin",
+		Position = Vector3.new(cx + 3, FLOOR_TOP + 1.3, cz),
+		Height = 2.6,
+		Diameter = 1.6,
+		Axis = "Y",
+		Color = DARK_METAL,
+		Material = Enum.Material.Metal,
+	})
+	local wifi = box(stuff, "WifiSign", cx - 1.8, 5.8, z1 - 1.2, cx + 1.8, 7.2, z1 - 1, WHITE)
+	sign(wifi, { Enum.NormalId.Front }, "WI-FI: NONE", WHITE, team, { TextColor3 = INK })
+	-- the visitors' whole game plan, on a small whiteboard in the north-west corner
+	local plan = box(stuff, "PlanBoard", -46.2, 4.2, z1 - 1.15, -42.2, 7.2, z1 - 1, WHITE)
+	sign(plan, { Enum.NormalId.Front }, "GAME PLAN:\nTRY NOT TO LOSE\nBY TOO MUCH", WHITE, team, {
+		TextColor3 = MARKER_BLUE,
+		Font = Enum.Font.GothamBold,
+		InsetX = 0.08,
+		InsetY = 0.12,
+	})
+	BuildUtil.Look(
+		plan,
+		"Visitors' Game Plan",
+		"Their whole game plan, scribbled in a hurry: 'Try not to lose by too much.' Good luck with that!",
+		{ At = Vector3.new(0, -0.8, -1.2), Distance = 7 }
+	)
+
+	-- the roof leaks: a stain on the ceiling, a falling drip, a bucket and a wet floor sign
+	local leakX, leakZ = -27, -113.5
+	BuildUtil.Cylinder(stuff, {
+		Name = "CeilingStain",
+		Position = Vector3.new(leakX, ceil - 0.03, leakZ),
+		Height = 0.06,
+		Diameter = 3,
+		Axis = "Y",
+		Color = STAIN_BROWN,
+		CanCollide = false,
+		CastShadow = false,
+	})
+	BuildUtil.Ball(stuff, {
+		Name = "Drip",
+		Position = Vector3.new(leakX, 5.4, leakZ),
+		Diameter = 0.3,
+		Color = WATER_BLUE,
+		Material = Enum.Material.Glass,
+		Transparency = 0.2,
+		CanCollide = false,
+		CastShadow = false,
+	})
+	local bucket = BuildUtil.Cylinder(stuff, {
+		Name = "Bucket",
+		Position = Vector3.new(leakX, FLOOR_TOP + 0.7, leakZ),
+		Height = 1.4,
+		Diameter = 1.4,
+		Axis = "Y",
+		Color = BUCKET_BLUE,
+	})
+	BuildUtil.Cylinder(stuff, {
+		Name = "BucketWater",
+		Position = Vector3.new(leakX, FLOOR_TOP + 1.25, leakZ),
+		Height = 0.2,
+		Diameter = 1.5,
+		Axis = "Y",
+		Color = WATER_BLUE,
+		Material = Enum.Material.Glass,
+		Transparency = 0.3,
+		CanCollide = false,
+	})
+	BuildUtil.Look(
+		bucket,
+		"Leaky Roof",
+		"Drip... drip... drip. The home team promises they'll fix it 'next season'.",
+		{ At = Vector3.new(1.2, 0, 0), Distance = 7 } -- (cylinder space: local X is up)
+	)
+	local signX, signZ = leakX - 1.6, leakZ + 2
+	for _, s in ipairs({ -1, 1 }) do
+		local panel = BuildUtil.Part(stuff, {
+			Name = "WetFloorSign",
+			Size = Vector3.new(1.2, 2, 0.08),
+			CFrame = CFrame.new(signX, FLOOR_TOP + 0.98, signZ + s * 0.21) * CFrame.Angles(-s * math.rad(12), 0, 0),
+			Color = CAUTION_YELLOW,
+			CanCollide = false,
+		})
+		sign(
+			panel,
+			{ s < 0 and Enum.NormalId.Front or Enum.NormalId.Back },
+			"CAUTION\nWET\nFLOOR",
+			CAUTION_YELLOW,
+			team,
+			{ TextColor3 = INK, InsetX = 0.1, InsetY = 0.12 }
+		)
+	end
+
+	-- a VISITORS mat inside the door (reads from the door, +X) and not-so-welcoming signs
+	local mat = BuildUtil.Part(stuff, {
 		Name = "VisitorMat",
-		Size = Vector3.new(doorTo - doorFrom, 0.04, 3.2),
-		CFrame = floorFrame * CFrame.new(doorX, 0.02, 3.5) * CFrame.Angles(0, math.pi, 0),
+		Size = Vector3.new(door.MaxZ - door.MinZ - 0.4, 0.04, 3.4),
+		CFrame = CFrame.new(x1 - 3, FLOOR_TOP + 0.02, doorMid) * CFrame.Angles(0, math.pi / 2, 0),
 		Color = LOCKER_GREY_DARK,
 		Material = Enum.Material.Fabric,
 		CanCollide = false,
@@ -875,144 +1118,9 @@ function StadiumRooms.visitor_lockerroom(ctx)
 		team,
 		{ TextColor3 = WHITE, InsetX = 0.06, InsetY = 0.15, PixelsPerStud = 12 }
 	)
-	local bin = floorFrame * CFrame.new(-innerHalf + 1.2, 1.3, 2.2)
-	BuildUtil.Cylinder(ctx, {
-		Name = "Bin",
-		Position = bin.Position,
-		Height = 2.6,
-		Diameter = 1.6,
-		Axis = "Y",
-		Color = DARK_METAL,
-		Material = Enum.Material.Metal,
-	})
-
-	-- an old CRT TV on an AV cart, bunny ears and all, showing NO SIGNAL
-	local cartX, cartZ = maxX - 5, innerMinZ + 1.4
-	BuildUtil.Block(
-		ctx,
-		"AVCart",
-		Vector3.new(2.2, 2.6, 1.8),
-		Vector3.new(cartX, 0, cartZ),
-		DARK_METAL,
-		Enum.Material.Metal,
-		nil,
-		FLOOR_TOP
-	)
-	local crtBottom = FLOOR_TOP + 2.6
-	BuildUtil.Block(
-		ctx,
-		"CRT",
-		Vector3.new(2, 1.8, 1.8),
-		Vector3.new(cartX, 0, cartZ),
-		CRT_BEIGE,
-		Enum.Material.SmoothPlastic,
-		nil,
-		crtBottom
-	)
-	local crtScreen = BuildUtil.Box(
-		ctx,
-		"CRTScreen",
-		Vector3.new(0.08, 1.3, 1.4),
-		Vector3.new(cartX - 1.04, crtBottom + 0.95, cartZ),
-		STATIC_GREY,
-		Enum.Material.SmoothPlastic
-	)
-	sign(crtScreen, { Enum.NormalId.Left }, "NO SIGNAL", STATIC_GREY, team, { TextColor3 = INK, InsetX = 0.1, InsetY = 0.3 })
-	for _, s in ipairs({ -1, 1 }) do
-		local base = Vector3.new(cartX + 0.2, crtBottom + 1.8, cartZ)
-		strut(ctx, "BunnyEar", base, base + Vector3.new(-0.3, 1.5, s * 0.8), 0.06, DARK_METAL, Enum.Material.Metal)
-	end
-
-	-- the roof leaks: a stain on the ceiling, a falling drip, a bucket and a wet floor sign
-	local leakX, leakZ = maxX - 7, cz - 2.6
-	BuildUtil.Cylinder(ctx, {
-		Name = "CeilingStain",
-		Position = Vector3.new(leakX, H - 0.25 - 0.03, leakZ),
-		Height = 0.06,
-		Diameter = 3,
-		Axis = "Y",
-		Color = STAIN_BROWN,
-		Material = Enum.Material.SmoothPlastic,
-		CanCollide = false,
-		CastShadow = false,
-	})
-	BuildUtil.Ball(ctx, {
-		Name = "Drip",
-		Position = Vector3.new(leakX, 5.4, leakZ),
-		Diameter = 0.3,
-		Color = WATER_BLUE,
-		Material = Enum.Material.Glass,
-		Transparency = 0.2,
-		CanCollide = false,
-		CastShadow = false,
-	})
-	BuildUtil.Cylinder(ctx, {
-		Name = "Bucket",
-		Position = Vector3.new(leakX, FLOOR_TOP + 0.7, leakZ),
-		Height = 1.4,
-		Diameter = 1.4,
-		Axis = "Y",
-		Color = BUCKET_BLUE,
-		Material = Enum.Material.SmoothPlastic,
-	})
-	BuildUtil.Cylinder(ctx, {
-		Name = "BucketWater",
-		Position = Vector3.new(leakX, FLOOR_TOP + 1.25, leakZ),
-		Height = 0.2,
-		Diameter = 1.5,
-		Axis = "Y",
-		Color = WATER_BLUE,
-		Material = Enum.Material.Glass,
-		Transparency = 0.3,
-		CanCollide = false,
-	})
-	local signX, signZ = leakX + 1.5, leakZ - 1.9
-	for _, s in ipairs({ -1, 1 }) do
-		local panel = BuildUtil.Part(ctx, {
-			Name = "WetFloorSign",
-			Size = Vector3.new(1.2, 2, 0.08),
-			CFrame = CFrame.new(signX, FLOOR_TOP + 0.98, signZ + s * 0.21) * CFrame.Angles(-s * math.rad(12), 0, 0),
-			Color = CAUTION_YELLOW,
-			Material = Enum.Material.SmoothPlastic,
-			CanCollide = false,
-		})
-		sign(
-			panel,
-			{ s < 0 and Enum.NormalId.Front or Enum.NormalId.Back },
-			"CAUTION\nWET\nFLOOR",
-			CAUTION_YELLOW,
-			team,
-			{ TextColor3 = INK, InsetX = 0.1, InsetY = 0.12 }
-		)
-	end
-
-	-- not-so-welcoming signs
-	local hotWater = BuildUtil.Box(
-		ctx,
-		"HotWaterSign",
-		Vector3.new(0.2, 1.3, 9),
-		Vector3.new(innerMinX + 0.1, FLOOR_TOP + lockerH + 0.95, cz),
-		WHITE,
-		Enum.Material.SmoothPlastic
-	)
+	local hotWater = box(stuff, "HotWaterSign", x0 + 1, lockerH + 0.6, midZ - 4.5, x0 + 1.2, lockerH + 1.6, midZ + 4.5, WHITE)
 	sign(hotWater, { Enum.NormalId.Right }, "HOT WATER: OUT OF ORDER", WHITE, team, { TextColor3 = Color3.fromRGB(190, 30, 30) })
-	local wifi = BuildUtil.Box(
-		ctx,
-		"WifiSign",
-		Vector3.new(3.6, 1.4, 0.2),
-		Vector3.new(maxX - 4, 6.2, innerMaxZ - 0.1),
-		WHITE,
-		Enum.Material.SmoothPlastic
-	)
-	sign(wifi, { Enum.NormalId.Front }, "WI-FI: NONE", WHITE, team, { TextColor3 = INK })
-	local goodLuck = BuildUtil.Box(
-		ctx,
-		"GoodLuckSign",
-		Vector3.new(0.2, 1.4, doorTo - doorFrom),
-		Vector3.new(innerMaxX - 0.1, top + 1.05, cz + doorX),
-		VISITOR_SIGN,
-		Enum.Material.SmoothPlastic
-	)
+	local goodLuck = box(stuff, "GoodLuckSign", ex - 0.2, door.Top + 0.1, door.MinZ, ex, ceil - 0.1, door.MaxZ, VISITOR_SIGN)
 	sign(goodLuck, { Enum.NormalId.Left }, "GOOD LUCK. YOU'LL NEED IT.", VISITOR_SIGN, team, { TextColor3 = WHITE, InsetY = 0.16 })
 end
 

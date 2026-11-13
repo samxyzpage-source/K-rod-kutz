@@ -86,6 +86,25 @@ local TRUNK = Color3.fromRGB(104, 74, 48)
 local WOOD = Color3.fromRGB(150, 105, 60)
 local HELIPAD = Color3.fromRGB(58, 60, 66)
 local SOLAR_BLUE = Color3.fromRGB(34, 52, 96)
+local DOOR_GLASS = Color3.fromRGB(170, 214, 236)
+local DECK_WOOD = Color3.fromRGB(156, 112, 72)
+local PLANTER_GREY = Color3.fromRGB(96, 98, 104)
+local BULB = Color3.fromRGB(255, 214, 140)
+local CAB_WOOD = Color3.fromRGB(122, 86, 56)
+local BUTTON_GLOW = Color3.fromRGB(120, 220, 255)
+
+-- Glass elevator tower outside the east exit + the Sky Deck (roof terrace) it serves. The tower's
+-- top floor sits level with the roof (floor top = ROOF_TOP) and steps out onto the deck through a
+-- gap in the east parapet. Parts above the roof are named "Roof..." so --noroof previews hide them.
+local TOWER = { MinX = 100, MaxX = 118, MinZ = 258, MaxZ = 284 }
+local LOBBY_CEILING = 12 -- the tower's ground lobby ceiling (12 .. 12.6)
+local TOWER_CEILING = 40 -- top floor ceiling = the tower roof (40 .. 41)
+local SHAFT = { MinX = 103, MaxX = 115, MinZ = 258.6, FaceZ0 = 265, FaceZ1 = 265.5 } -- doors in the north face
+local SHAFT_DOOR_HALF = 3
+local SHAFT_DOOR_H = 8.2
+-- (the deck runs from the front edge of the roof to the back edge, so the telescopes at both ends
+-- can see over the parapet; it stays clear of the corridor skylights at x < 74)
+local DECK = { MinX = 74.5, MaxX = 98.4, MinZ = 202, MaxZ = 358.4, Top = 30.3 }
 
 local FACADE_GLASS_PROPS = { Transparency = 0.35, Reflectance = 0.15 }
 local STRIP_GLASS_PROPS = { Transparency = 0.3, Reflectance = 0.2 }
@@ -235,6 +254,110 @@ local function panelText(part, faces, lines, o)
 		firstLabels = firstLabels or labels
 	end
 	return firstLabels
+end
+
+--[[
+	A sign whose first line is live text (BuildUtil.LiveText: the server writes the owner's team /
+	name into it once the plot is owned; `placeholder` shows until then) over a static second line.
+	o: TextColor3, SubColor3, LiveWeight (share of the height for the live line, default 0.6),
+	   BorderStuds + BorderColor3, InsetX, InsetY, PixelsPerStud, LightInfluence, LabelName
+	Returns the live TextLabel.
+]]
+local function liveSign(part, face, live, placeholder, subline, o)
+	local pps = o.PixelsPerStud or 20
+	local _, label = BuildUtil.LiveText(part, face, live, {
+		LabelName = o.LabelName or (part.Name .. "Live"),
+		Text = placeholder,
+		TextColor3 = o.TextColor3,
+		PixelsPerStud = pps,
+		LightInfluence = o.LightInfluence or 0,
+		Font = Enum.Font.GothamBlack,
+	})
+	local gui = label.Parent
+	local insetX, insetY = o.InsetX or 0.05, o.InsetY or 0.12
+	local liveShare = o.LiveWeight or 0.6
+	local inner = 1 - 2 * insetY
+	label.Position = UDim2.new(insetX, 0, insetY, 0)
+	label.Size = UDim2.new(1 - 2 * insetX, 0, inner * (subline and liveShare or 1), 0)
+	label.ZIndex = 2
+	if subline then
+		local sub = Instance.new("TextLabel")
+		sub.Name = (o.LabelName or part.Name) .. "Sub"
+		sub.BackgroundTransparency = 1
+		sub.BorderSizePixel = 0
+		sub.Position = UDim2.new(insetX, 0, insetY + inner * liveShare, 0)
+		sub.Size = UDim2.new(1 - 2 * insetX, 0, inner * (1 - liveShare), 0)
+		sub.Font = Enum.Font.GothamBold
+		sub.Text = subline
+		sub.TextColor3 = o.SubColor3 or o.TextColor3
+		sub.TextScaled = true
+		sub.ZIndex = 2
+		sub.Parent = gui
+	end
+	local border = math.floor((o.BorderStuds or 0) * pps + 0.5)
+	if border > 0 then
+		local frame = Instance.new("Frame")
+		frame.Name = "Border"
+		frame.Size = UDim2.new(1, 0, 1, 0)
+		frame.BackgroundColor3 = o.BorderColor3 or WHITE
+		frame.BorderSizePixel = 0
+		frame.ZIndex = 1
+		frame.Parent = gui
+		local panel = Instance.new("Frame")
+		panel.Name = "Panel"
+		panel.Position = UDim2.new(0, border, 0, border)
+		panel.Size = UDim2.new(1, -2 * border, 1, -2 * border)
+		panel.BackgroundColor3 = part.Color
+		panel.BorderSizePixel = 0
+		panel.ZIndex = 1
+		panel.Parent = frame
+	end
+	return label
+end
+
+--[[
+	The HQ directory: a header, two columns of rooms (the reader's left and right, nearest first)
+	and a footer line, on one face of `part` (a dark lit board).
+]]
+local function directoryText(part, face, columns, footer, accent)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "DirectoryGui"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.LightInfluence = 0
+	gui.Parent = part
+	local function line(name, text, x, y, w, h, color, font, alignment)
+		local label = Instance.new("TextLabel")
+		label.Name = name
+		label.BackgroundTransparency = 1
+		label.BorderSizePixel = 0
+		label.Position = UDim2.new(x, 0, y, 0)
+		label.Size = UDim2.new(w, 0, h, 0)
+		label.Font = font or Enum.Font.GothamBold
+		label.Text = text
+		label.TextColor3 = color
+		label.TextScaled = true
+		label.TextXAlignment = alignment or Enum.TextXAlignment.Left
+		label.Parent = gui
+		return label
+	end
+	line("Header", "HQ DIRECTORY", 0.05, 0.03, 0.9, 0.13, accent, Enum.Font.GothamBlack, Enum.TextXAlignment.Center)
+	local bar = Instance.new("Frame")
+	bar.Name = "HeaderBar"
+	bar.BackgroundColor3 = accent
+	bar.BorderSizePixel = 0
+	bar.Position = UDim2.new(0.05, 0, 0.175, 0)
+	bar.Size = UDim2.new(0.9, 0, 0.012, 0)
+	bar.Parent = gui
+	for c, column in ipairs(columns) do
+		local x = c == 1 and 0.05 or 0.53
+		line("ColumnTitle", column.title, x, 0.21, 0.42, 0.065, accent, Enum.Font.GothamBlack)
+		for r, room in ipairs(column.rooms) do
+			line("Room", room, x, 0.29 + (r - 1) * 0.085, 0.42, 0.07, WHITE)
+		end
+	end
+	line("Footer", footer, 0.05, 0.84, 0.9, 0.11, accent, Enum.Font.GothamBlack, Enum.TextXAlignment.Center)
 end
 
 -- A flat arrow painted on the floor along X: a shaft from tailX and a head (two flat wedges)
@@ -459,7 +582,9 @@ end
 
 -- A cladded wall (sides + back) with two window strips and a team-colour parapet band.
 -- door = { from, to } along the wall for an exit doorway (EXIT_TOP tall), or nil.
-local function claddedWall(ctx, name, axis, u0, u1, t0, t1, door, team)
+-- roofGap = { from, to }: the parapet stops at the roof surface there (a doorway onto the roof).
+-- Returns the (longest) parapet part.
+local function claddedWall(ctx, name, axis, u0, u1, t0, t1, door, team, roofGap)
 	local mid = (t0 + t1) / 2
 	for _, band in ipairs(WALL_BANDS) do
 		local y0, y1, kind = band[1], band[2], band[3]
@@ -473,7 +598,16 @@ local function claddedWall(ctx, name, axis, u0, u1, t0, t1, door, team)
 			wallSlab(ctx, name .. kind, axis, u0, u1, t0, t1, y0, y1, CLADDING, Enum.Material.Concrete)
 		end
 	end
-	return wallSlab(ctx, name .. "Parapet", axis, u0, u1, t0, t1, PARAPET_BOTTOM, PARAPET_TOP, team.Primary, Enum.Material.SmoothPlastic)
+	local function parapet(a, b, top)
+		return wallSlab(ctx, name .. "Parapet", axis, a, b, t0, t1, PARAPET_BOTTOM, top, team.Primary, Enum.Material.SmoothPlastic)
+	end
+	if not roofGap then
+		return parapet(u0, u1, PARAPET_TOP)
+	end
+	parapet(roofGap[1], roofGap[2], ROOF_TOP)
+	local first = parapet(u0, roofGap[1], PARAPET_TOP)
+	local second = parapet(roofGap[2], u1, PARAPET_TOP)
+	return (roofGap[1] - u0 > u1 - roofGap[2]) and first or second
 end
 
 local function buildWalls(ctx, S, team)
@@ -508,7 +642,8 @@ local function buildWalls(ctx, S, team)
 	local doorZ = (cor.MinZ + cor.MaxZ) / 2
 	local door = { doorZ - EXIT_HALF, doorZ + EXIT_HALF }
 	local westBand = claddedWall(walls, "WestWall", "Z", S.iz0, S.iz1, S.x0, S.ix0, door, team)
-	local eastBand = claddedWall(walls, "EastWall", "Z", S.iz0, S.iz1, S.ix1, S.x1, door, team)
+	-- (the east parapet opens where the elevator tower's top floor steps out onto the Sky Deck)
+	local eastBand = claddedWall(walls, "EastWall", "Z", S.iz0, S.iz1, S.ix1, S.x1, door, team, door)
 	local backBand = claddedWall(walls, "BackWall", "X", S.x0, S.x1, S.iz1, S.z1, nil, team)
 	local bandText = textColorOn(team.Primary, { team.Trim, team.Secondary })
 	panelText(westBand, { Enum.NormalId.Left }, { { Text = "TEAM HQ", Color = bandText } }, { PixelsPerStud = 8, InsetY = 0.14 })
@@ -539,20 +674,52 @@ local function buildWalls(ctx, S, team)
 		)
 		panelText(exitSign, { side.face }, { { Text = "EXIT", Color = EXIT_GREEN } }, { LightInfluence = 0, InsetY = 0.14 })
 	end
-	-- and a small team-colour canopy over each of them outside
-	for _, cx in ipairs({ { S.x0 - 4, S.x0 + 0.1 }, { S.x1 - 0.1, S.x1 + 4 } }) do
-		span(
-			walls,
-			"ExitCanopy",
-			cx[1],
-			EXIT_TOP + 0.3,
-			door[1] - 2,
-			cx[2],
-			EXIT_TOP + 0.9,
-			door[2] + 2,
-			team.Primary,
-			Enum.Material.SmoothPlastic
-		)
+	-- and a small team-colour canopy over the west one outside (the east one opens into the
+	-- elevator tower's lobby)
+	span(
+		walls,
+		"ExitCanopy",
+		S.x0 - 4,
+		EXIT_TOP + 0.3,
+		door[1] - 2,
+		S.x0 + 0.1,
+		EXIT_TOP + 0.9,
+		door[2] + 2,
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+
+	-- sliding glass doors in both exit doorways (they slide into the wall)
+	local doorHeight = EXIT_TOP - FLOOR_TOP
+	for _, exit in ipairs({
+		{
+			name = "WestDoors",
+			x = (S.x0 + S.ix0) / 2,
+			title = "West Doors",
+			info = "The way out to the cart road: hop in a golf cart or walk to the practice field.",
+		},
+		{
+			name = "EastDoors",
+			x = (S.ix1 + S.x1) / 2,
+			title = "East Doors",
+			info = "Through here: the glass elevator up to the Sky Deck on the roof, and the path to the Hall of Fame.",
+		},
+	}) do
+		local centre = Vector3.new(exit.x, FLOOR_TOP + doorHeight / 2, doorZ)
+		BuildUtil.Door(walls, {
+			Name = exit.name,
+			Size = Vector3.new(door[2] - door[1], doorHeight, 0.4),
+			CFrame = CFrame.lookAt(centre, centre + Vector3.new(1, 0, 0)),
+			Double = true,
+			Slide = true,
+			Color = DOOR_GLASS,
+			Material = Enum.Material.Glass,
+			Transparency = 0.45,
+			Object = "Glass Doors",
+			Title = exit.title,
+			Info = exit.info,
+			Distance = 8,
+		})
 	end
 end
 
@@ -594,7 +761,7 @@ local function buildEntrance(ctx, S, team)
 	-- two glass revolving doors in the opening (they don't collide, the doorway stays open)
 	for _, dx in ipairs({ -6.5, 6.5 }) do
 		local p = Vector3.new(cx + dx, 0, fz0 + 0.6)
-		BuildUtil.Cylinder(entrance, {
+		local drum = BuildUtil.Cylinder(entrance, {
 			Name = "RevolvingDoorDrum",
 			Position = p + Vector3.new(0, FLOOR_TOP + 4.5, 0),
 			Height = 9,
@@ -606,6 +773,14 @@ local function buildEntrance(ctx, S, team)
 			CanCollide = false,
 			CastShadow = false,
 		})
+		if dx < 0 then
+			BuildUtil.Look(
+				drum,
+				"Revolving Doors",
+				"The front door of your franchise! Spin through the glass and you're in the lobby, where every owner starts the day.",
+				{ Distance = 8 }
+			)
+		end
 		BuildUtil.Cylinder(entrance, {
 			Name = "RevolvingDoorCap",
 			Position = p + Vector3.new(0, FLOOR_TOP + 9.4, 0),
@@ -681,13 +856,21 @@ local function buildEntrance(ctx, S, team)
 		})
 	end
 
-	-- the big lit sign above the canopy, mounted on the fins
+	-- the big lit sign above the canopy, mounted on the fins: the team's name (live text - the
+	-- shell is built before anyone owns the plot) over HEADQUARTERS
 	local facadeSign =
 		span(entrance, "HQFacadeSign", cx - 32, 20.4, fz0 - 2.4, cx + 32, 26.4, fz0 - 1.7, SIGN_DARK, Enum.Material.SmoothPlastic)
-	local signLabels = panelText(facadeSign, { Enum.NormalId.Front }, {
-		{ Text = "TEAM HEADQUARTERS", Color = textColorOn(SIGN_DARK, { team.Trim, team.Secondary, WHITE }) },
-	}, { BorderStuds = 0.35, BorderColor3 = team.Primary, InsetX = 0.04, InsetY = 0.16, LightInfluence = 0 })
-	S.refs.FacadeSignLabel = signLabels[1]
+	local signColor = textColorOn(SIGN_DARK, { team.Trim, team.Secondary, WHITE })
+	S.refs.FacadeSignLabel = liveSign(facadeSign, Enum.NormalId.Front, "team", "TEAM", "HEADQUARTERS", {
+		LabelName = "FacadeTeamName",
+		TextColor3 = signColor,
+		SubColor3 = WHITE,
+		LiveWeight = 0.62,
+		BorderStuds = 0.35,
+		BorderColor3 = team.Primary,
+		InsetX = 0.06,
+		InsetY = 0.12,
+	})
 
 	-- planters with a tree on both sides of the doors, in front of the glass
 	for _, planter in ipairs({ { wx0 - 28, wx0 - 5, wx0 - 22 }, { wx1 + 5, wx1 + 28, wx1 + 22 } }) do
@@ -730,15 +913,35 @@ local function buildEntrance(ctx, S, team)
 	end
 
 	-- monument sign beside the walk, readable from the campus road
+	-- (team name + owner are live text, like the facade sign)
 	local mx, mz = wx1 + 17, walk.MinZ + 5
-	span(entrance, "MonumentBase", mx - 7.5, 0, mz - 1.7, mx + 7.5, 1, mz + 1.7, PLINTH, Enum.Material.Granite)
+	local monumentBase = span(entrance, "MonumentBase", mx - 7.5, 0, mz - 1.7, mx + 7.5, 1, mz + 1.7, PLINTH, Enum.Material.Granite)
+	local _, ownerLabel = BuildUtil.LiveText(monumentBase, Enum.NormalId.Front, "owner", {
+		LabelName = "MonumentOwner",
+		Text = "OWNER: -",
+		TextColor3 = C.Gold,
+		Font = Enum.Font.GothamBold,
+		PixelsPerStud = 30,
+	})
+	ownerLabel.Size = UDim2.new(0.8, 0, 0.7, 0)
+	ownerLabel.Position = UDim2.new(0.1, 0, 0.15, 0)
 	local monument = span(entrance, "Monument", mx - 6.5, 1, mz - 0.7, mx + 6.5, 5.4, mz + 0.7, team.Primary, Enum.Material.SmoothPlastic)
 	local monumentText = textColorOn(team.Primary, { team.Trim, team.Secondary })
-	panelText(monument, { Enum.NormalId.Front }, {
-		{ Text = "TEAM", Weight = 0.8, Color = monumentText },
-		{ Text = "HEADQUARTERS", Weight = 1, Color = monumentText },
-	}, { InsetX = 0.06, InsetY = 0.12 })
+	S.refs.MonumentLabel = liveSign(monument, Enum.NormalId.Front, "team", "TEAM", "HEADQUARTERS", {
+		LabelName = "MonumentTeamName",
+		TextColor3 = monumentText,
+		LiveWeight = 0.55,
+		LightInfluence = 1,
+		InsetX = 0.06,
+		InsetY = 0.1,
+	})
 	panelText(monument, { Enum.NormalId.Back }, { { Text = "WELCOME HOME", Color = monumentText } }, { InsetY = 0.3 })
+	BuildUtil.Look(
+		monument,
+		"Team Headquarters",
+		"Home of your franchise! Build every room inside step by step - the more you build, the more cash your team earns.",
+		{ LookKey = "owner", Distance = 9 }
+	)
 	span(entrance, "MonumentCap", mx - 7, 5.4, mz - 1, mx + 7, 6, mz + 1, team.Secondary, Enum.Material.SmoothPlastic)
 end
 
@@ -969,6 +1172,85 @@ local function buildInterior(ctx, S, team)
 	}, { BorderStuds = 0.4, BorderColor3 = team.Primary, InsetX = 0.05, InsetY = 0.1, LightInfluence = 0.5 })
 	S.refs.WelcomeLabel = bannerLabels[1]
 	hangerRods(inside, bx, 17, cor.MinZ + 0.6, 23.5)
+	-- (the prompt hangs at eye height under the banner, at the edge of the corridor)
+	BuildUtil.Look(
+		banner,
+		"Welcome Banner",
+		"Welcome to your Team HQ! Build every room step by step with the glowing buy buttons in the hallway. Here's what to do next:",
+		{ LookKey = "quests", At = Vector3.new(0, -15, 3), Distance = 9 }
+	)
+
+	-- HQ directories on both corridor end walls, above the EXIT signs: the rooms on the reader's
+	-- left and right, nearest first
+	local frontRooms = {
+		"FRONT OFFICE - DRAFT",
+		"COACHES' OFFICES",
+		"LOBBY - TEAM SAFE",
+		"INTERVIEW ROOM - PRESS",
+		"MEETING ROOM",
+		"PLAYER LOUNGE - GAMES",
+	}
+	local backRooms = {
+		"LOCKER ROOM",
+		"EQUIPMENT ROOM",
+		"WEIGHT ROOM - TRAINING",
+		"TRAINING ROOM - REHAB",
+		"FILM ROOM",
+		"CAFETERIA - FOOD",
+	}
+	local function reversed(list)
+		local out = {}
+		for i = #list, 1, -1 do
+			table.insert(out, list[i])
+		end
+		return out
+	end
+	local accent = textColorOn(SIGN_DARK, { team.Trim, team.Secondary, WHITE })
+	local doorZ = (cor.MinZ + cor.MaxZ) / 2
+	local directoryInfo = "Front Office: draft players. Coaches' Offices: game plans. Lobby: reception + team safe. "
+		.. "Interview Room: press conferences. Meeting Room: team talks. Player Lounge: arcade + ping-pong. "
+		.. "Locker Room: every player's locker. Equipment Room: helmets + pads. Weight Room: train your players. "
+		.. "Training Room: ice tubs + rehab. Film Room: study game film. Cafeteria: grab a tray. "
+		.. "Sky Deck: glass elevator behind the east doors!"
+	for _, board in ipairs({
+		{
+			x = S.ix1 - 0.2,
+			face = Enum.NormalId.Left,
+			readerDir = -1,
+			-- read facing +X: the front row is on the left
+			columns = {
+				{ title = "FRONT ROW", rooms = reversed(frontRooms) },
+				{ title = "BACK ROW", rooms = reversed(backRooms) },
+			},
+			footer = "SKY DECK: GLASS ELEVATOR THROUGH THESE DOORS",
+		},
+		{
+			x = S.ix0 + 0.2,
+			face = Enum.NormalId.Right,
+			readerDir = 1,
+			-- read facing -X: the back row is on the left
+			columns = {
+				{ title = "BACK ROW", rooms = backRooms },
+				{ title = "FRONT ROW", rooms = frontRooms },
+			},
+			footer = "SKY DECK: GLASS ELEVATOR AT THE EAST END",
+		},
+	}) do
+		local directory = BuildUtil.Box(
+			inside,
+			"HQDirectory",
+			Vector3.new(0.4, 7.4, 12.4),
+			Vector3.new(board.x, 15.9, doorZ),
+			SIGN_DARK,
+			Enum.Material.SmoothPlastic,
+			DECOR
+		)
+		directoryText(directory, board.face, board.columns, board.footer, accent)
+		BuildUtil.Look(directory, "HQ Directory", directoryInfo, {
+			At = Vector3.new(board.readerDir * 1.5, -11, -6),
+			Distance = 8,
+		})
+	end
 
 	-- ceiling lights: two long strips along the corridor, panels between the skylights and in
 	-- the lobby (a few of them carry PointLights)
@@ -1047,7 +1329,16 @@ local function buildInterior(ctx, S, team)
 		{ x0 = S.ix1 - 10.5, z = cor.MinZ + 1.3, back = -1 },
 	}) do
 		local benchX = bench.x0 + 4
-		BuildUtil.Box(inside, "CorridorBench", Vector3.new(8, 0.5, 2), Vector3.new(benchX, 1.65, bench.z), WOOD, Enum.Material.Wood, DECOR)
+		-- the seat faces away from the backrest; it doesn't collide (the corridor stays clear)
+		BuildUtil.Seat(inside, {
+			Name = "CorridorBench",
+			Size = Vector3.new(8, 0.5, 2),
+			CFrame = CFrame.new(benchX, 1.65, bench.z) * CFrame.Angles(0, bench.back > 0 and 0 or math.pi, 0),
+			Color = WOOD,
+			Material = Enum.Material.Wood,
+			CanCollide = false,
+			Object = "Bench",
+		})
 		BuildUtil.Box(
 			inside,
 			"CorridorBenchBase",
@@ -1066,6 +1357,639 @@ local function buildInterior(ctx, S, team)
 			Enum.Material.Wood,
 			DECOR
 		)
+	end
+end
+
+---------------------------------------------------------------------------------------------
+-- Glass elevator tower (outside the east exit) + the Sky Deck roof terrace
+---------------------------------------------------------------------------------------------
+
+-- Box of the given cross-section from point a to point b.
+local function strut(ctx, name, a, b, width, color, material, extra)
+	local props = extra and table.clone(extra) or {}
+	props.Name = name
+	props.Size = Vector3.new(width, width, (b - a).Magnitude)
+	props.CFrame = CFrame.lookAt((a + b) / 2, b)
+	props.Color = color
+	props.Material = material
+	return BuildUtil.Part(ctx, props)
+end
+
+-- Cylinder from point a to point b (not vertical).
+local function rodBetween(ctx, name, a, b, diameter, color, material, extra)
+	local props = extra and table.clone(extra) or {}
+	props.Name = name
+	props.Shape = Enum.PartType.Cylinder
+	props.Size = Vector3.new((b - a).Magnitude, diameter, diameter)
+	props.CFrame = CFrame.lookAt((a + b) / 2, b) * CFrame.Angles(0, math.pi / 2, 0)
+	props.Color = color
+	props.Material = material
+	return BuildUtil.Part(ctx, props)
+end
+
+local function buildElevatorTower(ctx, S, team)
+	local C = ctx.config.Colors
+	local tower = BuildUtil.Child(ctx, "ElevatorTower")
+	local cor = S.L.HQCorridor
+	local doorZ = (cor.MinZ + cor.MaxZ) / 2
+	local T, sh = TOWER, SHAFT
+	local accent = textColorOn(team.Primary, { team.Trim, team.Secondary })
+	local glassProps = { Transparency = 0.55, Reflectance = 0.15, CastShadow = false }
+	local function glass(name, x0, y0, z0, x1, y1, z1)
+		return span(tower, name, x0, y0, z0, x1, y1, z1, C.Glass, Enum.Material.Glass, glassProps)
+	end
+
+	-- floors, ceilings, roof and four team-colour corner columns
+	span(tower, "TowerLobbyFloor", S.x1 - 0.1, 0, T.MinZ, T.MaxX - 0.1, FLOOR_TOP, T.MaxZ, CORRIDOR_FLOOR, Enum.Material.Marble)
+	span(
+		tower,
+		"TowerLobbyCeiling",
+		T.MinX,
+		LOBBY_CEILING,
+		T.MinZ + 0.1,
+		T.MaxX - 0.1,
+		LOBBY_CEILING + 0.6,
+		T.MaxZ - 0.1,
+		SLAB_WHITE,
+		Enum.Material.SmoothPlastic
+	)
+	span(
+		tower,
+		"TowerRoofLevelFloor",
+		T.MinX,
+		ROOF_BOTTOM,
+		T.MinZ + 0.1,
+		T.MaxX - 0.1,
+		ROOF_TOP,
+		T.MaxZ - 0.1,
+		ROOF_GREY,
+		Enum.Material.Concrete
+	)
+	span(
+		tower,
+		"TowerRoof",
+		T.MinX - 0.4,
+		TOWER_CEILING,
+		T.MinZ - 0.4,
+		T.MaxX + 0.4,
+		TOWER_CEILING + 1,
+		T.MaxZ + 0.4,
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	for _, x in ipairs({ T.MinX, T.MaxX - 1 }) do
+		for _, z in ipairs({ T.MinZ, T.MaxZ - 1 }) do
+			span(tower, "TowerColumn", x, 0, z, x + 1, TOWER_CEILING, z + 1, team.Primary, Enum.Material.SmoothPlastic)
+		end
+	end
+
+	-- glass walls: the lobby (open portal on the east side, toward the Hall of Fame) and the top
+	-- floor (Sky Deck doorway on the west side); the south wall runs the full height (it is also the
+	-- back of the shaft)
+	local ex0, ex1 = T.MaxX - 0.6, T.MaxX - 0.2
+	local portal = { doorZ - 5, doorZ + 5 }
+	local deckDoor = { doorZ - EXIT_HALF, doorZ + EXIT_HALF }
+	glass("TowerGlassSouth", T.MinX + 1, FLOOR_TOP, T.MinZ + 0.2, T.MaxX - 1, TOWER_CEILING, T.MinZ + 0.6)
+	glass("TowerGlassNorth", T.MinX + 1, FLOOR_TOP, T.MaxZ - 0.6, T.MaxX - 1, LOBBY_CEILING, T.MaxZ - 0.2)
+	glass("TowerRoofLevelGlassNorth", T.MinX + 1, ROOF_TOP, T.MaxZ - 0.6, T.MaxX - 1, TOWER_CEILING, T.MaxZ - 0.2)
+	glass("TowerGlassEast", ex0, FLOOR_TOP, T.MinZ + 1, ex1, LOBBY_CEILING, portal[1])
+	glass("TowerGlassEast", ex0, FLOOR_TOP, portal[2], ex1, LOBBY_CEILING, T.MaxZ - 1)
+	glass("TowerRoofLevelGlassEast", ex0, ROOF_TOP, T.MinZ + 1, ex1, TOWER_CEILING, T.MaxZ - 1)
+	glass("TowerRoofLevelGlassWest", T.MinX + 0.2, ROOF_TOP, T.MinZ + 1, T.MinX + 0.6, TOWER_CEILING, deckDoor[1])
+	glass("TowerRoofLevelGlassWest", T.MinX + 0.2, ROOF_TOP, deckDoor[2], T.MinX + 0.6, TOWER_CEILING, T.MaxZ - 1)
+	span(
+		tower,
+		"TowerRoofLevelDoorHead",
+		T.MinX + 0.1,
+		ROOF_TOP + 8.6,
+		deckDoor[1],
+		T.MinX + 0.7,
+		TOWER_CEILING,
+		deckDoor[2],
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	local portalHead = span(
+		tower,
+		"TowerPortalHeader",
+		ex0 - 0.2,
+		10,
+		portal[1],
+		ex1 + 0.2,
+		LOBBY_CEILING,
+		portal[2],
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	panelText(portalHead, { Enum.NormalId.Right }, { { Text = "SKY DECK ELEVATOR", Color = accent } }, { InsetX = 0.06, InsetY = 0.2 })
+	span(
+		tower,
+		"TowerPortalCanopy",
+		T.MaxX - 0.2,
+		10.3,
+		portal[1] - 1,
+		T.MaxX + 1.5,
+		10.8,
+		portal[2] + 1,
+		team.Secondary,
+		Enum.Material.SmoothPlastic
+	)
+	-- X bracing between the lobby and the top floor on the east face, and the crown sign
+	for _, s in ipairs({ -1, 1 }) do
+		strut(
+			tower,
+			"TowerBrace",
+			Vector3.new(T.MaxX - 0.5, LOBBY_CEILING + 1, doorZ - s * 12),
+			Vector3.new(T.MaxX - 0.5, ROOF_BOTTOM - 0.5, doorZ + s * 12),
+			0.5,
+			STEEL,
+			Enum.Material.Metal
+		)
+	end
+	local crown = span(
+		tower,
+		"TowerRoofSign",
+		(T.MinX + T.MaxX) / 2 - 0.5,
+		TOWER_CEILING + 1,
+		doorZ - 9,
+		(T.MinX + T.MaxX) / 2 + 0.5,
+		TOWER_CEILING + 4.6,
+		doorZ + 9,
+		SIGN_DARK,
+		Enum.Material.SmoothPlastic
+	)
+	panelText(crown, { Enum.NormalId.Left, Enum.NormalId.Right }, { { Text = "SKY DECK", Color = accent } }, {
+		BorderStuds = 0.2,
+		BorderColor3 = team.Primary,
+		InsetX = 0.06,
+		InsetY = 0.16,
+		LightInfluence = 0,
+	})
+
+	-- lights
+	for _, light in ipairs({
+		{ name = "TowerLobbyCeilingLight", y = LOBBY_CEILING },
+		{ name = "TowerRoofLevelCeilingLight", y = TOWER_CEILING },
+	}) do
+		local lamp = span(tower, light.name, 105, light.y - 0.2, doorZ - 3, 115, light.y, doorZ + 3, LAMP, Enum.Material.Neon, PAINT)
+		BuildUtil.Light(lamp, "PointLight", { Name = "TowerLight", Range = 22, Brightness = 1.5, Color = WARM_LIGHT, Shadows = false })
+	end
+
+	-- the elevator shaft: glass sides, team-colour door pillars running up the whole tower, glass
+	-- between the two landings (with the hoist cable showing)
+	local shaftGlass = { Transparency = 0.45, Reflectance = 0.1, CastShadow = false }
+	for _, x in ipairs({ sh.MinX, sh.MaxX - 0.4 }) do
+		span(tower, "ShaftGlass", x, FLOOR_TOP, sh.MinZ, x + 0.4, TOWER_CEILING, sh.FaceZ0, C.Glass, Enum.Material.Glass, shaftGlass)
+	end
+	local doorX0, doorX1 = (sh.MinX + sh.MaxX) / 2 - SHAFT_DOOR_HALF, (sh.MinX + sh.MaxX) / 2 + SHAFT_DOOR_HALF
+	for _, p in ipairs({ { sh.MinX, doorX0 }, { doorX1, sh.MaxX } }) do
+		span(tower, "ShaftPillar", p[1], FLOOR_TOP, sh.FaceZ0, p[2], TOWER_CEILING, sh.FaceZ1, team.Primary, Enum.Material.Metal)
+	end
+	span(
+		tower,
+		"ShaftGlassMid",
+		doorX0,
+		LOBBY_CEILING + 0.6,
+		sh.FaceZ0 + 0.1,
+		doorX1,
+		ROOF_BOTTOM,
+		sh.FaceZ1 - 0.1,
+		C.Glass,
+		Enum.Material.Glass,
+		shaftGlass
+	)
+	BuildUtil.Cylinder(tower, {
+		Name = "HoistCable",
+		Position = Vector3.new((sh.MinX + sh.MaxX) / 2, (FLOOR_TOP + 9.4 + ROOF_BOTTOM) / 2, (sh.MinZ + sh.FaceZ0) / 2),
+		Height = ROOF_BOTTOM - FLOOR_TOP - 9.4,
+		Diameter = 0.3,
+		Axis = "Y",
+		Color = STEEL,
+		Material = Enum.Material.Metal,
+		CanCollide = false,
+	})
+
+	-- both landings: a cab (wood back, lit ceiling, button panel), sliding doors, a header sign and
+	-- a call panel beside the doors. Each elevator button rides to the other landing.
+	local upTarget = CFrame.lookAt(Vector3.new(110, ROOF_TOP, doorZ + 0.5), Vector3.new(90, ROOF_TOP, doorZ + 0.5))
+	local downTarget = CFrame.lookAt(Vector3.new(110, FLOOR_TOP, doorZ + 0.5), Vector3.new(90, FLOOR_TOP, doorZ + 0.5))
+	local landings = {
+		{
+			name = "Lobby",
+			y = FLOOR_TOP,
+			sign = "SKY DECK",
+			target = upTarget,
+			action = "Ride up",
+			label = "SKY DECK",
+			info = "A glass elevator up to the Sky Deck, the roof terrace on top of your Team HQ.",
+		},
+		{
+			name = "RoofLevel",
+			y = ROOF_TOP,
+			sign = "GROUND FLOOR",
+			target = downTarget,
+			action = "Ride down",
+			label = "GROUND FLOOR",
+			info = "Rides back down to the ground floor, next to the HQ's east doors.",
+		},
+	}
+	for _, landing in ipairs(landings) do
+		local y0 = landing.y
+		span(
+			tower,
+			landing.name .. "ElevatorCabBack",
+			sh.MinX + 0.4,
+			y0,
+			sh.MinZ,
+			sh.MaxX - 0.4,
+			y0 + 9,
+			sh.MinZ + 0.3,
+			CAB_WOOD,
+			Enum.Material.Wood
+		)
+		local cabCeiling = span(
+			tower,
+			landing.name .. "ElevatorCabCeiling",
+			sh.MinX + 0.4,
+			y0 + 9,
+			sh.MinZ,
+			sh.MaxX - 0.4,
+			y0 + 9.4,
+			sh.FaceZ0,
+			LAMP,
+			Enum.Material.Neon,
+			{ CastShadow = false }
+		)
+		BuildUtil.Light(cabCeiling, "PointLight", { Name = "CabLight", Range = 12, Brightness = 1.2, Color = WARM_LIGHT, Shadows = false })
+		local header = span(
+			tower,
+			landing.name .. "ElevatorHeader",
+			doorX0,
+			y0 + SHAFT_DOOR_H,
+			sh.FaceZ0,
+			doorX1,
+			y0 + SHAFT_DOOR_H + 1.8,
+			sh.FaceZ1,
+			SIGN_DARK,
+			Enum.Material.SmoothPlastic
+		)
+		panelText(
+			header,
+			{ Enum.NormalId.Back },
+			{ { Text = landing.sign, Color = accent } },
+			{ InsetX = 0.08, InsetY = 0.2, LightInfluence = 0 }
+		)
+		local doorCentre = Vector3.new((doorX0 + doorX1) / 2, y0 + SHAFT_DOOR_H / 2, (sh.FaceZ0 + sh.FaceZ1) / 2)
+		BuildUtil.Door(tower, {
+			Name = landing.name .. "ElevatorDoors",
+			Size = Vector3.new(doorX1 - doorX0, SHAFT_DOOR_H, 0.3),
+			CFrame = CFrame.lookAt(doorCentre, doorCentre + Vector3.new(0, 0, 1)),
+			Double = true,
+			Slide = true,
+			Color = C.Metal,
+			Material = Enum.Material.Metal,
+			Object = "Elevator Doors",
+			Title = "Glass Elevator",
+			Info = landing.info,
+			Distance = 8,
+		})
+		-- call panel on the east pillar (outside) + button panel inside the cab
+		local call = span(
+			tower,
+			landing.name .. "ElevatorCallPanel",
+			doorX1 + 0.8,
+			y0 + 3.6,
+			sh.FaceZ1,
+			doorX1 + 2.2,
+			y0 + 5.6,
+			sh.FaceZ1 + 0.2,
+			SIGN_DARK,
+			Enum.Material.SmoothPlastic
+		)
+		panelText(call, { Enum.NormalId.Back }, {
+			{ Text = landing.action == "Ride up" and "UP" or "DOWN", Color = BUTTON_GLOW },
+		}, { InsetX = 0.15, InsetY = 0.3, LightInfluence = 0 })
+		BuildUtil.Elevator(
+			ctx,
+			call,
+			landing.target,
+			{ Action = landing.action, Object = "Glass Elevator", Label = landing.label, Distance = 7 }
+		)
+		local buttons = span(
+			tower,
+			landing.name .. "ElevatorCabButtons",
+			sh.MaxX - 0.8,
+			y0 + 3.6,
+			sh.MinZ + 2.6,
+			sh.MaxX - 0.4,
+			y0 + 5.6,
+			sh.MinZ + 4,
+			SIGN_DARK,
+			Enum.Material.SmoothPlastic
+		)
+		panelText(buttons, { Enum.NormalId.Left }, {
+			{ Text = "SKY DECK", Color = BUTTON_GLOW },
+			{ Text = "LOBBY", Color = BUTTON_GLOW },
+		}, { InsetX = 0.12, InsetY = 0.15, LightInfluence = 0 })
+		BuildUtil.Elevator(
+			ctx,
+			buttons,
+			landing.target,
+			{ Action = landing.action, Object = "Elevator Buttons", Label = landing.label, Distance = 6 }
+		)
+	end
+
+	-- the top floor's sliding glass doors onto the Sky Deck
+	local deckDoorH = 8.6
+	local deckDoorCentre = Vector3.new(T.MinX + 0.4, ROOF_TOP + deckDoorH / 2, doorZ)
+	BuildUtil.Door(tower, {
+		Name = "SkyDeckDoors",
+		Size = Vector3.new(deckDoor[2] - deckDoor[1], deckDoorH, 0.3),
+		CFrame = CFrame.lookAt(deckDoorCentre, deckDoorCentre + Vector3.new(1, 0, 0)),
+		Double = true,
+		Slide = true,
+		Color = DOOR_GLASS,
+		Material = Enum.Material.Glass,
+		Transparency = 0.45,
+		Object = "Sky Deck Doors",
+		Title = "Sky Deck",
+		Info = "The roof terrace: benches, telescopes and the best view on the whole campus.",
+		Distance = 8,
+	})
+end
+
+local function buildSkyDeck(ctx, S, team)
+	local C = ctx.config.Colors
+	local deck = BuildUtil.Child(ctx, "SkyDeck")
+	local D = DECK
+	local dy = D.Top
+	local T = TOWER
+
+	-- wood decking on the roof slab (0.3 step up from the tower's top floor)
+	span(deck, "RoofDeckBoards", D.MinX, ROOF_TOP, D.MinZ, D.MaxX, dy, D.MaxZ, DECK_WOOD, Enum.Material.WoodPlanks)
+
+	-- glass railings with a steel top rail all round (the tower closes the east side in the middle)
+	local railH = 3.2
+	local function railing(x0, z0, x1, z1)
+		span(
+			deck,
+			"RoofRailingGlass",
+			x0,
+			dy,
+			z0,
+			x1,
+			dy + railH,
+			z1,
+			C.Glass,
+			Enum.Material.Glass,
+			{ Transparency = 0.5, CastShadow = false }
+		)
+		span(deck, "RoofRailingTop", x0 - 0.05, dy + railH, z0 - 0.05, x1 + 0.05, dy + railH + 0.3, z1 + 0.05, STEEL, Enum.Material.Metal)
+	end
+	railing(D.MinX, D.MinZ, D.MinX + 0.4, D.MaxZ)
+	railing(D.MinX + 0.4, D.MinZ, D.MaxX, D.MinZ + 0.4)
+	railing(D.MinX + 0.4, D.MaxZ - 0.4, D.MaxX, D.MaxZ)
+	railing(D.MaxX - 0.4, D.MinZ + 0.4, D.MaxX, T.MinZ)
+	railing(D.MaxX - 0.4, T.MaxZ, D.MaxX, D.MaxZ - 0.4)
+
+	-- planters: hedges in the corners, two trees along the west railing
+	local function planter(x, z, w, d, tree)
+		span(deck, "RoofPlanter", x - w / 2, dy, z - d / 2, x + w / 2, dy + 2, z + d / 2, PLANTER_GREY, Enum.Material.Concrete)
+		if tree then
+			span(
+				deck,
+				"RoofPlanterSoil",
+				x - w / 2 + 0.3,
+				dy + 2,
+				z - d / 2 + 0.3,
+				x + w / 2 - 0.3,
+				dy + 2.1,
+				z + d / 2 - 0.3,
+				TRUNK,
+				Enum.Material.Ground
+			)
+			BuildUtil.Cylinder(deck, {
+				Name = "RoofTreeTrunk",
+				Position = Vector3.new(x, dy + 4.5, z),
+				Height = 5,
+				Diameter = 0.6,
+				Axis = "Y",
+				Color = TRUNK,
+				Material = Enum.Material.Wood,
+			})
+			BuildUtil.Ball(deck, {
+				Name = "RoofTreeCrown",
+				Position = Vector3.new(x, dy + 8, z),
+				Diameter = 4.6,
+				Color = LEAVES,
+				Material = Enum.Material.Grass,
+			})
+		else
+			span(
+				deck,
+				"RoofPlanterHedge",
+				x - w / 2 + 0.3,
+				dy + 2,
+				z - d / 2 + 0.3,
+				x + w / 2 - 0.3,
+				dy + 3.3,
+				z + d / 2 - 0.3,
+				BUSH,
+				Enum.Material.Grass
+			)
+		end
+	end
+	planter(77.4, D.MinZ + 3.8, 4.4, 5.6, false)
+	planter(95.5, D.MinZ + 3.8, 4.4, 5.6, false)
+	planter(77.4, 258, 4.4, 4.4, true)
+	planter(77.4, 284, 4.4, 4.4, true)
+	planter(77.4, D.MaxZ - 22, 4.4, 5.6, false)
+	planter(95.5, D.MaxZ - 22, 4.4, 5.6, false)
+
+	-- benches: two face the stadium (south), two face the campus (north); one of each is a TV seat
+	local function bench(x, z, facing, object, camera)
+		local base = CFrame.new(x, dy, z) * CFrame.Angles(0, facing < 0 and 0 or math.pi, 0)
+		BuildUtil.Part(deck, {
+			Name = "RoofBenchBase",
+			Size = Vector3.new(5, 1.3, 1.2),
+			CFrame = base * CFrame.new(0, 0.65, 0),
+			Color = STEEL,
+			Material = Enum.Material.Metal,
+		})
+		BuildUtil.Seat(deck, {
+			Name = "RoofBenchSeat",
+			Size = Vector3.new(6, 0.5, 2),
+			CFrame = base * CFrame.new(0, 1.55, 0),
+			Color = DECK_WOOD,
+			Material = Enum.Material.Wood,
+			Object = object,
+			Camera = camera,
+		})
+		BuildUtil.Part(deck, {
+			Name = "RoofBenchBack",
+			Size = Vector3.new(6, 2.2, 0.35),
+			CFrame = base * CFrame.new(0, 2.9, 0.85),
+			Color = DECK_WOOD,
+			Material = Enum.Material.Wood,
+		})
+	end
+	local southZ, northZ = D.MinZ + 13, D.MaxZ - 13
+	local blimpCam = { From = Vector3.new(90, 120, 215), To = Vector3.new(5, 0, 35), Fov = 48, Label = "BLIMP CAM" }
+	local campusCam = { From = Vector3.new(96, 75, 345), To = Vector3.new(-25, 0, 465), Fov = 60, Label = "CAMPUS CAM" }
+	bench(80.5, southZ, -1, "Stadium View Bench", blimpCam)
+	bench(92.5, southZ, -1, "Bench")
+	bench(80.5, northZ, 1, "Bench")
+	bench(92.5, northZ, 1, "Campus View Bench", campusCam)
+
+	-- a cafe table with two chairs between the trees
+	local tableX, tableZ = 84, 271
+	BuildUtil.Cylinder(deck, {
+		Name = "RoofCafeTableLeg",
+		Position = Vector3.new(tableX, dy + 1.4, tableZ),
+		Height = 2.8,
+		Diameter = 0.4,
+		Axis = "Y",
+		Color = STEEL,
+		Material = Enum.Material.Metal,
+	})
+	BuildUtil.Cylinder(deck, {
+		Name = "RoofCafeTable",
+		Position = Vector3.new(tableX, dy + 2.9, tableZ),
+		Height = 0.2,
+		Diameter = 3.2,
+		Axis = "Y",
+		Color = WHITE,
+		Material = Enum.Material.SmoothPlastic,
+	})
+	for _, s in ipairs({ -1, 1 }) do
+		local chair = Vector3.new(tableX, dy, tableZ + s * 2.6)
+		local facing = CFrame.lookAt(chair, Vector3.new(tableX, dy, tableZ))
+		BuildUtil.Seat(deck, {
+			Name = "RoofCafeChair",
+			Size = Vector3.new(1.8, 0.4, 1.8),
+			CFrame = facing * CFrame.new(0, 1.7, 0),
+			Color = team.Primary,
+			Object = "Cafe Chair",
+			NoPrompt = s > 0,
+		})
+		BuildUtil.Part(deck, {
+			Name = "RoofCafeChairBack",
+			Size = Vector3.new(1.8, 2.2, 0.3),
+			CFrame = facing * CFrame.new(0, 3, 0.75),
+			Color = team.Primary,
+			Material = Enum.Material.SmoothPlastic,
+		})
+		BuildUtil.Part(deck, {
+			Name = "RoofCafeChairLeg",
+			Size = Vector3.new(0.3, 1.5, 0.3),
+			CFrame = facing * CFrame.new(0, 0.75, 0),
+			Color = STEEL,
+			Material = Enum.Material.Metal,
+		})
+	end
+
+	-- telescopes on posts, aimed at the stadium, the practice field and the dome; the practice
+	-- field one has a stool that shows the zoomed-in view
+	local function telescope(x, z, target, title, info)
+		local standTop = dy + 3.2
+		BuildUtil.Cylinder(deck, {
+			Name = "RoofTelescopeStand",
+			Position = Vector3.new(x, (dy + standTop) / 2, z),
+			Height = standTop - dy,
+			Diameter = 0.45,
+			Axis = "Y",
+			Color = STEEL,
+			Material = Enum.Material.Metal,
+		})
+		local pivot = Vector3.new(x, standTop + 0.35, z)
+		local dir = (target - pivot).Unit
+		local centre = pivot + dir * 0.6
+		local tube = rodBetween(deck, "RoofTelescope", centre - dir * 1.7, centre + dir * 1.7, 0.75, WHITE, Enum.Material.SmoothPlastic)
+		local eye = centre - dir * 2
+		rodBetween(deck, "RoofTelescopeEyepiece", eye - dir * 0.35, eye + dir * 0.35, 0.35, INK, Enum.Material.Metal)
+		BuildUtil.Look(tube, title, info, { Distance = 7 })
+		return dir, eye
+	end
+	telescope(
+		86.5,
+		D.MinZ + 4.5,
+		Vector3.new(0, 20, 60),
+		"Stadium Telescope",
+		"Zoom in on your stadium! Spot the light towers, the giant scoreboard and the top rows of the stands."
+	)
+	local fieldTarget = Vector3.new(-130, 0, 456)
+	local northTeleZ = D.MaxZ - 4.5
+	local fieldDir, eye = telescope(
+		79.5,
+		northTeleZ,
+		fieldTarget,
+		"Practice Field Telescope",
+		"You can see the practice field from here! Spot the blocking sleds, the tackling dummies and the coach tower on the far sideline."
+	)
+	telescope(
+		93.5,
+		northTeleZ,
+		Vector3.new(150, 15, 475),
+		"Campus Telescope",
+		"That big curved roof is the Indoor Practice Dome. Look right for the Hall of Fame and the golf carts on the back road!"
+	)
+	local flat = Vector3.new(fieldDir.X, 0, fieldDir.Z).Unit
+	local stool = Vector3.new(79.5, 0, northTeleZ) - flat * 2.4
+	BuildUtil.Cylinder(deck, {
+		Name = "RoofStoolPost",
+		Position = Vector3.new(stool.X, dy + 0.75, stool.Z),
+		Height = 1.5,
+		Diameter = 0.35,
+		Axis = "Y",
+		Color = STEEL,
+		Material = Enum.Material.Metal,
+	})
+	BuildUtil.Seat(deck, {
+		Name = "RoofTelescopeStool",
+		Size = Vector3.new(1.6, 0.4, 1.6),
+		CFrame = CFrame.lookAt(Vector3.new(stool.X, dy + 1.7, stool.Z), Vector3.new(stool.X + flat.X, dy + 1.7, stool.Z + flat.Z)),
+		Color = team.Primary,
+		Object = "Telescope Stool",
+		Camera = { From = eye + Vector3.new(0, 1, 0), To = fieldTarget, Fov = 16, Label = "TELESCOPE CAM" },
+	})
+
+	-- string lights: poles along the railings, festoons across the deck and along the west side
+	local poleTop = dy + 8.5
+	local poles = {
+		W1 = Vector3.new(D.MinX + 1.1, poleTop, 226),
+		W2 = Vector3.new(D.MinX + 1.1, poleTop, 271),
+		W3 = Vector3.new(D.MinX + 1.1, poleTop, 316),
+		E1 = Vector3.new(D.MaxX - 0.6, poleTop, 226),
+		E3 = Vector3.new(D.MaxX - 0.6, poleTop, 316),
+	}
+	for _, key in ipairs({ "W1", "W2", "W3", "E1", "E3" }) do
+		local p = poles[key]
+		BuildUtil.Cylinder(deck, {
+			Name = "RoofLightPole",
+			Position = Vector3.new(p.X, (dy + poleTop) / 2, p.Z),
+			Height = poleTop - dy,
+			Diameter = 0.35,
+			Axis = "Y",
+			Color = STEEL,
+			Material = Enum.Material.Metal,
+		})
+	end
+	local towerAnchor = Vector3.new(T.MinX + 0.2, poleTop, 271)
+	local strings = {
+		{ poles.W1, poles.E1, true },
+		{ poles.W3, poles.E3, true },
+		{ poles.W2, towerAnchor, true },
+		{ poles.W1, poles.W2, false },
+		{ poles.W2, poles.W3, false },
+	}
+	for _, s in ipairs(strings) do
+		local a, b = s[1] - Vector3.new(0, 0.2, 0), s[2] - Vector3.new(0, 0.2, 0)
+		local sag = (a + b) / 2 - Vector3.new(0, 1.2, 0)
+		local first = strut(deck, "RoofStringLights", a, sag, 0.18, BULB, Enum.Material.Neon, { CanCollide = false, CastShadow = false })
+		strut(deck, "RoofStringLights", sag, b, 0.18, BULB, Enum.Material.Neon, { CanCollide = false, CastShadow = false })
+		if s[3] then
+			BuildUtil.Light(first, "PointLight", { Name = "StringLight", Range = 24, Brightness = 1.3, Color = BULB, Shadows = false })
+		end
 	end
 end
 
@@ -1097,6 +2021,8 @@ function HQShell.Build(ctx)
 	buildEntrance(shell, S, team)
 	buildRoof(shell, S)
 	buildInterior(shell, S, team)
+	buildElevatorTower(shell, S, team)
+	buildSkyDeck(shell, S, team)
 	return S.refs
 end
 

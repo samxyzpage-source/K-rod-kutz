@@ -11,18 +11,25 @@
 	Steps (Items.lua):
 	  1 Building        podium + front steps, limestone walls with marble pilasters and tall dark
 	                    windows, "<TEAM> HALL OF FAME" carved in the frieze, a pediment with a team
-	                    medallion and a copper gable roof behind it, a rotunda topped by a giant football standing on end (laces
-	                    facing the road), nave columns, ceiling lights and a team medallion in the
-	                    floor under the dome
+	                    medallion and a copper gable roof behind it, a rotunda topped by a giant
+	                    football standing on end (laces facing the road), nave columns, ceiling
+	                    lights and a team medallion in the floor under the dome.
+	                    Walk-in: bronze double doors (they swing into the hall), the museum desk +
+	                    gift shop (free foam finger), four leather benches (one is a Ring of Honor
+	                    TV camera seat), the Franchise History timeline and three team photos
 	  2 Trophy Cases    four lit glass display cases in the galleries: championship trophies,
-	                    game balls, championship rings and MVP awards
+	                    game balls, championship rings and MVP awards (each one a "look"), and the
+	                    live CHAMPIONSHIPS screen on the east wall
 	  3 Jersey Wall     the Ring of Honor on the back wall: ten framed home/away jerseys with
-	                    numbers and names under a lit header
+	                    numbers and names under a lit header (each a legend to "look" at), six
+	                    bronze legend plaques on the west wall and the live RECORD screen
 	  4 Player Statues  four bronze players on marble plinths lining the nave (QB throwing,
-	                    receiver catch, running back stiff-arm, trophy pose)
+	                    receiver catch, running back stiff-arm, trophy pose), each with a bio
 	  5 Gold Entrance   a gold colonnade + canopy carrying the glowing HALL OF FAME sign, a gold
-	                    door frame with the gold doors standing open, a red carpet from the road to
-	                    the Ring of Honor, velvet rope lines and team banners on the facade
+	                    door frame and dedication plaque, a red carpet from the road to the Ring of
+	                    Honor, velvet rope lines and team banners on the facade
+
+	All the legends (names, numbers, stories) are invented for this game.
 
 	Small footballs (game balls, trophy tops, the statues' balls) are single ball parts stretched
 	into an ellipsoid by a sphere SpecialMesh, so the offline previews draw them as round balls.
@@ -90,17 +97,164 @@ local VELVET_RED = Color3.fromRGB(140, 14, 28)
 local SIGN_DARK = Color3.fromRGB(30, 24, 18)
 local GLOW_GOLD = Color3.fromRGB(255, 214, 90)
 
+local SCREEN_DARK = Color3.fromRGB(12, 14, 22)
+local DARK_WOOD = Color3.fromRGB(70, 46, 30)
+local PHOTO_SKY = Color3.fromRGB(150, 196, 230)
+local PHOTO_GRASS = Color3.fromRGB(70, 132, 62)
+local SEPIA_LIGHT = Color3.fromRGB(214, 192, 150)
+local SEPIA_DARK = Color3.fromRGB(120, 92, 60)
+local SKIN = Color3.fromRGB(200, 150, 110)
+
+-- The franchise legends (all invented). Retired jerseys on the Ring of Honor:
+-- { number, name on the frame, full name, nickname, position, years, one fun line }
 local JERSEYS = {
-	{ "7", "CARTER" },
-	{ "12", "HAYES" },
-	{ "21", "BROOKS" },
-	{ "34", "WALKER" },
-	{ "56", "REED" },
-	{ "80", "MORGAN" },
-	{ "88", "PRICE" },
-	{ "92", "TURNER" },
-	{ "10", "BENNETT" },
-	{ "25", "COLE" },
+	{
+		"7",
+		"CARTER",
+		"Dash Carter",
+		"The Cheetah",
+		"Kick Returner",
+		"1979-1988",
+		"Ran back 14 kicks for touchdowns. Fans swore he was part cheetah.",
+	},
+	{
+		"12",
+		"HAYES",
+		"Boone Hayes",
+		"Cannon Arm",
+		"Quarterback",
+		"1968-1981",
+		"Threw a ball so far in practice that it landed in the parking lot.",
+	},
+	{
+		"21",
+		"BROOKS",
+		"Otis Brooks",
+		"The Legend",
+		"Running Back & Safety",
+		"1950-1962",
+		"Played offense AND defense in every game, then led the post-game dance.",
+	},
+	{
+		"34",
+		"WALKER",
+		"Moe Walker",
+		"The Bulldozer",
+		"Fullback",
+		"1955-1966",
+		"Once carried three tacklers into the end zone on his back.",
+	},
+	{
+		"56",
+		"REED",
+		"Hank Reed",
+		"Tank",
+		"Linebacker",
+		"1983-1995",
+		"Made so many tackles that runners checked if he was playing before kick-off.",
+	},
+	{ "80", "MORGAN", "Felix Morgan", "Silk", "Wide Receiver", "1990-2003", "Ran routes so smooth the defenders called him Silk." },
+	{
+		"88",
+		"PRICE",
+		"Danny Price",
+		"Hands of Glue",
+		"Tight End",
+		"1972-1984",
+		"Dropped one pass in his whole career - and he still talks about it.",
+	},
+	{
+		"92",
+		"TURNER",
+		"Rex Turner",
+		"The Storm",
+		"Defensive End",
+		"1996-2008",
+		"Sacked quarterbacks 140 times and helped every one of them back up.",
+	},
+	{
+		"10",
+		"BENNETT",
+		"Sal Bennett",
+		"Mr. Automatic",
+		"Kicker",
+		"1985-1999",
+		"Never missed an extra point in 15 seasons, not even in a snowstorm.",
+	},
+	{
+		"25",
+		"COLE",
+		"Jojo Cole",
+		"Ballhawk",
+		"Cornerback",
+		"2001-2012",
+		"Intercepted 61 passes and did a brand-new victory dance after every one.",
+	},
+}
+
+-- Bronze plaques on the west gallery wall: { plaque text, title, info }
+local LEGEND_PLAQUES = {
+	{
+		"NELLIE\nASHFORD\nFOUNDER\n1950",
+		"Nellie Ashford",
+		"Founder, 1950. Started the team with one borrowed ball and nine friends from her bakery.",
+	},
+	{
+		"GUS\nHALLORAN\nHEAD COACH\n1966-1989",
+		"Coach Gus Halloran",
+		"Head Coach, 1966-1989. Won five titles in the same lucky sweater - nobody knows if he ever washed it.",
+	},
+	{
+		"ABE\nOKAFOR\nCENTER\n1974-1986",
+		'Abe "Big Bear" Okafor',
+		"Center, 1974-1986. Snapped the ball 9,000 times without a fumble, then ate 40 pancakes to celebrate.",
+	},
+	{
+		"PETE\nLINDQVIST\nPUNTER\n1981-1996",
+		'Pete "Boomer" Lindqvist',
+		"Punter, 1981-1996. His longest punt bounced all the way to the ticket booth.",
+	},
+	{
+		"TITO\nVANCE\nSAFETY\n1993-2004",
+		'Tito "The Eraser" Vance',
+		"Safety, 1993-2004. Wiped receivers right off the highlight reel with 54 interceptions.",
+	},
+	{
+		"ROSA\nDELGADO\nHEAD TRAINER\n1988-2015",
+		'Rosa "Doc" Delgado',
+		"Head Trainer, 1988-2015. Taped over 50,000 ankles and always had an ice pack ready.",
+	},
+}
+
+-- Framed team photos in the east corner of the back wall
+local TEAM_PHOTOS = {
+	{
+		caption = "1950 - THE FIRST TEAM",
+		title = "The First Team (1950)",
+		info = "The very first squad in borrowed helmets. That's founder Nellie Ashford holding the ball!",
+		sepia = true,
+	},
+	{
+		caption = "CHAMPIONSHIP PARADE",
+		title = "Championship Parade",
+		info = "Confetti, an open-top bus and a whole city cheering. Win a title and the next parade is yours!",
+		lookKey = "titles",
+	},
+	{
+		caption = "THIS SEASON'S SQUAD",
+		title = "This Season's Squad",
+		info = "Your current team on photo day, all smiles before the first kick-off of the season.",
+		lookKey = "record",
+	},
+}
+
+-- Franchise History timeline: { year, event } (the last one shows the owner's team name)
+local MILESTONES = {
+	{ "1950", "FOUNDED" },
+	{ "1958", "FIRST WIN" },
+	{ "1966", "COACH HALLORAN" },
+	{ "1972", "FIRST TITLE" },
+	{ "1999", "NEW STADIUM" },
 }
 
 ---------------------------------------------------------------------------------------------
@@ -227,6 +381,94 @@ local function football(ctx, name, cframe, length, diameter, color, material, ex
 	mesh.Scale = Vector3.new(length / diameter, 1, 1)
 	mesh.Parent = part
 	return part
+end
+
+-- A dark LED screen whose text the server keeps up to date (BuildUtil.LiveText).
+local function liveScreen(part, face, live, placeholder, textColor)
+	local _, label = BuildUtil.LiveText(part, face, live, {
+		LabelName = "Live_" .. live,
+		Text = placeholder,
+		TextColor3 = textColor,
+		BackgroundColor3 = SCREEN_DARK,
+		BackgroundTransparency = 0,
+		LightInfluence = 0,
+		Font = Enum.Font.GothamBlack,
+		PixelsPerStud = 20,
+	})
+	label.TextWrapped = true
+	local pad = Instance.new("UIPadding")
+	local inset = UDim.new(0.08, 0)
+	pad.PaddingLeft, pad.PaddingRight, pad.PaddingTop, pad.PaddingBottom = inset, inset, inset, inset
+	pad.Parent = label
+	return label
+end
+
+-- GUI rectangle (scale units) used to draw photos and the timeline on a SurfaceGui.
+local function guiBox(parent, x, y, w, h, color, round)
+	local frame = Instance.new("Frame")
+	frame.Position = UDim2.new(x, 0, y, 0)
+	frame.Size = UDim2.new(w, 0, h, 0)
+	frame.BackgroundColor3 = color
+	frame.BorderSizePixel = 0
+	frame.Parent = parent
+	if round then
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0.5, 0)
+		corner.Parent = frame
+	end
+	return frame
+end
+
+local function guiText(parent, x, y, w, h, text, color, font)
+	local label = Instance.new("TextLabel")
+	label.Position = UDim2.new(x, 0, y, 0)
+	label.Size = UDim2.new(w, 0, h, 0)
+	label.BackgroundTransparency = 1
+	label.Font = font or Enum.Font.GothamBold
+	label.Text = text
+	label.TextColor3 = color
+	label.TextScaled = true
+	label.TextWrapped = true
+	label.Parent = parent
+	return label
+end
+
+-- A framed team photo drawn on one face of `part`: a row of players on the grass and a caption.
+local function teamPhoto(part, face, team, opts)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "PhotoGui"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 30
+	gui.Parent = part
+	local sky = opts.sepia and SEPIA_LIGHT or PHOTO_SKY
+	local grass = opts.sepia and SEPIA_DARK or PHOTO_GRASS
+	local border = guiBox(gui, 0, 0, 1, 1, DARK_WOOD)
+	local photo = guiBox(border, 0.06, 0.07, 0.88, 0.66, sky)
+	guiBox(photo, 0, 0.62, 1, 0.38, grass)
+	for i = 1, 6 do
+		local jersey = opts.sepia and SEPIA_DARK or ((i % 2 == 1) and team.Primary or team.Secondary)
+		local x = 0.05 + (i - 1) * 0.155
+		guiBox(photo, x, 0.42, 0.13, 0.4, jersey)
+		guiBox(photo, x + 0.025, 0.2, 0.08, 0.22, opts.sepia and SEPIA_DARK or SKIN, true)
+	end
+	guiText(border, 0.06, 0.76, 0.88, 0.18, opts.caption, GLOW_GOLD, Enum.Font.Garamond)
+	return gui
+end
+
+-- A museum bench (one leather block you can sit on). The sitter faces `yawDeg` (0 = -Z,
+-- 180 = +Z, 90 = -X, -90 = +X); the bench runs `length` studs across that direction.
+local function bench(ctx, x, z, yawDeg, length, opts)
+	opts = opts or {}
+	return BuildUtil.Seat(ctx, {
+		Name = "MuseumBench",
+		Size = Vector3.new(length, 1.7, 2.2),
+		CFrame = CFrame.new(x, FLOOR + 0.85, z) * CFrame.Angles(0, math.rad(yawDeg), 0),
+		Color = LEATHER,
+		Material = Enum.Material.Leather,
+		Object = opts.Object or "Museum Bench",
+		Camera = opts.Camera,
+	})
 end
 
 ---------------------------------------------------------------------------------------------
@@ -422,6 +664,105 @@ local function buildBuilding(ctx)
 end
 
 ---------------------------------------------------------------------------------------------
+-- Step 1 (inside): doors, museum desk + gift shop, benches, timeline, team photos
+---------------------------------------------------------------------------------------------
+
+local function buildMuseumFloor(ctx)
+	local C = ctx.config.Colors
+	local team = ctx.colors
+	local teamName = ctx.teamName or ""
+	BuildUtil.Stage(ctx, 1)
+	local hall = BuildUtil.Child(ctx, "MuseumFloor")
+
+	-- the big bronze entrance doors fill the doorway and swing INTO the hall (the door frame is
+	-- turned around so its front, the side the leaves swing to, faces +Z)
+	local doorH = DOOR_TOP - FLOOR
+	BuildUtil.Door(hall, {
+		Name = "EntranceDoors",
+		Size = Vector3.new(DOOR_MAX_X - DOOR_MIN_X, doorH, 0.6),
+		CFrame = CFrame.new(CX, FLOOR + doorH / 2, (OUTER.MinZ + INNER.MinZ) / 2) * CFrame.Angles(0, math.pi, 0),
+		Double = true,
+		Swing = 90,
+		Color = BRONZE_DARK,
+		Material = Enum.Material.Metal,
+		Window = true,
+		Object = "Hall of Fame",
+		Title = "Hall of Fame & Museum",
+		Info = "Trophies, retired jerseys, bronze statues and the legends who built this franchise. Admission is free!",
+	})
+
+	-- museum desk + gift shop in the west front corner (the shop keeper stands by the wall)
+	local deskZ0, deskZ1 = 230.5, 239.5
+	local desk = slab(hall, "GiftCounter", 151, 153.4, FLOOR, 4.6, deskZ0, deskZ1, team.Primary, Enum.Material.Wood)
+	sign(desk, { Enum.NormalId.Right }, "TICKETS & GIFTS", team.Primary, team, { InsetX = 0.08, InsetY = 0.3 })
+	BuildUtil.Look(
+		desk,
+		"Museum Desk",
+		"Free maps and audio tours start here. The shelf is full of souvenirs: snow globes, mini helmets and plush mascots.",
+		{ At = Vector3.new(1.6, 1.4, -3), Distance = 8 }
+	)
+	slab(hall, "GiftCounterTop", 150.8, 153.7, 4.6, 4.85, deskZ0 - 0.2, deskZ1 + 0.2, MARBLE, Enum.Material.Marble)
+	local shelf = slab(hall, "GiftShelf", INNER.MinX, INNER.MinX + 1.4, FLOOR, 9, deskZ0, deskZ1, DARK_WOOD, Enum.Material.Wood)
+	sign(shelf, { Enum.NormalId.Right }, "SOUVENIRS", DARK_WOOD, team, {
+		TextColor3 = C.Gold,
+		Font = Enum.Font.Garamond,
+		Rect = { 0.1, 0.04, 0.8, 0.14 },
+	})
+	local bin = slab(hall, "FoamFingerBin", 151.3, 153.3, 4.85, 6.1, 237.2, 239.2, team.Secondary, Enum.Material.Foil)
+	sign(bin, { Enum.NormalId.Right }, "#1", team.Secondary, team, { InsetX = 0.15, InsetY = 0.1 })
+	BuildUtil.Use(hall, bin, "foamfinger", {
+		Object = "Gift Shop",
+		Title = "Souvenir Foam Finger",
+		Info = "A free souvenir from the museum gift shop. Point it at the Ring of Honor!",
+		Distance = 8,
+	})
+
+	-- benches: two in the nave facing the Ring of Honor (one is a TV camera seat) and one in
+	-- each gallery, facing the legend plaques (west) and the big screens (east)
+	local ringCam = { From = Vector3.new(CX, 10, 272), To = Vector3.new(CX, 11, INNER.MaxZ), Fov = 55, Label = "RING OF HONOR" }
+	bench(hall, CX - 10, 296, 180, 7, { Object = "Ring of Honor Bench", Camera = ringCam })
+	bench(hall, CX + 10, 296, 180, 7)
+	bench(hall, 158, 266, 90, 8)
+	bench(hall, 232, 266, -90, 8)
+
+	-- Franchise History timeline in the west corner of the back wall
+	local face = INNER.MaxZ
+	local timeline = slab(hall, "HistoryTimeline", 148.5, 161.5, 4, 13.5, face - 0.3, face, DARK_WOOD, Enum.Material.Wood)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "TimelineGui"
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 24
+	gui.Parent = timeline
+	guiText(gui, 0.05, 0.03, 0.9, 0.17, "FRANCHISE HISTORY", C.Gold, Enum.Font.Garamond)
+	local events = table.clone(MILESTONES)
+	table.insert(events, { "TODAY", teamName ~= "" and teamName or "YOUR TEAM" })
+	for i, event in ipairs(events) do
+		local col = (i - 1) % 3
+		local above = i <= 3
+		local x = 0.03 + col * 0.32
+		local y = above and 0.24 or 0.56
+		guiText(gui, x, y, 0.3, 0.09, event[1], C.Gold, Enum.Font.GothamBlack)
+		guiText(gui, x, y + 0.1, 0.3, 0.1, event[2], WHITE, Enum.Font.GothamBold)
+	end
+	slab(hall, "TimelineBar", 149, 161, 8.6, 9, face - 0.5, face - 0.3, C.Gold, Enum.Material.Metal, GOLD_SHINE)
+	BuildUtil.Look(
+		timeline,
+		"Franchise History",
+		"From one borrowed ball in 1950 to the team you run today: every big moment in the franchise's story.",
+		{ LookKey = "season" }
+	)
+
+	-- three framed team photos in the east corner of the back wall
+	for i, photo in ipairs(TEAM_PHOTOS) do
+		local x = 230 + (i - 1) * 5
+		local frame = slab(hall, "TeamPhoto", x - 2.3, x + 2.3, 5.4, 9, face - 0.25, face, DARK_WOOD, Enum.Material.Wood)
+		teamPhoto(frame, Enum.NormalId.Front, team, photo)
+		BuildUtil.Look(frame, photo.title, photo.info, { LookKey = photo.lookKey, Distance = 8 })
+	end
+end
+
+---------------------------------------------------------------------------------------------
 -- Step 2: trophy cases
 ---------------------------------------------------------------------------------------------
 
@@ -453,6 +794,7 @@ local function displayCase(ctx, name, cx, cz, label, fill)
 	local lamp = slab(case, "CaseLamp", cx - 3.1, cx + 3.1, top + 5.32, top + 5.9, cz - 8.1, cz + 8.1, LAMP, Enum.Material.Neon)
 	BuildUtil.Light(lamp, "PointLight", { Name = "CaseLight", Range = 14, Brightness = 1.6, Color = WARM_LIGHT })
 	fill(case, cx, cz, top)
+	return base
 end
 
 local function buildTrophyCases(ctx)
@@ -463,7 +805,7 @@ local function buildTrophyCases(ctx)
 	local cases = BuildUtil.Child(ctx, "TrophyCases")
 
 	-- West gallery, front: a big championship cup between two football-topped trophies
-	displayCase(cases, "ChampionshipCase", GALLERY_X[1], CASE_Z[1], "CHAMPIONSHIPS", function(c, cx, cz, top)
+	local championships = displayCase(cases, "ChampionshipCase", GALLERY_X[1], CASE_Z[1], "CHAMPIONSHIPS", function(c, cx, cz, top)
 		-- the cup: a round bowl whose upper half hides in a rim of the same width
 		cyl(c, "CupStem", Vector3.new(cx, top + 0.9, cz), 1.8, 0.9, "Y", gold, metal, GOLD_SHINE)
 		ball(c, "CupBowl", CFrame.new(cx, top + 3.2, cz), 3.2, gold, metal, GOLD_SHINE)
@@ -476,7 +818,7 @@ local function buildTrophyCases(ctx)
 	end)
 
 	-- East gallery, front: game balls (a golden one in the middle)
-	displayCase(cases, "GameBallCase", GALLERY_X[2], CASE_Z[1], "GAME BALLS", function(c, cx, cz, top)
+	local gameBalls = displayCase(cases, "GameBallCase", GALLERY_X[2], CASE_Z[1], "GAME BALLS", function(c, cx, cz, top)
 		for i, dz in ipairs({ -5, 0, 5 }) do
 			local golden = i == 2
 			local along = CFrame.new(cx, top + 0.9, cz + dz) * CFrame.Angles(0, math.pi / 2, 0)
@@ -501,7 +843,7 @@ local function buildTrophyCases(ctx)
 	end)
 
 	-- West gallery, back: championship rings on a black cushion
-	displayCase(cases, "RingCase", GALLERY_X[1], CASE_Z[2], "CHAMPIONSHIP RINGS", function(c, cx, cz, top)
+	local rings = displayCase(cases, "RingCase", GALLERY_X[1], CASE_Z[2], "CHAMPIONSHIP RINGS", function(c, cx, cz, top)
 		slab(c, "RingCushion", cx - 0.9, cx + 0.9, top, top + 0.7, cz - 6.5, cz + 6.5, CUSHION, Enum.Material.Fabric)
 		for _, dz in ipairs({ -4.5, 0, 4.5 }) do
 			local ringY = top + 0.7 + 1.25
@@ -511,7 +853,7 @@ local function buildTrophyCases(ctx)
 	end)
 
 	-- East gallery, back: a gold helmet between two MVP plaques
-	displayCase(cases, "AwardCase", GALLERY_X[2], CASE_Z[2], "MVP AWARDS", function(c, cx, cz, top)
+	local awards = displayCase(cases, "AwardCase", GALLERY_X[2], CASE_Z[2], "MVP AWARDS", function(c, cx, cz, top)
 		ball(c, "GoldHelmet", CFrame.new(cx, top + 1.5, cz), 3, gold, metal, GOLD_SHINE)
 		-- the face mask looks toward the nave (-X)
 		slab(c, "GoldHelmetMask", cx - 1.6, cx - 1.15, top + 0.5, top + 1.6, cz - 0.85, cz + 0.85, gold, metal, GOLD_SHINE)
@@ -526,6 +868,32 @@ local function buildTrophyCases(ctx)
 			})
 		end
 	end)
+
+	-- what's in each case (the championship case shows how many titles the owner has won)
+	BuildUtil.Look(championships, "Championship Trophies", "Every title this franchise wins earns a golden trophy in this case.", {
+		LookKey = "titles",
+	})
+	BuildUtil.Look(
+		gameBalls,
+		"Game Balls",
+		"Signed balls from the biggest wins in team history. The golden one is from the first championship game in 1972."
+	)
+	BuildUtil.Look(rings, "Championship Rings", "One gold ring for every champion. Players only wear them on very special days.")
+	BuildUtil.Look(
+		awards,
+		"MVP Awards",
+		"The golden helmet goes to the season's Most Valuable Player, the plaques to the All-Pro stars.",
+		{ LookKey = "rating" }
+	)
+
+	-- the championship counter on the east gallery wall, between the windows
+	local screen =
+		slab(cases, "TitlesScreen", INNER.MaxX - 0.35, INNER.MaxX, 6, 12.6, 250.5, 261.5, SCREEN_DARK, Enum.Material.SmoothPlastic)
+	liveScreen(screen, Enum.NormalId.Left, "titles", "CHAMPIONSHIPS", C.Gold)
+	BuildUtil.Look(screen, "Championship Counter", "Every title your team wins in the playoffs is added to this screen.", {
+		LookKey = "titles",
+		At = Vector3.new(-0.6, -3.6, 0),
+	})
 end
 
 ---------------------------------------------------------------------------------------------
@@ -584,7 +952,39 @@ local function buildJerseyWall(ctx)
 			InsetX = 0.12,
 			InsetY = 0.18,
 		})
+		-- the bottom row is read up close; the top row's prompt sits under its jersey and reaches
+		-- further, so stepping back from the wall picks the top row
+		local title = ("#%s %s"):format(jersey[1], jersey[3])
+		local info = ('"%s" - %s, %s. %s'):format(jersey[4], jersey[5], jersey[6], jersey[7])
+		if row == 0 then
+			BuildUtil.Look(body, title, info, { At = Vector3.new(0, -3, -0.4), Distance = 12 })
+		else
+			BuildUtil.Look(body, title, info, { Distance = 7 })
+		end
 	end
+
+	-- six bronze legend plaques on the west gallery wall, three on each side of the middle window
+	for i, plaque in ipairs(LEGEND_PLAQUES) do
+		local z = (i <= 3 and 251.5 or 271.5) + ((i - 1) % 3) * 4.5
+		local plate =
+			slab(wall, "LegendPlaque", INNER.MinX, INNER.MinX + 0.3, 4.4, 8.8, z - 1.7, z + 1.7, BRONZE, Enum.Material.Metal, BRONZE_SHINE)
+		sign(plate, { Enum.NormalId.Right }, plaque[1], BRONZE, team, {
+			TextColor3 = INK,
+			Font = Enum.Font.Garamond,
+			InsetX = 0.1,
+			InsetY = 0.08,
+		})
+		BuildUtil.Look(plate, plaque[2], plaque[3], { Distance = 8 })
+	end
+
+	-- the season tracker on the east gallery wall
+	local screen =
+		slab(wall, "RecordScreen", INNER.MaxX - 0.35, INNER.MaxX, 6, 12.6, 270.5, 281.5, SCREEN_DARK, Enum.Material.SmoothPlastic)
+	liveScreen(screen, Enum.NormalId.Left, "record", "RECORD", textColorOn(SCREEN_DARK, { team.Secondary, team.Trim, C.Gold }))
+	BuildUtil.Look(screen, "Season Tracker", "Every win and loss of your team's season, counted up live.", {
+		LookKey = "record",
+		At = Vector3.new(-0.6, -3.6, 0),
+	})
 end
 
 ---------------------------------------------------------------------------------------------
@@ -606,10 +1006,11 @@ local PLINTH = Vector3.new(5, 4.2, 5)
 	      { swing, raise } in degrees (swing 180 = straight up, raise = away from the body),
 	      Ball = "Left" | "Right" | "Overhead", BallAtTip (the ball sits beyond the fingertips)
 ]]
-local function statue(ctx, name, base, pose, plaque)
+local function statue(ctx, name, base, pose, plaque, look)
 	local team = ctx.colors
 	local st = BuildUtil.Child(ctx, name)
 	local plinth = block(st, "Plinth", PLINTH, base * CFrame.new(0, PLINTH.Y / 2, 0), PLINTH_STONE, Enum.Material.Marble)
+	BuildUtil.Look(plinth, look[1], look[2])
 	sign(plinth, { Enum.NormalId.Front }, plaque, PLINTH_STONE, team, {
 		TextColor3 = ctx.config.Colors.Gold,
 		Font = Enum.Font.Garamond,
@@ -672,35 +1073,75 @@ local function buildStatues(ctx)
 	local function base(x, z, yawDeg)
 		return CFrame.new(x, FLOOR, z) * CFrame.Angles(0, math.rad(yawDeg), 0)
 	end
-	statue(hall, "QuarterbackStatue", base(CX - 10.5, 252, -50), {
-		Legs = { 22, -22 },
-		Plant = 22,
-		Lean = -4,
-		Arms = { { 80, 8 }, { 205, 10 } },
-		Ball = "Right",
-		BallAtTip = true,
-	}, "#12\nCANNON ARM")
-	statue(hall, "ReceiverStatue", base(CX + 10.5, 252, 50), {
-		Legs = { 35, -5 },
-		Plant = 5,
-		Lean = -6,
-		Arms = { { 170, -8 }, { 170, -8 } },
-		Ball = "Overhead",
-	}, "#81\nHANDS OF GLUE")
-	statue(hall, "RunningBackStatue", base(CX - 10.5, 280, -60), {
-		Legs = { 30, -30 },
-		Plant = 30,
-		Lean = 12,
-		Arms = { { 25, 4 }, { 85, -4 } },
-		Ball = "Left",
-	}, "#28\nTHE BULLDOZER")
-	statue(hall, "LegendStatue", base(CX + 10.5, 280, 60), {
-		Legs = { 62, 0 },
-		Plant = 0,
-		Lean = 6,
-		Arms = { { 28, 4 }, { 90, 0 } },
-		Ball = "Left",
-	}, "#21\nTHE LEGEND")
+	statue(
+		hall,
+		"QuarterbackStatue",
+		base(CX - 10.5, 252, -50),
+		{
+			Legs = { 22, -22 },
+			Plant = 22,
+			Lean = -4,
+			Arms = { { 80, 8 }, { 205, 10 } },
+			Ball = "Right",
+			BallAtTip = true,
+		},
+		"#12\nCANNON ARM",
+		{
+			"Statue: Boone Hayes",
+			'"Cannon Arm" frozen mid-throw. His last-second bomb won the franchise\'s first title in 1972.',
+		}
+	)
+	statue(
+		hall,
+		"ReceiverStatue",
+		base(CX + 10.5, 252, 50),
+		{
+			Legs = { 35, -5 },
+			Plant = 5,
+			Lean = -6,
+			Arms = { { 170, -8 }, { 170, -8 } },
+			Ball = "Overhead",
+		},
+		"#88\nHANDS OF GLUE",
+		{
+			"Statue: Danny Price",
+			"The famous one-handed catch from the 1977 playoffs, high above two defenders.",
+		}
+	)
+	statue(
+		hall,
+		"RunningBackStatue",
+		base(CX - 10.5, 280, -60),
+		{
+			Legs = { 30, -30 },
+			Plant = 30,
+			Lean = 12,
+			Arms = { { 25, 4 }, { 85, -4 } },
+			Ball = "Left",
+		},
+		"#34\nTHE BULLDOZER",
+		{
+			"Statue: Moe Walker",
+			'"The Bulldozer" ran right through tacklers. Rub his helmet for luck before a game day!',
+		}
+	)
+	statue(
+		hall,
+		"LegendStatue",
+		base(CX + 10.5, 280, 60),
+		{
+			Legs = { 62, 0 },
+			Plant = 0,
+			Lean = 6,
+			Arms = { { 28, 4 }, { 90, 0 } },
+			Ball = "Left",
+		},
+		"#21\nTHE LEGEND",
+		{
+			"Statue: Otis Brooks",
+			"A star of the very first team in 1950 who played offense AND defense. That's why they call him The Legend.",
+		}
+	)
 end
 
 ---------------------------------------------------------------------------------------------
@@ -783,33 +1224,19 @@ local function buildGoldEntrance(ctx)
 	slab(entrance, "GoldDoorFrame", DOOR_MIN_X - 1.2, DOOR_MIN_X, FLOOR, DOOR_TOP, frameZ0, frameZ1, gold, metal, GOLD_SHINE)
 	slab(entrance, "GoldDoorFrame", DOOR_MAX_X, DOOR_MAX_X + 1.2, FLOOR, DOOR_TOP, frameZ0, frameZ1, gold, metal, GOLD_SHINE)
 	slab(entrance, "GoldDoorFrame", DOOR_MIN_X - 1.2, DOOR_MAX_X + 1.2, DOOR_TOP, DOOR_TOP + 1.4, frameZ0, frameZ1, gold, metal, GOLD_SHINE)
-	-- the two gold door leaves stand wide open against the doorway sides, inside the hall
-	local leafDepth = (DOOR_MAX_X - DOOR_MIN_X) / 2 - 1
-	slab(
-		entrance,
-		"GoldDoor",
-		DOOR_MIN_X,
-		DOOR_MIN_X + 0.4,
-		FLOOR,
-		DOOR_TOP - 0.3,
-		INNER.MinZ,
-		INNER.MinZ + leafDepth,
-		gold,
-		metal,
-		GOLD_SHINE
-	)
-	slab(
-		entrance,
-		"GoldDoor",
-		DOOR_MAX_X - 0.4,
-		DOOR_MAX_X,
-		FLOOR,
-		DOOR_TOP - 0.3,
-		INNER.MinZ,
-		INNER.MinZ + leafDepth,
-		gold,
-		metal,
-		GOLD_SHINE
+	-- a gold dedication plaque beside the doorway (shows the owner's name)
+	local dedication = slab(entrance, "DedicationPlaque", 203.7, 206.3, 4, 7.4, OUTER.MinZ - 0.25, OUTER.MinZ, gold, metal, GOLD_SHINE)
+	sign(dedication, { Enum.NormalId.Front }, "DEDICATED\nTO THE\nFANS", gold, team, {
+		TextColor3 = INK,
+		Font = Enum.Font.Garamond,
+		InsetX = 0.1,
+		InsetY = 0.12,
+	})
+	BuildUtil.Look(
+		dedication,
+		"Dedication Plaque",
+		"This Hall of Fame honours every player, coach and fan who ever wore the team colours. It was built by the team's owner.",
+		{ LookKey = "owner", Distance = 8 }
 	)
 
 	-- red carpet: from the road, up both steps, through the doorway to the Ring of Honor
@@ -865,6 +1292,7 @@ end
 
 function HallOfFame.hall_of_fame(ctx)
 	buildBuilding(ctx)
+	buildMuseumFloor(ctx)
 	buildTrophyCases(ctx)
 	buildJerseyWall(ctx)
 	buildStatues(ctx)

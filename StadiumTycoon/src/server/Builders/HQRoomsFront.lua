@@ -8,31 +8,36 @@
 
 	  hq_lobby        the open atrium behind the entrance (no closing walls, the walk from the
 	                  doors to the corridor stays open):
-	                    1 reception desk (look) + receptionist chair (seat), HQ directory (look)
-	                    2 giant team wall: live team name + record, logo, three team photos (look)
-	                    3 sofas + armchairs (seats), plants, lamp
+	                    1 reception desk (look) + receptionist chair (seat), a basket of free foam
+	                      fingers (use), HQ directory (look) with a station clock on top (look)
+	                    2 giant team wall: live team name, record, season + game-day countdown, logo,
+	                      three team photos (look), Rumble the mascot statue (look)
+	                    3 sofas + armchairs (seats; one cushion is a camera seat on the big screen),
+	                      plants, lamp
 	                    4 a lit glass trophy case (look: championships)
 	                    5 a big LED screen (live summary + game-day ticker) over the corridor opening
 	  hq_frontoffice  the GM's office: 1 walls + door, 2 GM desk + chair (seat), computer (look:
 	                  record), guest chairs, 3 the DRAFT BOARD (look: draft, live starters screen),
-	                  war-room table + chairs, draft-day phone (look), 4 window glass, bookcase,
-	                  retired jersey + team photos (look), mini fridge (soda), sofa
+	                  war-room table + chairs (one a draft-board camera seat), draft-day phone (look),
+	                  4 window glass, bookcase, retired jersey + team photos (look), mini fridge
+	                  (soda), sofa, franchise certificate (live owner), first dollar, stadium model
 	  hq_coaches      1 walls, sliding glass doors and the head coach office with its own door,
-	                  2 head coach desk + chair, playbook shelf (look), 3 assistant desks + huddle
-	                  table (seats), sports-drink cooler, 4 whiteboards with plays (look), depth
-	                  chart (live starters) and a live TEAM RATING board
+	                  2 head coach desk + chair (a game-film camera seat), playbook shelf (look),
+	                  3 assistant desks + huddle table (seats), sports-drink cooler, 4 whiteboards
+	                  with plays (look), depth chart (live starters) and a live TEAM RATING board
 	  hq_interview    press room: 1 dark walls + step-and-repeat backdrop + door, 2 stage, podium
 	                  with microphones (use: press conference, TV close-up camera), panel table,
 	                  3 press chairs (seats), TV cameras (look), a camera-operator seat with a live
-	                  TV view and an ON AIR light
-	  hq_meeting      team meeting room: 1 walls + team crest (look) + motto, 2 tiered rows of
-	                  seats (one with a screen camera), 3 stage with podium (look), video wall with
-	                  the live season + summary and this week's game plan (look)
+	                  TV view, press monitors (live score + summary) and an ON AIR light
+	  hq_meeting      team meeting room: 1 walls + team crest (look) + motto (look), 2 tiered rows of
+	                  seats (one with a screen camera) with steps at the back, 3 stage with podium
+	                  (look), video wall with the live season + summary (look) and this week's game
+	                  plan (look)
 	  hq_lounge       player lounge: 1 walls + striped team carpet, 2 sectional couch (seats, the
-	                  middle one a TV camera seat), big TV (live score), bean bags, 3 pool table
+	                  middle one a TV camera seat), big TV (live score, look), bean bags, 3 pool table
 	                  (look) + ping-pong (use) with a live rally scoreboard, 4 arcade cabinets (use)
 	                  under a live high-score marquee, drinks fridge (soda), popcorn machine,
-	                  foosball (look)
+	                  foosball (look), jukebox (look)
 
 	Plays on whiteboards and screens, the step-and-repeat pattern, the directory, team photos and
 	the draft board cards are drawn with GUI frames on SurfaceGuis (crisp lines, no extra parts).
@@ -618,6 +623,7 @@ local function officeChair(ctx, frame, color, opts)
 		Name = "ChairSeat",
 		Object = opts.Object or "Office Chair",
 		NoPrompt = opts.NoPrompt,
+		Camera = opts.Camera,
 	})
 	local back = lblock(ctx, frame, "ChairBack", Vector3.new(2.2, 3, 0.45), 0, 2.1, 1.0, color, Enum.Material.Leather)
 	return seat, back
@@ -950,6 +956,20 @@ function HQRoomsFront.hq_lobby(ctx)
 	box(reception, "Keyboard", -127.4, 2.85, 234.9, -124.6, 2.97, 235.3, BLACK)
 	box(reception, "Phone", -121.6, 2.85, 234.4, -120.8, 3.2, 235.2, BLACK)
 	ball(reception, "DeskBell", Vector3.new(-120, 4.25, 231.2), 0.6, GOLD, Enum.Material.Metal)
+	-- welcome gift: a basket of foam fingers on the counter (every visitor may take one)
+	local basket = box(reception, "GiftBasket", -135, 4, 230.8, -132, 4.9, 232.4, Color3.fromRGB(196, 150, 90), Enum.Material.Wood)
+	sign(basket, Enum.NormalId.Front, "FREE!", Color3.fromRGB(196, 150, 90), team, { TextColor3 = INK, InsetX = 0.1, InsetY = 0.12 })
+	for i, fx in ipairs({ -134.2, -132.8 }) do
+		local color = i == 1 and team.Primary or team.Secondary
+		box(reception, "FoamHand", fx - 0.55, 4.9, 231.3, fx + 0.55, 6.1, 231.7, color, Enum.Material.Foil, NO_COLLIDE)
+		box(reception, "FoamFinger", fx - 0.18, 6.1, 231.33, fx + 0.18, 7.1, 231.67, color, Enum.Material.Foil, NO_COLLIDE)
+	end
+	BuildUtil.Use(reception, basket, "foamfinger", {
+		Object = "Welcome Gift",
+		Title = "Welcome Gift",
+		Info = "Every visitor to Team HQ gets a free foam finger. Wave it high on game day!",
+		Distance = 8,
+	})
 	-- the receptionist's chair (walk in between the desk wings from the corridor side)
 	officeChair(reception, frameAt(-126, 237.6, "S"), LEATHER_BLACK, { Object = "Receptionist's Chair" })
 
@@ -992,6 +1012,29 @@ function HQRoomsFront.hq_lobby(ctx)
 			Enum.TextXAlignment.Left
 		)
 	end
+	-- a round station clock on top of the directory (hands at ten past ten)
+	box(reception, "ClockStem", -111.55, 9.1, 215.7, -110.95, 9.75, 216.3, DARK_METAL, Enum.Material.Metal)
+	local clockD = 2.8
+	local clock = cyl(reception, "LobbyClock", Vector3.new(-111.25, 9.7 + clockD / 2, 216), 0.5, clockD, "Z", BLACK, Enum.Material.Metal)
+	local clockGui = canvas(clock, Enum.NormalId.Right, 40, nil, 0.4) -- a Z cylinder's Right end faces -Z
+	local c = clockD / 2
+	guiDot(clockGui, c, c, clockD - 0.35, WHITE)
+	for h = 0, 11 do
+		local a = h * math.pi / 6
+		local r0, r1 = c - 0.42, c - (h % 3 == 0 and 0.7 or 0.55)
+		guiLine(clockGui, c + r0 * math.sin(a), c - r0 * math.cos(a), c + r1 * math.sin(a), c - r1 * math.cos(a), 0.09, INK)
+	end
+	guiText(clockGui, c - 0.45, c + 0.32, 0.9, 0.32, "HQ", team.Primary, Enum.Font.GothamBlack)
+	local hourA, minuteA = math.rad(305), math.rad(60)
+	guiLine(clockGui, c, c, c + 0.55 * math.sin(hourA), c - 0.55 * math.cos(hourA), 0.13, INK)
+	guiLine(clockGui, c, c, c + 0.85 * math.sin(minuteA), c - 0.85 * math.cos(minuteA), 0.09, INK)
+	guiDot(clockGui, c, c, 0.2, Color3.fromRGB(200, 30, 30))
+	BuildUtil.Look(
+		clock,
+		"Lobby Clock",
+		"It's always football o'clock at Team HQ! Game days kick off every few minutes - the countdown on the Team Wall shows when.",
+		{ Distance = 10 }
+	)
 	BuildUtil.Look(
 		directory,
 		"HQ Directory",
@@ -1027,6 +1070,36 @@ function HQRoomsFront.hq_lobby(ctx)
 	for _, span in ipairs({ { -146.4, -134.8 }, { -125.2, -113.6 } }) do
 		box(wallModel, "LogoStripe", span[1], 13, 246.2, span[2], 13.8, 246.5, team.Secondary)
 	end
+	-- LED tickers either side of the logo: where the season stands + the next game day
+	local seasonPanel = box(wallModel, "SeasonScreen", -145.6, 9.6, 246.2, -135.4, 12.3, 246.5, LED_DARK)
+	liveScreen(seasonPanel, Enum.NormalId.Front, "season", "SEASON 1 - WEEK 1", { PixelsPerStud = 20, Padding = 0.1 })
+	local countdown = box(wallModel, "GameDayScreen", -124.6, 9.6, 246.2, -114.4, 12.3, 246.5, LED_DARK)
+	liveScreen(countdown, Enum.NormalId.Front, "gameday", "NEXT GAME SOON", {
+		TextColor3 = Color3.fromRGB(120, 230, 140),
+		PixelsPerStud = 20,
+		Padding = 0.1,
+	})
+	-- Rumble, the team mascot, greets visitors on a marble plinth (faces the doors)
+	local mx, mz = -145, 225
+	cyl(wallModel, "MascotPlinth", Vector3.new(mx, FLOOR_TOP + 0.6, mz), 1.2, 4.2, "Y", MARBLE, Enum.Material.Marble)
+	local plaque = box(wallModel, "MascotPlaque", mx - 1.3, 0.5, mz - 2.12, mx + 1.3, 1.3, mz - 1.9, GOLD, Enum.Material.Metal)
+	sign(plaque, Enum.NormalId.Front, "RUMBLE", GOLD, team, { TextColor3 = INK, InsetX = 0.08, InsetY = 0.12 })
+	local base = FLOOR_TOP + 1.2
+	box(wallModel, "MascotLegs", mx - 0.9, base, mz - 0.5, mx + 0.9, base + 1.3, mz + 0.5, shade(team.Primary, 0.7), Enum.Material.Fabric)
+	local body = ball(wallModel, "MascotBody", Vector3.new(mx, base + 2.9, mz), 3.4, team.Primary, Enum.Material.Fabric)
+	ball(wallModel, "MascotHead", Vector3.new(mx, base + 5.2, mz), 2.6, team.Primary, Enum.Material.Fabric)
+	ball(wallModel, "MascotSnout", Vector3.new(mx, base + 4.95, mz - 1.15), 1.2, WHITE, Enum.Material.Fabric, NO_COLLIDE)
+	for _, s in ipairs({ -1, 1 }) do
+		ball(wallModel, "MascotEar", Vector3.new(mx + s * 0.95, base + 6.35, mz), 0.95, team.Secondary, Enum.Material.Fabric, NO_COLLIDE)
+		ball(wallModel, "MascotEye", Vector3.new(mx + s * 0.48, base + 5.55, mz - 1.08), 0.42, INK, Enum.Material.SmoothPlastic, NO_COLLIDE)
+	end
+	ball(wallModel, "MascotFootball", Vector3.new(mx + 1.7, base + 3.2, mz - 0.6), 1.1, FOOTBALL, Enum.Material.Leather, NO_COLLIDE)
+	BuildUtil.Look(
+		body,
+		"Rumble the Mascot",
+		"Meet Rumble, your team's fuzzy mascot! Rumble leads the cheers on game day and has never lost a dance-off.",
+		{ Distance = 9 }
+	)
 	for _, px0 in ipairs({ -149, -113 }) do
 		box(wallModel, "WallPillar", px0, FLOOR_TOP, 245.6, px0 + 2, 19.6, 249.4, DARK_METAL, Enum.Material.Metal)
 		box(wallModel, "PillarGlow", px0 + 0.7, 1.2, 245.45, px0 + 1.3, 18.8, 245.6, team.Secondary, Enum.Material.Neon, PAINT)
@@ -1087,7 +1160,12 @@ function HQRoomsFront.hq_lobby(ctx)
 	box(seating, "RugBorder", -89, FLOOR_TOP, 223, -57, 0.35, 245, team.Primary, Enum.Material.Carpet, PAINT)
 	box(seating, "Rug", -88, FLOOR_TOP, 224, -58, 0.38, 244, Color3.fromRGB(78, 80, 88), Enum.Material.Carpet, PAINT)
 	local sofaColor = Color3.fromRGB(96, 100, 112)
-	sofa(seating, frameAt(-73, 228, "N"), 12, sofaColor, shade(team.Primary, 0.85), { Object = "Lobby Sofa" })
+	-- (its middle cushion is a camera seat on the live Team Wall: step 2, so it always exists when
+	-- the sofas do - the big screen only comes with step 5)
+	sofa(seating, frameAt(-73, 228, "N"), 12, sofaColor, shade(team.Primary, 0.85), {
+		Object = "Lobby Sofa",
+		Camera = { From = Vector3.new(-130, 11, 226), To = Vector3.new(-130, 9.2, 246.2), Fov = 52, Label = "TEAM WALL - LIVE" },
+	})
 	sofa(seating, frameAt(-73, 240, "S"), 12, sofaColor, shade(team.Primary, 0.85), { Object = "Lobby Sofa" })
 	for _, side in ipairs({ { -83.5, "E" }, { -62.5, "W" } }) do
 		chair(seating, frameAt(side[1], 234, side[2]), team.Secondary, {
@@ -1157,7 +1235,7 @@ function HQRoomsFront.hq_lobby(ctx)
 	end
 	-- championship banners on poles either side of the case
 	for i, bx in ipairs({ -90, -54 }) do
-		cyl(trophies, "BannerPole", Vector3.new(bx, FLOOR_TOP + 8.5, 254.5), 17, 0.4, "Y", GOLD, Enum.Material.Metal)
+		cyl(trophies, "BannerPole", Vector3.new(bx, FLOOR_TOP + 8.15, 254.5), 16.3, 0.4, "Y", GOLD, Enum.Material.Metal)
 		local color = i == 1 and team.Primary or team.Secondary
 		local banner = box(trophies, "ChampionshipBanner", bx - 2.4, 7, 254.3, bx + 2.4, 16.4, 254.45, color, Enum.Material.Fabric)
 		sign(banner, Enum.NormalId.Front, i == 1 and "LEAGUE\nCHAMPIONS" or "DIVISION\nCHAMPIONS", color, team, {
@@ -1328,15 +1406,17 @@ function HQRoomsFront.hq_frontoffice(ctx)
 	box(draft, "WarRoomTable", -239, 2.8, 228, -233, 3.1, 248, WOOD, Enum.Material.Wood)
 	box(draft, "WarRoomTableBase", -237.5, FLOOR_TOP, 230, -234.5, 2.8, 246, DARK_WOOD, Enum.Material.Wood)
 	for i, cz in ipairs({ 231, 236, 241, 246 }) do
+		-- (the third chair is a camera seat: a close-up of the draft board)
 		chair(draft, frameAt(-230.6, cz, "W"), LEATHER_BLACK, {
 			Material = Enum.Material.Leather,
 			BackHeight = 2.8,
 			Object = "War Room Chair",
 			NoPrompt = i ~= 3,
+			Camera = i == 3 and { From = Vector3.new(-226, 8, 238), To = Vector3.new(-248, 6.8, 238), Fov = 58, Label = "DRAFT BOARD" }
+				or nil,
 		})
 	end
-	local phone = box(draft, "DraftPhone", -237, 3.1, 231, -235.8, 3.5, 232.2, Color3.fromRGB(200, 30, 30))
-	BuildUtil.Light(phone, "PointLight", { Name = "PhoneGlow", Range = 4, Brightness = 1, Color = Color3.fromRGB(255, 80, 80) })
+	local phone = box(draft, "DraftPhone", -237, 3.1, 231, -235.8, 3.5, 232.2, Color3.fromRGB(220, 40, 40), Enum.Material.Neon)
 	BuildUtil.Look(
 		phone,
 		"Draft Day Phone",
@@ -1452,6 +1532,67 @@ function HQRoomsFront.hq_frontoffice(ctx)
 	cyl(decor, "FloorLampPole", Vector3.new(-203, FLOOR_TOP + 3.6, 259), 7.2, 0.25, "Y", DARK_METAL, Enum.Material.Metal)
 	local lampShade = cyl(decor, "FloorLampShade", Vector3.new(-203, FLOOR_TOP + 7.6, 259), 1.6, 2, "Y", LAMP, Enum.Material.Fabric)
 	BuildUtil.Light(lampShade, "PointLight", { Name = "LampLight", Range = 18, Brightness = 1, Color = WARM_LIGHT })
+
+	-- two frames on the wood feature wall, either side of the logo: the owner's franchise
+	-- certificate (live owner name) and the first dollar the franchise ever earned
+	local paperColor = Color3.fromRGB(246, 240, 222)
+	box(decor, "CertificateFrame", -232.4, 5.6, 202.1, -227.6, 9.4, 202.3, GOLD, Enum.Material.Metal)
+	local certificate = box(decor, "Certificate", -232, 6, 202.3, -228, 9, 202.36, paperColor, Enum.Material.SmoothPlastic, NO_COLLIDE)
+	local certGui, ownerLabel = BuildUtil.LiveText(certificate, Enum.NormalId.Back, "owner", "OWNER", {
+		LabelName = "Live_owner",
+		TextColor3 = INK,
+		BackgroundColor3 = paperColor,
+		BackgroundTransparency = 0,
+		Font = Enum.Font.Garamond,
+		PixelsPerStud = 40,
+	})
+	ownerLabel.Size = UDim2.new(0.84, 0, 0.3, 0)
+	ownerLabel.Position = UDim2.new(0.08, 0, 0.42, 0)
+	guiText(certGui, 0.3, 0.25, 3.4, 0.7, "FRANCHISE CERTIFICATE", team.Primary, Enum.Font.GothamBlack)
+	guiFrame(certGui, 0.5, 1.05, 3, 0.04, GOLD)
+	guiText(certGui, 0.3, 2.35, 2.9, 0.35, "THIS TEAM BELONGS TO THE OWNER ABOVE", Color3.fromRGB(90, 80, 70), Enum.Font.Garamond)
+	guiDot(certGui, 3.6, 2.52, 0.45, Color3.fromRGB(200, 40, 40)) -- the wax seal
+	BuildUtil.Look(
+		certificate,
+		"Franchise Certificate",
+		"Official papers that say this whole franchise is yours: the stadium, the HQ and every player.",
+		{ LookKey = "owner", Distance = 9 }
+	)
+	box(decor, "DollarFrame", -220.4, 5.6, 202.1, -215.6, 9.4, 202.3, DARK_WOOD, Enum.Material.Wood)
+	local dollar = box(decor, "FirstDollar", -220, 6, 202.3, -216, 9, 202.36, paperColor, Enum.Material.SmoothPlastic, NO_COLLIDE)
+	local dollarGui = canvas(dollar, Enum.NormalId.Back, 40, paperColor, 1)
+	guiFrame(dollarGui, 0.5, 0.6, 3, 1.4, Color3.fromRGB(120, 168, 112))
+	guiFrame(dollarGui, 0.62, 0.72, 2.76, 1.16, Color3.fromRGB(176, 210, 160))
+	guiText(dollarGui, 0.7, 0.8, 0.8, 1, "1", Color3.fromRGB(40, 90, 50), Enum.Font.GothamBlack)
+	guiText(dollarGui, 2.5, 0.8, 0.8, 1, "1", Color3.fromRGB(40, 90, 50), Enum.Font.GothamBlack)
+	guiDot(dollarGui, 2, 1.3, 0.9, Color3.fromRGB(120, 168, 112))
+	guiText(dollarGui, 0.4, 2.25, 3.2, 0.45, "OUR FIRST DOLLAR", INK, Enum.Font.Garamond)
+	BuildUtil.Look(
+		dollar,
+		"Our First Dollar",
+		"The very first dollar this franchise ever earned, framed forever. Every great stadium starts with one!",
+		{ Distance = 9 }
+	)
+
+	-- a scale model of the stadium under glass, for planning upgrades
+	local pedestal = box(decor, "ModelPedestal", -217, FLOOR_TOP, 237, -211, 3.3, 243, DARK_WOOD, Enum.Material.Wood)
+	sign(pedestal, Enum.NormalId.Back, "OUR STADIUM", DARK_WOOD, team, { TextColor3 = GOLD, InsetX = 0.1, Top = 0.12, Height = 0.2 })
+	box(decor, "ModelField", -215.6, 3.3, 239, -212.4, 3.45, 241, Color3.fromRGB(58, 125, 52), Enum.Material.Grass)
+	for _, s in ipairs({
+		{ -216.4, 241, -211.6, 241.8 },
+		{ -216.4, 238.2, -211.6, 239 },
+		{ -216.4, 239, -215.6, 241 },
+		{ -212.4, 239, -211.6, 241 },
+	}) do
+		box(decor, "ModelStands", s[1], 3.3, s[2], s[3], 4.1, s[4], team.Primary)
+	end
+	box(decor, "ModelGlass", -216.8, 3.3, 237.2, -211.2, 5.4, 242.8, GLASS, Enum.Material.Glass, { Transparency = 0.75 })
+	BuildUtil.Look(
+		pedestal,
+		"Stadium Model",
+		"The GM's tiny model of your stadium, used to plan every upgrade. Buy more steps outside to make the real one even bigger!",
+		{ At = Vector3.new(0, 0.6, 3.1), Distance = 8 }
+	)
 end
 
 ---------------------------------------------------------------------------------------------
@@ -1525,7 +1666,8 @@ function HQRoomsFront.hq_coaches(ctx)
 		Openings = {
 			{ From = -197.5, To = -188, Sill = SILL_TOP, Mullions = 1 },
 			{ From = -178, To = -170 },
-			{ From = -167, To = -153, Sill = SILL_TOP, Mullions = 2 },
+			-- (the pier east of the doorway is as wide as a door leaf: the leaf slides into it)
+			{ From = -166, To = -153, Sill = SILL_TOP, Mullions = 2 },
 		},
 		Glass = true,
 		WallColor = wallColor,
@@ -1590,7 +1732,11 @@ function HQRoomsFront.hq_coaches(ctx)
 	})
 	ball(office, "Whistle", (desk * CFrame.new(-0.6, 3.3, 0.1)).Position, 0.4, CHROME, Enum.Material.Metal)
 	ball(office, "GameBall", (desk * CFrame.new(-4, 3.55, -0.9)).Position, 0.9, FOOTBALL, Enum.Material.Leather)
-	officeChair(office, frameAt(-189, 209.6, "N"), LEATHER_BLACK, { Object = "Head Coach's Chair" })
+	-- (a camera seat: sit down to watch the game film on the office TV)
+	officeChair(office, frameAt(-189, 209.6, "N"), LEATHER_BLACK, {
+		Object = "Head Coach's Chair",
+		Camera = { From = Vector3.new(-192.5, 7.2, 219.5), To = Vector3.new(-195.85, 6.85, 229.3), Fov = 34, Label = "GAME FILM" },
+	})
 	for i, gx in ipairs({ -192, -186 }) do
 		chair(office, frameAt(gx, 218.6, "S"), team.Secondary, {
 			Width = 2.4,
@@ -1784,11 +1930,14 @@ function HQRoomsFront.hq_interview(ctx)
 		DoorInfo = "Press conferences happen here. Step up to the podium and answer the reporters' questions!",
 	})
 	local backdrop = BuildUtil.Child(ctx, "Backdrop")
-	local panel = box(backdrop, "Backdrop", -42, FLOOR_TOP, 203.4, -8, 11.4, 204.2, WHITE)
+	-- the backdrop covers the whole front wall, so TV close-ups of the podium only ever show the
+	-- team pattern behind the speaker (never the facade glass)
+	local backX0, backX1 = -48.2, -1.8
+	local panel = box(backdrop, "Backdrop", backX0, FLOOR_TOP, 203.4, backX1, 11.4, 204.2, WHITE)
 	-- step-and-repeat: staggered rows of the team name and the monogram badge
 	local gui = canvas(panel, Enum.NormalId.Back, 14, WHITE, 1)
-	local W, H = 34, 11.08
-	local cols, rowsN = 4, 4
+	local W, H = backX1 - backX0, 11.08
+	local cols, rowsN = 5, 4
 	local cellW, cellH = W / cols, H / rowsN
 	local nameColor = contrastRatio(WHITE, team.Primary) >= 3 and team.Primary or INK
 	for r = 0, rowsN - 1 do
@@ -1814,10 +1963,11 @@ function HQRoomsFront.hq_interview(ctx)
 			end
 		end
 	end
-	for _, ex in ipairs({ -43, -8 }) do
+	for _, ex in ipairs({ backX0 - 1, backX1 }) do
 		box(backdrop, "BackdropEdge", ex, FLOOR_TOP, 203.3, ex + 1, 11.6, 204.3, team.Primary)
 	end
-	local header = box(backdrop, "BackdropHeader", -43, 11.6, 203.3, -7, WALL_TOP, 204.6, Color3.fromRGB(30, 30, 36))
+	local header =
+		box(backdrop, "BackdropHeader", backX0 - 1, 11.6, 203.3, backX1 + 1, WALL_TOP, 204.6, Color3.fromRGB(30, 30, 36))
 	sign(header, Enum.NormalId.Back, "PRESS CONFERENCE", Color3.fromRGB(30, 30, 36), team, { InsetX = 0.2, InsetY = 0.1 })
 	-- seen from the lobby: a PRESS ROOM panel and an ON AIR light
 	local lobbyPanel = box(backdrop, "LobbySign", -50.2, 3.5, 222, -50, 9.5, 246, team.Primary)
@@ -1832,10 +1982,11 @@ function HQRoomsFront.hq_interview(ctx)
 	box(stage, "Stage", -44, FLOOR_TOP, 204.2, -6, stageTop, 216, Color3.fromRGB(36, 36, 42), Enum.Material.WoodPlanks)
 	box(stage, "StageSkirt", -44.1, FLOOR_TOP, 216, -5.9, stageTop - 0.05, 216.2, team.Primary)
 	box(stage, "StageStep", -29, FLOOR_TOP, 216.2, -21, 0.9, 218.2, Color3.fromRGB(36, 36, 42), Enum.Material.WoodPlanks)
-	box(stage, "PanelTable", -34, 4, 207.2, -14, 4.3, 210.2, Color3.fromRGB(40, 40, 46))
-	local skirt = box(stage, "TableSkirt", -34, stageTop, 210, -14, 4, 210.25, team.Primary, Enum.Material.Fabric)
+	-- (the panel table leaves a 5-stud walk between it and the podium)
+	box(stage, "PanelTable", -33, 4, 207.2, -13, 4.3, 210.2, Color3.fromRGB(40, 40, 46))
+	local skirt = box(stage, "TableSkirt", -33, stageTop, 210, -13, 4, 210.25, team.Primary, Enum.Material.Fabric)
 	sign(skirt, Enum.NormalId.Back, name, team.Primary, team, { InsetX = 0.1, InsetY = 0.22 })
-	local seats = { { -29, "HEAD COACH" }, { -24, "QB #12" }, { -19, "GM" } }
+	local seats = { { -28, "HEAD COACH" }, { -23, "QB #12" }, { -18, "GM" } }
 	for i, s in ipairs(seats) do
 		chair(stage, frameAt(s[1], 206.1, "N", stageTop), LEATHER_BLACK, {
 			Material = Enum.Material.Leather,
@@ -1861,7 +2012,7 @@ function HQRoomsFront.hq_interview(ctx)
 		Info = "The reporters want to hear about the big game. Pick the best answers and the fans will love you!",
 		At = Vector3.new(0, 1.2, 1.6), -- on the speaker's side
 		Distance = 8,
-		Camera = { From = Vector3.new(-35, 6.6, 238), To = PODIUM_HEAD, Fov = 28 },
+		Camera = { From = Vector3.new(-35, 6.6, 238), To = PODIUM_HEAD, Fov = 22 },
 	})
 	local podiumFront = lblock(stage, podium, "PodiumFront", Vector3.new(2.6, 2.2, 0.12), 0, 0.8, -1.16, team.Primary)
 	sign(podiumFront, Enum.NormalId.Front, monogram(ctx), team.Primary, team, { InsetX = 0.2, InsetY = 0.15 })
@@ -1914,7 +2065,7 @@ function HQRoomsFront.hq_interview(ctx)
 		Color = DARK_METAL,
 		Material = Enum.Material.Metal,
 		Object = "Camera Operator's Stool",
-		Camera = { From = Vector3.new(-38, 6.5, 249.8), To = PODIUM_HEAD, Fov = 24, Label = "PRESS CONFERENCE - LIVE" },
+		Camera = { From = Vector3.new(-38, 7.4, 248.4), To = PODIUM_HEAD, Fov = 24, Label = "PRESS CONFERENCE - LIVE" },
 	})
 	for _, l in ipairs({ { -46, 221, -1.05 }, { -4, 221, 1.05 } }) do
 		cyl(press, "LightStand", Vector3.new(l[1], FLOOR_TOP + 3.6, l[2]), 7.2, 0.25, "Y", DARK_METAL, Enum.Material.Metal)
@@ -1932,7 +2083,30 @@ function HQRoomsFront.hq_interview(ctx)
 		)
 	end
 	box(press, "Cable", -40, FLOOR_TOP, 236, -39.7, 0.38, 251, BLACK, Enum.Material.Rubber, PAINT)
-	box(press, "Cable", -13, FLOOR_TOP, 222, -12.7, 0.38, 251, BLACK, Enum.Material.Rubber, PAINT)
+	box(press, "Cable", -9.8, FLOOR_TOP, 222, -9.5, 0.38, 251, BLACK, Enum.Material.Rubber, PAINT)
+	-- press monitors on both side walls: the latest score (west) and the team summary (east)
+	local westTV = box(press, "PressMonitor", -49.2, 5.4, 225, -48.9, 10.2, 234, BLACK)
+	local westScreen = box(press, "PressMonitorScreen", -48.9, 5.7, 225.3, -48.8, 9.9, 233.7, LED_DARK)
+	liveScreen(westScreen, Enum.NormalId.Right, "score", name .. " 0 - 0 VISITORS", {
+		TextColor3 = WHITE,
+		Font = Enum.Font.GothamBlack,
+		PixelsPerStud = 20,
+		Padding = 0.08,
+	})
+	BuildUtil.Look(
+		westTV,
+		"Press Monitor",
+		"Reporters check the latest score here before they fire off their questions. Win big and the questions get easy!",
+		{ LookKey = "record", At = Vector3.new(0.6, -1.6, 0), Distance = 9 }
+	)
+	box(press, "PressMonitor", -1.1, 5.4, 225, -0.8, 10.2, 234, BLACK)
+	local eastScreen = box(press, "PressMonitorScreen", -1.2, 5.7, 225.3, -1.1, 9.9, 233.7, LED_DARK)
+	liveScreen(eastScreen, Enum.NormalId.Left, "summary", name, {
+		TextColor3 = LED_TEXT,
+		Font = Enum.Font.GothamBold,
+		PixelsPerStud = 20,
+		Padding = 0.06,
+	})
 	-- ON AIR light over the door, inside the room
 	local live = box(press, "OnAirSign", -27, 9.6, 262.4, -21, 10.9, 262.8, ON_AIR_RED, Enum.Material.Neon)
 	sign(live, Enum.NormalId.Front, "ON AIR", ON_AIR_RED, team, { TextColor3 = WHITE, InsetX = 0.12, InsetY = 0.14, LightInfluence = 0 })
@@ -1976,6 +2150,12 @@ function HQRoomsFront.hq_meeting(ctx)
 	sign(namePanel, Enum.NormalId.Left, name, team.Primary, team, { InsetX = 0.05, InsetY = 0.12 })
 	local motto = box(walls, "Motto", 0.8, 8, 214, 1, 10.4, 250, team.Secondary)
 	sign(motto, Enum.NormalId.Right, "ONE TEAM - ONE GOAL", team.Secondary, team, { InsetX = 0.05, InsetY = 0.12 })
+	BuildUtil.Look(
+		motto,
+		"Team Motto",
+		"ONE TEAM - ONE GOAL! The whole squad shouts it together before every game day.",
+		{ At = Vector3.new(0.6, -3, 0), Distance = 9 }
+	)
 	-- framed posters on both side walls
 	local posters = {
 		{ 0.8, 1.05, 218, "PLAYOFFS\nBOUND", Enum.NormalId.Right },
@@ -2001,6 +2181,11 @@ function HQRoomsFront.hq_meeting(ctx)
 		local top = FLOOR_TOP + riseH * (r - 1)
 		box(seating, "Riser", 6, FLOOR_TOP, z0, 44, top, z1, riserColor, Enum.Material.Carpet)
 		box(seating, "RiserGlow", 6, top - 0.15, z0 - 0.08, 44, top - 0.05, z0, team.Secondary, Enum.Material.Neon, PAINT)
+	end
+	-- two steps up the back of the top riser in the middle aisle (from the door side)
+	for k, top in ipairs({ FLOOR_TOP + riseH * 2, FLOOR_TOP + riseH }) do
+		local z0 = 249.5 + (k - 1) * 1.6
+		box(seating, "BackStep", 22.8, FLOOR_TOP, z0, 27.2, top, z0 + 1.6, riserColor, Enum.Material.Carpet)
 	end
 	local seatXs = { 8, 12.5, 17, 21.5, 28.5, 33, 37.5, 42 }
 	for r, z in ipairs(rowZ) do
@@ -2058,6 +2243,12 @@ function HQRoomsFront.hq_meeting(ctx)
 	)
 	local summary = box(front, "SummaryScreen", 25.2, 3.2, 202.8, 41.4, 9.55, 202.95, LED_DARK)
 	liveScreen(summary, Enum.NormalId.Back, "summary", name, { TextColor3 = WHITE, PixelsPerStud = 16, Font = Enum.Font.GothamBlack })
+	BuildUtil.Look(
+		summary,
+		"Season Screen",
+		"Every game day is one week of the season. Win enough games to reach the playoffs, then win two more for the title!",
+		{ LookKey = "season", At = Vector3.new(0, -1.5, 0.2), Distance = 10 }
+	)
 	BuildUtil.Light(
 		summary,
 		"SurfaceLight",
@@ -2106,7 +2297,7 @@ local function arcade(ctx, z, bodyColor, glow, title, team)
 	guiText(gui, 0.2, 0.3, 2.4, 0.6, "PRESS START", WHITE, Enum.Font.Arcade)
 	guiRing(gui, 1.4, 1.5, 0.5, 0.08, glow)
 	guiFrame(gui, 0.4, 1.95, 2, 0.12, glow)
-	local marquee = lblock(ctx, f, "ArcadeMarquee", Vector3.new(3.4, 1.1, 1), 0, 6.6, -1.5, glow, Enum.Material.Neon)
+	local marquee = lblock(ctx, f, "ArcadeMarquee", Vector3.new(3.6, 1.1, 1), 0, 6.6, -1.5, glow, Enum.Material.Neon)
 	sign(
 		marquee,
 		Enum.NormalId.Front,
@@ -2153,12 +2344,18 @@ function HQRoomsFront.hq_lounge(ctx)
 	-- Step 2: sectional couch (a TV camera seat in the middle), big TV with the live score -----
 	BuildUtil.Stage(ctx, 2)
 	local tvArea = BuildUtil.Child(ctx, "TVCorner")
-	box(tvArea, "Rug", 70, FLOOR_TOP, 206, 97, 0.37, 226, Color3.fromRGB(70, 72, 80), Enum.Material.Carpet, PAINT)
+	box(tvArea, "Rug", 70, FLOOR_TOP, 206, 96.6, 0.37, 226, Color3.fromRGB(70, 72, 80), Enum.Material.Carpet, PAINT)
 	box(tvArea, "TVWall", 74, FLOOR_TOP, 201.5, 94, WALL_TOP, 202.3, Color3.fromRGB(56, 58, 66), Enum.Material.Slate)
 	box(tvArea, "TVConsole", 76, FLOOR_TOP, 202.3, 92, 2.2, 204.8, BLACK, Enum.Material.Wood)
 	box(tvArea, "Soundbar", 78, 2.2, 203.6, 90, 2.7, 204.3, DARK_METAL)
 	box(tvArea, "GameConsole", 90.6, 2.2, 202.8, 91.8, 3.6, 204.3, WHITE)
-	box(tvArea, "TV", 76.5, 3.2, 202.3, 91.5, 11.4, 203, BLACK)
+	local tvFrame = box(tvArea, "TV", 76.5, 3.2, 202.3, 91.5, 11.4, 203, BLACK)
+	BuildUtil.Look(
+		tvFrame,
+		"Players' Big TV",
+		"Game replays all day long! The players watch your last game here to spot what to do better next week.",
+		{ LookKey = "record", At = Vector3.new(-5.5, -3.4, 0.6), Distance = 9 }
+	)
 	local fieldGreen = Color3.fromRGB(18, 58, 30)
 	local tvScreen = box(tvArea, "TVScreen", 77, 3.7, 203, 91, 10.9, 203.1, fieldGreen)
 	liveScreen(tvScreen, Enum.NormalId.Back, "score", name .. " 0 - 0 VISITORS", {
@@ -2298,6 +2495,21 @@ function HQRoomsFront.hq_lounge(ctx)
 		{ Name = "MarqueeGlow", Face = Enum.NormalId.Right, Range = 10, Brightness = 1, Color = Color3.fromRGB(120, 220, 255) }
 	)
 	-- foosball table by the corridor wall: rods run across (Z), goals at the X ends
+	-- a glowing jukebox against the east wall (faces -X, into the room)
+	local jukebox = box(arcadeModel, "Jukebox", 95.8, FLOOR_TOP, 236.5, 98.4, 5.2, 240.5, DARK_WOOD, Enum.Material.Wood)
+	cyl(arcadeModel, "JukeboxArch", Vector3.new(97.1, 5.2, 238.5), 2.6, 4, "X", Color3.fromRGB(255, 150, 60), Enum.Material.Neon)
+	local playlist = box(arcadeModel, "JukeboxPanel", 95.6, 1.2, 237, 95.8, 4.6, 240, Color3.fromRGB(40, 20, 60), Enum.Material.Neon)
+	local jukeGui = canvas(playlist, Enum.NormalId.Left, 30, Color3.fromRGB(40, 20, 60), 0)
+	guiText(jukeGui, 0.2, 0.15, 2.6, 0.6, "JUKEBOX", Color3.fromRGB(255, 200, 90), Enum.Font.Arcade)
+	for i, song in ipairs({ "1. GAME DAY STOMP", "2. FOURTH & LOUD", "3. RUMBLE'S SHUFFLE" }) do
+		guiText(jukeGui, 0.25, 0.9 + (i - 1) * 0.7, 2.5, 0.45, song, WHITE, Enum.Font.Code, Enum.TextXAlignment.Left)
+	end
+	BuildUtil.Look(
+		jukebox,
+		"Jukebox",
+		"Loaded with the team's pump-up songs. Rumble the mascot picks the same dance song every single day!",
+		{ At = Vector3.new(-1.6, 0, 0), Distance = 8 }
+	)
 	box(arcadeModel, "FoosballLegs", 85.5, FLOOR_TOP, 252.6, 90.5, 2.4, 255.4, DARK_METAL, Enum.Material.Metal)
 	local foosball = box(arcadeModel, "FoosballBody", 84.5, 2.4, 251.5, 91.5, 3.3, 256.5, team.Primary)
 	BuildUtil.Look(
