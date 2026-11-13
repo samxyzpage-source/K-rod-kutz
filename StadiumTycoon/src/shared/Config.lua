@@ -67,6 +67,11 @@ Config.OwnerBonus = {
 	IntervalSeconds = 480,
 	MinimumCash = 250,
 	IncomeSeconds = 90, -- the bonus is worth this many seconds of income (or MinimumCash)
+	-- TESTING: while you play in Roblox Studio the bonus button is always ready and every click
+	-- gives StudioTestCash. Published games ignore this (it only works in Studio), so it can stay
+	-- on. Set StudioTestMode = false to test the normal 8-minute bonus in Studio.
+	StudioTestMode = true,
+	StudioTestCash = 1000000000, -- $1,000,000,000 per click
 }
 
 -- Draft + roster: draft players from the Front Office's draft board.

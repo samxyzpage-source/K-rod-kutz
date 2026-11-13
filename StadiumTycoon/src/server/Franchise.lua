@@ -18,6 +18,7 @@
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
@@ -28,6 +29,11 @@ local Format = require(Shared:WaitForChild("Format"))
 local PlayerData = require(script.Parent.PlayerData)
 
 local Franchise = {}
+
+-- Studio test mode: an always-ready bonus with lots of cash (never in a published game).
+local function studioTestBonus()
+	return Config.OwnerBonus.StudioTestMode == true and RunService:IsStudio()
+end
 
 local plotManager = nil
 local remotes = nil
@@ -415,7 +421,8 @@ local function publish(player)
 	player:SetAttribute("TrainUnlocked", trainUnlocked(player))
 	player:SetAttribute("TeamChosen", f.Team ~= nil)
 	player:SetAttribute("TeamNickname", f.Team and Config.TeamNicknames[f.Team.Nickname] or "")
-	player:SetAttribute("BonusReadyAt", Workspace:GetServerTimeNow() + math.max(0, f.NextBonus - os.time()))
+	local bonusWait = studioTestBonus() and 0 or math.max(0, f.NextBonus - os.time())
+	player:SetAttribute("BonusReadyAt", Workspace:GetServerTimeNow() + bonusWait)
 	-- leaderboard
 	local leaderstats = player:FindFirstChild("leaderstats")
 	if leaderstats then
@@ -490,10 +497,21 @@ local function onClaimBonus(player)
 		return
 	end
 	local f = franchiseOf(player)
-	if not f or os.time() < f.NextBonus then
+	if not f then
 		return
 	end
 	local settings = Config.OwnerBonus
+	if studioTestBonus() then
+		PlayerData.AddCash(player, settings.StudioTestCash)
+		f.Stats.Bonuses = (f.Stats.Bonuses or 0) + 1
+		PlayerData.MarkChanged(player)
+		notify(player, "STUDIO TEST BONUS!  +" .. Format.MoneyExact(settings.StudioTestCash), "cash")
+		Franchise.CheckQuests(player)
+		return
+	end
+	if os.time() < f.NextBonus then
+		return
+	end
 	local amount = math.max(settings.MinimumCash, math.floor(plotManager.GetBaseIncome(player) * settings.IncomeSeconds))
 	if PlayerData.AddCash(player, amount) then
 		f.NextBonus = os.time() + settings.IntervalSeconds
