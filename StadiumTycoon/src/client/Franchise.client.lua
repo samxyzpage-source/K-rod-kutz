@@ -141,7 +141,7 @@ local function updateBonus()
 	end
 	local left = readyAt - Workspace:GetServerTimeNow()
 	if left <= 0 then
-		bonusButton.Text = "CLAIM\nOWNER'S BONUS!"
+		bonusButton.Text = player:GetAttribute("TestBonus") and "GET $1B\nTEST CASH!" or "CLAIM\nOWNER'S BONUS!"
 		bonusButton.BackgroundColor3 = GOLD
 		bonusButton.TextColor3 = DARK
 		bonusButton.BackgroundTransparency = (math.sin(os.clock() * 6) + 1) * 0.12

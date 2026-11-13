@@ -1693,6 +1693,7 @@ local function runTests()
 	check(PlayerData.GetCash(hank) >= afterFirst + Config.OwnerBonus.StudioTestCash, "and it is always ready in Studio")
 	Franchise.CheckQuests(hank)
 	check((hank:GetAttribute("BonusReadyAt") or math.huge) <= workspace:GetServerTimeNow() + 0.5, "the bonus button shows CLAIM")
+	check(hank:GetAttribute("TestBonus") == true, "the bonus button knows it's test cash in Studio")
 
 	section("Game day")
 	local GameDay = requireNode("ServerScriptService/TycoonServer/GameDay")

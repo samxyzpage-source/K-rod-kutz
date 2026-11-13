@@ -423,6 +423,7 @@ local function publish(player)
 	player:SetAttribute("TeamNickname", f.Team and Config.TeamNicknames[f.Team.Nickname] or "")
 	local bonusWait = studioTestBonus() and 0 or math.max(0, f.NextBonus - os.time())
 	player:SetAttribute("BonusReadyAt", Workspace:GetServerTimeNow() + bonusWait)
+	player:SetAttribute("TestBonus", studioTestBonus()) -- the button says it's test cash
 	-- leaderboard
 	local leaderstats = player:FindFirstChild("leaderstats")
 	if leaderstats then

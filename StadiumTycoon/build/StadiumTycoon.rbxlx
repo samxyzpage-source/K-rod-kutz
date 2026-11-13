@@ -25843,6 +25843,7 @@ local function publish(player)
 	player:SetAttribute("TeamNickname", f.Team and Config.TeamNicknames[f.Team.Nickname] or "")
 	local bonusWait = studioTestBonus() and 0 or math.max(0, f.NextBonus - os.time())
 	player:SetAttribute("BonusReadyAt", Workspace:GetServerTimeNow() + bonusWait)
+	player:SetAttribute("TestBonus", studioTestBonus()) -- the button says it's test cash
 	-- leaderboard
 	local leaderstats = player:FindFirstChild("leaderstats")
 	if leaderstats then
@@ -30511,7 +30512,7 @@ local function updateBonus()
 	end
 	local left = readyAt - Workspace:GetServerTimeNow()
 	if left <= 0 then
-		bonusButton.Text = "CLAIM\nOWNER'S BONUS!"
+		bonusButton.Text = player:GetAttribute("TestBonus") and "GET $1B\nTEST CASH!" or "CLAIM\nOWNER'S BONUS!"
 		bonusButton.BackgroundColor3 = GOLD
 		bonusButton.TextColor3 = DARK
 		bonusButton.BackgroundTransparency = (math.sin(os.clock() * 6) + 1) * 0.12
