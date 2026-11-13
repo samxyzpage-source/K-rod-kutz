@@ -125,11 +125,10 @@ local function findLabel(plot, itemId, labelName)
 end
 
 local function updateVault(plot)
-	local label = plot.Refs.VaultLabel
-	if plot.Owner then
-		label.Text = Format.MoneyExact(math.floor(plot.Vault))
-	else
-		label.Text = "$0"
+	local text = plot.Owner and Format.MoneyExact(math.floor(plot.Vault)) or "$0"
+	plot.Refs.VaultLabel.Text = text
+	if plot.Refs.CampusVaultLabel then
+		plot.Refs.CampusVaultLabel.Text = text -- the campus "team safe" shows the same vault
 	end
 end
 
@@ -644,8 +643,25 @@ local function ownerIsOnPad(plot)
 	if not root then
 		return false
 	end
-	local offset = plot.Refs.CollectPad.CFrame:PointToObjectSpace(root.CFrame.Position)
-	return math.abs(offset.X) <= 4.5 and math.abs(offset.Z) <= 4.5 and offset.Y > -1 and offset.Y < 8
+	for _, pad in ipairs({ plot.Refs.CollectPad, plot.Refs.CampusCollectPad }) do
+		local offset = pad.CFrame:PointToObjectSpace(root.CFrame.Position)
+		if math.abs(offset.X) <= 4.5 and math.abs(offset.Z) <= 4.5 and offset.Y > -1 and offset.Y < 8 then
+			return true
+		end
+	end
+	return false
+end
+
+-- Team bus: touching one stop takes you to the other (plaza <-> practice campus).
+local function onBusTouched(hit, destination)
+	local player = playerFromHit(hit)
+	if not player or not cooldownReady(player, "bus", 2) then
+		return
+	end
+	local character = player.Character
+	if character then
+		character:PivotTo(destination)
+	end
 end
 
 ---------------------------------------------------------------------------------------------
@@ -764,6 +780,19 @@ function PlotManager.Init(parentFolder, remote)
 		refs.CollectPad.Touched:Connect(function(hit)
 			onCollectTouched(plot, hit)
 		end)
+		if refs.CampusCollectPad then
+			refs.CampusCollectPad.Touched:Connect(function(hit)
+				onCollectTouched(plot, hit)
+			end)
+		end
+		if refs.BusStopPlaza and refs.BusStopCampus then
+			refs.BusStopPlaza.Touched:Connect(function(hit)
+				onBusTouched(hit, refs.BusArriveCampus)
+			end)
+			refs.BusStopCampus.Touched:Connect(function(hit)
+				onBusTouched(hit, refs.BusArrivePlaza)
+			end)
+		end
 	end
 	updateFreePlots()
 end

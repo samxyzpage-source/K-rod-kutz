@@ -72,6 +72,17 @@ Config.BuildAnimation = true
 Config.RespawnAtPlot = true -- owners respawn at their own stadium
 Config.ShowGuideBeam = true -- a glowing beam points to your next buy button
 
+-- Game days: every IntervalSeconds a game day starts for everyone. Fans walk in, fill the
+-- stands you've built, and income is multiplied for DurationSeconds.
+Config.GameDay = {
+	Enabled = true,
+	IntervalSeconds = 240,
+	DurationSeconds = 60,
+	IncomeMultiplier = 2,
+	SeatedFans = 150, -- max seated fans per stadium (spread over the stands you own)
+	WalkingFans = 8, -- fans that walk in through the gate at kick-off
+}
+
 -- Sounds (client only). Set Id = "" to turn one off, or paste your own "rbxassetid://123..." ids.
 Config.Sounds = {
 	Purchase = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.6, Speed = 1 },
@@ -143,7 +154,9 @@ Config.Colors = {
 -- Layout (plot-local studs) ----------------------------------------------------------------
 local L = {}
 L.PlotWidth = 420 -- X
-L.PlotDepth = 400 -- Z
+L.PlotDepth = 400 -- Z depth of the original stadium area (front edge at -PlotDepth/2)
+L.PlotFrontZ = -200 -- front edge of the plot (faces the street)
+L.PlotBackZ = 200 -- back edge of the plot
 L.StreetWidth = 60 -- gap between the two rows of plots (spawn is in the middle)
 L.PlotGap = 30 -- gap between neighbouring plots on the same side of the street
 L.Yard = 2
@@ -1070,15 +1083,6 @@ local function lightTower(ctx, name, base, target)
 	local toField = Vector3.new(target.X - base.X, 0, target.Z - base.Z).Unit
 
 	BuildUtil.Block(tower, "TowerFooting", Vector3.new(8, 1.2, 8), base, C.ConcreteDark, Enum.Material.Concrete)
-	BuildUtil.Cylinder(tower, {
-		Name = "TowerMast",
-		Position = Vector3.new(base.X, (1.2 + MAST_TOP) / 2, base.Z),
-		Height = MAST_TOP - 1.2,
-		Diameter = 2.2,
-		Axis = "Y",
-		Color = C.Metal,
-		Material = Enum.Material.Metal,
-	})
 	-- tapered lattice legs from a wide base up to the service platform
 	for _, sx in ipairs({ -1, 1 }) do
 		for _, sz in ipairs({ -1, 1 }) do
@@ -1123,8 +1127,31 @@ local function lightTower(ctx, name, base, target)
 		Material = Enum.Material.Neon,
 	})
 
-	-- a smaller bank lower down (the main bank is too high for a 60 stud light to reach the turf)
-	local lowPosition = Vector3.new(base.X, LOW_BANK_Y, base.Z) + toField * 2
+	-- The bank leans toward the field, so its lower edge ends up right over the mast. A cross-arm
+	-- there carries it and the mast stops under the arm (instead of poking through the panels).
+	local armTop = (head * CFrame.new(0, -plateHeight / 2, 0.4)).Position.Y
+	local armCentre = Vector3.new(base.X, armTop - 0.5, base.Z)
+	BuildUtil.Part(tower, {
+		Name = "HeadCrossArm",
+		Size = Vector3.new(plateWidth - 3, 1, 2.4),
+		CFrame = CFrame.lookAt(armCentre, armCentre + toField),
+		Color = STEEL,
+		Material = Enum.Material.Metal,
+	})
+	local mastTop = armTop - 0.5
+	BuildUtil.Cylinder(tower, {
+		Name = "TowerMast",
+		Position = Vector3.new(base.X, (1.2 + mastTop) / 2, base.Z),
+		Height = mastTop - 1.2,
+		Diameter = 2.2,
+		Axis = "Y",
+		Color = C.Metal,
+		Material = Enum.Material.Metal,
+	})
+
+	-- a smaller bank lower down (the main bank is too high for a 60 stud light to reach the turf),
+	-- held far enough out that the lattice leg on the field side passes behind it
+	local lowPosition = Vector3.new(base.X, LOW_BANK_Y, base.Z) + toField * 3.8
 	floodBank(tower, CFrame.lookAt(lowPosition, target), 2, 1, Vector3.new(3.8, 3.2, 0.5), {
 		{ 1, 1, 80, 3 },
 	})
@@ -1454,6 +1481,8 @@ function Features.suites(ctx)
 	local zMid = (zFront + zBack) / 2
 	local slabBottom = floorY - 1.6
 	local glassBottom, glassTop = floorY + 0.8, ceilingY - 2
+	-- walls, sill and header fit between the two 0.8 end walls, so no faces are coplanar with them
+	local between = length - 1.6
 
 	for _, side in ipairs({ -1, 1 }) do
 		local section = BuildUtil.Child(ctx, side < 0 and "WestSuites" or "EastSuites")
@@ -1483,7 +1512,7 @@ function Features.suites(ctx)
 		BuildUtil.Box(
 			section,
 			"SuiteBackWall",
-			Vector3.new(length, ceilingY - floorY, 0.8),
+			Vector3.new(between, ceilingY - floorY, 0.8),
 			Vector3.new(cx, (floorY + ceilingY) / 2, zBack + 0.4),
 			C.Concrete,
 			Enum.Material.Concrete
@@ -1525,7 +1554,7 @@ function Features.suites(ctx)
 		BuildUtil.Box(
 			section,
 			"SuiteSill",
-			Vector3.new(length, glassBottom - floorY, 0.6),
+			Vector3.new(between, glassBottom - floorY, 0.6),
 			Vector3.new(cx, (floorY + glassBottom) / 2, frontZ),
 			team.Secondary,
 			Enum.Material.SmoothPlastic
@@ -1533,7 +1562,7 @@ function Features.suites(ctx)
 		BuildUtil.Box(
 			section,
 			"SuiteGlass",
-			Vector3.new(length - 1.6, glassTop - glassBottom, 0.3),
+			Vector3.new(between, glassTop - glassBottom, 0.3),
 			Vector3.new(cx, (glassBottom + glassTop) / 2, frontZ),
 			C.Glass,
 			Enum.Material.Glass,
@@ -1542,7 +1571,7 @@ function Features.suites(ctx)
 		sign(
 			section,
 			"SuiteHeader",
-			Vector3.new(length, ceilingY - glassTop, 0.6),
+			Vector3.new(between, ceilingY - glassTop, 0.6),
 			CFrame.new(cx, (glassTop + ceilingY) / 2, frontZ),
 			team.Secondary,
 			Enum.NormalId.Back,
@@ -1710,7 +1739,8 @@ function Features.canopy(ctx)
 		halfWidth = halfWidth,
 		masts = { -100, -55, 55, 100 },
 		fins = { -124, -100, -55, 0, 55, 100, 124 },
-		braceY = 24,
+		-- high enough that the braces clear the heads of fans standing on the deck's top row (y 26)
+		braceY = L.UpperTopHeight + 5,
 		braceDistance = 22,
 		text = "HOME OF THE " .. name,
 	})
@@ -2818,8 +2848,8 @@ function Plaza.ticketbooth(ctx)
 	BuildUtil.Block(
 		ctx,
 		"Door",
-		Vector3.new(0.2, 6.2, 3),
-		Vector3.new(backX - 0.2, 0, cz + 2.5),
+		Vector3.new(0.3, 6.2, 3),
+		Vector3.new(backX - 0.1, 0, cz + 2.5), -- set 0.05 into the wall (it used to hang 0.1 off it)
 		C.Wood,
 		Enum.Material.WoodPlanks,
 		nil,
@@ -2944,8 +2974,8 @@ function Plaza.concessions(ctx)
 	BuildUtil.Block(
 		ctx,
 		"BackDoor",
-		Vector3.new(0.2, 6.2, 3),
-		Vector3.new(backX - 0.2, 0, cz + 2),
+		Vector3.new(0.3, 6.2, 3),
+		Vector3.new(backX - 0.1, 0, cz + 2), -- set 0.05 into the wall (it used to hang 0.1 off it)
 		C.Wood,
 		Enum.Material.WoodPlanks,
 		nil,
@@ -3054,14 +3084,16 @@ function Plaza.concessions(ctx)
 		3.8
 	)
 
+	-- The awning only covers the serving window: a full-width one hung in front of the menu
+	-- board and hid most of it from the walkway (and from the usual raised camera).
 	stripedAwning(ctx, {
 		Name = "Awning",
 		WallX = frontX,
 		Reach = 5.4,
 		TopY = 7.85,
 		Drop = 1.5,
-		MinZ = STAND.MinZ + 0.3,
-		MaxZ = STAND.MaxZ - 0.3,
+		MinZ = windowZ - 3.2,
+		MaxZ = windowZ + 3.2,
 		Strips = 5,
 		Colors = { team.Primary, team.Trim },
 	})
@@ -3364,10 +3396,11 @@ function Plaza.parking(ctx)
 		team,
 		{ InsetY = 0.08 }
 	)
+	-- thicker than the 0.6 pole, so the pole doesn't poke through the middle of the text
 	local board = BuildUtil.Box(
 		ctx,
 		"ParkingBoard",
-		Vector3.new(0.3, 1.6, 6.4),
+		Vector3.new(0.9, 1.6, 6.4),
 		Vector3.new(signX, 11.6, signZ),
 		team.Trim,
 		Enum.Material.SmoothPlastic
@@ -3398,21 +3431,49 @@ function Plaza.teamstore(ctx)
 	local openWidth = openMaxZ - openMinZ
 	local glassX = frontX + 0.5
 
-	-- Shell: floor, three plaster walls, team-coloured corner piers + header, roof
+	-- Shell: floor, three plaster walls, team-coloured corner piers + header, roof.
+	-- The floor stops just inside the walls and the piers stand 0.1 proud of the walls, so no
+	-- two differently coloured faces share a plane (that z-fought along the storefront corners).
 	BuildUtil.Box(
 		ctx,
 		"Floor",
-		Vector3.new(length, floorTop, depth),
-		Vector3.new(midX, floorTop / 2, cz),
+		Vector3.new(length - 0.05, floorTop, depth - 0.1),
+		Vector3.new(midX - 0.025, floorTop / 2, cz),
 		STORE_FLOOR,
 		Enum.Material.Marble
 	)
 	BuildUtil.Block(ctx, "BackWall", Vector3.new(1, wallH, depth), Vector3.new(backX - 0.5, 0, cz), STORE_WALL, Enum.Material.Plaster)
 	BuildUtil.Block(ctx, "SouthWall", Vector3.new(length, wallH, 1), Vector3.new(midX, 0, southZ + 0.5), STORE_WALL, Enum.Material.Plaster)
 	BuildUtil.Block(ctx, "NorthWall", Vector3.new(length, wallH, 1), Vector3.new(midX, 0, northZ - 0.5), STORE_WALL, Enum.Material.Plaster)
-	for _, z in ipairs({ southZ + 2, northZ - 2 }) do
-		BuildUtil.Block(ctx, "Pier", Vector3.new(1, wallH, 4), Vector3.new(glassX, 0, z), team.Primary, Enum.Material.SmoothPlastic)
+	for _, z in ipairs({ southZ + 1.95, northZ - 1.95 }) do
+		BuildUtil.Block(ctx, "Pier", Vector3.new(1.2, wallH, 4.1), Vector3.new(glassX, 0, z), team.Primary, Enum.Material.SmoothPlastic)
 	end
+	-- team-coloured band along the top of the side and back walls (stands 0.15 proud of them)
+	local bandH = 1
+	local pierBackX = glassX + 0.6
+	local bandLength = backX + 0.15 - pierBackX
+	for _, z in ipairs({ southZ - 0.05, northZ + 0.05 }) do
+		BuildUtil.Block(
+			ctx,
+			"WallBand",
+			Vector3.new(bandLength, bandH, 0.2),
+			Vector3.new(pierBackX + bandLength / 2, 0, z),
+			team.Primary,
+			Enum.Material.SmoothPlastic,
+			nil,
+			wallH - bandH
+		)
+	end
+	BuildUtil.Block(
+		ctx,
+		"WallBand",
+		Vector3.new(0.2, bandH, depth + 0.3),
+		Vector3.new(backX + 0.05, 0, cz),
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		nil,
+		wallH - bandH
+	)
 	BuildUtil.Box(
 		ctx,
 		"Header",
@@ -3449,11 +3510,13 @@ function Plaza.teamstore(ctx)
 			glassProps
 		)
 	end
+	-- transom starts on top of the transom bar (sharing its bottom face made it flicker)
+	local transomBottom = doorTop + 0.3
 	BuildUtil.Box(
 		storefront,
 		"Transom",
-		Vector3.new(0.3, glassTop - doorTop, doorMaxZ - doorMinZ),
-		Vector3.new(glassX, (doorTop + glassTop) / 2, cz),
+		Vector3.new(0.3, glassTop - transomBottom, doorMaxZ - doorMinZ),
+		Vector3.new(glassX, (transomBottom + glassTop) / 2, cz),
 		C.Glass,
 		Enum.Material.Glass,
 		glassProps
@@ -3534,11 +3597,12 @@ function Plaza.teamstore(ctx)
 		Enum.Material.SmoothPlastic
 	)
 	sign(storeSign, { Enum.NormalId.Left }, "TEAM STORE", team.Secondary, team, { InsetY = 0.1 })
+	local sideMidX = (pierBackX + backX) / 2 -- middle of the plaster part of the south wall
 	BuildUtil.Box(
 		ctx,
 		"SideWindow",
 		Vector3.new(20, 4, 0.2),
-		Vector3.new(midX + 2, 5, southZ - 0.1),
+		Vector3.new(sideMidX, 5, southZ - 0.1),
 		C.Glass,
 		Enum.Material.Glass,
 		{ Transparency = 0.2 }
@@ -3546,8 +3610,8 @@ function Plaza.teamstore(ctx)
 	local nameSign = BuildUtil.Box(
 		ctx,
 		"NameSign",
-		Vector3.new(16, 3, 0.2),
-		Vector3.new(midX + 2, 9.4, southZ - 0.1),
+		Vector3.new(16, 2.8, 0.2),
+		Vector3.new(sideMidX, 9.4, southZ - 0.1),
 		team.Primary,
 		Enum.Material.SmoothPlastic
 	)
@@ -3792,8 +3856,6 @@ function Plaza.trophy(ctx)
 	)
 
 	-- Team flags on the corners of the bottom step
-	local flagYaw = CFrame.Angles(0, math.rad(45), 0)
-	local flagAxis = Vector3.new(1, 0, -1).Unit
 	local poleInset = 11.5
 	for i, corner in ipairs({ { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } }) do
 		local px, pz = cx + corner[1] * poleInset, cz + corner[2] * poleInset
@@ -3809,13 +3871,14 @@ function Plaza.trophy(ctx)
 			ctx,
 			{ Name = "FlagFinial", Position = Vector3.new(px, 13.45, pz), Diameter = 0.9, Color = C.Gold, Material = Enum.Material.Metal }
 		)
-		-- flags fly along the diagonal, away from the trophy
-		local outward = (corner[1] - corner[2] >= 0) and 1 or -1
-		local flagCenter = Vector3.new(px, 11.6, pz) + flagAxis * outward * 2.3
+		-- each flag flies along its own corner's diagonal, away from the trophy
+		-- (a part's local +X points along (cos a, 0, -sin a) after a yaw of a)
+		local outward = Vector3.new(corner[1], 0, corner[2]).Unit
+		local flagCenter = Vector3.new(px, 11.6, pz) + outward * 2.3
 		BuildUtil.Part(ctx, {
 			Name = "Flag",
 			Size = Vector3.new(4.2, 2.8, 0.15),
-			CFrame = CFrame.new(flagCenter) * flagYaw,
+			CFrame = CFrame.new(flagCenter) * CFrame.Angles(0, math.atan2(-corner[2], corner[1]), 0),
 			Color = (i % 2 == 1) and team.Primary or team.Secondary,
 			Material = Enum.Material.Fabric,
 			CanCollide = false,
@@ -4716,7 +4779,354 @@ return Stands
           </Properties>
         </Item>
       </Item>
-      <Item class="Script" referent="16">
+      <Item class="ModuleScript" referent="16">
+        <Properties>
+          <string name="Name">Crowd</string>
+          <string name="Source"><![CDATA[--[[
+	Crowd
+	Builds the simple NPC fans used on game days:
+	  * seated fans that fill the stands the owner has built
+	  * walking fans that stroll in from the entrance gate
+
+	Fans are a couple of anchored blocks (no Humanoids), so even a full crowd is cheap.
+	Every fan model is tagged "TycoonFan" by the GameDay module; the client makes them cheer.
+	Like the Builders, this module only uses BuildUtil + datatypes, so it can run in the
+	offline preview tools.
+]]
+
+local BuildUtil = require(script.Parent.BuildUtil)
+
+local Crowd = {}
+
+local SKIN_TONES = {
+	Color3.fromRGB(255, 220, 177),
+	Color3.fromRGB(234, 192, 134),
+	Color3.fromRGB(198, 134, 66),
+	Color3.fromRGB(141, 85, 36),
+	Color3.fromRGB(95, 60, 30),
+}
+local VISITOR_COLOR = Color3.fromRGB(150, 150, 158)
+
+--[[
+	Seat sections for each stands item, derived from Config.Layout. Every section has:
+	  origin   local CFrame at ground level, front-centre of row 1, LookVector pointing AWAY from the field
+	  length   row length (along the CFrame's X axis)
+	  rows     number of rows, firstHeight = top of row 1
+	  gaps     list of {from, to} offsets along the row that must stay empty (e.g. the tunnel)
+	  visitor  true = fans wear grey visitor colours
+]]
+function Crowd.SeatSections(layout, owned)
+	local L = layout
+	local sections = {}
+	local function add(itemId, origin, length, firstHeight, gaps, visitor)
+		if owned[itemId] then
+			table.insert(sections, {
+				origin = origin,
+				length = length,
+				rows = itemId:find("upper") and L.UpperRows or L.LowerRows,
+				firstHeight = firstHeight,
+				gaps = gaps or {},
+				visitor = visitor or false,
+			})
+		end
+	end
+	local sideLength = L.SidelineStandsHalfLength * 2
+	local tunnel = { { -L.TunnelHalfWidth - 1, L.TunnelHalfWidth + 1 } }
+	local endLength = L.FieldWidth
+	local back = CFrame.Angles(0, math.pi, 0)
+
+	add("bleachers_home", CFrame.new(0, 0, L.SurfaceMaxZ) * back, sideLength, L.RowRise)
+	add("upper_home", CFrame.new(0, 0, L.BackLowerOuterZ) * back, sideLength, L.UpperStartHeight)
+	add("bleachers_visitor", CFrame.new(0, 0, L.SurfaceMinZ), sideLength, L.RowRise, tunnel, true)
+	add("upper_visitor", CFrame.new(0, 0, L.FrontLowerOuterZ), sideLength, L.UpperStartHeight, tunnel, true)
+	add("endzone_stands_east", CFrame.new(L.SurfaceHalfX, 0, L.FieldCenterZ) * CFrame.Angles(0, -math.pi / 2, 0), endLength, L.RowRise)
+	add("endzone_stands_west", CFrame.new(-L.SurfaceHalfX, 0, L.FieldCenterZ) * CFrame.Angles(0, math.pi / 2, 0), endLength, L.RowRise)
+	return sections
+end
+
+local function inGap(offset, gaps)
+	for _, gap in ipairs(gaps) do
+		if offset >= gap[1] and offset <= gap[2] then
+			return true
+		end
+	end
+	return false
+end
+
+-- One seated fan: a jersey block and a head, sitting on top of a row, facing the field.
+local function seatedFan(ctx, seatCFrame, jersey, skin, number)
+	local fanCtx, model = BuildUtil.Child(ctx, "Fan" .. number)
+	BuildUtil.Part(fanCtx, {
+		Name = "Body",
+		Size = Vector3.new(2, 2.4, 1.2),
+		CFrame = seatCFrame * CFrame.new(0, 1.2, 0),
+		Color = jersey,
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		CastShadow = false,
+	})
+	BuildUtil.Part(fanCtx, {
+		Name = "Head",
+		Size = Vector3.new(1.3, 1.3, 1.3),
+		CFrame = seatCFrame * CFrame.new(0, 3.05, 0),
+		Color = skin,
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		CastShadow = false,
+	})
+	return model
+end
+
+--[[
+	Fills the owner's stands with up to `maxFans` seated fans.
+	ctx      BuildUtil context (ctx.parent = folder for the fans)
+	owned    set of owned item ids
+	rng      a Random object (or anything with :NextNumber() and :NextInteger(a, b))
+	Returns the list of fan models.
+]]
+function Crowd.SeatedFans(ctx, owned, maxFans, rng)
+	local L = ctx.config.Layout
+	local sections = Crowd.SeatSections(L, owned)
+	local fans = {}
+	if #sections == 0 or maxFans <= 0 then
+		return fans
+	end
+	local perSection = math.max(1, math.floor(maxFans / #sections))
+	local count = 0
+	for _, section in ipairs(sections) do
+		local placed = 0
+		local attempts = 0
+		local used = {}
+		while placed < perSection and attempts < perSection * 6 do
+			attempts += 1
+			local row = rng:NextInteger(1, section.rows)
+			local offset = (rng:NextNumber() - 0.5) * (section.length - 4)
+			local slot = row .. ":" .. math.floor(offset / 2.6)
+			if not inGap(offset, section.gaps) and not used[slot] then
+				used[slot] = true
+				local top = section.firstHeight + (row - 1) * L.RowRise
+				-- rows step along the section's LookVector; sit a little toward the field side of the row
+				local depth = (row - 0.5) * L.RowDepth - 0.6
+				-- the fan looks back toward the field (+Z of the section CFrame)
+				local seat = section.origin * CFrame.new(offset, top, -depth) * CFrame.Angles(0, math.pi, 0)
+				local jersey
+				if section.visitor and rng:NextNumber() < 0.5 then
+					jersey = VISITOR_COLOR
+				else
+					-- mix the team colours (plus white) so fans stand out against the seats
+					local roll = rng:NextNumber()
+					jersey = roll < 0.4 and ctx.colors.Secondary or (roll < 0.7 and ctx.colors.Trim or ctx.colors.Primary)
+				end
+				local skin = SKIN_TONES[rng:NextInteger(1, #SKIN_TONES)]
+				count += 1
+				table.insert(fans, seatedFan(ctx, seat, jersey, skin, count))
+				placed += 1
+			end
+		end
+	end
+	return fans
+end
+
+--[[
+	A walking fan for the entrance parade. Returns the model and its root part.
+	The root is anchored; the other parts are welded to it, so moving the root moves the fan.
+	startCFrame is plot-local.
+]]
+function Crowd.Walker(ctx, startCFrame, jersey, skin, number)
+	local fanCtx, model = BuildUtil.Child(ctx, "Walker" .. number)
+	local root = BuildUtil.Part(fanCtx, {
+		Name = "Root",
+		Size = Vector3.new(1.8, 2, 1),
+		CFrame = startCFrame * CFrame.new(0, 3, 0),
+		Color = jersey,
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		CastShadow = false,
+	})
+	local function welded(name, size, offset, color)
+		local part = BuildUtil.Part(fanCtx, {
+			Name = name,
+			Size = size,
+			CFrame = startCFrame * offset,
+			Color = color,
+			Material = Enum.Material.SmoothPlastic,
+			CanCollide = false,
+			CastShadow = false,
+		})
+		part.Anchored = false
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = root
+		weld.Part1 = part
+		weld.Parent = part
+		return part
+	end
+	welded("Head", Vector3.new(1.1, 1.1, 1.1), CFrame.new(0, 4.6, 0), skin)
+	welded("Legs", Vector3.new(1.6, 2, 0.9), CFrame.new(0, 1, 0), Color3.fromRGB(40, 44, 60))
+	model.PrimaryPart = root
+	return model, root
+end
+
+Crowd.SkinTones = SKIN_TONES
+Crowd.VisitorColor = VISITOR_COLOR
+
+return Crowd
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="17">
+        <Properties>
+          <string name="Name">GameDay</string>
+          <string name="Source"><![CDATA[--[[
+	GameDay
+	Every few minutes a GAME DAY starts for the whole server:
+	  * fans walk in through every claimed stadium's gate and fill the stands its owner built
+	  * income is multiplied (Config.GameDay.IncomeMultiplier) while it lasts
+	  * the jumbotron / scoreboard get excited and the HUD shows a countdown
+
+	Attributes on Workspace.Tycoons (read by the HUD):
+	  GameDayActive   true while a game day is on
+	  GameDayEndsAt   server time (workspace:GetServerTimeNow()) when it ends
+	  NextGameDayAt   server time when the next one starts
+]]
+
+local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+
+local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
+local Config = require(Shared:WaitForChild("Config"))
+
+local BuildUtil = require(script.Parent.BuildUtil)
+local Crowd = require(script.Parent.Crowd)
+
+local GameDay = {}
+
+local FAN_TAG = "TycoonFan" -- Effects.client.lua makes these cheer
+local CROWD_FOLDER = "GameDayFans"
+local WALK_SPEED = 12 -- studs per second
+
+local settings = Config.GameDay
+local tycoonsFolder = nil
+local plotManager = nil
+local active = false
+local rng = Random.new()
+
+local function serverNow()
+	return Workspace:GetServerTimeNow()
+end
+
+function GameDay.IsActive()
+	return active
+end
+
+-- Removes a plot's game-day crowd (also used when a plot is released).
+function GameDay.ClearCrowd(plot)
+	local folder = plot.Model:FindFirstChild(CROWD_FOLDER)
+	if folder then
+		folder:Destroy()
+	end
+end
+
+local function spawnWalkers(plot, folder, ctx)
+	local L = Config.Layout
+	for index = 1, settings.WalkingFans do
+		task.delay((index - 1) * 0.9, function()
+			if not active or folder.Parent == nil then
+				return
+			end
+			local x = rng:NextNumber(-L.WalkwayHalfWidth + 2, L.WalkwayHalfWidth - 2)
+			local facingStadium = CFrame.Angles(0, math.pi, 0) -- local +Z
+			local start = CFrame.new(x, 0, L.GateZ + 3) * facingStadium
+			local finish = CFrame.new(x * 0.6, 0, L.SurfaceMinZ - 2) * facingStadium
+			local jersey = (rng:NextNumber() < 0.6) and plot.Palette.Primary or plot.Palette.Secondary
+			local skin = Crowd.SkinTones[rng:NextInteger(1, #Crowd.SkinTones)]
+			local model, root = Crowd.Walker(ctx, start, jersey, skin, index)
+			local distance = (finish.Position - start.Position).Magnitude
+			local tween = TweenService:Create(
+				root,
+				TweenInfo.new(distance / WALK_SPEED, Enum.EasingStyle.Linear),
+				{ CFrame = plot.Origin * finish * CFrame.new(0, 3, 0) }
+			)
+			tween.Completed:Connect(function()
+				model:Destroy()
+			end)
+			tween:Play()
+		end)
+	end
+end
+
+local function spawnCrowd(plot)
+	GameDay.ClearCrowd(plot)
+	local folder = Instance.new("Folder")
+	folder.Name = CROWD_FOLDER
+	local ctx = BuildUtil.NewContext(plot.Origin, folder, plot.Palette, plot.TeamName, Config)
+	local fans = Crowd.SeatedFans(ctx, plot.Owned, settings.SeatedFans, rng)
+	for _, fan in ipairs(fans) do
+		CollectionService:AddTag(fan, FAN_TAG)
+	end
+	folder.Parent = plot.Model
+	spawnWalkers(plot, folder, ctx)
+	return #fans
+end
+
+local function beginGameDay()
+	active = true
+	tycoonsFolder:SetAttribute("GameDayEndsAt", serverNow() + settings.DurationSeconds)
+	tycoonsFolder:SetAttribute("GameDayActive", true)
+	plotManager.SetGameDay(true, settings.IncomeMultiplier)
+	for _, plot in ipairs(plotManager.GetPlots()) do
+		if plot.Owner then
+			local ok, err = pcall(spawnCrowd, plot)
+			if not ok then
+				warn("[GameDay] Couldn't spawn the crowd: " .. tostring(err))
+			end
+		end
+	end
+end
+
+local function endGameDay()
+	active = false
+	tycoonsFolder:SetAttribute("GameDayActive", false)
+	plotManager.SetGameDay(false, 1)
+	for _, plot in ipairs(plotManager.GetPlots()) do
+		GameDay.ClearCrowd(plot)
+	end
+end
+
+-- A plot claimed in the middle of a game day gets its crowd straight away.
+function GameDay.OnPlotClaimed(plot)
+	if active then
+		pcall(spawnCrowd, plot)
+	end
+end
+
+function GameDay.Init(folder, manager)
+	tycoonsFolder = folder
+	plotManager = manager
+	tycoonsFolder:SetAttribute("GameDayActive", false)
+end
+
+function GameDay.Start()
+	if not settings.Enabled then
+		return
+	end
+	task.spawn(function()
+		while true do
+			tycoonsFolder:SetAttribute("NextGameDayAt", serverNow() + settings.IntervalSeconds)
+			task.wait(settings.IntervalSeconds)
+			beginGameDay()
+			task.wait(settings.DurationSeconds)
+			endGameDay()
+		end
+	end)
+end
+
+return GameDay
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Script" referent="18">
         <Properties>
           <string name="Name">Main</string>
           <token name="RunContext">0</token>
@@ -4735,6 +5145,7 @@ local Config = require(ReplicatedStorage:WaitForChild("TycoonShared"):WaitForChi
 local World = require(script.Parent.World)
 local PlayerData = require(script.Parent.PlayerData)
 local PlotManager = require(script.Parent.PlotManager)
+local GameDay = require(script.Parent.GameDay)
 
 -- Remote used to show messages on players' screens
 local remotes = Instance.new("Folder")
@@ -4750,6 +5161,7 @@ local tycoonsFolder = Instance.new("Folder")
 tycoonsFolder.Name = "Tycoons"
 tycoonsFolder.Parent = Workspace
 PlotManager.Init(tycoonsFolder, notifyRemote)
+GameDay.Init(tycoonsFolder, PlotManager)
 World.StartDayNight(Config, PlotManager.SetNight)
 
 -- Players
@@ -4784,12 +5196,13 @@ end)
 
 PlayerData.StartAutosave()
 PlotManager.Start()
+GameDay.Start()
 
 print(("[%s] Ready with %d stadium plots."):format(Config.GameTitle, Config.PlotCount))
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="17">
+      <Item class="ModuleScript" referent="19">
         <Properties>
           <string name="Name">PlayerData</string>
           <string name="Source"><![CDATA[--[[
@@ -5090,8 +5503,8 @@ local function saveProfile(profile, release)
 	while profile.Saving do
 		task.wait(0.1)
 	end
-	if not store or not profile.CanSave then
-		return false
+	if not store or not profile.CanSave or (profile.Released and not release) then
+		return false -- (an autosave that was queued behind the final save has nothing left to do)
 	end
 	profile.Saving = true
 	local changesAtSave = profile.Changes
@@ -5233,7 +5646,7 @@ return PlayerData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="18">
+      <Item class="ModuleScript" referent="20">
         <Properties>
           <string name="Name">PlotManager</string>
           <string name="Source"><![CDATA[--[[
@@ -5262,6 +5675,7 @@ local Format = require(Shared:WaitForChild("Format"))
 
 local BuildUtil = require(script.Parent.BuildUtil)
 local Builders = require(script.Parent.Builders)
+local GameDay = require(script.Parent.GameDay)
 local PlayerData = require(script.Parent.PlayerData)
 local World = require(script.Parent.World)
 
@@ -5273,6 +5687,8 @@ local claiming = {} -- [Player] = true while waiting for their data
 local cooldowns = {} -- [Player] = { [key] = os.clock() }
 local notifyRemote = nil
 local isNight = false
+local incomeBoost = 1 -- multiplier while a game day is on
+local gameDayActive = false
 local rng = Random.new()
 
 local tycoonsFolder = nil
@@ -5360,11 +5776,10 @@ local function findLabel(plot, itemId, labelName)
 end
 
 local function updateVault(plot)
-	local label = plot.Refs.VaultLabel
-	if plot.Owner then
-		label.Text = Format.MoneyExact(math.floor(plot.Vault))
-	else
-		label.Text = "$0"
+	local text = plot.Owner and Format.MoneyExact(math.floor(plot.Vault)) or "$0"
+	plot.Refs.VaultLabel.Text = text
+	if plot.Refs.CampusVaultLabel then
+		plot.Refs.CampusVaultLabel.Text = text -- the campus "team safe" shows the same vault
 	end
 end
 
@@ -5417,7 +5832,7 @@ end
 local function updateOwnerAttributes(plot)
 	local owner = plot.Owner
 	if owner then
-		owner:SetAttribute("Income", plot.Income * Config.IncomeMultiplier)
+		owner:SetAttribute("Income", plot.Income * Config.IncomeMultiplier * incomeBoost)
 		owner:SetAttribute("Built", countOwned(plot))
 	end
 end
@@ -5749,6 +6164,7 @@ function PlotManager.Claim(plot, player, profile)
 		notify(player, "Stadium claimed! Step on the glowing button to start building.", "success")
 		notify(player, "Your money piles up in the VAULT by the gate - step on the green pad to collect it.", "info")
 	end
+	GameDay.OnPlotClaimed(plot)
 end
 
 local function onClaimTouched(plot, hit)
@@ -5820,6 +6236,7 @@ function PlotManager.Release(player)
 	end
 	plot.Buttons = {}
 	setGateClaimed(plot, nil)
+	GameDay.ClearCrowd(plot)
 	updateVault(plot)
 	updateFreePlots()
 	for _, other in ipairs(Players:GetPlayers()) do
@@ -5877,8 +6294,25 @@ local function ownerIsOnPad(plot)
 	if not root then
 		return false
 	end
-	local offset = plot.Refs.CollectPad.CFrame:PointToObjectSpace(root.CFrame.Position)
-	return math.abs(offset.X) <= 4.5 and math.abs(offset.Z) <= 4.5 and offset.Y > -1 and offset.Y < 8
+	for _, pad in ipairs({ plot.Refs.CollectPad, plot.Refs.CampusCollectPad }) do
+		local offset = pad.CFrame:PointToObjectSpace(root.CFrame.Position)
+		if math.abs(offset.X) <= 4.5 and math.abs(offset.Z) <= 4.5 and offset.Y > -1 and offset.Y < 8 then
+			return true
+		end
+	end
+	return false
+end
+
+-- Team bus: touching one stop takes you to the other (plaza <-> practice campus).
+local function onBusTouched(hit, destination)
+	local player = playerFromHit(hit)
+	if not player or not cooldownReady(player, "bus", 2) then
+		return
+	end
+	local character = player.Character
+	if character then
+		character:PivotTo(destination)
+	end
 end
 
 ---------------------------------------------------------------------------------------------
@@ -5893,6 +6327,15 @@ function PlotManager.SetNight(night)
 end
 
 local function jumbotronMessages(plot)
+	if gameDayActive then
+		return {
+			{ "GAME DAY!", Color3.fromRGB(255, 196, 37) },
+			{ plot.TeamName, plot.Palette.Primary },
+			{ "MAKE SOME NOISE!", plot.Palette.Secondary },
+			{ ("%dX CASH!"):format(incomeBoost), Color3.fromRGB(34, 150, 80) },
+			{ ("HOME %d - AWAY %d"):format(plot.HomeScore, plot.AwayScore), Color3.fromRGB(15, 15, 20) },
+		}
+	end
 	return {
 		{ plot.TeamName, plot.Palette.Primary },
 		{ "MAKE SOME NOISE!", plot.Palette.Secondary },
@@ -5988,6 +6431,19 @@ function PlotManager.Init(parentFolder, remote)
 		refs.CollectPad.Touched:Connect(function(hit)
 			onCollectTouched(plot, hit)
 		end)
+		if refs.CampusCollectPad then
+			refs.CampusCollectPad.Touched:Connect(function(hit)
+				onCollectTouched(plot, hit)
+			end)
+		end
+		if refs.BusStopPlaza and refs.BusStopCampus then
+			refs.BusStopPlaza.Touched:Connect(function(hit)
+				onBusTouched(hit, refs.BusArriveCampus)
+			end)
+			refs.BusStopCampus.Touched:Connect(function(hit)
+				onBusTouched(hit, refs.BusArrivePlaza)
+			end)
+		end
 	end
 	updateFreePlots()
 end
@@ -6022,7 +6478,7 @@ function PlotManager.Start()
 			task.wait(Config.IncomeTickSeconds)
 			for _, plot in ipairs(plots) do
 				if plot.Owner then
-					plot.Vault += plot.Income * Config.IncomeMultiplier * Config.IncomeTickSeconds
+					plot.Vault += plot.Income * Config.IncomeMultiplier * incomeBoost * Config.IncomeTickSeconds
 					if ownerIsOnPad(plot) then
 						collect(plot, true)
 					else
@@ -6049,24 +6505,53 @@ function PlotManager.Start()
 		end
 	end)
 
-	-- pretend football game
+	-- pretend football game (scores much more often on game days)
 	task.spawn(function()
+		local elapsed = 0
 		while true do
-			task.wait(25)
-			for _, plot in ipairs(plots) do
-				if plot.Owner then
-					simulateGame(plot)
+			task.wait(1)
+			elapsed += 1
+			if elapsed >= (gameDayActive and 8 or 25) then
+				elapsed = 0
+				for _, plot in ipairs(plots) do
+					if plot.Owner then
+						simulateGame(plot)
+					end
 				end
 			end
 		end
 	end)
 end
 
+function PlotManager.GetPlots()
+	return plots
+end
+
+-- Called by GameDay when a game day starts (active = true) or ends.
+function PlotManager.SetGameDay(active, multiplier)
+	gameDayActive = active
+	incomeBoost = active and multiplier or 1
+	for _, plot in ipairs(plots) do
+		if plot.Owner then
+			updateOwnerAttributes(plot)
+			if active then
+				notify(plot.Owner, ("GAME DAY! Fans are pouring in - %dX CASH!"):format(incomeBoost), "success")
+				if plot.ItemModels.jumbotron then
+					plot.JumbotronHoldUntil = os.clock() + 4
+					showOnJumbotron(plot, "GAME DAY!", Color3.fromRGB(255, 196, 37))
+				end
+			else
+				notify(plot.Owner, "That's the final whistle! The next game day starts soon.", "info")
+			end
+		end
+	end
+end
+
 return PlotManager
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="19">
+      <Item class="ModuleScript" referent="21">
         <Properties>
           <string name="Name">World</string>
           <string name="Source"><![CDATA[--[[
@@ -6087,7 +6572,9 @@ function World.GetPlotOrigins(config)
 	local count = math.clamp(math.floor(config.PlotCount), 1, 6)
 	local perSide = math.ceil(count / 2)
 	local spacing = L.PlotWidth + L.PlotGap
-	local zOffset = L.StreetWidth / 2 + L.PlotDepth / 2
+	-- the plot origin sits -PlotFrontZ studs behind the plot's front edge (the plot can be
+	-- deeper at the back than at the front)
+	local zOffset = L.StreetWidth / 2 - L.PlotFrontZ
 	local origins = {}
 	for index = 1, count do
 		local onSouthSide = (index % 2 == 0)
@@ -6151,7 +6638,7 @@ function World.Build(config)
 		local groundWidth = math.min(2048, streetLength + 400)
 		makePart({
 			Name = "Ground",
-			Size = Vector3.new(groundWidth, 4, math.min(2048, L.StreetWidth + L.PlotDepth * 2 + 400)),
+			Size = Vector3.new(groundWidth, 4, math.min(2048, L.StreetWidth + (L.PlotBackZ - L.PlotFrontZ) * 2 + 400)),
 			CFrame = CFrame.new(0, -2, 0),
 			Color = Color3.fromRGB(76, 140, 66),
 			Material = Enum.Material.Grass,
@@ -6259,19 +6746,19 @@ return World
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="20">
+  <Item class="StarterPlayer" referent="22">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="21">
+    <Item class="StarterPlayerScripts" referent="23">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="22">
+      <Item class="Folder" referent="24">
         <Properties>
           <string name="Name">TycoonClient</string>
         </Properties>
-        <Item class="LocalScript" referent="23">
+        <Item class="LocalScript" referent="25">
           <Properties>
             <string name="Name">Effects</string>
             <string name="Source"><![CDATA[--[[
@@ -6281,6 +6768,8 @@ return World
 	  * a guide beam points from your character to the button for your next goal
 	    (server sets the player attribute "NextGoal" to an item id)
 	  * small sounds for purchases and collecting cash (Config.Sounds)
+	  * game-day fans (tagged "TycoonFan" by the server) bounce and cheer - only on this
+	    screen, so it costs no network traffic
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -6296,7 +6785,9 @@ local Config = require(Shared:WaitForChild("Config"))
 local notifyRemote = ReplicatedStorage:WaitForChild("TycoonRemotes"):WaitForChild("Notify")
 
 local BUTTON_TAG = "TycoonBuyButton"
+local FAN_TAG = "TycoonFan"
 local GUIDE_HIDE_DISTANCE = 18
+local FAN_ANIMATE_DISTANCE = 260
 
 ---------------------------------------------------------------------------------------------
 -- Pulsing buy buttons
@@ -6317,7 +6808,60 @@ CollectionService:GetInstanceRemovedSignal(BUTTON_TAG):Connect(function(pad)
 	buttons[pad] = nil
 end)
 
+---------------------------------------------------------------------------------------------
+-- Cheering fans
+---------------------------------------------------------------------------------------------
+local fans = {} -- [Model] = { parts = { {part, restingCFrame} }, phase, speed }
+
+local function scanFan(model, entry)
+	entry.parts = {}
+	for _, descendant in ipairs(model:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			table.insert(entry.parts, { descendant, descendant.CFrame })
+		end
+	end
+end
+
+local function trackFan(model)
+	if not model:IsA("Model") then
+		return
+	end
+	local entry = { parts = {}, phase = math.random() * math.pi * 2, speed = 5 + math.random() * 3 }
+	scanFan(model, entry)
+	fans[model] = entry
+end
+
+for _, model in ipairs(CollectionService:GetTagged(FAN_TAG)) do
+	trackFan(model)
+end
+CollectionService:GetInstanceAddedSignal(FAN_TAG):Connect(trackFan)
+CollectionService:GetInstanceRemovedSignal(FAN_TAG):Connect(function(model)
+	fans[model] = nil
+end)
+
+local function animateFans(now)
+	local camera = Workspace.CurrentCamera
+	local cameraPosition = camera and camera.CFrame.Position or Vector3.new()
+	for model, entry in pairs(fans) do
+		if model.Parent == nil then
+			fans[model] = nil
+		else
+			if #entry.parts < 2 then
+				scanFan(model, entry) -- children may replicate a moment after the tag
+			end
+			local first = entry.parts[1]
+			if first and (first[2].Position - cameraPosition).Magnitude < FAN_ANIMATE_DISTANCE then
+				local lift = math.max(0, math.sin(now * entry.speed + entry.phase)) * 0.9
+				for _, pair in ipairs(entry.parts) do
+					pair[1].CFrame = pair[2] + Vector3.new(0, lift, 0)
+				end
+			end
+		end
+	end
+end
+
 RunService.RenderStepped:Connect(function()
+	animateFans(os.clock())
 	local wave = (math.sin(os.clock() * 4) + 1) / 2 -- 0..1
 	for pad in pairs(buttons) do
 		if pad.Parent then
@@ -6436,7 +6980,7 @@ end)
 ]]></string>
           </Properties>
         </Item>
-        <Item class="LocalScript" referent="24">
+        <Item class="LocalScript" referent="26">
           <Properties>
             <string name="Name">HUD</string>
             <string name="Source"><![CDATA[--[[
@@ -6454,6 +6998,7 @@ local Workspace = game:GetService("Workspace")
 local player = Players.LocalPlayer
 local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
 local Format = require(Shared:WaitForChild("Format"))
+local Config = require(Shared:WaitForChild("Config"))
 local Items = require(Shared:WaitForChild("Items"))
 local notifyRemote = ReplicatedStorage:WaitForChild("TycoonRemotes"):WaitForChild("Notify")
 
@@ -6570,6 +7115,21 @@ local hintLabel = create("TextLabel", {
 	create("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }),
 })
 
+local gameDayLabel = create("TextLabel", {
+	Name = "GameDay",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 132),
+	Size = UDim2.new(0, 270, 0, 26),
+	BackgroundColor3 = Color3.fromRGB(18, 22, 30),
+	BackgroundTransparency = 0.35,
+	Font = Enum.Font.GothamBold,
+	Text = "",
+	TextColor3 = Color3.fromRGB(220, 220, 225),
+	TextScaled = true,
+	Visible = false,
+	Parent = screen,
+}, { corner(8), create("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }) })
+
 local saveLabel = create("TextLabel", {
 	Name = "SaveStatus",
 	AnchorPoint = Vector2.new(0, 1),
@@ -6685,6 +7245,46 @@ onBuiltChanged()
 onSaveStatusChanged()
 
 ---------------------------------------------------------------------------------------------
+-- Game day banner (countdown to the next game day, or time left in the current one)
+---------------------------------------------------------------------------------------------
+local function clock(seconds)
+	seconds = math.max(0, math.floor(seconds))
+	return ("%d:%02d"):format(math.floor(seconds / 60), seconds % 60)
+end
+
+local function updateGameDay()
+	if not tycoonsFolder or player:GetAttribute("PlotIndex") == nil then
+		gameDayLabel.Visible = false
+		return
+	end
+	local now = Workspace:GetServerTimeNow()
+	if tycoonsFolder:GetAttribute("GameDayActive") then
+		local multiplier = Config.GameDay and Config.GameDay.IncomeMultiplier or 2
+		local endsAt = tycoonsFolder:GetAttribute("GameDayEndsAt") or now
+		gameDayLabel.Text = ("GAME DAY!  %dX CASH  %s"):format(multiplier, clock(endsAt - now))
+		gameDayLabel.BackgroundColor3 = Color3.fromRGB(255, 196, 37)
+		gameDayLabel.BackgroundTransparency = 0.05 + (math.sin(os.clock() * 6) + 1) * 0.1
+		gameDayLabel.TextColor3 = Color3.fromRGB(25, 25, 30)
+		gameDayLabel.Visible = true
+	elseif tycoonsFolder:GetAttribute("NextGameDayAt") then
+		gameDayLabel.Text = "Next game day in " .. clock(tycoonsFolder:GetAttribute("NextGameDayAt") - now)
+		gameDayLabel.BackgroundColor3 = Color3.fromRGB(18, 22, 30)
+		gameDayLabel.BackgroundTransparency = 0.35
+		gameDayLabel.TextColor3 = Color3.fromRGB(220, 220, 225)
+		gameDayLabel.Visible = true
+	else
+		gameDayLabel.Visible = false
+	end
+end
+
+task.spawn(function()
+	while true do
+		updateGameDay()
+		task.wait(0.2)
+	end
+end)
+
+---------------------------------------------------------------------------------------------
 -- Toast notifications
 ---------------------------------------------------------------------------------------------
 local toastOrder = 0
@@ -6782,13 +7382,13 @@ notifyRemote.OnClientEvent:Connect(showToast)
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="25">
+  <Item class="Workspace" referent="27">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
       <bool name="StreamingEnabled">false</bool>
     </Properties>
-    <Item class="Part" referent="26">
+    <Item class="Part" referent="28">
       <Properties>
         <string name="Name">Ground</string>
         <bool name="Anchored">true</bool>
@@ -6818,7 +7418,7 @@ notifyRemote.OnClientEvent:Connect(showToast)
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="27">
+    <Item class="SpawnLocation" referent="29">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>

@@ -41,7 +41,7 @@ Config.GameDay = {
 	IntervalSeconds = 240,
 	DurationSeconds = 60,
 	IncomeMultiplier = 2,
-	SeatedFans = 72, -- max seated fans per stadium (spread over the stands you own)
+	SeatedFans = 150, -- max seated fans per stadium (spread over the stands you own)
 	WalkingFans = 8, -- fans that walk in through the gate at kick-off
 }
 
@@ -116,7 +116,9 @@ Config.Colors = {
 -- Layout (plot-local studs) ----------------------------------------------------------------
 local L = {}
 L.PlotWidth = 420 -- X
-L.PlotDepth = 400 -- Z
+L.PlotDepth = 400 -- Z depth of the original stadium area (front edge at -PlotDepth/2)
+L.PlotFrontZ = -200 -- front edge of the plot (faces the street)
+L.PlotBackZ = 200 -- back edge of the plot
 L.StreetWidth = 60 -- gap between the two rows of plots (spawn is in the middle)
 L.PlotGap = 30 -- gap between neighbouring plots on the same side of the street
 L.Yard = 2

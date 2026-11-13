@@ -16,7 +16,9 @@ function World.GetPlotOrigins(config)
 	local count = math.clamp(math.floor(config.PlotCount), 1, 6)
 	local perSide = math.ceil(count / 2)
 	local spacing = L.PlotWidth + L.PlotGap
-	local zOffset = L.StreetWidth / 2 + L.PlotDepth / 2
+	-- the plot origin sits -PlotFrontZ studs behind the plot's front edge (the plot can be
+	-- deeper at the back than at the front)
+	local zOffset = L.StreetWidth / 2 - L.PlotFrontZ
 	local origins = {}
 	for index = 1, count do
 		local onSouthSide = (index % 2 == 0)
@@ -80,7 +82,7 @@ function World.Build(config)
 		local groundWidth = math.min(2048, streetLength + 400)
 		makePart({
 			Name = "Ground",
-			Size = Vector3.new(groundWidth, 4, math.min(2048, L.StreetWidth + L.PlotDepth * 2 + 400)),
+			Size = Vector3.new(groundWidth, 4, math.min(2048, L.StreetWidth + (L.PlotBackZ - L.PlotFrontZ) * 2 + 400)),
 			CFrame = CFrame.new(0, -2, 0),
 			Color = Color3.fromRGB(76, 140, 66),
 			Material = Enum.Material.Grass,

@@ -363,8 +363,8 @@ function Plaza.ticketbooth(ctx)
 	BuildUtil.Block(
 		ctx,
 		"Door",
-		Vector3.new(0.2, 6.2, 3),
-		Vector3.new(backX - 0.2, 0, cz + 2.5),
+		Vector3.new(0.3, 6.2, 3),
+		Vector3.new(backX - 0.1, 0, cz + 2.5), -- set 0.05 into the wall (it used to hang 0.1 off it)
 		C.Wood,
 		Enum.Material.WoodPlanks,
 		nil,
@@ -489,8 +489,8 @@ function Plaza.concessions(ctx)
 	BuildUtil.Block(
 		ctx,
 		"BackDoor",
-		Vector3.new(0.2, 6.2, 3),
-		Vector3.new(backX - 0.2, 0, cz + 2),
+		Vector3.new(0.3, 6.2, 3),
+		Vector3.new(backX - 0.1, 0, cz + 2), -- set 0.05 into the wall (it used to hang 0.1 off it)
 		C.Wood,
 		Enum.Material.WoodPlanks,
 		nil,
@@ -599,14 +599,16 @@ function Plaza.concessions(ctx)
 		3.8
 	)
 
+	-- The awning only covers the serving window: a full-width one hung in front of the menu
+	-- board and hid most of it from the walkway (and from the usual raised camera).
 	stripedAwning(ctx, {
 		Name = "Awning",
 		WallX = frontX,
 		Reach = 5.4,
 		TopY = 7.85,
 		Drop = 1.5,
-		MinZ = STAND.MinZ + 0.3,
-		MaxZ = STAND.MaxZ - 0.3,
+		MinZ = windowZ - 3.2,
+		MaxZ = windowZ + 3.2,
 		Strips = 5,
 		Colors = { team.Primary, team.Trim },
 	})
@@ -909,10 +911,11 @@ function Plaza.parking(ctx)
 		team,
 		{ InsetY = 0.08 }
 	)
+	-- thicker than the 0.6 pole, so the pole doesn't poke through the middle of the text
 	local board = BuildUtil.Box(
 		ctx,
 		"ParkingBoard",
-		Vector3.new(0.3, 1.6, 6.4),
+		Vector3.new(0.9, 1.6, 6.4),
 		Vector3.new(signX, 11.6, signZ),
 		team.Trim,
 		Enum.Material.SmoothPlastic
@@ -943,21 +946,49 @@ function Plaza.teamstore(ctx)
 	local openWidth = openMaxZ - openMinZ
 	local glassX = frontX + 0.5
 
-	-- Shell: floor, three plaster walls, team-coloured corner piers + header, roof
+	-- Shell: floor, three plaster walls, team-coloured corner piers + header, roof.
+	-- The floor stops just inside the walls and the piers stand 0.1 proud of the walls, so no
+	-- two differently coloured faces share a plane (that z-fought along the storefront corners).
 	BuildUtil.Box(
 		ctx,
 		"Floor",
-		Vector3.new(length, floorTop, depth),
-		Vector3.new(midX, floorTop / 2, cz),
+		Vector3.new(length - 0.05, floorTop, depth - 0.1),
+		Vector3.new(midX - 0.025, floorTop / 2, cz),
 		STORE_FLOOR,
 		Enum.Material.Marble
 	)
 	BuildUtil.Block(ctx, "BackWall", Vector3.new(1, wallH, depth), Vector3.new(backX - 0.5, 0, cz), STORE_WALL, Enum.Material.Plaster)
 	BuildUtil.Block(ctx, "SouthWall", Vector3.new(length, wallH, 1), Vector3.new(midX, 0, southZ + 0.5), STORE_WALL, Enum.Material.Plaster)
 	BuildUtil.Block(ctx, "NorthWall", Vector3.new(length, wallH, 1), Vector3.new(midX, 0, northZ - 0.5), STORE_WALL, Enum.Material.Plaster)
-	for _, z in ipairs({ southZ + 2, northZ - 2 }) do
-		BuildUtil.Block(ctx, "Pier", Vector3.new(1, wallH, 4), Vector3.new(glassX, 0, z), team.Primary, Enum.Material.SmoothPlastic)
+	for _, z in ipairs({ southZ + 1.95, northZ - 1.95 }) do
+		BuildUtil.Block(ctx, "Pier", Vector3.new(1.2, wallH, 4.1), Vector3.new(glassX, 0, z), team.Primary, Enum.Material.SmoothPlastic)
 	end
+	-- team-coloured band along the top of the side and back walls (stands 0.15 proud of them)
+	local bandH = 1
+	local pierBackX = glassX + 0.6
+	local bandLength = backX + 0.15 - pierBackX
+	for _, z in ipairs({ southZ - 0.05, northZ + 0.05 }) do
+		BuildUtil.Block(
+			ctx,
+			"WallBand",
+			Vector3.new(bandLength, bandH, 0.2),
+			Vector3.new(pierBackX + bandLength / 2, 0, z),
+			team.Primary,
+			Enum.Material.SmoothPlastic,
+			nil,
+			wallH - bandH
+		)
+	end
+	BuildUtil.Block(
+		ctx,
+		"WallBand",
+		Vector3.new(0.2, bandH, depth + 0.3),
+		Vector3.new(backX + 0.05, 0, cz),
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		nil,
+		wallH - bandH
+	)
 	BuildUtil.Box(
 		ctx,
 		"Header",
@@ -994,11 +1025,13 @@ function Plaza.teamstore(ctx)
 			glassProps
 		)
 	end
+	-- transom starts on top of the transom bar (sharing its bottom face made it flicker)
+	local transomBottom = doorTop + 0.3
 	BuildUtil.Box(
 		storefront,
 		"Transom",
-		Vector3.new(0.3, glassTop - doorTop, doorMaxZ - doorMinZ),
-		Vector3.new(glassX, (doorTop + glassTop) / 2, cz),
+		Vector3.new(0.3, glassTop - transomBottom, doorMaxZ - doorMinZ),
+		Vector3.new(glassX, (transomBottom + glassTop) / 2, cz),
 		C.Glass,
 		Enum.Material.Glass,
 		glassProps
@@ -1079,11 +1112,12 @@ function Plaza.teamstore(ctx)
 		Enum.Material.SmoothPlastic
 	)
 	sign(storeSign, { Enum.NormalId.Left }, "TEAM STORE", team.Secondary, team, { InsetY = 0.1 })
+	local sideMidX = (pierBackX + backX) / 2 -- middle of the plaster part of the south wall
 	BuildUtil.Box(
 		ctx,
 		"SideWindow",
 		Vector3.new(20, 4, 0.2),
-		Vector3.new(midX + 2, 5, southZ - 0.1),
+		Vector3.new(sideMidX, 5, southZ - 0.1),
 		C.Glass,
 		Enum.Material.Glass,
 		{ Transparency = 0.2 }
@@ -1091,8 +1125,8 @@ function Plaza.teamstore(ctx)
 	local nameSign = BuildUtil.Box(
 		ctx,
 		"NameSign",
-		Vector3.new(16, 3, 0.2),
-		Vector3.new(midX + 2, 9.4, southZ - 0.1),
+		Vector3.new(16, 2.8, 0.2),
+		Vector3.new(sideMidX, 9.4, southZ - 0.1),
 		team.Primary,
 		Enum.Material.SmoothPlastic
 	)
@@ -1337,8 +1371,6 @@ function Plaza.trophy(ctx)
 	)
 
 	-- Team flags on the corners of the bottom step
-	local flagYaw = CFrame.Angles(0, math.rad(45), 0)
-	local flagAxis = Vector3.new(1, 0, -1).Unit
 	local poleInset = 11.5
 	for i, corner in ipairs({ { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } }) do
 		local px, pz = cx + corner[1] * poleInset, cz + corner[2] * poleInset
@@ -1354,13 +1386,14 @@ function Plaza.trophy(ctx)
 			ctx,
 			{ Name = "FlagFinial", Position = Vector3.new(px, 13.45, pz), Diameter = 0.9, Color = C.Gold, Material = Enum.Material.Metal }
 		)
-		-- flags fly along the diagonal, away from the trophy
-		local outward = (corner[1] - corner[2] >= 0) and 1 or -1
-		local flagCenter = Vector3.new(px, 11.6, pz) + flagAxis * outward * 2.3
+		-- each flag flies along its own corner's diagonal, away from the trophy
+		-- (a part's local +X points along (cos a, 0, -sin a) after a yaw of a)
+		local outward = Vector3.new(corner[1], 0, corner[2]).Unit
+		local flagCenter = Vector3.new(px, 11.6, pz) + outward * 2.3
 		BuildUtil.Part(ctx, {
 			Name = "Flag",
 			Size = Vector3.new(4.2, 2.8, 0.15),
-			CFrame = CFrame.new(flagCenter) * flagYaw,
+			CFrame = CFrame.new(flagCenter) * CFrame.Angles(0, math.atan2(-corner[2], corner[1]), 0),
 			Color = (i % 2 == 1) and team.Primary or team.Secondary,
 			Material = Enum.Material.Fabric,
 			CanCollide = false,

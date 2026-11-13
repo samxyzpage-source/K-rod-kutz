@@ -297,15 +297,6 @@ local function lightTower(ctx, name, base, target)
 	local toField = Vector3.new(target.X - base.X, 0, target.Z - base.Z).Unit
 
 	BuildUtil.Block(tower, "TowerFooting", Vector3.new(8, 1.2, 8), base, C.ConcreteDark, Enum.Material.Concrete)
-	BuildUtil.Cylinder(tower, {
-		Name = "TowerMast",
-		Position = Vector3.new(base.X, (1.2 + MAST_TOP) / 2, base.Z),
-		Height = MAST_TOP - 1.2,
-		Diameter = 2.2,
-		Axis = "Y",
-		Color = C.Metal,
-		Material = Enum.Material.Metal,
-	})
 	-- tapered lattice legs from a wide base up to the service platform
 	for _, sx in ipairs({ -1, 1 }) do
 		for _, sz in ipairs({ -1, 1 }) do
@@ -350,8 +341,31 @@ local function lightTower(ctx, name, base, target)
 		Material = Enum.Material.Neon,
 	})
 
-	-- a smaller bank lower down (the main bank is too high for a 60 stud light to reach the turf)
-	local lowPosition = Vector3.new(base.X, LOW_BANK_Y, base.Z) + toField * 2
+	-- The bank leans toward the field, so its lower edge ends up right over the mast. A cross-arm
+	-- there carries it and the mast stops under the arm (instead of poking through the panels).
+	local armTop = (head * CFrame.new(0, -plateHeight / 2, 0.4)).Position.Y
+	local armCentre = Vector3.new(base.X, armTop - 0.5, base.Z)
+	BuildUtil.Part(tower, {
+		Name = "HeadCrossArm",
+		Size = Vector3.new(plateWidth - 3, 1, 2.4),
+		CFrame = CFrame.lookAt(armCentre, armCentre + toField),
+		Color = STEEL,
+		Material = Enum.Material.Metal,
+	})
+	local mastTop = armTop - 0.5
+	BuildUtil.Cylinder(tower, {
+		Name = "TowerMast",
+		Position = Vector3.new(base.X, (1.2 + mastTop) / 2, base.Z),
+		Height = mastTop - 1.2,
+		Diameter = 2.2,
+		Axis = "Y",
+		Color = C.Metal,
+		Material = Enum.Material.Metal,
+	})
+
+	-- a smaller bank lower down (the main bank is too high for a 60 stud light to reach the turf),
+	-- held far enough out that the lattice leg on the field side passes behind it
+	local lowPosition = Vector3.new(base.X, LOW_BANK_Y, base.Z) + toField * 3.8
 	floodBank(tower, CFrame.lookAt(lowPosition, target), 2, 1, Vector3.new(3.8, 3.2, 0.5), {
 		{ 1, 1, 80, 3 },
 	})
@@ -681,6 +695,8 @@ function Features.suites(ctx)
 	local zMid = (zFront + zBack) / 2
 	local slabBottom = floorY - 1.6
 	local glassBottom, glassTop = floorY + 0.8, ceilingY - 2
+	-- walls, sill and header fit between the two 0.8 end walls, so no faces are coplanar with them
+	local between = length - 1.6
 
 	for _, side in ipairs({ -1, 1 }) do
 		local section = BuildUtil.Child(ctx, side < 0 and "WestSuites" or "EastSuites")
@@ -710,7 +726,7 @@ function Features.suites(ctx)
 		BuildUtil.Box(
 			section,
 			"SuiteBackWall",
-			Vector3.new(length, ceilingY - floorY, 0.8),
+			Vector3.new(between, ceilingY - floorY, 0.8),
 			Vector3.new(cx, (floorY + ceilingY) / 2, zBack + 0.4),
 			C.Concrete,
 			Enum.Material.Concrete
@@ -752,7 +768,7 @@ function Features.suites(ctx)
 		BuildUtil.Box(
 			section,
 			"SuiteSill",
-			Vector3.new(length, glassBottom - floorY, 0.6),
+			Vector3.new(between, glassBottom - floorY, 0.6),
 			Vector3.new(cx, (floorY + glassBottom) / 2, frontZ),
 			team.Secondary,
 			Enum.Material.SmoothPlastic
@@ -760,7 +776,7 @@ function Features.suites(ctx)
 		BuildUtil.Box(
 			section,
 			"SuiteGlass",
-			Vector3.new(length - 1.6, glassTop - glassBottom, 0.3),
+			Vector3.new(between, glassTop - glassBottom, 0.3),
 			Vector3.new(cx, (glassBottom + glassTop) / 2, frontZ),
 			C.Glass,
 			Enum.Material.Glass,
@@ -769,7 +785,7 @@ function Features.suites(ctx)
 		sign(
 			section,
 			"SuiteHeader",
-			Vector3.new(length, ceilingY - glassTop, 0.6),
+			Vector3.new(between, ceilingY - glassTop, 0.6),
 			CFrame.new(cx, (glassTop + ceilingY) / 2, frontZ),
 			team.Secondary,
 			Enum.NormalId.Back,
@@ -937,7 +953,8 @@ function Features.canopy(ctx)
 		halfWidth = halfWidth,
 		masts = { -100, -55, 55, 100 },
 		fins = { -124, -100, -55, 0, 55, 100, 124 },
-		braceY = 24,
+		-- high enough that the braces clear the heads of fans standing on the deck's top row (y 26)
+		braceY = L.UpperTopHeight + 5,
 		braceDistance = 22,
 		text = "HOME OF THE " .. name,
 	})

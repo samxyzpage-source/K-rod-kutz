@@ -74,8 +74,8 @@ local function seatedFan(ctx, seatCFrame, jersey, skin, number)
 	local fanCtx, model = BuildUtil.Child(ctx, "Fan" .. number)
 	BuildUtil.Part(fanCtx, {
 		Name = "Body",
-		Size = Vector3.new(1.8, 2, 1),
-		CFrame = seatCFrame * CFrame.new(0, 1, 0),
+		Size = Vector3.new(2, 2.4, 1.2),
+		CFrame = seatCFrame * CFrame.new(0, 1.2, 0),
 		Color = jersey,
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
@@ -83,8 +83,8 @@ local function seatedFan(ctx, seatCFrame, jersey, skin, number)
 	})
 	BuildUtil.Part(fanCtx, {
 		Name = "Head",
-		Size = Vector3.new(1.1, 1.1, 1.1),
-		CFrame = seatCFrame * CFrame.new(0, 2.6, 0),
+		Size = Vector3.new(1.3, 1.3, 1.3),
+		CFrame = seatCFrame * CFrame.new(0, 3.05, 0),
 		Color = skin,
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
@@ -117,7 +117,7 @@ function Crowd.SeatedFans(ctx, owned, maxFans, rng)
 			attempts += 1
 			local row = rng:NextInteger(1, section.rows)
 			local offset = (rng:NextNumber() - 0.5) * (section.length - 4)
-			local slot = row .. ":" .. math.floor(offset / 2.5)
+			local slot = row .. ":" .. math.floor(offset / 2.6)
 			if not inGap(offset, section.gaps) and not used[slot] then
 				used[slot] = true
 				local top = section.firstHeight + (row - 1) * L.RowRise
@@ -126,10 +126,12 @@ function Crowd.SeatedFans(ctx, owned, maxFans, rng)
 				-- the fan looks back toward the field (+Z of the section CFrame)
 				local seat = section.origin * CFrame.new(offset, top, -depth) * CFrame.Angles(0, math.pi, 0)
 				local jersey
-				if section.visitor then
+				if section.visitor and rng:NextNumber() < 0.5 then
 					jersey = VISITOR_COLOR
 				else
-					jersey = (rng:NextNumber() < 0.6) and ctx.colors.Primary or ctx.colors.Secondary
+					-- mix the team colours (plus white) so fans stand out against the seats
+					local roll = rng:NextNumber()
+					jersey = roll < 0.4 and ctx.colors.Secondary or (roll < 0.7 and ctx.colors.Trim or ctx.colors.Primary)
 				end
 				local skin = SKIN_TONES[rng:NextInteger(1, #SKIN_TONES)]
 				count += 1

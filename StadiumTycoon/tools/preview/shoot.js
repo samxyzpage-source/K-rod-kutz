@@ -23,10 +23,14 @@ const showButtons = flags.includes("--buttons");
 const VIEWS = {
   aerial: { pos: [-330, 250, -390], target: [0, 0, 10], fov: 45 },
   aerial_back: { pos: [340, 240, 380], target: [0, 0, 0], fov: 45 },
-  top: { ortho: true, half: 225 },
+  aerial_far: { pos: [-470, 380, -470], target: [0, 0, 80], fov: 45 },
+  top: { ortho: true, half: 225, center: [0, 0] },
+  top_full: { ortho: true, half: 300, center: [0, 80] },
   plaza: { pos: [0, 10, -232], target: [0, 14, -100], fov: 70 },
   field: { pos: [0, 7, -30], target: [0, 16, 110], fov: 85 },
   endzone: { pos: [-128, 9, 30], target: [180, 22, 30], fov: 80 },
+  campus: { pos: [60, 55, 150], target: [-20, 5, 290], fov: 70 },
+  crowd: { pos: [0, 30, -20], target: [0, 18, 120], fov: 75 },
 };
 
 function render(payload) {
@@ -127,9 +131,10 @@ function render(payload) {
     const aspect = width / height;
     const h = view.half;
     camera = new THREE.OrthographicCamera(-h * aspect, h * aspect, h, -h, 1, 2000);
-    camera.position.set(0, 600, 0);
+    const [cx, cz] = view.center || [0, 0];
+    camera.position.set(cx, 600, cz);
     camera.up.set(0, 0, 1); // +Z (back of plot) at the top of the image, plaza at the bottom
-    camera.lookAt(0, 0, 0);
+    camera.lookAt(cx, 0, cz);
   } else {
     camera = new THREE.PerspectiveCamera(view.fov || 50, width / height, 0.5, 5000);
     camera.position.set(...view.pos);

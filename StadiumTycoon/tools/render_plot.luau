@@ -2,10 +2,11 @@
 	Offline plot builder + layout checker (runs with Lune, outside Roblox).
 
 	Usage (from the StadiumTycoon folder):
-	  lune run tools/render_plot.luau [outDir] [itemIds]
+	  lune run tools/render_plot.luau [outDir] [itemIds] [crowd]
 
 	  outDir   where parts.json is written (default: tools/out)
 	  itemIds  comma separated item Ids to build, or "all" (default: all)
+	  crowd    pass "crowd" to also seat a game-day crowd in the stands (preview only)
 
 	It loads the real builder modules from src/, runs every builder with real Roblox
 	datatypes (Lune validates property names and Enum items), then checks:
@@ -28,6 +29,7 @@ local Vector3 = roblox.Vector3
 
 local outDir = process.args[1] or "tools/out"
 local selection = process.args[2] or "all"
+local withCrowd = process.args[3] == "crowd"
 
 ---------------------------------------------------------------------------------------------
 -- Fake DataModel paths -> source folders
@@ -217,6 +219,44 @@ for _, item in ipairs(Items.List) do
 	end
 end
 
+if withCrowd then
+	local Crowd = requireNode("ServerScriptService/TycoonServer/Crowd")
+	local owned = {}
+	for id in pairs(selected) do
+		owned[id] = true
+	end
+	local seed = 0
+	local rng = {
+		NextNumber = function()
+			seed = (seed * 1103515245 + 12345) % 2147483648
+			return seed / 2147483648
+		end,
+	}
+	rng.NextInteger = function(_, a, b)
+		return a + math.floor(rng.NextNumber() * (b - a + 1))
+	end
+	local crowdCtx, crowdModel = BuildUtil.Child(BuildUtil.NewContext(origin, root, palette, "PREVIEW", Config), "GameDayFans")
+	local ok, err = pcall(Crowd.SeatedFans, crowdCtx, owned, Config.GameDay.SeatedFans, rng)
+	if not ok then
+		addError("Crowd.SeatedFans failed: " .. tostring(err))
+	end
+	for index = 1, Config.GameDay.WalkingFans do
+		local x = -8 + index * 2
+		local okWalker, walkerErr = pcall(
+			Crowd.Walker,
+			crowdCtx,
+			CFrame.new(x, 0, L.GateZ + 10 + index * 12) * CFrame.Angles(0, math.pi, 0),
+			palette.Primary,
+			Crowd.SkinTones[1],
+			index
+		)
+		if not okWalker then
+			addError("Crowd.Walker failed: " .. tostring(walkerErr))
+		end
+	end
+	table.insert(built, { id = "GameDayFans", model = crowdModel })
+end
+
 ---------------------------------------------------------------------------------------------
 -- Collect parts + checks
 ---------------------------------------------------------------------------------------------
@@ -268,8 +308,8 @@ for _, entry in ipairs(built) do
 			if size.X > 2048 or size.Y > 2048 or size.Z > 2048 then
 				addError(("%s/%s is larger than 2048 studs"):format(entry.id, inst.Name))
 			end
-			local halfW, halfD = L.PlotWidth / 2, L.PlotDepth / 2
-			if box.minX < -halfW - 0.01 or box.maxX > halfW + 0.01 or box.minZ < -halfD - 0.01 or box.maxZ > halfD + 0.01 then
+			local halfW = L.PlotWidth / 2
+			if box.minX < -halfW - 0.01 or box.maxX > halfW + 0.01 or box.minZ < L.PlotFrontZ - 0.01 or box.maxZ > L.PlotBackZ + 0.01 then
 				addWarning(
 					("%s/%s sticks outside the plot (x %.1f..%.1f, z %.1f..%.1f)"):format(
 						entry.id,
@@ -391,10 +431,37 @@ local corridors = {
 		},
 	},
 }
+if L.CampusWalk then
+	table.insert(corridors, {
+		name = "campus walk",
+		box = {
+			minX = L.CampusWalk.MinX + 1,
+			maxX = L.CampusWalk.MaxX - 1,
+			minY = 0.8,
+			maxY = 9,
+			minZ = L.CampusWalk.MinZ + 3,
+			maxZ = L.CampusWalk.MaxZ,
+		},
+	})
+end
+if L.CampusRoad then
+	table.insert(corridors, {
+		name = "campus road",
+		box = {
+			minX = L.CampusRoad.MinX + 2,
+			maxX = L.CampusRoad.MaxX - 2,
+			minY = 0.8,
+			maxY = 9,
+			minZ = L.CampusRoad.MinZ + 1,
+			maxZ = L.CampusRoad.MaxZ - 1,
+		},
+		ignore = { PlotBase = true }, -- bus stop shelters + team safe sit on the road on purpose
+	})
+end
 for _, corridor in ipairs(corridors) do
 	for id, list in pairs(partsByItem) do
 		for _, entry in ipairs(list) do
-			if isSolid(entry) and overlaps(corridor.box, entry.box) then
+			if not (corridor.ignore and corridor.ignore[id]) and isSolid(entry) and overlaps(corridor.box, entry.box) then
 				addWarning(("%s is blocked by %s/%s"):format(corridor.name, id, entry.part.Name))
 			end
 		end
@@ -414,7 +481,7 @@ fs.writeFile(
 	serde.encode("json", {
 		parts = partsOut,
 		buttons = buttons,
-		plot = { width = L.PlotWidth, depth = L.PlotDepth },
+		plot = { width = L.PlotWidth, frontZ = L.PlotFrontZ, backZ = L.PlotBackZ },
 	})
 )
 
