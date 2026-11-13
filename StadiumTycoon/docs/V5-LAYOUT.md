@@ -88,7 +88,7 @@ vomitories ("tunnels into the seats") to their sections.
 ## The Team HQ (campus coordinates)
 
 * Footprint `L.HQ` X[-250, 100] Z[200, 360] (the shell may stick out a little for architecture:
-  X[-262, 112] Z[188, 372], but the HQ entrance walk X[-112, -88] Z[186, 200] stays clear at
+  X[-262, 118] Z[188, 372] (the east tower reaches x 118), but the HQ entrance walk X[-112, -88] Z[186, 200] stays clear at
   ground level and the campus/back roads stay clear).
 * Ground floor y = 0.2. **Upper floor top y = 17** (`L.HQ.UpperFloorY`) everywhere except the
   atrium void over the lobby (`L.HQAtrium` X[-150, -50] Z[202, 264]). Roof ~36.

@@ -40,19 +40,19 @@ const VIEWS = {
   v5_field: { pos: [0, 8, -20], target: [0, 40, 180], fov: 90 }, // V5: from the field toward the home stands
   v5_hq: { pos: [-100, 70, 200], target: [-100, 10, 400], fov: 70 }, // V5: the HQ from the campus road
 
-  plaza: { pos: [0, 10, -232], target: [0, 14, -100], fov: 70 },
+  plaza: { pos: [0, 12, -450], target: [0, 20, -200], fov: 70 }, // (V5: from the claim gate to Gate A)
   field: { pos: [0, 7, -30], target: [0, 16, 110], fov: 85 },
   endzone: { pos: [-128, 9, 30], target: [180, 22, 30], fov: 80 },
   crowd: { pos: [0, 30, -20], target: [0, 18, 120], fov: 75 },
-  campus: { pos: [-60, 160, 150], target: [-40, 0, 420], fov: 65 },
-  hq_top: { ortho: true, half: 190, center: [-75, 280], noroof: true },
-  hq_inside: { pos: [-100, 9, 205], target: [-100, 6, 300], fov: 85, noroof: true },
-  hq_front: { pos: [-100, 30, 120], target: [-100, 10, 260], fov: 70 },
-  fields: { pos: [10, 90, 330], target: [10, 0, 470], fov: 75 },
-  hall_garage: { pos: [60, 60, 170], target: [195, 10, 300], fov: 70 },
-  fanzone: { pos: [150, 50, -230], target: [244, 5, -20], fov: 70 },
-  staff: { pos: [-148, 22, 345], target: [-148, 4, 392], fov: 90 },
-  vendors: { pos: [-62, 9, -138], target: [-86, 3, -138], fov: 75 },
+  campus: { pos: [-60, 160, 270], target: [-40, 0, 540], fov: 65 }, // (V5: campus area +120 z)
+  hq_top: { ortho: true, half: 190, center: [-75, 400], noroof: true },
+  hq_inside: { pos: [-100, 9, 325], target: [-100, 6, 420], fov: 85, noroof: true },
+  hq_front: { pos: [-100, 30, 240], target: [-100, 10, 380], fov: 70 },
+  fields: { pos: [10, 90, 450], target: [10, 0, 590], fov: 75 },
+  hall_garage: { pos: [60, 60, 290], target: [195, 10, 420], fov: 70 },
+  fanzone: { pos: [370, 50, -230], target: [464, 5, -20], fov: 70 }, // (V5: fan zone area +220 x)
+  staff: { pos: [-148, 22, 465], target: [-148, 4, 512], fov: 90 },
+  vendors: { pos: [-62, 9, -368], target: [-86, 3, -368], fov: 75 },
 };
 
 function render(payload) {

@@ -782,13 +782,14 @@ local function buildFacades(ctx, S, team)
 			{ Reflectance = 0.25 }
 		)
 		-- the cantilevered slab edge and the roof fascia (team colour) in front of the overhang
+		-- (the fascias run 0.05 past the slab + roof ends so no end faces share a plane)
 		local slabEdge = span(
 			walls,
 			"SlabEdgeFascia",
-			w0,
+			w0 - 0.05,
 			sb - 0.4,
 			SLAB_FRONT - 0.4,
-			w1,
+			w1 + 0.05,
 			up + 0.6,
 			SLAB_FRONT + 0.4,
 			PANEL_WHITE,
@@ -805,10 +806,10 @@ local function buildFacades(ctx, S, team)
 		span(
 			walls,
 			"RoofFascia",
-			w0,
+			w0 - 0.05,
 			ROOF_BOTTOM - 0.3,
 			SLAB_FRONT - 0.4,
-			w1,
+			w1 + 0.05,
 			PARAPET_TOP,
 			SLAB_FRONT + 0.4,
 			team.Primary,
@@ -826,30 +827,34 @@ local function buildFacades(ctx, S, team)
 
 	-- SIDES: limestone ground floor, glass upper floor (stone where the towers attach), doorways
 	-- at both corridor ends on both floors, a team-colour parapet along the roof edge
+	-- (the end walls reach 0.45 into the front / back walls, past the glass planes in them, so the
+	-- corners have no see-through slits)
+	local cz0, cz1 = S.iz0 - 0.45, S.iz1 + 0.45
 	local function sideWall(name, t0, t1, towerZ0, towerZ1)
 		local function slab(z0, z1, y0, y1, color, material, extra)
 			return span(walls, name, t0, y0, z0, t1, y1, z1, color, material, extra)
 		end
 		-- ground floor
-		slab(S.iz0, d0, 0, sb, LIMESTONE, Enum.Material.Limestone)
-		slab(d1, S.iz1, 0, sb, LIMESTONE, Enum.Material.Limestone)
+		slab(cz0, d0, 0, sb, LIMESTONE, Enum.Material.Limestone)
+		slab(d1, cz1, 0, sb, LIMESTONE, Enum.Material.Limestone)
 		slab(d0, d1, DOOR_TOP, sb, LIMESTONE, Enum.Material.Limestone)
 		-- upper floor
-		slab(S.iz0, towerZ0, up, ROOF_BOTTOM, CURTAIN_GLASS, Enum.Material.Glass, CURTAIN_PROPS)
+		slab(cz0, towerZ0, up, ROOF_BOTTOM, CURTAIN_GLASS, Enum.Material.Glass, CURTAIN_PROPS)
 		slab(towerZ0, d0, up, ROOF_BOTTOM, LIMESTONE, Enum.Material.Limestone)
 		slab(d1, towerZ1, up, ROOF_BOTTOM, LIMESTONE, Enum.Material.Limestone)
 		slab(d0, d1, up + DOOR_TOP - FLOOR_TOP, ROOF_BOTTOM, LIMESTONE, Enum.Material.Limestone)
-		slab(towerZ1, S.iz1, up, ROOF_BOTTOM, CURTAIN_GLASS, Enum.Material.Glass, CURTAIN_PROPS)
+		slab(towerZ1, cz1, up, ROOF_BOTTOM, CURTAIN_GLASS, Enum.Material.Glass, CURTAIN_PROPS)
 	end
-	sideWall("WestWall", S.x0, S.ix0, CORE.MinZ, CORE.MaxZ)
-	sideWall("EastWall", S.ix1, S.x1, TOWER.MinZ, TOWER.MaxZ)
+	-- (0.05 proud of the front / back walls' end faces, so those never share a plane with them)
+	sideWall("WestWall", S.x0 - 0.05, S.ix0, CORE.MinZ, CORE.MaxZ)
+	sideWall("EastWall", S.ix1, S.x1 + 0.05, TOWER.MinZ, TOWER.MaxZ)
 	span(
 		walls,
 		"WestParapet",
 		S.x0 - 0.4,
 		ROOF_BOTTOM - 0.3,
 		SLAB_FRONT,
-		S.x0 + 1.5,
+		S.x0 + 1.45, -- (its inner face stays just inside the wall below the roof)
 		PARAPET_TOP,
 		ROOF_BACK,
 		team.Primary,
@@ -860,7 +865,7 @@ local function buildFacades(ctx, S, team)
 		span(
 			walls,
 			"EastParapet",
-			S.x1 - 1.5,
+			S.x1 - 1.45,
 			ROOF_BOTTOM - 0.3,
 			z[1],
 			S.x1 + 0.4,
@@ -904,10 +909,10 @@ local function buildFacades(ctx, S, team)
 	span(
 		walls,
 		"BackSlabEdgeFascia",
-		S.x0,
+		S.x0 - 0.05,
 		sb - 0.4,
 		SLAB_BACK - 0.4,
-		S.x1,
+		S.x1 + 0.05,
 		up + 0.6,
 		SLAB_BACK + 0.4,
 		PANEL_WHITE,
@@ -1040,7 +1045,8 @@ local function buildAtrium(ctx, S, team)
 	})
 
 	-- the entrance canopy (the prow's floor) on four slim columns under the prow corners
-	local canopy = span(atr, "EntranceCanopy", ax0, CANOPY_BOTTOM, 188, ax1, CANOPY_TOP, fz + 1, PANEL_WHITE, Enum.Material.SmoothPlastic)
+	-- (its front edge stays 0.1 behind the MAIN ENTRANCE sign's face)
+	local canopy = span(atr, "EntranceCanopy", ax0, CANOPY_BOTTOM, 188.1, ax1, CANOPY_TOP, fz + 1, PANEL_WHITE, Enum.Material.SmoothPlastic)
 	BuildUtil.Light(canopy, "SpotLight", {
 		Name = "CanopyLight",
 		Face = Enum.NormalId.Bottom,
@@ -1505,7 +1511,8 @@ local function buildWestCore(ctx, S, team)
 	local accent = textColorOn(SIGN_DARK, { team.Trim, team.Secondary, WHITE })
 
 	-- floor, stone end walls, a glass west face (the stairs show from outside), roof
-	span(core, "CoreFloor", K.MinX, 0, K.MinZ, S.x0 + 0.1, FLOOR_TOP, K.MaxZ, CORRIDOR_FLOOR, Enum.Material.Marble)
+	-- (0.05 inside the tower walls' outer faces)
+	span(core, "CoreFloor", K.MinX + 0.05, 0, K.MinZ + 0.05, S.x0 + 0.1, FLOOR_TOP, K.MaxZ - 0.05, CORRIDOR_FLOOR, Enum.Material.Marble)
 	span(core, "CoreWall", K.MinX, 0, K.MinZ, K.MaxX, top, K.MinZ + 1, LIMESTONE, Enum.Material.Limestone)
 	span(core, "CoreWall", K.MinX, 0, K.MaxZ - 1, K.MaxX, top, K.MaxZ, LIMESTONE, Enum.Material.Limestone)
 	-- the elevator shaft behind the south part of the west face is solid stone
@@ -1717,7 +1724,8 @@ local function buildEastTower(ctx, S, team)
 	local levels = { FLOOR_TOP, up, DECK_TOP }
 
 	-- floors, roof and four team-colour corner columns
-	span(tower, "TowerFloor", S.x1 - 0.1, 0, T.MinZ, T.MaxX, FLOOR_TOP, T.MaxZ, CORRIDOR_FLOOR, Enum.Material.Marble)
+	-- (0.05 inside the corner columns' outer faces)
+	span(tower, "TowerFloor", S.x1 - 0.1, 0, T.MinZ + 0.05, T.MaxX - 0.05, FLOOR_TOP, T.MaxZ - 0.05, CORRIDOR_FLOOR, Enum.Material.Marble)
 	-- (the upper floors end inside the glass walls, so no faces line up)
 	span(tower, "TowerUpperFloor", T.MinX, up - 1, sh.FaceZ + 0.6, T.MaxX - 0.8, up, T.MaxZ - 0.4, SLAB_COLOR, Enum.Material.Concrete)
 	span(
@@ -2030,7 +2038,9 @@ local function buildTerrace(ctx, S, team)
 		CFrame = CFrame.lookAt(Vector3.new(stool.X, y + 1.7, stool.Z), Vector3.new(stool.X + flat.X, y + 1.7, stool.Z + flat.Z)),
 		Color = team.Primary,
 		Object = "Telescope Stool",
-		Camera = { From = eye + Vector3.new(0, 1, 0), To = fieldTarget, Fov = 16, Label = "TELESCOPE CAM" },
+		-- (the zoomed-in view starts along the tube's line just past the roof edge, so the parapet and
+		-- the railing stay out of it)
+		Camera = { From = eye + fieldDir * 16 + Vector3.new(0, 1, 0), To = fieldTarget, Fov = 16, Label = "TELESCOPE CAM" },
 	})
 
 	-- lamp posts along the boardwalk (string-light bulbs on top)
@@ -2150,13 +2160,14 @@ function HQShell.Build(ctx)
 		{ x0 = hq.MinX, x1 = L.HQAtrium.MinX, blades = {} },
 		{ x0 = L.HQAtrium.MaxX, x1 = hq.MaxX, blades = {} },
 	}
-	for x = hq.MinX + 0.4, L.HQAtrium.MinX - 8, BLADE_STEP do
+	-- (the end blades stay 0.05 inside the slab ends so their faces never share a plane)
+	for x = hq.MinX + 0.45, L.HQAtrium.MinX - 8, BLADE_STEP do
 		table.insert(S.wings[1].blades, x)
 	end
 	for x = L.HQAtrium.MaxX + BLADE_STEP, hq.MaxX - 8, BLADE_STEP do
 		table.insert(S.wings[2].blades, x)
 	end
-	table.insert(S.wings[2].blades, hq.MaxX - 0.4)
+	table.insert(S.wings[2].blades, hq.MaxX - 0.45)
 
 	local shell = BuildUtil.Child(ctx, "HQShell")
 	buildFloors(shell, S, team)
