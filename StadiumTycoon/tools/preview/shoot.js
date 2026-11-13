@@ -36,9 +36,15 @@ const VIEWS = {
   plot: { ortho: true, half: 640, center: [0, 130] }, // V5: the whole plot from above
   v5_aerial: { pos: [-700, 520, -760], target: [0, 0, 60], fov: 50 }, // V5: whole stadium from the front-left
   v5_back: { pos: [620, 420, 900], target: [-40, 0, 300], fov: 50 }, // V5: campus + stadium from behind
-  v5_bowl: { pos: [0, 140, -330], target: [0, 20, 60], fov: 70 }, // V5: into the bowl over Gate A
+  v5_bowl: { pos: [0, 230, -300], target: [0, 20, 80], fov: 60 }, // V5: into the bowl over Gate A
   v5_field: { pos: [0, 8, -20], target: [0, 40, 180], fov: 90 }, // V5: from the field toward the home stands
-  v5_hq: { pos: [-100, 70, 200], target: [-100, 10, 400], fov: 70 }, // V5: the HQ from the campus road
+  v5_hq: { pos: [-250, 32, 262], target: [-100, 16, 335], fov: 70 }, // V5: the HQ front along the campus road
+  // V5 interiors (used for the README pictures)
+  v5_concourse: { pos: [-60, 37, -100], target: [-140, 32, -116], fov: 80 }, // main concourse food court
+  v5_pressbox: { pos: [0, 60, 186], target: [0, 28, 30], fov: 80 }, // inside the press box
+  v5_club: { pos: [-228, 60, -70], target: [-236, 57, 100], fov: 80 }, // west club lounge
+  v5_lockers: { pos: [-12, 8, 146], target: [18, 4, 174], fov: 85 }, // home locker room under the stands
+  v5_atrium: { pos: [-100, 26, 335], target: [-100, 8, 380], fov: 85, noroof: true }, // HQ grand atrium
 
   plaza: { pos: [0, 12, -450], target: [0, 20, -200], fov: 70 }, // (V5: from the claim gate to Gate A)
   field: { pos: [0, 7, -30], target: [0, 16, 110], fov: 85 },

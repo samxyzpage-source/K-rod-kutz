@@ -320,9 +320,20 @@ function M.scoreboard(ctx)
 		span(support, "PylonBeam", frontX, frontX + col, 110, 113, zc - 5 + col, zc + 5 - col, STEEL, Enum.Material.Metal)
 		span(support, "PylonBeam", backX - col, backX, 110, 113, zc - 5 + col, zc + 5 - col, STEEL, Enum.Material.Metal)
 		-- the crew landing (y 128) runs through the pylon from the catwalk to the back columns
-		span(support, "CrewLanding", B.backX + 0.2, backX - 0.1, deckY - 0.4, deckY, zc - 5, zc + 5, STEEL, Enum.Material.DiamondPlate)
-		guard(support, walkX, backX - 0.1, deckY, zc < 30 and zc + 4.7 or zc - 5, zc < 30 and zc + 5 or zc - 4.7) -- catwalk side
-		guard(support, B.backX + 0.5, backX - 0.1, deckY, zc < 30 and zc - 5 or zc + 4.7, zc < 30 and zc - 4.7 or zc + 5) -- outer side
+		span(
+			support,
+			"CrewLanding",
+			B.backX + 0.2,
+			backX - 0.1,
+			deckY - 0.4,
+			deckY,
+			zc - 4.95,
+			zc + 4.95,
+			STEEL,
+			Enum.Material.DiamondPlate
+		)
+		guard(support, walkX, backX - 0.1, deckY, zc < 30 and zc + 4.65 or zc - 4.95, zc < 30 and zc + 4.95 or zc - 4.65) -- catwalk side
+		guard(support, B.backX + 0.5, backX - 0.1, deckY, zc < 30 and zc - 4.95 or zc + 4.65, zc < 30 and zc - 4.65 or zc + 4.95) -- outer side
 		guard(support, backX - 0.4, backX - 0.1, deckY, zc - 5 + col, zc + 5 - col)
 	end
 	-- arms from the pylons (and the truss in the middle) over the facade to the board's back
@@ -338,7 +349,7 @@ function M.scoreboard(ctx)
 	strut(support, "TrussBrace", Vector3.new(braceX, 22, north - 5), Vector3.new(braceX, 110, south + 5), 1.2, STEEL)
 
 	-- the service catwalk behind the board (between the landings), with its guards + hangers
-	span(support, "CatwalkFloor", B.backX + 0.2, walkX, deckY - 0.4, deckY, south + 5, north - 5, STEEL, Enum.Material.DiamondPlate)
+	span(support, "CatwalkFloor", B.backX + 0.2, walkX, deckY - 0.4, deckY, south + 4.95, north - 4.95, STEEL, Enum.Material.DiamondPlate)
 	guard(support, B.backX + 0.2, B.backX + 0.5, deckY, south - 5, north + 5) -- board side (the housing stands right in front)
 	guard(support, walkX - 0.3, walkX, deckY, south + 5, north - 5)
 	post(support, "CatwalkHanger", walkX - 0.15, B.zc, deckY + 3.4, B.armHigh[1], 0.35, STEEL, Enum.Material.Metal, NO_COLLIDE)
@@ -905,7 +916,7 @@ function M.jumbotron(ctx)
 
 	-- the room: floor, ceiling, lamp, a sign over the door and the door itself
 	span(ctx, "ControlRoomFloor", rx0, rx1, 0, 0.2, rz0, rz1, FLOOR_DARK)
-	span(ctx, "ControlRoomRug", rx0 + 4, rx0 + 9, 0.2, 0.25, rz1 - 5.5, rz1 - 0.6, team.Primary, Enum.Material.Fabric, NO_COLLIDE)
+	span(ctx, "ControlRoomRug", rx0 + 3.5, rx0 + 8.5, 0.2, 0.25, rz1 - 3.8, rz1 - 0.6, team.Primary, Enum.Material.Fabric, NO_COLLIDE)
 	span(ctx, "WallStripe", rx0, rx0 + 0.1, 3.4, 4, rz0, rz1, team.Secondary, nil, NO_COLLIDE)
 	span(ctx, "WallStripe", rx0, rx1, 3.4, 4, rz0, rz0 + 0.1, team.Secondary, nil, NO_COLLIDE)
 	span(ctx, "ControlRoomCeiling", rx0, rx1, roomTop - 0.4, roomTop, rz0, rz1, CEILING_WHITE)
