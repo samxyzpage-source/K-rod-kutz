@@ -35,6 +35,7 @@ local notifyRemote = nil
 local rng = Random.new()
 local sanitized = setmetatable({}, { __mode = "k" }) -- [franchiseTable] = true
 local cooldowns = {} -- [player] = { [key] = os.clock() }
+local seasonHooks = {} -- fn(player, plot, titles) after each game-day result
 
 local POSITIONS = Config.Draft.Positions
 local FIRST_NAMES = {
@@ -102,6 +103,7 @@ local QUESTS = {
 	{ Id = "field", Text = "Finish the Practice Field", Stat = "Piece:practice_field", Goal = 1, Reward = 5000 },
 	{ Id = "cart", Text = "Drive a golf cart", Stat = "Drives", Goal = 1, Reward = 3000 },
 	{ Id = "draft1", Text = "Draft your first player", Stat = "Drafted", Goal = 1, Reward = 4000 },
+	{ Id = "train1", Text = "Train a player in the Weight Room", Stat = "Trainings", Goal = 1, Reward = 8000 },
 	{ Id = "rooms6", Text = "Finish 6 HQ rooms", Stat = "RoomsDone", Goal = 6, Reward = 12000 },
 	{ Id = "turf", Text = "Lay the stadium turf", Stat = "Piece:turf", Goal = 1, Reward = 15000 },
 	{ Id = "roster", Text = "Fill every roster position", Stat = "PositionsFilled", Goal = #POSITIONS, Reward = 30000 },
@@ -112,13 +114,16 @@ local QUESTS = {
 	{ Id = "kick50", Text = "Kick a 55-yard field goal", Stat = "LongestFG", Goal = 55, Reward = 200000 },
 	{ Id = "rooms12", Text = "Finish every HQ room", Stat = "RoomsDone", Goal = 11, Reward = 300000 },
 	{ Id = "win5", Text = "Win 5 game days", Stat = "Wins", Goal = 5, Reward = 400000 },
+	{ Id = "playoffs", Text = "Make the playoffs", Stat = "Playoffs", Goal = 1, Reward = 500000 },
 	{ Id = "rating80", Text = "Reach a team rating of 80", Stat = "TeamRating", Goal = 80, Reward = 600000 },
 	{ Id = "hall", Text = "Open the Hall of Fame", Stat = "Piece:hall_of_fame", Goal = 1, Reward = 900000 },
 	{ Id = "upperring", Text = "Close the upper ring", Stat = "Piece:upper_bowl_ends", Goal = 1, Reward = 1500000 },
 	{ Id = "win15", Text = "Win 15 game days", Stat = "Wins", Goal = 15, Reward = 2000000 },
+	{ Id = "title", Text = "Win a championship", Stat = "Championships", Goal = 1, Reward = 3000000 },
 	{ Id = "champion", Text = "Build the Championship Trophy", Stat = "Piece:trophy", Goal = 1, Reward = 5000000 },
 }
 local QUESTS_SHOWN = 3
+local SEASON_STAGES = { regular = true, semifinal = true, final = true }
 
 ---------------------------------------------------------------------------------------------
 -- Data helpers
@@ -190,6 +195,16 @@ local function sanitize(f)
 	if not isNumber(f.NextBonus) then
 		f.NextBonus = 0
 	end
+	local season = f.Season
+	if
+		type(season) ~= "table"
+		or not (isNumber(season.Number) and season.Number >= 1)
+		or not (isNumber(season.Week) and season.Week >= 0 and season.Week <= Config.Season.Weeks)
+		or not (isNumber(season.Wins) and season.Wins >= 0 and isNumber(season.Losses) and season.Losses >= 0)
+		or not SEASON_STAGES[season.Stage]
+	then
+		f.Season = { Number = 1, Week = 0, Wins = 0, Losses = 0, Stage = "regular" }
+	end
 	sanitized[f] = true
 	return f
 end
@@ -258,6 +273,16 @@ local function draftCost(player)
 	return math.max(Config.Draft.MinimumCost, math.floor(income * Config.Draft.CostIncomeSeconds))
 end
 
+local function trainCost(player)
+	local income = plotManager and plotManager.GetIncome(player) or 0
+	return math.max(Config.Draft.MinimumTrainCost, math.floor(income * Config.Draft.TrainCostIncomeSeconds))
+end
+
+local function trainUnlocked(player)
+	local profile = PlayerData.GetProfile(player)
+	return profile ~= nil and Items.HasPiece(profile.Owned, "hq_weightroom")
+end
+
 local function draftUnlocked(player)
 	local profile = PlayerData.GetProfile(player)
 	return profile ~= nil and profile.Owned["hq_frontoffice:3"] == true -- the Draft Board
@@ -302,6 +327,21 @@ function Franchise.GetStat(player, key)
 	return f.Stats[key] or 0
 end
 
+local function seasonText(season)
+	if season.Stage == "semifinal" then
+		return ("SEASON %d  -  PLAYOFF SEMIFINAL NEXT"):format(season.Number)
+	elseif season.Stage == "final" then
+		return ("SEASON %d  -  CHAMPIONSHIP GAME NEXT"):format(season.Number)
+	end
+	return ("SEASON %d  -  WEEK %d/%d  -  %d-%d"):format(
+		season.Number,
+		math.min(season.Week + 1, Config.Season.Weeks),
+		Config.Season.Weeks,
+		season.Wins,
+		season.Losses
+	)
+end
+
 local function publish(player)
 	local f = franchiseOf(player)
 	if not f or player.Parent == nil then
@@ -341,8 +381,12 @@ local function publish(player)
 	local rating = Franchise.TeamRating(player)
 	player:SetAttribute("TeamRating", rating)
 	player:SetAttribute("Record", ("%d-%d"):format(f.Stats.Wins or 0, f.Stats.Losses or 0))
+	player:SetAttribute("Season", seasonText(f.Season))
+	player:SetAttribute("Titles", f.Stats.Championships or 0)
 	player:SetAttribute("DraftCost", draftCost(player))
 	player:SetAttribute("DraftUnlocked", draftUnlocked(player))
+	player:SetAttribute("TrainCost", trainCost(player))
+	player:SetAttribute("TrainUnlocked", trainUnlocked(player))
 	player:SetAttribute("TeamChosen", f.Team ~= nil)
 	player:SetAttribute("TeamNickname", f.Team and Config.TeamNicknames[f.Team.Nickname] or "")
 	player:SetAttribute("BonusReadyAt", Workspace:GetServerTimeNow() + math.max(0, f.NextBonus - os.time()))
@@ -351,6 +395,7 @@ local function publish(player)
 	if leaderstats then
 		leaderstats.Wins.Value = f.Stats.Wins or 0
 		leaderstats.Rating.Value = rating
+		leaderstats.Titles.Value = f.Stats.Championships or 0
 	end
 end
 
@@ -518,6 +563,50 @@ local function onDraft(player)
 end
 
 ---------------------------------------------------------------------------------------------
+-- Training
+---------------------------------------------------------------------------------------------
+
+-- Works out your weakest starter and makes them better. Returns { ok, message, player }.
+local function onTrain(player)
+	local settings = Config.Draft
+	local f, profile = franchiseOf(player)
+	if not f or not plotManager.GetPlot(player) then
+		return { ok = false, message = "Claim a stadium first." }
+	end
+	if not trainUnlocked(player) then
+		return { ok = false, message = "Finish the Weight Room in your HQ to start training!" }
+	end
+	local weakest = nil
+	for _, p in pairs(starters(f)) do
+		if p.Rating < settings.MaxTrainedRating and (not weakest or p.Rating < weakest.Rating) then
+			weakest = p
+		end
+	end
+	if not weakest then
+		return { ok = false, message = #f.Roster == 0 and "Draft some players to train first." or "Your starters are maxed out!" }
+	end
+	if not cooldownReady(player, "train", settings.TrainCooldownSeconds) then
+		return { ok = false, message = "The players need a breather. Try again in a few seconds." }
+	end
+	local cost = trainCost(player)
+	if not PlayerData.TrySpend(player, cost) then
+		cooldowns[player].train = nil -- didn't train, so no cooldown
+		return { ok = false, message = ("A training session costs %s."):format(Format.MoneyExact(cost)) }
+	end
+	local gain = rng:NextInteger(1, 3)
+	if Items.HasPiece(profile.Owned, "hq_trainingroom") then
+		gain += 1 -- the training room keeps them healthy
+	end
+	local before = weakest.Rating
+	weakest.Rating = math.min(settings.MaxTrainedRating, weakest.Rating + gain)
+	f.Stats.Trainings = (f.Stats.Trainings or 0) + 1
+	PlayerData.MarkChanged(player)
+	notify(player, ("%s %s trained: %d -> %d"):format(weakest.Pos, weakest.Name, before, weakest.Rating), "success")
+	Franchise.CheckQuests(player)
+	return { ok = true, message = "Trained!", player = weakest }
+end
+
+---------------------------------------------------------------------------------------------
 -- Game-day results
 ---------------------------------------------------------------------------------------------
 
@@ -533,6 +622,55 @@ local function footballScore(minimum)
 	return score
 end
 
+local function newSeason(f)
+	f.Season = { Number = f.Season.Number + 1, Week = 0, Wins = 0, Losses = 0, Stage = "regular" }
+end
+
+-- Moves the season on after a game. Returns a short note for the result message and any extra prize.
+local function advanceSeason(player, f, won)
+	local season = f.Season
+	local settings = Config.Season
+	if season.Stage == "regular" then
+		season.Week += 1
+		if won then
+			season.Wins += 1
+		else
+			season.Losses += 1
+		end
+		if season.Week < settings.Weeks then
+			return ("Week %d/%d (%d-%d)"):format(season.Week, settings.Weeks, season.Wins, season.Losses), 0
+		end
+		if season.Wins >= settings.PlayoffWins then
+			season.Stage = "semifinal"
+			f.Stats.Playoffs = (f.Stats.Playoffs or 0) + 1
+			return ("PLAYOFFS! %d-%d season - the next game day is the semifinal"):format(season.Wins, season.Losses), 0
+		end
+		local note = ("Season over at %d-%d (%d wins make the playoffs). New season!"):format(
+			season.Wins,
+			season.Losses,
+			settings.PlayoffWins
+		)
+		newSeason(f)
+		return note, 0
+	elseif season.Stage == "semifinal" then
+		if won then
+			season.Stage = "final"
+			return "Semifinal won - the CHAMPIONSHIP GAME is next!", 0
+		end
+		newSeason(f)
+		return "Knocked out in the semifinal. New season!", 0
+	end
+	-- the championship game
+	newSeason(f)
+	if won then
+		f.Stats.Championships = (f.Stats.Championships or 0) + 1
+		local prize =
+			math.max(settings.MinimumChampionshipPrize, math.floor(plotManager.GetIncome(player) * settings.ChampionshipIncomeSeconds))
+		return ("CHAMPIONS!!! Title #%d"):format(f.Stats.Championships), prize
+	end
+	return "Lost the championship game. So close! New season!", 0
+end
+
 function Franchise.PlayGameDay()
 	for _, plot in ipairs(plotManager.GetPlots()) do
 		local player = plot.Owner
@@ -544,7 +682,8 @@ function Franchise.PlayGameDay()
 			end
 			local progress = built / #Items.List
 			local rating = Franchise.TeamRating(player)
-			local opponent = 46 + progress * 40 + rng:NextInteger(-6, 6)
+			local playoff = f.Season.Stage ~= "regular"
+			local opponent = 46 + progress * 40 + rng:NextInteger(-6, 6) + (playoff and Config.Season.PlayoffBoost or 0)
 			local winChance = 1 / (1 + math.exp(-(rating - opponent) / 6))
 			local won = rng:NextNumber() < winChance
 			local winnerScore = footballScore(14)
@@ -560,6 +699,8 @@ function Franchise.PlayGameDay()
 				f.Stats.Losses = (f.Stats.Losses or 0) + 1
 				prize = math.max(200, math.floor(income * 30))
 			end
+			local seasonNote, titlePrize = advanceSeason(player, f, won)
+			prize += titlePrize
 			PlayerData.AddCash(player, prize)
 			PlayerData.MarkChanged(player)
 			notify(
@@ -573,9 +714,24 @@ function Franchise.PlayGameDay()
 				),
 				won and "success" or "info"
 			)
+			notify(player, seasonNote, titlePrize > 0 and "success" or "info")
 			Franchise.CheckQuests(player)
+			for _, hook in ipairs(seasonHooks) do
+				task.spawn(hook, player, plot, f.Stats.Championships or 0)
+			end
 		end
 	end
+end
+
+-- fn(player, plot, titles) after every game-day result (e.g. to hang championship banners).
+function Franchise.OnResult(fn)
+	table.insert(seasonHooks, fn)
+end
+
+-- How many championships a player has won.
+function Franchise.GetTitles(player)
+	local f = franchiseOf(player)
+	return f and f.Stats.Championships or 0
 end
 
 ---------------------------------------------------------------------------------------------
@@ -614,6 +770,9 @@ function Franchise.OnPlayerLoaded(player)
 		local rating = Instance.new("IntValue")
 		rating.Name = "Rating"
 		rating.Parent = leaderstats
+		local titles = Instance.new("IntValue")
+		titles.Name = "Titles"
+		titles.Parent = leaderstats
 		leaderstats.Parent = player
 	end
 	Franchise.CheckQuests(player)
@@ -661,6 +820,11 @@ function Franchise.Init(manager, remoteFolder, notify)
 	draft.OnServerInvoke = onDraft
 	draft.Parent = remotes
 
+	local train = Instance.new("RemoteFunction")
+	train.Name = "Train"
+	train.OnServerInvoke = onTrain
+	train.Parent = remotes
+
 	-- keep costs/attributes fresh as income grows
 	task.spawn(function()
 		while true do
@@ -678,6 +842,8 @@ end
 Franchise._onChooseTeam = onChooseTeam
 Franchise._onClaimBonus = onClaimBonus
 Franchise._onDraft = onDraft
+Franchise._onTrain = onTrain
+Franchise._advanceSeason = advanceSeason
 Franchise._resetCooldowns = function(player)
 	cooldowns[player] = nil
 end

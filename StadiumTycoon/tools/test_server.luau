@@ -272,7 +272,7 @@ local function makePlayer(name, userId)
 	-- leaderstats can't be parented to a fake (table) player, so the test makes it up front
 	local leaderstats = Instance.new("Folder")
 	leaderstats.Name = "leaderstats"
-	for _, statName in ipairs({ "Wins", "Rating" }) do
+	for _, statName in ipairs({ "Wins", "Rating", "Titles" }) do
 		local value = Instance.new("IntValue")
 		value.Name = statName
 		value.Parent = leaderstats
@@ -928,6 +928,18 @@ local function runTests()
 	local rating = alice:GetAttribute("TeamRating")
 	check(rating and rating > Config.Draft.BaseRating and rating <= 99, "team rating: " .. tostring(rating))
 	check(alice.leaderstats.Rating.Value == rating, "leaderboard shows the team rating")
+	-- training (Weight Room)
+	check(alice:GetAttribute("TrainUnlocked") == true, "the finished Weight Room unlocks training")
+	Franchise._resetCooldowns(alice)
+	local cashBeforeTrain = PlayerData.GetCash(alice)
+	local trained = Franchise._onTrain(alice)
+	check(trained.ok and trained.player ~= nil, "training works: " .. tostring(trained.message))
+	check(PlayerData.GetCash(alice) == cashBeforeTrain - (alice:GetAttribute("TrainCost") or -1), "training costs TrainCost")
+	check(trained.player.Rating > 0 and trained.player.Rating <= Config.Draft.MaxTrainedRating, "trained rating stays under the cap")
+	local again = Franchise._onTrain(alice)
+	check(again.ok == false and again.message:find("breather") ~= nil, "training has a cooldown")
+	check(aliceProfile.Franchise.Quests.train1 == true, "the training quest completes")
+	check(Franchise._onTrain(bob).ok == false, "no training without a stadium")
 	local spent = PlayerData.GetCash(alice)
 	PlayerData.TrySpend(alice, spent)
 	Franchise._resetCooldowns(alice)
@@ -1009,6 +1021,32 @@ local function runTests()
 	for _ = 1, 40 do
 		Franchise.PlayGameDay()
 	end
+	local stats = aliceProfile.Franchise.Stats
+	check((stats.Wins or 0) + (stats.Losses or 0) == wins0 + losses0 + 41, "41 game days played")
+	check(aliceProfile.Franchise.Season.Number >= 5, ("seasons roll over (season %d)"):format(aliceProfile.Franchise.Season.Number))
+	check(tostring(alice:GetAttribute("Season")):find("SEASON") ~= nil, "Season attribute: " .. tostring(alice:GetAttribute("Season")))
+	-- season rules, step by step
+	local f = aliceProfile.Franchise
+	local playoffsBefore = stats.Playoffs or 0
+	f.Season = { Number = 7, Week = Config.Season.Weeks - 1, Wins = Config.Season.PlayoffWins - 1, Losses = 2, Stage = "regular" }
+	Franchise._advanceSeason(alice, f, true)
+	check(f.Season.Stage == "semifinal" and (stats.Playoffs or 0) == playoffsBefore + 1, "enough wins after the last week = playoffs")
+	Franchise._advanceSeason(alice, f, true)
+	check(f.Season.Stage == "final", "winning the semifinal = championship game")
+	local titlesBefore = stats.Championships or 0
+	local _, titlePrize = Franchise._advanceSeason(alice, f, true)
+	check((stats.Championships or 0) == titlesBefore + 1, "winning the final = a title")
+	check(titlePrize >= Config.Season.MinimumChampionshipPrize, ("titles pay a big prize ($%d)"):format(titlePrize))
+	check(f.Season.Number == 8 and f.Season.Week == 0 and f.Season.Stage == "regular", "then a new season starts")
+	f.Season = { Number = 8, Week = Config.Season.Weeks - 1, Wins = 1, Losses = Config.Season.Weeks - 2, Stage = "regular" }
+	Franchise._advanceSeason(alice, f, false)
+	check(f.Season.Number == 9 and f.Season.Stage == "regular", "missing the playoffs starts a new season")
+	f.Season = { Number = 9, Week = 0, Wins = 0, Losses = 0, Stage = "semifinal" }
+	Franchise._advanceSeason(alice, f, false)
+	check(f.Season.Number == 10 and f.Season.Stage == "regular", "a playoff loss ends the season")
+	Franchise.CheckQuests(alice)
+	check(alice.leaderstats.Titles.Value == stats.Championships, "leaderboard shows titles")
+	check(f.Quests.title == true and f.Quests.playoffs == true, "playoff + title quests complete")
 	check(
 		(alice:GetAttribute("QuestsDone") or 0) >= 15,
 		("most quests done by a finished franchise (%d)"):format(alice:GetAttribute("QuestsDone") or 0)
@@ -1416,6 +1454,8 @@ local function runTests()
 		)
 		viewer:SetAttribute("TeamRating", 72)
 		viewer:SetAttribute("Record", "3-1")
+		viewer:SetAttribute("Season", "SEASON 2  -  WEEK 5/8  -  3-1")
+		viewer:SetAttribute("Titles", 1)
 		viewer:SetAttribute("DraftUnlocked", true)
 		viewer:SetAttribute("DraftCost", 5000)
 		instanceSignal(teamUi:FindFirstChild("Roster", true), "Activated"):Fire()
@@ -1426,12 +1466,15 @@ local function runTests()
 		check(qbRow and qbRow.Name == "RowQB" and qbRow:FindFirstChild("Name").Text == "Test Passer", "roster shows the starters")
 		check(rosterWindow:FindFirstChild("RowRB", true):FindFirstChild("Name").Text:find("empty") ~= nil, "empty positions are marked")
 		check(rosterWindow:FindFirstChild("Record", true).Text == "RECORD 3-1", "record shown")
+		local seasonText = rosterWindow:FindFirstChild("Season", true).Text
+		check(seasonText:find("WEEK 5/8") ~= nil and seasonText:find("TITLES: 1") ~= nil, "season + titles shown: " .. seasonText)
 		local draftButton = rosterWindow:FindFirstChild("DraftButton", true)
 		check(draftButton.Text:find("$5,000", 1, true) ~= nil, "draft button shows the price: " .. draftButton.Text)
 		instanceSignal(draftButton, "Activated"):Fire()
 		task.wait(0.05)
 		local draftInfo = rosterWindow:FindFirstChild("DraftInfo", true)
 		check(draftInfo.Text:find("Claim a stadium") ~= nil, "draft errors from the server are shown: " .. draftInfo.Text)
+		check(rosterWindow:FindFirstChild("TrainButton", true).Text == "TRAIN LOCKED", "train button is locked without a Weight Room")
 	end
 
 	section("Kick meter (client)")

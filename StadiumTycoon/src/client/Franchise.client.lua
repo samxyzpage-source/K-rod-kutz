@@ -21,6 +21,7 @@ local remotes = ReplicatedStorage:WaitForChild("TycoonRemotes")
 local chooseTeamRemote = remotes:WaitForChild("ChooseTeam")
 local claimBonusRemote = remotes:WaitForChild("ClaimBonus")
 local draftRemote = remotes:WaitForChild("Draft")
+local trainRemote = remotes:WaitForChild("Train")
 
 local DARK = Color3.fromRGB(18, 22, 30)
 local GOLD = Color3.fromRGB(255, 196, 37)
@@ -422,10 +423,19 @@ local recordLabel = label({
 	TextXAlignment = Enum.TextXAlignment.Right,
 	Parent = rosterWindow,
 })
+local seasonLabel = label({
+	Name = "Season",
+	Position = UDim2.new(0, 16, 0, 80),
+	Size = UDim2.new(1, -32, 0, 20),
+	Text = "",
+	TextColor3 = Color3.fromRGB(255, 225, 120),
+	Font = Enum.Font.GothamBold,
+	Parent = rosterWindow,
+})
 local rosterList = create("Frame", {
 	Name = "List",
-	Position = UDim2.new(0, 16, 0, 86),
-	Size = UDim2.new(1, -32, 1, -170),
+	Position = UDim2.new(0, 16, 0, 106),
+	Size = UDim2.new(1, -32, 1, -190),
 	BackgroundTransparency = 1,
 	Parent = rosterWindow,
 }, {
@@ -433,11 +443,20 @@ local rosterList = create("Frame", {
 })
 local draftButton = button({
 	Name = "DraftButton",
-	AnchorPoint = Vector2.new(0.5, 1),
-	Position = UDim2.new(0.5, 0, 1, -34),
-	Size = UDim2.new(0.7, 0, 0, 44),
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.new(0, 16, 1, -34),
+	Size = UDim2.new(0.5, -22, 0, 44),
 	BackgroundColor3 = Color3.fromRGB(34, 150, 80),
 	Text = "DRAFT A PLAYER",
+	Parent = rosterWindow,
+})
+local trainButton = button({
+	Name = "TrainButton",
+	AnchorPoint = Vector2.new(1, 1),
+	Position = UDim2.new(1, -16, 1, -34),
+	Size = UDim2.new(0.5, -22, 0, 44),
+	BackgroundColor3 = Color3.fromRGB(40, 110, 190),
+	Text = "TRAIN",
 	Parent = rosterWindow,
 })
 local draftInfo = label({
@@ -517,10 +536,15 @@ local function updateRoster()
 	ratingLabel.Text = "TEAM RATING " .. tostring(rating)
 	ratingLabel.TextColor3 = ratingColor(rating)
 	recordLabel.Text = "RECORD " .. tostring(player:GetAttribute("Record") or "0-0")
+	local titles = player:GetAttribute("Titles") or 0
+	seasonLabel.Text = tostring(player:GetAttribute("Season") or "") .. (titles > 0 and ("   |   TITLES: %d"):format(titles) or "")
 	local unlocked = player:GetAttribute("DraftUnlocked") == true
 	local cost = player:GetAttribute("DraftCost") or 0
-	draftButton.Text = unlocked and ("DRAFT A PLAYER  " .. Format.MoneyExact(cost)) or "DRAFT LOCKED"
+	draftButton.Text = unlocked and ("DRAFT  " .. Format.MoneyExact(cost)) or "DRAFT LOCKED"
 	draftButton.BackgroundColor3 = unlocked and Color3.fromRGB(34, 150, 80) or Color3.fromRGB(80, 80, 90)
+	local canTrain = player:GetAttribute("TrainUnlocked") == true
+	trainButton.Text = canTrain and ("TRAIN  " .. Format.MoneyExact(player:GetAttribute("TrainCost") or 0)) or "TRAIN LOCKED"
+	trainButton.BackgroundColor3 = canTrain and Color3.fromRGB(40, 110, 190) or Color3.fromRGB(80, 80, 90)
 	draftInfo.Text = unlocked and "Better coaches + film room = better draft picks. Win game days with a high rating!"
 		or "Build the Draft Board in your Front Office to unlock the draft."
 end
@@ -536,6 +560,20 @@ draftButton.Activated:Connect(function()
 	end)
 	drafting = false
 	if ok and type(result) == "table" and not result.ok and result.message then
+		draftInfo.Text = result.message
+	end
+end)
+local training = false
+trainButton.Activated:Connect(function()
+	if training then
+		return
+	end
+	training = true
+	local ok, result = pcall(function()
+		return trainRemote:InvokeServer()
+	end)
+	training = false
+	if ok and type(result) == "table" and result.message then
 		draftInfo.Text = result.message
 	end
 end)
@@ -561,7 +599,17 @@ end
 for _, attribute in ipairs({ "Quests", "QuestsDone" }) do
 	player:GetAttributeChangedSignal(attribute):Connect(updateQuests)
 end
-for _, attribute in ipairs({ "Roster", "TeamRating", "Record", "DraftCost", "DraftUnlocked" }) do
+for _, attribute in ipairs({
+	"Roster",
+	"TeamRating",
+	"Record",
+	"Season",
+	"Titles",
+	"DraftCost",
+	"DraftUnlocked",
+	"TrainCost",
+	"TrainUnlocked",
+}) do
 	player:GetAttributeChangedSignal(attribute):Connect(updateRoster)
 end
 player:GetAttributeChangedSignal("PlotIndex"):Connect(onPlotOrTeam)

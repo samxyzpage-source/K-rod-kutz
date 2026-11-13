@@ -77,6 +77,21 @@ Config.Draft = {
 	MinimumCost = 400,
 	BenchSize = 12, -- players kept besides the starters
 	EmptyPositionRating = 35,
+	-- Training (needs the finished Weight Room): +1..3 rating for your weakest starter
+	TrainCostIncomeSeconds = 25, -- a session costs this many seconds of income (or MinimumTrainCost)
+	MinimumTrainCost = 250,
+	TrainCooldownSeconds = 20,
+	MaxTrainedRating = 95, -- training can't push a player past this (great draft picks can)
+}
+
+-- Seasons: every game day is one week of the season. Win enough regular-season games to reach
+-- the playoffs (a semifinal, then the championship game). Titles are counted on the leaderboard.
+Config.Season = {
+	Weeks = 8,
+	PlayoffWins = 5, -- regular-season wins needed for the playoffs
+	PlayoffBoost = 4, -- playoff opponents are this much stronger
+	ChampionshipIncomeSeconds = 900, -- extra prize for a title: this many seconds of income...
+	MinimumChampionshipPrize = 25000, -- ...or at least this much
 }
 
 -- Field goal challenge (stadium field, once the goal posts are finished).

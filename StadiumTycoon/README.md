@@ -1,21 +1,27 @@
 # Gridiron Stadium Tycoon (Roblox)
 
-A Roblox tycoon where every player builds a pro-football franchise from nothing. You start with
-the **Front Office**, build a **practice facility** (practice field, locker room, weight room,
-training room, film room, practice gear, and later an indoor practice dome), then build the
-**stadium** piece by piece. It grows from turf and yard lines into a **full bowl**, with
-seating all the way round on two decks, home and visitor locker rooms, a two-level press box,
-a TV broadcast booth, luxury suites, a jumbotron and a ring canopy. The last piece is a
-giant championship trophy.
+A Roblox tycoon where every player builds a pro-football franchise from nothing. You start
+inside an **empty team headquarters** and fill it room by room: lobby, front office, locker
+room, coaches' offices, weight room, equipment room, training room, film room, team meeting
+room, cafeteria, player lounge and interview room. Then you build the **practice campus**
+behind it (practice field, practice gear, indoor dome, golf cart garage, Hall of Fame) and the
+**stadium** in front of it. The stadium grows from bare turf into a **full bowl** with two
+decks, locker rooms, a press box, a TV booth, suites, a jumbotron and a ring canopy. A
+**tailgate fan zone** sits beside it. The last piece is a giant championship trophy.
 
-Every few minutes a **game day** starts. Fans walk in through your gate, fill the stands you
-built and cheer, and your income is doubled for a minute.
+Nothing appears in one click. Every piece is built in **2 to 6 steps**. For example, the
+practice field goes grass, then yard lines, then end zones, then goal posts, then fence and
+sideline, then bleachers. That makes **177 build steps** in 49 pieces.
 
-![The finished franchise: full-bowl stadium, plaza and practice campus](docs/preview-aerial.png)
+On top of building, you **run the team**. You pick your colours and nickname, draft and
+train players, hire coaches, kick field goals, play game days and seasons, and chase quests
+and championships.
 
-| Game day from the 50-yard line | From the end zone | Practice campus |
+![The finished franchise: full-bowl stadium, fan zone, team HQ and practice campus](docs/preview-aerial.png)
+
+| Game day from the 50-yard line | Inside the team HQ | Practice campus |
 | --- | --- | --- |
-| ![Game day crowd, home tunnel and two-level press box](docs/preview-gameday.png) | ![End zone view with the ring canopy](docs/preview-endzone.png) | ![Practice campus: locker room, weight room, training room, film room, indoor dome](docs/preview-campus.png) |
+| ![Game day crowd and the full bowl](docs/preview-gameday.png) | ![Team HQ rooms seen from above](docs/preview-hq.png) | ![Practice field, indoor dome, golf carts and Hall of Fame](docs/preview-campus.png) |
 
 *Previews are rendered offline from the real build code (tools/), so signs and text aren't shown.*
 
@@ -25,29 +31,32 @@ built and cheer, and your income is doubled for a minute.
 | --- | --- |
 | 1 | Core stadium: 23 pieces, plots claimed at a gold gate, vault + collect pad, saving, day/night, HUD |
 | 1.1 | Polish: pulsing buy buttons, a guide beam to your next button, sounds, "Unlocked: ..." messages, vault hints, full-server handling |
-| 2 | Front Office + practice campus behind the stadium, Team Bus between the plaza and the campus, a second collect pad (Team Safe). The stadium becomes a full bowl (corner seats, upper bowl ends) with a home tunnel, home + visitor locker rooms, a bigger press box and a TV broadcast booth |
-| 3 | Game days with NPC fans, double income, a countdown in the HUD, and an excited jumbotron and scoreboard |
+| 2 | Front office + practice campus behind the stadium, a Team Bus, a second collect pad. The stadium becomes a full bowl with a home tunnel, two locker rooms, a bigger press box and a TV booth |
+| 3 | Game days: NPC fans walk in and fill the stands, double income, a countdown in the HUD |
+| 4 | Much bigger plots. You start inside an empty **Team HQ** with 12 rooms to build. Every piece is built in 2-6 steps (177 steps). New: drivable **golf carts**, a **Hall of Fame & Museum**, a **tailgate fan zone**, cafeteria, player lounge, interview room, coaches' offices, equipment room and meeting room. Team features: **team picker, Owner's Bonus, quests, draft + roster, training, hired staff, field goal challenge, seasons + playoffs + titles**, and a leaderboard |
 
 ## Play it in Roblox Studio
 
 1. Download [`build/StadiumTycoon.rbxlx`](build/StadiumTycoon.rbxlx).
 2. Double-click it (or in Studio: **File > Open from File...**).
 3. Press **Play** (F5).
-4. Walk through a glowing **gold gate** to claim a stadium.
-5. Step on the glowing **buttons** to build. Green = you can afford it, red = not yet.
-   A golden **guide beam** points from you to your next button.
-6. Your franchise earns money every second. It piles up in the **vault** next to the gate.
-   Step on the **green pad** beside the vault to collect it (standing on it keeps collecting).
-   The **Team Safe** pad at the practice campus collects from the same vault.
-7. The practice campus is behind the stadium. Ride the **Team Bus** (the blue pad in the plaza)
-   to get there, or walk through the stadium: in the front tunnel, across the field and out the
-   home tunnel behind the home bench.
+4. Walk through a glowing **gold gate** to claim a franchise. You are taken into your empty
+   **Team HQ** and asked to **pick your team colours and nickname**.
+5. Step on the glowing **buttons** to build. Green = you can afford it, red = not yet. Each
+   button says which step it is ("Step 2/5: Lockers"). A golden **guide beam** points from
+   you to your next button.
+6. Your franchise earns money every second. It piles up in the **vault**. Step on a **collect
+   pad** to move it into your cash (standing on it keeps collecting). There is one in the
+   HQ lobby (the Team Safe) and one by the stadium gate.
+7. Get around on foot, on the **Team Bus** (blue pads: HQ <-> stadium plaza), or in a
+   **golf cart** once you build the garage. Sit in the driver's seat and drive with
+   W/A/S/D (or the thumbstick on a phone).
 
 The plots, buttons and buildings are built by the scripts when the game starts, so in edit mode
 you only see the ground and the spawn point. That's expected: press Play.
 
 **Multiplayer test:** in Studio open the **Test** tab, set *Clients and Servers* to 2 players
-and press **Start**. Each player can claim a different stadium (6 plots per server).
+and press **Start**. Each player can claim a different franchise (4 plots per server).
 
 **Build faster while testing:** open `ReplicatedStorage > TycoonShared > Config` and set
 `Config.IncomeMultiplier = 50`. To see a game day sooner, set `Config.GameDay.IntervalSeconds = 30`.
@@ -55,13 +64,15 @@ Put both back before publishing.
 
 ### Before you publish: set the server size
 
-Each server has 6 stadium plots (`Config.PlotCount`). In **Home > Game Settings > Places**, set
-**Max Players** to **6** so every player gets a stadium. If a server is ever full, players without a
-stadium are told that all stadiums are taken and get a message when one opens up.
+Each server has 4 franchise plots (`Config.PlotCount`, the plots are very big now). In
+**Home > Game Settings > Places**, set **Max Players** to **4** so every player gets one. If a
+server is ever full, players without a plot are told that all stadiums are taken and get a
+message when one opens up.
 
 ### Turning on saving
 
-Progress (cash + everything you built) saves with a DataStore. That only works when:
+Progress (cash, everything you built, your team, roster, quests and record) saves with a
+DataStore. That only works when:
 
 1. The place is published: **File > Publish to Roblox**.
 2. In Studio: **Home > Game Settings > Security > Enable Studio Access to API Services** is ON.
@@ -78,37 +89,55 @@ How saving stays safe:
 
 ## How the game works
 
+### Building
+
 | Thing | What it does |
 | --- | --- |
-| Gold gate | Touch it to claim an empty stadium (one per player). The sign shows your name. |
-| Buy buttons | Appear when a piece unlocks. They pulse and show the name, price and income it adds. |
+| Gold gate | Touch it to claim an empty franchise (one per player). |
+| Buy buttons | One per piece. It shows the piece, the step ("Step 3/6: End Zones") and the price. After you buy a step, the next step's button appears in the same spot. |
 | Guide beam | A golden beam from your character to the cheapest button you can see. |
-| Vault / Team Safe | Collect your income every second. The number above them is how much is waiting. |
-| Collect pads | Step on one (front plaza or campus) to move the vault money into your cash. |
-| Team Bus | Blue pads in the plaza and at the campus teleport you between the two. |
-| Game day | Every 4 minutes: fans walk in and fill your stands, and income is doubled for 60 seconds. |
-| HUD | Cash, income per second, pieces built, game day countdown and whether saving is on. |
-| Scoreboard / Jumbotron | Your team name, attendance and a pretend game that keeps scoring (faster on game days). |
+| Vault + collect pads | Income piles up in the vault. Step on a collect pad (HQ lobby or stadium gate) to collect. |
+| Team Bus | Blue pads at the HQ and in the stadium plaza teleport you between them. |
+| Golf carts | The garage gives you up to 3 carts in your team colours. Abandoned carts drive themselves home. |
 | Day / night | A full day takes 10 minutes. Stadium lights switch on at night. |
 
-Each plot gets its own team colours (navy & orange, crimson & gold, forest & silver, purple & black,
-teal & black, royal & white). Team names come from the owner's display name, so no real NFL teams,
-logos or trademarks are used.
+### Running the team
 
-### The build order (36 pieces, about 40-45 minutes to finish)
+| Feature | How it works |
+| --- | --- |
+| Pick your team | Choose one of 6 colour schemes and a nickname (Comets, Thunderhawks, Ironclads...). Everything you built is repainted, including the carts. Change it any time with the **TEAM** button. |
+| Owner's Bonus | A free cash gift every 8 minutes: the gold **BONUS** button on the right shows the countdown. |
+| Quests | 27 goals with cash rewards, shown on the left ("Finish 2 HQ rooms", "Kick a 55-yard field goal", "Win a championship"...). |
+| Draft | Build the **Draft Board** in the Front Office, then draft players from the **ROSTER** screen. Each has a position (QB, RB, WR, OL, DEF, K) and a rating. Your film room, coaches' offices and coaching staff give better picks. |
+| Training | Finish the **Weight Room** to train your weakest starter (+1 to +3 rating, +1 more with a Training Room). |
+| Staff | Hire a coaching staff and a medical staff (they appear on the practice field and raise your team rating) and food vendors for the plaza. |
+| Field goals | When the goal posts are finished, three kick spots appear on your field (25, 40 and 55 yards). Step on one, stop the aim needle in the green, then stop the power bar past the gold line. Good kicks pay. |
+| Game days | Every 4 minutes fans walk in and fill the stands you built, income is doubled for 60 seconds, and your team plays. Your team rating against the opponent decides the odds. The score goes up on your scoreboard. |
+| Seasons | Every game day is one week. Win 5 of 8 to make the playoffs: a semifinal, then the championship game. Titles pay a big prize. |
+| Leaderboard | The player list shows Wins, Rating and Titles. |
 
-**Franchise:** Front Office (free) -> Practice Field -> Practice Locker Room + Practice Gear ->
-Weight Room -> Training Room -> Film Room
+Team colours: navy & orange, crimson & gold, forest & silver, purple & black, teal & black,
+royal & white. All team names are made up, so no real league teams, logos or trademarks are used.
 
-**Stadium:** Turf Field -> Yard Lines -> Team Benches -> End Zones -> Ticket Booth -> Goal Posts ->
-Midfield Logo -> Concession Stand -> Home Stands -> Home Locker Room -> Visitor Stands ->
-Visitor Locker Room -> Scoreboard -> Parking Lot -> West + East End Zone Seats ->
-Corner Seats (the lower bowl closes) -> Team Store -> Stadium Lights -> Home Upper Deck ->
-Indoor Practice Dome -> Visitor Upper Deck -> Jumbotron -> Press Box ->
-Upper Bowl Ends (the upper ring closes) -> Luxury Suites -> TV Broadcast Booth -> Stadium Canopy ->
-Championship Trophy
+### The build order (49 pieces, 177 steps)
 
-Prices and income are in `src/shared/Items.lua`.
+**Team HQ:** Lobby & Reception (first step free) -> Front Office -> Locker Room ->
+Coaches' Offices
+
+**Campus:** Practice Field -> Weight Room -> Equipment Room -> Golf Cart Garage ->
+Practice Gear -> Training Room -> Film Room -> Team Meeting Room -> Coaching Staff ->
+Medical & Training Staff
+
+**Stadium:** Turf -> Yard Lines -> Team Benches -> End Zones -> Cafeteria (HQ) -> Goal Posts ->
+Ticket Booth -> Midfield Logo -> Concession Stand -> Food Vendors -> Player Lounge (HQ) ->
+Home Stands -> Home Locker Room -> Interview Room (HQ) -> Visitor Stands -> Visitor Locker Room ->
+Scoreboard -> Parking Lot -> West + East End Zone Seats -> Corner Seats (the lower bowl closes) ->
+Team Store -> Tailgate & Fan Zone -> Stadium Lights -> Home Upper Deck -> Indoor Practice Dome ->
+Hall of Fame & Museum -> Visitor Upper Deck -> Jumbotron -> Press Box ->
+Upper Bowl Ends (the upper ring closes) -> Luxury Suites -> TV Broadcast Booth ->
+Stadium Canopy -> Championship Trophy
+
+Prices, income and steps are in `src/shared/Items.lua`.
 
 ## Project layout
 
@@ -117,28 +146,40 @@ StadiumTycoon/
   build/StadiumTycoon.rbxlx      the place file to open in Studio (built from src/)
   default.project.json           Rojo project: maps src/ into the place
   src/shared/   -> ReplicatedStorage.TycoonShared
-    Config.lua                   all tunable numbers, team colours, game days and the plot layout
-    Items.lua                    every buildable piece: price, income, unlock order, button spot
+    Config.lua                   all tunable numbers, team colours, seasons, kicks, the plot layout
+    Items.lua                    every piece and its steps: price, income, unlock order, button spot
     Format.lua                   money formatting ($12.5K)
   src/server/   -> ServerScriptService.TycoonServer
     Main.server.lua              entry point: builds the world, wires players, saving, loops
     World.lua                    plot positions, street + spawn, day/night cycle
-    PlotManager.lua              claiming, buttons, purchases, vault, bus, scoreboard, lights
+    PlotManager.lua              claiming, buttons, step-by-step purchases, vault, bus, scoreboard
     PlayerData.lua               DataStore loading/saving with session locking
+    Franchise.lua                team picker, Owner's Bonus, quests, draft, training, seasons
+    KickGame.lua                 the field goal challenge (server side)
+    Vehicles.lua                 golf carts
     GameDay.lua                  game day schedule, income boost, crowds
     Crowd.lua                    NPC fan models (seated + walking)
-    BuildUtil.lua                helpers for making parts, text and lights
-    Builders/                    the geometry, one function per item id
-      PlotBase.lua               slab, paths, gate, vault, collect pads, team bus stops
-      CampusBuildings.lua        front office, practice locker room, weight room, training room, film room
+    BuildUtil.lua                helpers for parts, text, lights and build steps
+    Builders/                    the geometry, one function per piece (each step marked with BuildUtil.Stage)
+      PlotBase.lua               slab, roads, gate, vault, collect pads, team bus stops
+      HQShell.lua                the empty Team HQ building
+      HQRoomsFront.lua           lobby, front office, coaches' offices, interview, meeting room, lounge
+      HQRoomsBack.lua            locker room, equipment, weight room, training room, film room, cafeteria
       CampusFields.lua           practice field, practice gear, indoor practice dome
+      Garage.lua                 golf cart garage
+      HallOfFame.lua             Hall of Fame & Museum
+      FanZone.lua                tailgate lot, food trucks, games, stage
+      Staff.lua                  coaches, trainers and food vendors (NPCs)
       StadiumRooms.lua           home + visitor locker rooms
       Field.lua                  turf, yard lines, end zones, goal posts, midfield, benches
-      Stands.lua                 the full bowl: lower + upper sideline decks, end zones, corners
+      Stands.lua                 the full bowl: lower + upper decks, end zones, corners
       Plaza.lua                  ticket booth, concessions, parking, team store, trophy
       Features.lua               scoreboard, lights, jumbotron, press box, suites, broadcast booth, canopy
   src/client/   -> StarterPlayer.StarterPlayerScripts.TycoonClient
     HUD.client.lua               cash / income / progress / game day / save status / pop-ups
+    Franchise.client.lua         team picker, bonus button, quests, roster + draft + training
+    KickGame.client.lua          the field goal aim + power meter
+    Drive.client.lua             golf cart driving
     Effects.client.lua           pulsing buttons, guide beam, sounds, cheering fans
   tools/                         offline checks (see below)
   docs/                          preview pictures
@@ -146,10 +187,13 @@ StadiumTycoon/
 
 ### Adding a new piece
 
-1. Add an entry to `Items.List` in `src/shared/Items.lua` (Id, Name, Cost, Income, Requires, Button position).
-2. Add a builder function with the same Id to one of the `Builders/` modules. Use the
+1. Add a `piece(...)` entry to `src/shared/Items.lua`: id, name, the list of step names, total
+   cost, total income, the pieces it requires and its button position.
+2. Add a builder function with the same id to one of the `Builders/` modules (and its module
+   to `Builders/init.lua`). Start each step's parts with `BuildUtil.Stage(ctx, n)`. Use the
    `BuildUtil` helpers and plot-local coordinates (see the comment at the top of `Config.lua`).
-3. Rebuild the place file (below) or paste the changed scripts into Studio.
+3. Check it with `lune run tools/render_plot.luau tools/out <piece id>`, then rebuild the place
+   file (below) or paste the changed scripts into Studio.
 
 ## For developers
 
@@ -158,24 +202,26 @@ These tools are optional. You only need them to edit the code outside Studio.
 * **Rojo** (`rojo build default.project.json -o build/StadiumTycoon.rbxlx`) rebuilds the place
   file. You can also use `rojo serve` to live-sync into Studio.
 * **Lune** runs the game code outside Roblox:
-  * `lune run tools/render_plot.luau tools/out all` builds a complete plot with the real builder
-    code and checks it: plot bounds, blocked buttons, clear walkways and tunnel. Add `crowd` as a
-    third argument to also seat a game-day crowd.
+  * `lune run tools/render_plot.luau tools/out all` builds every step of a complete plot with
+    the real builder code and checks it: zones, plot bounds, blocked buttons, clear walkways,
+    roads, tunnels and HQ corridors. Add `crowd` as a third argument to also seat a crowd.
   * `node tools/preview/shoot.js tools/out/parts.json tools/out` renders it to PNG images
     (run `npm install` in `tools/preview` first; needs Playwright + Chromium).
-  * `lune run tools/test_server.luau` runs 150+ checks of the server logic, HUD and client
-    effects against a fake Roblox engine. It covers:
-    * claiming, buying, the vault and auto-collect
+  * `lune run tools/test_server.luau` runs about 300 checks of the server logic and the client
+    scripts against a fake Roblox engine. It covers:
+    * claiming, step-by-step buying, the vault and auto-collect
+    * golf carts and the drive controller
+    * the team picker, Owner's Bonus, quests, draft, training, field goals, seasons and playoffs
     * saving and rejoining, session locks, temporary errors, bad or newer save data, and
       Studio without API access
     * game days and crowds
-    * the HUD, the guide beam and the cheering fans
+    * the HUD, team screens, kick meter, guide beam and cheering fans
   * `lune run tools/inspect_place.luau build/StadiumTycoon.rbxlx` checks the built place file.
 * **StyLua** (`stylua src tools`) formats the code and **selene** (`selene src`) lints it.
 
 ## Ideas for next versions
 
-* Rebirth / "new season" for a permanent income boost.
-* Upgrades for existing pieces (bigger jumbotron, more seats) instead of only new pieces.
-* A leaderboard (cash, stadium value), daily rewards and gamepasses (2x cash, auto-collect).
+* Rebirth / "new franchise" for a permanent income boost.
+* Upgrades for existing pieces (bigger jumbotron, more seats).
+* Gamepasses (2x cash, auto-collect, a faster golf cart).
 * Real Humanoid NPC players running drills on the practice field.
