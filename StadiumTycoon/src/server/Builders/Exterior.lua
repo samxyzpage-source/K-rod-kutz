@@ -10,43 +10,56 @@
 	seg.base * CFrame.new(x, y, -o). The Front face (-Z) of an unrotated part looks away from the
 	field (toward the plaza), its Back face (+Z) toward the field.
 
+	PIECES + STEPS
+	  gates       1 Gate A (Main Gate)  2 Gate B (West)  3 Gate C (East)  4 Gate D (Players' Gate):
+	              one complete gate per step (portal, plaza, entry hall)
+	  escalators  1 Main Escalators (3 flights + landings in every gate hall)  2 Corner Ramps
+	              3 Elevators (a glass elevator per gate hall)  4 Wayfinding Signs
+	  facade      1 Lower Facade  2 Glass Curtain Walls  3 Upper Facade & Fins
+	              4 Banners & Night Lights
+
 	THE GATE HALL (the same on all four gate axes: A front/visitor, B west, C east, D back/home),
 	segment x |x| < 14 between the hall walls (14..15), offsets 84.2..152:
-	  * portal (gates)       pylons |x| 13..19 at offsets 152.4..163 (y 0..42) + a lit marquee over
+	  * portal (gates)       pylons |x| 13..19 at offsets 152.4..163 (y 0..50) + a lit marquee over
 	                         the 26-wide, 26-tall opening, a glass canopy out to offset 177, turnstiles
-	                         at 166.6..169.4, a security tent at x 27..39 and two team flags at x -32/-44
+	                         at 166.6..169.4, a security tent at x 36..48 and two team flags at x -40/-52
+	                         (gate B mirrors its plaza and the end gates' flags stand at -28/-38, clear
+	                         of the canopy masts and video-board pylons of Features.lua)
 	  * entry lobby (gates)  offsets 120..152 on the ground, ceiling 28.4..28.9 (a hole over the
 	                         elevator shaft); its inner wall at 119.4..120 is open at |x| < 7 where the
-	                         first escalators rise into the tall escalator well (84.2..120)
+	                         first escalators rise into the tall escalator well (84.2..120). The hall
+	                         walls stop below the club ring's girder (49.4) under it and at 52.9 outside
 	  * escalators           F1 ground -> 30 (|x| < 6, offsets 142 -> 90) onto the landing C (84..90)
 	                         in front of the main concourse's gate opening (|x| < 8); bridge A (x -14..-6,
 	                         y 30) runs back out to the mezzanine B (146..152, y 30); F2 30 -> 54 (|x| < 6,
-	                         150 -> 113) lands on D (108..113) at the club ring's gate opening (offset
+	                         149 -> 112.5) lands on D (108..112.5) at the club ring's gate opening (offset
 	                         108); bridge E (x 6..14, y 54) + a path along the segment (offsets
 	                         134.2..140.2 out to x 58) + a leg into the facade band reach F3 54 -> 74,
 	                         which climbs along the segment inside the facade band (offsets 152.4..158.4,
 	                         x 52 -> 17.4) to the top landing (x -8..17.4) at the upper concourse's gate
-	                         opening (offset 152, |x| < 8)
+	                         opening (offset 152, |x| < 8). Steps are diamond-plate ramps (30-33 deg).
 	  * elevator             a glass shaft at x 6.2..14, offsets 140.2..146 (doors at y 0, 30, 54) + a
 	                         door on the top landing (y 74); every door has buttons to the other 3 levels
 	  The front walkway / back walk corridors (|x| < 11 from offset 149 outward, y 0.8..9) stay clear:
 	  turnstiles are non-collidable, everything collidable stands at |x| >= 13 or above y 22.
 
-	CORNER RAMPS (escalators step 2): outside the facade's four diagonal corners (u = s * x, the
-	ramps run toward the end zones): two 60-long flights (1:4) side by side along the facade
-	(R1 ground -> 15 in the outer lane, offsets 170..178.6; a turning landing; R2 15 -> 30 in the
-	inner lane, 162.4..170) and a bridge at y 30 (u 27.4..33.4) through the facade to the main
-	concourse's outer wall (offset 84.1). The concourse's corner walls have no openings (food stands
-	stand behind them), so a lit "MAIN CONCOURSE" panel on the wall + a "TO THE CORNER RAMP" panel
-	inside take fans through (elevator-type prompts, both ways).
+	CORNER RAMPS (escalators step 2): outside the facade's four diagonal corners (u = s * x; the
+	ramps run from the bridge toward the end zones, clear of the canopy mast on each corner's centre
+	line): two 45-long flights (1:3) side by side along the facade (R1 ground -> 15 in the outer lane,
+	offsets 170..178.6, u 24 -> 69; a turning landing u 69..77; R2 15 -> 30 in the inner lane,
+	162.4..170, u 69 -> 24) and a bridge at y 30 (u 18..24) through the facade to a balcony (u 18..40,
+	offsets 84..100) at the main concourse's outer wall. That corner wall has no opening (food stands
+	stand behind it), so a lit "MAIN CONCOURSE" panel on the wall + a "CORNER RAMP - EXIT" panel inside
+	(u 28..32, where no stand is) take fans through (elevator-type prompts, both ways).
 
 	FACADE (offsets 152..160, y 0..112): a stone base (158..160, 0..14) with a cap (14..15), glass
 	curtain walls (159..159.6) up to 86 with spandrel bands at the concourse levels, a team-colour
 	upper band (158.4..160.2, 86..110) behind vertical fins (160.2..162.2), a cornice roof (110..112)
-	that closes the gap to the upper deck's rear fascia (152.05), piers on the 8 joints, the team name
-	in giant letters over Gate A, LED strips, banners and night lights. It leaves the gate portals
-	(|x| < 19 below y 42), F3 + its landings in the band (offsets < 158.8) and the corner bridges
-	(u 26.8..34, y 29..40) open.
+	that closes the gap to the upper deck's rear fascia (152.05), piers on the 8 joints, the gate
+	pylons continued as stone towers up to the band, the team name in giant letters over Gate A
+	(smaller ones over B, C, D), LED strips, banners and night lights. It leaves the gate portals
+	(|x| < 19 below y 50), F3 + its landings in the band (offsets < 158.8) and the corner bridges
+	(u 17.4..24.6, y 29..40) open.
 
 	Flat layers: hall floor + plaza paving 0.1..0.2 (the plot walkways are 0..0.1), floor logos
 	0.2..0.26, Gate D's red carpet 0.26..0.32.
@@ -127,7 +140,7 @@ local BAL_H = 3 -- balustrade height above the steps
 local TREAD = 1 -- step band thickness
 local TRUSS = 2.6 -- truss cladding under the steps
 local F1 = { x = 0, bottom = 142, top = 90, y0 = 0, y1 = 30 }
-local F2 = { x = 0, bottom = 150, top = 113, y0 = 30, y1 = 54 }
+local F2 = { x = 0, bottom = 149, top = 112.5, y0 = 30, y1 = 54 } -- (3 studs of mezzanine to board it)
 local F3 = { o = 155.4, bottom = 52, top = 17.4, y0 = 54, y1 = 74 }
 local SHAFT = { x0 = 6.2, x1 = 14, o0 = 140.2, o1 = 146, top = 72.6 }
 local PATH = { o0 = 134.2, o1 = 140.2, x1 = 52, leg1 = 58, band = 158.6 }
@@ -487,7 +500,8 @@ local function buildGate(ctx, seg, gate, L)
 
 	-- PORTAL ------------------------------------------------------------------------------
 	for _, s in ipairs({ -1, 1 }) do
-		local pylon = box(hall, seg, "GatePylon", s * PORTAL_HALF, s * PYLON_OUT, 0, PYLON_TOP, PYLON_IN, PYLON_FRONT, STONE, Enum.Material.Granite)
+		local pylon =
+			box(hall, seg, "GatePylon", s * PORTAL_HALF, s * PYLON_OUT, 0, PYLON_TOP, PYLON_IN, PYLON_FRONT, STONE, Enum.Material.Granite)
 		-- a tall team-colour panel with the gate letter on the pylon's front
 		local panel = box(
 			hall,
@@ -517,17 +531,80 @@ local function buildGate(ctx, seg, gate, L)
 		At = Vector3.new(0, 4 - (LINTEL[1] + LINTEL[2]) / 2, -(PYLON_FRONT - PYLON_IN) / 2 - 1),
 		Distance = 12,
 	})
-	local led = box(hall, seg, "MarqueeLED", -PORTAL_HALF, PORTAL_HALF, LINTEL[1] - 0.4, LINTEL[1], PYLON_FRONT - 1, PYLON_FRONT, team.Secondary, Enum.Material.Neon, PAINT)
+	local led = box(
+		hall,
+		seg,
+		"MarqueeLED",
+		-PORTAL_HALF,
+		PORTAL_HALF,
+		LINTEL[1] - 0.4,
+		LINTEL[1],
+		PYLON_FRONT - 1,
+		PYLON_FRONT,
+		team.Secondary,
+		Enum.Material.Neon,
+		PAINT
+	)
 	lightsAlong(led, 3, { Name = "GateLight", Range = 20, Brightness = 1.4, Color = LIGHT_WARM, Shadows = false }, -0.5)
 
 	-- glass canopy over the turnstiles, with a steel edge beam and the team banner under it
-	box(hall, seg, "GateCanopy", -CANOPY_HALF, CANOPY_HALF, CANOPY_Y[1], CANOPY_Y[2], PYLON_FRONT, CANOPY_OUT, GLASS, Enum.Material.Glass, { Transparency = 0.35 })
-	local beam = box(hall, seg, "CanopyBeam", -CANOPY_HALF, CANOPY_HALF, CANOPY_Y[1] - 1.2, CANOPY_Y[2] + 0.2, CANOPY_OUT - 1, CANOPY_OUT, DARK_STEEL, Enum.Material.Metal)
+	box(
+		hall,
+		seg,
+		"GateCanopy",
+		-CANOPY_HALF,
+		CANOPY_HALF,
+		CANOPY_Y[1],
+		CANOPY_Y[2],
+		PYLON_FRONT,
+		CANOPY_OUT,
+		GLASS,
+		Enum.Material.Glass,
+		{ Transparency = 0.35 }
+	)
+	local beam = box(
+		hall,
+		seg,
+		"CanopyBeam",
+		-CANOPY_HALF,
+		CANOPY_HALF,
+		CANOPY_Y[1] - 1.2,
+		CANOPY_Y[2] + 0.2,
+		CANOPY_OUT - 1,
+		CANOPY_OUT,
+		DARK_STEEL,
+		Enum.Material.Metal
+	)
 	lightsAlong(beam, 4, { Name = "CanopyLight", Range = 18, Brightness = 1.2, Color = LIGHT_WARM, Shadows = false }, -1)
 	for _, s in ipairs({ -1, 1 }) do
-		box(hall, seg, "CanopyPost", s * (CANOPY_HALF - 1.2), s * (CANOPY_HALF - 0.4), 0, CANOPY_Y[1] - 1.2, CANOPY_OUT - 0.9, CANOPY_OUT - 0.1, DARK_STEEL, Enum.Material.Metal)
+		box(
+			hall,
+			seg,
+			"CanopyPost",
+			s * (CANOPY_HALF - 1.2),
+			s * (CANOPY_HALF - 0.4),
+			0,
+			CANOPY_Y[1] - 1.2,
+			CANOPY_OUT - 0.9,
+			CANOPY_OUT - 0.1,
+			DARK_STEEL,
+			Enum.Material.Metal
+		)
 	end
-	local banner = box(hall, seg, "TeamBanner", -12, 12, CANOPY_Y[1] - 5.6, CANOPY_Y[1] - 1.2, CANOPY_OUT - 0.6, CANOPY_OUT - 0.4, team.Primary, nil, PAINT)
+	local banner = box(
+		hall,
+		seg,
+		"TeamBanner",
+		-12,
+		12,
+		CANOPY_Y[1] - 5.6,
+		CANOPY_Y[1] - 1.2,
+		CANOPY_OUT - 0.6,
+		CANOPY_OUT - 0.4,
+		team.Primary,
+		nil,
+		PAINT
+	)
 	liveTeam(ctx, banner, OUTWARD, ink(team.Primary, team), team.Primary, { PPS = 14 })
 
 	-- PLAZA ---------------------------------------------------------------------------------
@@ -547,16 +624,40 @@ local function buildGate(ctx, seg, gate, L)
 	-- between them, and the walkway through the gate stays clear)
 	for index = -3, 3 do
 		local x = index * 6
-		local cabinet = box(hall, seg, "Turnstile", x - 0.6, x + 0.6, 0.2, 3.6, TURNSTILE_O[1], TURNSTILE_O[2], STEEL, Enum.Material.Metal, NO_COLLIDE)
-		local scanner = box(hall, seg, "TicketScanner", x - 0.45, x + 0.45, 3.6, 4.1, TURNSTILE_O[1] + 0.5, TURNSTILE_O[2] - 0.5, SCANNER_GREEN, Enum.Material.Neon, NO_COLLIDE)
+		local cabinet =
+			box(hall, seg, "Turnstile", x - 0.6, x + 0.6, 0.2, 3.6, TURNSTILE_O[1], TURNSTILE_O[2], STEEL, Enum.Material.Metal, NO_COLLIDE)
+		local scanner = box(
+			hall,
+			seg,
+			"TicketScanner",
+			x - 0.45,
+			x + 0.45,
+			3.6,
+			4.1,
+			TURNSTILE_O[1] + 0.5,
+			TURNSTILE_O[2] - 0.5,
+			SCANNER_GREEN,
+			Enum.Material.Neon,
+			NO_COLLIDE
+		)
 		if index == 0 then
-			BuildUtil.Look(cabinet, "Turnstiles", "Scan your ticket! Hold it under the green light - BEEP! - and walk on through. On game day thousands of fans pass these.", {
-				Distance = 9,
-			})
+			BuildUtil.Look(
+				cabinet,
+				"Turnstiles",
+				"Scan your ticket! Hold it under the green light - BEEP! - and walk on through. On game day thousands of fans pass these.",
+				{
+					Distance = 9,
+				}
+			)
 		elseif index == 1 then
-			BuildUtil.Look(scanner, "Ticket Scanner", "Green light means GO! Red light means... check you have the right game. Every ticket has a secret barcode.", {
-				Distance = 8,
-			})
+			BuildUtil.Look(
+				scanner,
+				"Ticket Scanner",
+				"Green light means GO! Red light means... check you have the right game. Every ticket has a secret barcode.",
+				{
+					Distance = 8,
+				}
+			)
 		end
 	end
 
@@ -585,15 +686,46 @@ local function buildGate(ctx, seg, gate, L)
 		Color = TENT_WHITE,
 		Material = Enum.Material.Fabric,
 	})
-	local valance = box(hall, seg, "TentValance", ps * (t.x0 - 0.2), ps * (t.x1 + 0.2), 8, 9.2, t.o1 + 0.2, t.o1 + 0.4, team.Primary, Enum.Material.Fabric, PAINT)
+	local valance = box(
+		hall,
+		seg,
+		"TentValance",
+		ps * (t.x0 - 0.2),
+		ps * (t.x1 + 0.2),
+		8,
+		9.2,
+		t.o1 + 0.2,
+		t.o1 + 0.4,
+		team.Primary,
+		Enum.Material.Fabric,
+		PAINT
+	)
 	write(valance, OUTWARD, "SECURITY", ink(team.Primary, team), { Top = 0.08, Height = 0.84 })
-	local tableTop = box(hall, seg, "BagTable", ps * (t.x0 + 1.5), ps * (t.x0 + 7.5), 0.2, 3.2, t.o0 + 2, t.o0 + 4.6, WHITE, Enum.Material.SmoothPlastic)
-	BuildUtil.Look(tableTop, "Security Check", "Bags go on the table for a quick peek, then walk through the arch. Keys and phones in the bin - no beeping allowed!", {
-		Distance = 9,
-	})
+	local tableTop =
+		box(hall, seg, "BagTable", ps * (t.x0 + 1.5), ps * (t.x0 + 7.5), 0.2, 3.2, t.o0 + 2, t.o0 + 4.6, WHITE, Enum.Material.SmoothPlastic)
+	BuildUtil.Look(
+		tableTop,
+		"Security Check",
+		"Bags go on the table for a quick peek, then walk through the arch. Keys and phones in the bin - no beeping allowed!",
+		{
+			Distance = 9,
+		}
+	)
 	box(hall, seg, "MetalDetector", ps * (t.x1 - 4.6), ps * (t.x1 - 4), 0.2, 7.4, mid - 0.6, mid + 0.6, DARK_STEEL, Enum.Material.Metal)
 	box(hall, seg, "MetalDetector", ps * (t.x1 - 1.4), ps * (t.x1 - 0.8), 0.2, 7.4, mid - 0.6, mid + 0.6, DARK_STEEL, Enum.Material.Metal)
-	local header = box(hall, seg, "MetalDetectorTop", ps * (t.x1 - 4.6), ps * (t.x1 - 0.8), 7.4, 8, mid - 0.6, mid + 0.6, DARK_STEEL, Enum.Material.Metal)
+	local header = box(
+		hall,
+		seg,
+		"MetalDetectorTop",
+		ps * (t.x1 - 4.6),
+		ps * (t.x1 - 0.8),
+		7.4,
+		8,
+		mid - 0.6,
+		mid + 0.6,
+		DARK_STEEL,
+		Enum.Material.Metal
+	)
 	BuildUtil.Light(header, "PointLight", { Name = "TentLight", Range = 14, Brightness = 1, Color = LIGHT_COOL, Shadows = false })
 
 	-- two team flags on tall poles
@@ -608,11 +740,23 @@ local function buildGate(ctx, seg, gate, L)
 			Color = STEEL,
 			Material = Enum.Material.Metal,
 		})
-		local flag = box(hall, seg, "TeamFlag", ps * (u - 10.3), ps * (u - 0.3), 32.5, 38.5, 171.9, 172.1, index == 1 and team.Primary or team.Secondary, Enum.Material.Fabric, PAINT)
+		local flag = box(
+			hall,
+			seg,
+			"TeamFlag",
+			ps * (u - 10.3),
+			ps * (u - 0.3),
+			32.5,
+			38.5,
+			171.9,
+			172.1,
+			index == 1 and team.Primary or team.Secondary,
+			Enum.Material.Fabric,
+			PAINT
+		)
 		local flagColor = index == 1 and team.Primary or team.Secondary
 		liveTeam(ctx, flag, OUTWARD, ink(flagColor, team), flagColor, { PPS = 14 })
 	end
-
 
 	-- ENTRY HALL ----------------------------------------------------------------------------
 	box(hall, seg, "HallFloor", -HALL_HALF, HALL_HALF, 0.1, 0.2, HALL_IN, FRONT, TERRAZZO, Enum.Material.Marble, PAINT)
@@ -620,18 +764,69 @@ local function buildGate(ctx, seg, gate, L)
 	for _, s in ipairs({ -1, 1 }) do
 		-- under the club ring the walls stop below its outer girder (49.5); outside it they carry
 		-- the club-level bridge (53)
-		local well = box(hall, seg, "HallWall", s * HALL_HALF, s * HALL_WALL, 0, LOW_WALL_TOP, HALL_IN, CLUB_EDGE, HALL_WALL_COLOR, Enum.Material.Concrete)
+		local well = box(
+			hall,
+			seg,
+			"HallWall",
+			s * HALL_HALF,
+			s * HALL_WALL,
+			0,
+			LOW_WALL_TOP,
+			HALL_IN,
+			CLUB_EDGE,
+			HALL_WALL_COLOR,
+			Enum.Material.Concrete
+		)
 		lightsAlongZ(well, 2, light, -s * 0.8, 14)
-		local outer = box(hall, seg, "HallWall", s * HALL_HALF, s * HALL_WALL, 0, WALL_TOP, CLUB_EDGE, FRONT, HALL_WALL_COLOR, Enum.Material.Concrete)
+		local outer =
+			box(hall, seg, "HallWall", s * HALL_HALF, s * HALL_WALL, 0, WALL_TOP, CLUB_EDGE, FRONT, HALL_WALL_COLOR, Enum.Material.Concrete)
 		lightsAlongZ(outer, 2, light, -s * 0.8, 12)
-		box(hall, seg, "HallStripe", s * (HALL_HALF - 0.15), s * HALL_HALF, 9.5, 11.5, LOBBY_IN + 0.6, FRONT - 0.6, team.Primary, nil, PAINT)
+		box(
+			hall,
+			seg,
+			"HallStripe",
+			s * (HALL_HALF - 0.15),
+			s * HALL_HALF,
+			9.5,
+			11.5,
+			LOBBY_IN + 0.6,
+			FRONT - 0.6,
+			team.Primary,
+			nil,
+			PAINT
+		)
 		-- the lobby's inner wall, open in the middle where the escalators rise
-		local inner = box(hall, seg, "LobbyInnerWall", s * LOBBY_OPEN, s * HALL_HALF, 0, LOBBY_CEIL[2], LOBBY_IN - 0.6, LOBBY_IN, HALL_WALL_COLOR, Enum.Material.Concrete)
+		local inner = box(
+			hall,
+			seg,
+			"LobbyInnerWall",
+			s * LOBBY_OPEN,
+			s * HALL_HALF,
+			0,
+			LOBBY_CEIL[2],
+			LOBBY_IN - 0.6,
+			LOBBY_IN,
+			HALL_WALL_COLOR,
+			Enum.Material.Concrete
+		)
 		if s < 0 then
 			local welcome = write(inner, OUTWARD, "WELCOME", team.Primary, { Top = 0.3, Height = 0.12, Left = 0.06, Width = 0.88 })
 			addLine(welcome, "TO GATE " .. gate.letter, 0.43, 0.08, Enum.Font.GothamBold)
 		else
-			local screen = box(hall, seg, "LobbyTeamScreen", 1.2 + LOBBY_OPEN, HALL_HALF - 0.8, 13, 19, LOBBY_IN, LOBBY_IN + 0.15, SIGN_DARK, nil, PAINT)
+			local screen = box(
+				hall,
+				seg,
+				"LobbyTeamScreen",
+				1.2 + LOBBY_OPEN,
+				HALL_HALF - 0.8,
+				13,
+				19,
+				LOBBY_IN,
+				LOBBY_IN + 0.15,
+				SIGN_DARK,
+				nil,
+				PAINT
+			)
 			liveTeam(ctx, screen, OUTWARD, ink(SIGN_DARK, team), SIGN_DARK, { PPS = 20 })
 		end
 	end
@@ -654,12 +849,45 @@ local function buildGate(ctx, seg, gate, L)
 	-- the hall's glass front above the portal
 	box(hall, seg, "HallFrontGlass", -HALL_HALF, HALL_HALF, LOBBY_CEIL[2], WALL_TOP, FRONT, PYLON_IN, GLASS, Enum.Material.Glass, GLASSY)
 	-- guest services desk
-	local desk = box(hall, seg, "GuestServicesDesk", -HALL_HALF + 0.4, -HALL_HALF + 3.4, 0.2, 3.6, 124, 132, team.Secondary, Enum.Material.SmoothPlastic)
-	BuildUtil.Look(desk, "Guest Services", "Lost your seats? Need a map or a birthday sticker? The friendly staff here help every fan find the way.", {
-		Distance = 9,
-	})
+	local desk = box(
+		hall,
+		seg,
+		"GuestServicesDesk",
+		-HALL_HALF + 0.4,
+		-HALL_HALF + 3.4,
+		0.2,
+		3.6,
+		124,
+		132,
+		team.Secondary,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.Look(
+		desk,
+		"Guest Services",
+		"Lost your seats? Need a map or a birthday sticker? The friendly staff here help every fan find the way.",
+		{
+			Distance = 9,
+		}
+	)
 	local deskSign = box(hall, seg, "GuestServicesSign", -HALL_HALF, -HALL_HALF + 0.2, 5.6, 8.6, 123, 133, SIGN_DARK, nil, PAINT)
 	write(deskSign, Enum.NormalId.Right, "GUEST SERVICES", WHITE, { Glow = true, Top = 0.15, Height = 0.7 })
+	-- a live game-day countdown over the desk
+	local clock = box(hall, seg, "GameDayScreen", -HALL_HALF + 0.15, -HALL_HALF + 0.35, 12.4, 17.4, 122, 134, SIGN_DARK, nil, PAINT)
+	local _, clockLabel = BuildUtil.LiveText(clock, Enum.NormalId.Right, "gameday", {
+		LabelName = "Live_gameday",
+		Text = "NEXT GAME SOON",
+		TextColor3 = Color3.fromRGB(255, 226, 120),
+		BackgroundColor3 = SIGN_DARK,
+		BackgroundTransparency = 0,
+		LightInfluence = 0,
+		Font = Enum.Font.GothamBold,
+		PixelsPerStud = 20,
+	})
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft, pad.PaddingRight = UDim.new(0.05, 0), UDim.new(0.05, 0)
+	pad.PaddingTop, pad.PaddingBottom = UDim.new(0.15, 0), UDim.new(0.15, 0)
+	pad.Parent = clockLabel
 	BuildUtil.Light(deskSign, "PointLight", { Name = "DeskLight", Range = 12, Brightness = 1, Color = LIGHT_WARM, Shadows = false })
 	if gate.letter == "D" then
 		box(hall, seg, "RedCarpet", -3, 3, 0.26, 0.32, F1.bottom + 4, PAVING_OUT, RED_CARPET, Enum.Material.Fabric, PAINT)
@@ -692,14 +920,32 @@ local function escalatorBank(ctx, seg, a, b, w0, w1, lanes, trussFrom)
 	local t = trussFrom or 0
 	local start = { a[1] + dx * t, a[2] + dy * t, a[3] + dz * t }
 	local truss = slope(ctx, seg, "EscalatorTruss", start, b, w0, w1, TRUSS, CLADDING, Enum.Material.Metal, nil, TREAD)
-	lightsAlongZ(truss, 2, { Name = "EscalatorLight", Range = 14, Brightness = 0.9, Color = LIGHT_COOL, Shadows = false }, 0, -TRUSS / 2 - 0.5)
+	lightsAlongZ(
+		truss,
+		2,
+		{ Name = "EscalatorLight", Range = 14, Brightness = 0.9, Color = LIGHT_COOL, Shadows = false },
+		0,
+		-TRUSS / 2 - 0.5
+	)
 	local laneW = ((w1 - w0) - (lanes + 1) * BAL) / lanes
 	for i = 0, lanes do
 		local g0 = w0 + i * (laneW + BAL)
 		local g1 = g0 + BAL
 		slope(ctx, seg, "EscalatorGlass", up(a, BAL_H), up(b, BAL_H), g0, g1, BAL_H * cosA, GLASS, Enum.Material.Glass, GLASSY)
 		if i == 0 or i == lanes then
-			slope(ctx, seg, "Handrail", up(a, BAL_H + 0.35), up(b, BAL_H + 0.35), g0 - 0.06, g1 + 0.06, 0.35, RUBBER, Enum.Material.Rubber, NO_COLLIDE)
+			slope(
+				ctx,
+				seg,
+				"Handrail",
+				up(a, BAL_H + 0.35),
+				up(b, BAL_H + 0.35),
+				g0 - 0.06,
+				g1 + 0.06,
+				0.35,
+				RUBBER,
+				Enum.Material.Rubber,
+				NO_COLLIDE
+			)
 		end
 	end
 	return steps
@@ -746,8 +992,8 @@ local function hallEscalators(ctx, seg)
 	rail(esc, seg, 6, 6.4, 54, F2.top, SHAFT.o0)
 	rail(esc, seg, HALL_HALF - 0.4, HALL_HALF, 54, CLUB_EDGE, PATH.o0)
 	box(esc, seg, "UpperPath", HALL_HALF, PATH.x1, 53, 54, PATH.o0, PATH.o1, slab, Enum.Material.Concrete)
-	rail(esc, seg, HALL_WALL, PATH.leg1, 54, PATH.o0, PATH.o0 + 0.4)
-	rail(esc, seg, HALL_WALL, PATH.x1, 54, PATH.o1 - 0.4, PATH.o1)
+	rail(esc, seg, HALL_HALF, PATH.leg1, 54, PATH.o0, PATH.o0 + 0.4)
+	rail(esc, seg, HALL_HALF, PATH.x1, 54, PATH.o1 - 0.4, PATH.o1)
 	box(esc, seg, "UpperPathLeg", PATH.x1, PATH.leg1, 53, 54, PATH.o0, PATH.band, slab, Enum.Material.Concrete)
 	rail(esc, seg, PATH.leg1 - 0.4, PATH.leg1, 54, PATH.o0 + 0.4, PATH.band)
 	rail(esc, seg, PATH.x1, PATH.x1 + 0.4, 54, PATH.o1, TOP.o0 + 0.2)
@@ -799,13 +1045,25 @@ local function cornerRamp(ctx, seg, s)
 	)
 	lightsAlongZ(p, 2, light, 0, 1)
 	for _, o in ipairs({ R.inner[1] + 0.3, R.inner[2] - 0.3 }) do
-		slope(ramp, seg, "RampParapet", { x(R.low), 15 + h, o }, { x(R.high), 30 + h, o }, o - 0.3, o + 0.3, h * cos1, wall, Enum.Material.Concrete)
+		slope(
+			ramp,
+			seg,
+			"RampParapet",
+			{ x(R.low), 15 + h, o },
+			{ x(R.high), 30 + h, o },
+			o - 0.3,
+			o + 0.3,
+			h * cos1,
+			wall,
+			Enum.Material.Concrete
+		)
 	end
 	local dir = R.landing > R.low and 1 or -1
 	local landingEnd = R.landing - dir * 0.6
 	box(ramp, seg, "RampParapet", x(R.landing), x(landingEnd), 15, 15 + h, R.inner[1], R.outer[2], wall, Enum.Material.Concrete)
 	box(ramp, seg, "RampParapet", x(landingEnd), x(R.low), 15, 15 + h, R.inner[1], R.inner[1] + 0.6, wall, Enum.Material.Concrete)
-	local lp = box(ramp, seg, "RampParapet", x(landingEnd), x(R.low), 15, 15 + h, R.outer[2] - 0.6, R.outer[2], wall, Enum.Material.Concrete)
+	local lp =
+		box(ramp, seg, "RampParapet", x(landingEnd), x(R.low), 15, 15 + h, R.outer[2] - 0.6, R.outer[2], wall, Enum.Material.Concrete)
 	BuildUtil.Light(lp, "PointLight", light)
 
 	-- the bridge at y 30 through the facade (R2 arrives at its +u side at the outer end), ending in a
@@ -856,8 +1114,22 @@ local function elevator(ctx, seg)
 	local lift = BuildUtil.Child(ctx, "Elevator")
 	local team = ctx.colors
 	local sh = SHAFT
-	box(lift, seg, "ElevatorShaft", sh.x0, sh.x1, 0, sh.top, sh.o0, sh.o1, GLASS, Enum.Material.Glass, GLASSY)
-	local cab = box(lift, seg, "ElevatorCab", sh.x0 + 0.8, sh.x1 - 0.6, 0.2, 9.2, sh.o0 + 0.6, sh.o1 - 0.6, team.Primary, Enum.Material.SmoothPlastic, NO_COLLIDE)
+	-- (from the top of the hall floor finish, so the glass never shares a face with it)
+	box(lift, seg, "ElevatorShaft", sh.x0, sh.x1, 0.2, sh.top, sh.o0, sh.o1, GLASS, Enum.Material.Glass, GLASSY)
+	local cab = box(
+		lift,
+		seg,
+		"ElevatorCab",
+		sh.x0 + 0.8,
+		sh.x1 - 0.6,
+		0.2,
+		9.2,
+		sh.o0 + 0.6,
+		sh.o1 - 0.6,
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		NO_COLLIDE
+	)
 	BuildUtil.Light(cab, "PointLight", { Name = "CabLight", Range = 12, Brightness = 1, Color = LIGHT_COOL, Shadows = false })
 
 	-- levels: door (x0, x1, y, o0, o1, which side the riders stand: +1 = toward the plaza) +
@@ -902,7 +1174,8 @@ local function elevator(ctx, seg)
 		if index == 4 then
 			x0, x1 = x0 + 0.6, x1 + 0.6
 		end
-		local door = box(lift, seg, "ElevatorDoor", x0, x1, level.y, level.y + 8, level.o[1], level.o[2], STEEL, Enum.Material.Metal, NO_COLLIDE)
+		local door =
+			box(lift, seg, "ElevatorDoor", x0, x1, level.y, level.y + 8, level.o[1], level.o[2], STEEL, Enum.Material.Metal, NO_COLLIDE)
 		write(door, level.side > 0 and OUTWARD or INWARD, level.label, SIGN_DARK, { Top = 0.02, Height = 0.08, PPS = 20 })
 		local buttons = 0
 		for target, other in ipairs(levels) do
@@ -933,18 +1206,32 @@ local function hallSigns(ctx, seg, gate, L)
 	local l1 = write(s1, OUTWARD, "ESCALATORS  ^  MAIN CONCOURSE", color, { Glow = true, Top = 0.1, Height = 0.42 })
 	addLine(l1, "SECTIONS " .. lower .. "   |   CLUB LEVEL   |   UPPER DECK", 0.6, 0.28, Enum.Font.GothamBold)
 	BuildUtil.Light(s1, "PointLight", glow)
-	BuildUtil.Look(s1, "Gate " .. gate.letter .. " Escalators", "Ride up to the main concourse for sections " .. lower .. ". Keep going up for the club level and the upper deck - or take the glass elevator!", {
-		At = Vector3.new(0, 3.5 - 22.5, -1.2),
-	})
+	BuildUtil.Look(
+		s1,
+		"Gate " .. gate.letter .. " Escalators",
+		"Ride up to the main concourse for sections "
+			.. lower
+			.. ". Keep going up for the club level and the upper deck - or take the glass elevator!",
+		{
+			At = Vector3.new(0, 3.5 - 22.5, -1.2),
+		}
+	)
 
 	-- main concourse level: on the -x wall over bridge A (the bridge leads outward = to the right)
 	local s2 = box(signs, seg, "WayfindingSign", -HALL_HALF, -HALL_HALF + 0.2, 33.5, 37.5, 96, 112, SIGN_DARK, nil, NO_COLLIDE)
 	local l2 = write(s2, Enum.NormalId.Right, "CLUB LEVEL & UPPER DECK  >>>", color, { Glow = true, Top = 0.1, Height = 0.45 })
 	addLine(l2, "WALK THE BRIDGE TO THE NEXT ESCALATOR", 0.62, 0.26, Enum.Font.GothamBold)
 	BuildUtil.Light(s2, "PointLight", glow)
-	BuildUtil.Look(s2, "Main Concourse Level", "Straight ahead: the main concourse, food stands and sections " .. lower .. ". Going higher? Walk out along the bridge to the next escalator.", {
-		At = Vector3.new(1.5, 33 - 35.5, 0),
-	})
+	BuildUtil.Look(
+		s2,
+		"Main Concourse Level",
+		"Straight ahead: the main concourse, food stands and sections "
+			.. lower
+			.. ". Going higher? Walk out along the bridge to the next escalator.",
+		{
+			At = Vector3.new(1.5, 33 - 35.5, 0),
+		}
+	)
 
 	-- club level: over F2's top, facing the riders
 	local s3 = box(signs, seg, "WayfindingSign", -6, 6, 62, 66, F2.top + 0.4, F2.top + 0.8, SIGN_DARK, nil, NO_COLLIDE)
@@ -955,35 +1242,63 @@ local function hallSigns(ctx, seg, gate, L)
 		At = Vector3.new(0, 57 - 64, 2.5),
 	})
 	-- club level: over the elevator, pointing to the upper-deck path (to the right going out)
-	local s4 = box(signs, seg, "WayfindingSign", SHAFT.x0 + 0.3, SHAFT.x1 - 0.3, 63, 67, SHAFT.o0 - 0.7, SHAFT.o0 - 0.4, SIGN_DARK, nil, NO_COLLIDE)
+	local s4 = box(
+		signs,
+		seg,
+		"WayfindingSign",
+		SHAFT.x0 + 0.3,
+		SHAFT.x1 - 0.3,
+		63,
+		67,
+		SHAFT.o0 - 0.7,
+		SHAFT.o0 - 0.4,
+		SIGN_DARK,
+		nil,
+		NO_COLLIDE
+	)
 	local l4 = write(s4, INWARD, "UPPER CONCOURSE  >>", color, { Glow = true, Top = 0.1, Height = 0.45 })
 	addLine(l4, "SECTIONS " .. upper, 0.62, 0.28, Enum.Font.GothamBold)
-	BuildUtil.Look(s4, "Upper Concourse", "Turn right and follow the walkway to the last escalator - it climbs right up the outside wall to the upper deck!", {
-		At = Vector3.new(0, 57 - 65, 2.5),
-	})
+	BuildUtil.Look(
+		s4,
+		"Upper Concourse",
+		"Turn right and follow the walkway to the last escalator - it climbs right up the outside wall to the upper deck!",
+		{
+			At = Vector3.new(-2.1, 57 - 65, 5.6), -- (on bridge E, clear of the elevator buttons)
+		}
+	)
 
 	-- upper concourse: over its gate opening
 	local s5 = box(signs, seg, "WayfindingSign", -7.5, 7.5, 80.6, 84.2, TOP.o0 + 0.05, TOP.o0 + 0.35, SIGN_DARK, nil, NO_COLLIDE)
 	local l5 = write(s5, OUTWARD, "UPPER CONCOURSE", color, { Glow = true, Top = 0.08, Height = 0.5 })
 	addLine(l5, "SECTIONS " .. upper, 0.62, 0.3, Enum.Font.GothamBold)
 	BuildUtil.Light(s5, "PointLight", glow)
-	BuildUtil.Look(s5, "Upper Concourse", "The top level! Hot dogs, restrooms and the tunnels to sections " .. upper .. " - the best view of the whole field.", {
-		At = Vector3.new(0, 77.5 - 82.4, -1.5),
-	})
+	BuildUtil.Look(
+		s5,
+		"Upper Concourse",
+		"The top level! Hot dogs, restrooms and the tunnels to sections " .. upper .. " - the best view of the whole field.",
+		{
+			At = Vector3.new(0, 77.5 - 82.4, -1.5),
+		}
+	)
 end
 
--- Step 4: the sign on a corner ramp's landing.
+-- Step 4: the sign at the foot of a corner ramp (on R2's tall end, facing the corner plaza).
 local function rampSign(ctx, seg, s)
 	local R = RAMP
-	-- on R2's tall end, facing the corner plaza where the ramp starts
-	local sign = box(ctx, seg, "RampSign", s * (R.high - 0.25), s * R.high, 5, 14, R.inner[1] + 0.6, R.inner[2] - 0.6, SIGN_DARK, nil, NO_COLLIDE)
+	local sign =
+		box(ctx, seg, "RampSign", s * (R.high - 0.25), s * R.high, 5, 14, R.inner[1] + 0.6, R.inner[2] - 0.6, SIGN_DARK, nil, NO_COLLIDE)
 	local face = s > 0 and Enum.NormalId.Left or Enum.NormalId.Right
 	local label = write(sign, face, "RAMP", WHITE, { Glow = true, Top = 0.08, Height = 0.38 })
 	addLine(label, "TO THE MAIN CONCOURSE", 0.52, 0.3, Enum.Font.GothamBold)
 	BuildUtil.Light(sign, "PointLight", { Name = "SignLight", Range = 14, Brightness = 1, Color = LIGHT_WARM, Shadows = false })
-	BuildUtil.Look(sign, "Corner Ramp", "No escalator line? Walk up the ramp! Two long slopes take you to the main concourse - great for strollers and wheelchairs.", {
-		At = Vector3.new(-s * 1.5, 3.5 - 9.5, 0),
-	})
+	BuildUtil.Look(
+		sign,
+		"Corner Ramp",
+		"No escalator line? Walk up the ramp! Two long slopes take you to the main concourse - great for strollers and wheelchairs.",
+		{
+			At = Vector3.new(-s * 1.5, 3.5 - 9.5, 0),
+		}
+	)
 end
 
 function M.escalators(ctx)
@@ -1110,14 +1425,66 @@ function M.facade(ctx)
 			table.insert(cuts, c)
 		end
 		for _, r in ipairs(runs(-half, half, cuts)) do
-			box(glass, seg, "CurtainGlass", r[1], r[2], F.capTop - k, F.glassTop - k, F.glassIn, F.glassOut, CURTAIN, Enum.Material.Glass, { Transparency = 0.35 })
+			box(
+				glass,
+				seg,
+				"CurtainGlass",
+				r[1],
+				r[2],
+				F.capTop - k,
+				F.glassTop - k,
+				F.glassIn,
+				F.glassOut,
+				CURTAIN,
+				Enum.Material.Glass,
+				{ Transparency = 0.35 }
+			)
 		end
 		for _, c in ipairs(gateCut(seg)) do
-			box(glass, seg, "CurtainGlass", c[1], c[2], F.gateGlassBottom, F.glassTop, F.glassIn, F.glassOut, CURTAIN, Enum.Material.Glass, { Transparency = 0.35 })
+			box(
+				glass,
+				seg,
+				"CurtainGlass",
+				c[1],
+				c[2],
+				F.gateGlassBottom,
+				F.glassTop,
+				F.glassIn,
+				F.glassOut,
+				CURTAIN,
+				Enum.Material.Glass,
+				{ Transparency = 0.35 }
+			)
 		end
 		for _, c in ipairs(rampCut(seg)) do
-			box(glass, seg, "CurtainGlass", c[1], c[2], F.capTop - k, F.rampOpenY[1], F.glassIn, F.glassOut, CURTAIN, Enum.Material.Glass, { Transparency = 0.35 })
-			box(glass, seg, "CurtainGlass", c[1], c[2], F.rampOpenY[2], F.glassTop - k, F.glassIn, F.glassOut, CURTAIN, Enum.Material.Glass, { Transparency = 0.35 })
+			box(
+				glass,
+				seg,
+				"CurtainGlass",
+				c[1],
+				c[2],
+				F.capTop - k,
+				F.rampOpenY[1],
+				F.glassIn,
+				F.glassOut,
+				CURTAIN,
+				Enum.Material.Glass,
+				{ Transparency = 0.35 }
+			)
+			box(
+				glass,
+				seg,
+				"CurtainGlass",
+				c[1],
+				c[2],
+				F.rampOpenY[2],
+				F.glassTop - k,
+				F.glassIn,
+				F.glassOut,
+				CURTAIN,
+				Enum.Material.Glass,
+				{ Transparency = 0.35 }
+			)
 		end
 		-- spandrels: main concourse level (cut at the gate + bridge) and upper concourse level
 		local sHalf = seg.len(F.spanOut) / 2
@@ -1166,11 +1533,35 @@ function M.facade(ctx)
 			-- the gate pylons rise as stone towers to the cornice (in front of the glass line, so the
 			-- escalator landings in the band behind them stay clear)
 			for _, s in ipairs({ -1, 1 }) do
-				box(upper, seg, "GateTower", s * PORTAL_HALF, s * PYLON_OUT, PYLON_TOP, F.bandTop, F.glassOut, PYLON_FRONT, STONE, Enum.Material.Granite)
+				box(
+					upper,
+					seg,
+					"GateTower",
+					s * PORTAL_HALF,
+					s * PYLON_OUT,
+					PYLON_TOP,
+					F.bandTop,
+					F.glassOut,
+					PYLON_FRONT,
+					STONE,
+					Enum.Material.Granite
+				)
 			end
 			local big = gate.letter == "A"
 			local w = big and 58 or 36
-			local sign = box(upper, seg, "TeamNameSign", -w, w, big and 88 or 90, big and 106 or 104, PYLON_FRONT + 0.4, PYLON_FRONT + 1.2, SIGN_DARK, Enum.Material.Metal)
+			local sign = box(
+				upper,
+				seg,
+				"TeamNameSign",
+				-w,
+				w,
+				big and 88 or 90,
+				big and 106 or 104,
+				PYLON_FRONT + 0.4,
+				PYLON_FRONT + 1.2,
+				SIGN_DARK,
+				Enum.Material.Metal
+			)
 			liveTeam(ctx, sign, OUTWARD, ink(SIGN_DARK, team), SIGN_DARK, { PPS = big and 8 or 10, PadY = 0.08 })
 			BuildUtil.Light(sign, "PointLight", { Name = "SignLight", Range = 30, Brightness = 1.2, Color = LIGHT_WARM, Shadows = false })
 		end
@@ -1185,11 +1576,30 @@ function M.facade(ctx)
 		local k = sink(seg)
 		-- LED strip under the cornice
 		local half = seg.len(160.9) / 2
-		local top = box(lights, seg, "FacadeLED", -half, half, 109.2 - k, 109.8 - k, 160.4, 160.9, team.Secondary, Enum.Material.Neon, PAINT)
-		lightsAlong(top, seg.kind == "corner" and 2 or 4, { Name = "FacadeGlow", Range = 40, Brightness = 1.4, Color = team.Secondary, Shadows = false }, -1)
+		local top =
+			box(lights, seg, "FacadeLED", -half, half, 109.2 - k, 109.8 - k, 160.4, 160.9, team.Secondary, Enum.Material.Neon, PAINT)
+		lightsAlong(
+			top,
+			seg.kind == "corner" and 2 or 4,
+			{ Name = "FacadeGlow", Range = 40, Brightness = 1.4, Color = team.Secondary, Shadows = false },
+			-1
+		)
 		-- LED strip on the base cap (cut at the gates)
 		for _, r in ipairs(facadeRuns(seg, 160.7, gateCut(seg))) do
-			local strip = box(lights, seg, "FacadeLED", r[1], r[2], 14.2 - k, 14.8 - k, F.capOut, F.capOut + 0.3, team.Primary, Enum.Material.Neon, PAINT)
+			local strip = box(
+				lights,
+				seg,
+				"FacadeLED",
+				r[1],
+				r[2],
+				14.2 - k,
+				14.8 - k,
+				F.capOut,
+				F.capOut + 0.3,
+				team.Primary,
+				Enum.Material.Neon,
+				PAINT
+			)
 			local n = math.max(1, math.floor((r[2] - r[1]) / 70 + 0.5))
 			lightsAlong(strip, n, { Name = "UpLight", Range = 32, Brightness = 1.3, Color = LIGHT_COOL, Shadows = false }, 4, -1)
 		end
@@ -1205,11 +1615,30 @@ function M.facade(ctx)
 		for _, x in ipairs(spots) do
 			sloganIndex += 1
 			local color = sloganIndex % 2 == 0 and team.Secondary or team.Primary
-			local banner = box(lights, seg, "FacadeBanner", x - 5.5, x + 5.5, 88, 106, F.bandOut + 0.05, F.bandOut + 0.25, color, Enum.Material.Fabric, PAINT)
+			local banner = box(
+				lights,
+				seg,
+				"FacadeBanner",
+				x - 5.5,
+				x + 5.5,
+				88,
+				106,
+				F.bandOut + 0.05,
+				F.bandOut + 0.25,
+				color,
+				Enum.Material.Fabric,
+				PAINT
+			)
 			if sloganIndex % 2 == 1 then
 				liveTeam(ctx, banner, OUTWARD, ink(color, team), color, { PPS = 10, PadY = 0.38 })
 			else
-				write(banner, OUTWARD, slogans[(sloganIndex / 2 - 1) % #slogans + 1], ink(color, team), { Top = 0.36, Height = 0.28, PPS = 10 })
+				write(
+					banner,
+					OUTWARD,
+					slogans[(sloganIndex / 2 - 1) % #slogans + 1],
+					ink(color, team),
+					{ Top = 0.36, Height = 0.28, PPS = 10 }
+				)
 			end
 		end
 	end

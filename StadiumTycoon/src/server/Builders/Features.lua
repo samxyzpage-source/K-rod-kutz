@@ -320,10 +320,10 @@ function M.scoreboard(ctx)
 		span(support, "PylonBeam", frontX, frontX + col, 110, 113, zc - 5 + col, zc + 5 - col, STEEL, Enum.Material.Metal)
 		span(support, "PylonBeam", backX - col, backX, 110, 113, zc - 5 + col, zc + 5 - col, STEEL, Enum.Material.Metal)
 		-- the crew landing (y 128) runs through the pylon from the catwalk to the back columns
-		span(support, "CrewLanding", B.backX + 0.2, backX, deckY - 0.4, deckY, zc - 5, zc + 5, STEEL, Enum.Material.DiamondPlate)
-		guard(support, walkX, backX, deckY, zc < 30 and zc + 4.7 or zc - 5, zc < 30 and zc + 5 or zc - 4.7) -- catwalk side
-		guard(support, B.backX + 0.5, backX, deckY, zc < 30 and zc - 5 or zc + 4.7, zc < 30 and zc - 4.7 or zc + 5) -- outer side
-		guard(support, backX - 0.3, backX, deckY, zc - 5 + col, zc + 5 - col)
+		span(support, "CrewLanding", B.backX + 0.2, backX - 0.1, deckY - 0.4, deckY, zc - 5, zc + 5, STEEL, Enum.Material.DiamondPlate)
+		guard(support, walkX, backX - 0.1, deckY, zc < 30 and zc + 4.7 or zc - 5, zc < 30 and zc + 5 or zc - 4.7) -- catwalk side
+		guard(support, B.backX + 0.5, backX - 0.1, deckY, zc < 30 and zc - 5 or zc + 4.7, zc < 30 and zc - 4.7 or zc + 5) -- outer side
+		guard(support, backX - 0.4, backX - 0.1, deckY, zc - 5 + col, zc + 5 - col)
 	end
 	-- arms from the pylons (and the truss in the middle) over the facade to the board's back
 	for _, z in ipairs({ south, B.zc, north }) do
@@ -551,6 +551,7 @@ local TOWER = {
 	platformY = 140,
 	rings = { 36, 72, 108 },
 	bankY = 156, -- centre of the flood-light bank
+	camY = 225, -- the TOWER CAM (high enough to see over the roof's inner edge into the bowl)
 }
 
 -- How far the lattice legs are from the tower axis at height y.
@@ -782,7 +783,8 @@ local function lightTower(ctx, number, base, target)
 		CFrame.lookAt(Vector3.new(callX, footY, bz + sz * 3), Vector3.new(callX + sx * 10, footY, bz + sz * 3)),
 		{ Action = "Ride down", Object = "Tower Lift", Label = "GROUND LEVEL", At = Vector3.new(-sx * 1.7, -1.5, 0) }
 	)
-	-- a crew seat on the platform with a camera over the bank
+	-- a crew seat on the platform with a camera high above the bank: the roof hides the field from
+	-- the bank itself, so the camera rises until it looks over the roof into the whole bowl
 	local seatPosition = Vector3.new(bx - sx * 5, topY + 0.6, bz - sz * 5)
 	BuildUtil.Seat(tower, {
 		Name = "TowerCamSeat",
@@ -791,9 +793,9 @@ local function lightTower(ctx, number, base, target)
 		Color = team.Primary,
 		Object = "Light Crew Seat",
 		Camera = {
-			From = headPosition + toField * 4 + Vector3.new(0, -9, 0),
+			From = Vector3.new(bx, TOWER.camY, bz) + toField * 10,
 			To = Vector3.new(target.X, 0, target.Z),
-			Fov = 55,
+			Fov = 50,
 			Label = "LIGHT TOWER " .. number .. " CAM",
 		},
 	})
