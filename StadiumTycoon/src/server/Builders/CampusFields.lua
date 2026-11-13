@@ -1,92 +1,73 @@
 --[[
 	CampusFields
-	The outdoor and indoor practice fields of the training campus behind the stadium.
+	The outdoor and indoor practice fields of the campus, beyond the back road behind the Team HQ.
+	Every footprint comes from Config.Layout.Zones. Every piece is bought in steps (Items.lua): each
+	builder builds the whole piece and calls BuildUtil.Stage(ctx, n) before the parts of step n.
 
-	  practice_field  striped grass practice field in X[-200,-30] Z[262,350]: boundary + yard
-	                  lines every 5 yards, yard numbers, one team end zone at the far (west) end
-	                  with a single goal post, and a low railing all round. The railing has a gate
-	                  ("PRACTICE FIELD" banner) in the +X side, facing the campus walk.
-	  practice_gear   training equipment on and around the practice field: kicking net, water
-	                  station, agility ladder, two-man blocking sled, tackling dummies, cone drill
-	                  and a coach tower with a megaphone. The middle of the field stays open.
-	  indoor_dome     translucent barrel-vault practice bubble in X[-10,200] Z[262,352]: a
-	                  13-panel polygonal arch roof running along X on a team-coloured base,
-	                  closed end walls, striped turf with lines + end zones + a goal post,
-	                  ceiling lights, a big team portal facing the campus walk (-Z) and a field
-	                  door in the west end wall facing the practice field gate (-X).
+	  practice_field  a full 100-yard field running along X (7-yard end zones, so a goal post and the
+	                  fence still fit behind each end line). The team area is on the near (-Z) side
+	                  behind the main gate, which sits right behind the buy button.
+	    1 Grass             turf over the whole zone with 5-yard mowing stripes
+	    2 Yard Lines        boundary, goal and 5-yard lines; yard numbers, one-yard sideline ticks and
+	                        hash marks are GUI frames on two invisible sheets (no part per mark)
+	    3 End Zones         team end zones with the owner's name, orange pylons, a midfield logo
+	    4 Goal Posts        a slingshot goal post behind each end line, with wind ribbons
+	    5 Fence & Sideline  chain-link fence, main gate with a PRACTICE FIELD arch, side gate toward
+	                        the dome, team mat, benches, water station, ball bin, fence banners
+	    6 Bleachers         five-row aluminium bleachers on the far (+Z) sideline, facing the road
+	  practice_gear   equipment on the field. A lane 40 studs wide across midfield (gate -> bleachers)
+	                  stays free of anything collidable.
+	    1 Blocking Sleds          seven-man sled + two-man sled (west half)
+	    2 Tackling Dummies        stand-up dummies (one knocked over) + two tackle wheels (east half)
+	    3 Agility Ladder & Cones  two flat ladders, a cone weave and mini hurdles (all walk-through)
+	    4 Coach Tower             filming scaffold on the far sideline: camera, megaphone, umbrella
+	  indoor_dome     an elliptical barrel vault running along X (11 roof panels).
+	    1 Frame             team knee walls, steel arches + purlins, end walls (west door toward the
+	                        practice field, east loading door), entrance portal at the buy button (-Z)
+	    2 Turf & Lines      indoor turf, an 80-yard field with lines, numbers, end zones, goal posts
+	    3 Roof Panels       team-coloured base panels, translucent membrane, team name on top
+	    4 Doors & Lights    glass entrance doors, INDOOR PRACTICE + team signs, side doors, lamps
 
 	Paint layers (bottom of every layer is the turf top 0.2):
-	  dome mowing stripes 0.24 | end zones 0.3 | lines 0.32 | yard numbers 0.33 |
-	  agility ladder rungs 0.36 / straps 0.38
+	  mowing stripes 0.24 | team mat 0.26 | end zones 0.3 | lines 0.32 | mark sheets 0.335 |
+	  logo ring 0.35 / logo 0.36 / logo text 0.37 | cone bases 0.38 | ladder rungs 0.4 / straps 0.42
 ]]
 
 local BuildUtil = require(script.Parent.Parent.BuildUtil)
 
 local CampusFields = {}
 
--- Reserved footprints (plot-local studs; Config.Layout has no values for these)
-local FIELD_AREA = { MinX = -200, MaxX = -30, MinZ = 262, MaxZ = 350 } -- practice_field
--- practice_gear stays inside X[-200,-30] Z[262,356] (on and around the practice field)
-local DOME_AREA = { MinX = -10, MaxX = 200, MinZ = 262, MaxZ = 352 } -- indoor_dome, top <= 46
-
 local TURF_TOP = 0.2
+local YARD = 2
 local STEP = 10 -- 5 yards: yard lines and mowing stripes
-local LINE_WIDTH = 0.6
-local BOUNDARY_WIDTH = 1
-local LINE_THICKNESS = 0.12 -- 0.2 .. 0.32
-local ENDZONE_THICKNESS = 0.1 -- 0.2 .. 0.3
-local STRIPE_THICKNESS = 0.04 -- 0.2 .. 0.24
 
-local NUMBER_Y = 0.33
-local NUMBER_INSET = 12 -- sideline -> centre of the row of yard numbers
+local STRIPE_TOP = 0.24
+local MAT_TOP = 0.26
+local ENDZONE_TOP = 0.3
+local LINE_TOP = 0.32
+local SHEET_Y = 0.335
+local LOGO_RING_TOP = 0.35
+local LOGO_TOP = 0.36
+local LOGO_TEXT_Y = 0.37
+local CONE_BASE_TOP = 0.38
+local RUNG_TOP = 0.4
+local STRAP_TOP = 0.42
+
+local LINE_WIDTH = 0.6
+local GOAL_LINE_WIDTH = 0.8
+local BOUNDARY_WIDTH = 1
+local NUMBER_INSET = 12 -- sideline -> centre of the yard numbers
 local NUMBER_HEIGHT = 6
-local NUMBER_PPS = 16
-local NUMBER_TEXT_SIZE = 80
-local DIGIT_WIDTH = 3.2
+local DIGIT_WIDTH = 3.6
 local DIGIT_GAP = 1.2
+local SHEET_PPS = 8
 
 local CROSSBAR_HEIGHT = 7
 local UPRIGHT_HALF_GAP = 6.2
-local POST_SETBACK = 4.5
+local POST_SETBACK = 3
 local PAD_HEIGHT = 4
 
--- Outdoor practice field: the end zone is at the far (west) end, the open end faces the campus walk.
-local PF = {
-	EndLineX = FIELD_AREA.MinX + 10, -- -190: back of the end zone
-	GoalLineX = FIELD_AREA.MinX + 30, -- -170
-	FarLineX = FIELD_AREA.MaxX - 10, -- -40: east boundary (the 65-yard line)
-	MinZ = FIELD_AREA.MinZ + 10, -- 272: front sideline
-	MaxZ = FIELD_AREA.MaxZ - 10, -- 340: back sideline
-	FenceInset = 1,
-	GateHalfWidth = 10, -- gate in the +X railing, centred on the field
-	PostHeight = 3.8,
-}
-PF.CenterZ = (PF.MinZ + PF.MaxZ) / 2 -- 306
-
--- Indoor dome: a polygonal barrel vault along X. Arch vertex k (0..Panels) sits at angle k*180/Panels
--- on a half circle of `Radius` around (z = CenterZ, y = KneeHeight).
-local DOME = {
-	MinX = DOME_AREA.MinX + 2, -- -8: the west door frame stands in the 2 studs in front of the end wall
-	MaxX = DOME_AREA.MaxX - 2, -- 198
-	CenterZ = (DOME_AREA.MinZ + DOME_AREA.MaxZ) / 2, -- 307
-	Radius = 42, -- base z 265 .. 349, top of the roof ~45.2
-	KneeHeight = 3,
-	Panels = 13, -- odd, so there is a flat top panel for the team name
-	Thickness = 1,
-	PortalCenterX = 11, -- main entrance in the -Z side, at the end of the campus walk (X[-20,20])
-	PortalHalfWidth = 10,
-	EndDoorHalfWidth = 7, -- field door in the west end wall
-}
-DOME.CenterX = (DOME.MinX + DOME.MaxX) / 2 -- 95
-
--- Main portal frame in front of the -Z side of the dome (from the footprint edge z = 262 inward)
-local PORTAL = {
-	OpenTop = 14, -- top of the doorway (the arch's first vertex is at y ~13, the panel above recedes)
-	Top = 25,
-	Depth = 6,
-	PillarWidth = 3,
-	Chamfer = 3.5,
-}
+local FENCE_HEIGHT = 5.2
 
 local PAINT = { CanCollide = false, CastShadow = false }
 local NO_COLLIDE = { CanCollide = false }
@@ -94,22 +75,98 @@ local UP = Vector3.new(0, 1, 0)
 
 local WHITE = Color3.fromRGB(248, 248, 248)
 local INK = Color3.fromRGB(22, 22, 26)
-local FENCE_WHITE = Color3.fromRGB(232, 234, 238)
+local STEEL_WHITE = Color3.fromRGB(232, 234, 238)
+local CHAIN_LINK = Color3.fromRGB(170, 176, 184)
+local ALUMINIUM = Color3.fromRGB(200, 204, 210)
+local ALUMINIUM_DARK = Color3.fromRGB(150, 155, 162)
 local DARK_METAL = Color3.fromRGB(62, 64, 70)
 local RIBBON_RED = Color3.fromRGB(240, 70, 30)
-local NET_WHITE = Color3.fromRGB(240, 240, 240)
 local COOLER_ORANGE = Color3.fromRGB(247, 128, 10)
 local CONE_ORANGE = Color3.fromRGB(255, 110, 20)
+local PYLON_ORANGE = Color3.fromRGB(255, 96, 16)
 local LADDER_YELLOW = Color3.fromRGB(255, 214, 10)
 local STRAP_BLACK = Color3.fromRGB(30, 30, 34)
 local RUBBER_BLACK = Color3.fromRGB(36, 36, 40)
 local LEATHER = Color3.fromRGB(124, 66, 36)
 local MEMBRANE = Color3.fromRGB(242, 244, 248)
 local LAMP_WHITE = Color3.fromRGB(255, 246, 228)
+local CAMERA_BLACK = Color3.fromRGB(28, 28, 32)
+local TALLY_RED = Color3.fromRGB(255, 40, 40)
+local GLASS_TINT = Color3.fromRGB(150, 200, 230)
+
+---------------------------------------------------------------------------------------------
+-- Layouts (derived from Config.Layout.Zones)
+---------------------------------------------------------------------------------------------
+
+-- Outdoor practice field: X runs along the field, the team area is on the -Z (road) side.
+local function practiceLayout(L)
+	local zone = L.Zones.practice_field
+	local f = { Zone = zone }
+	f.CenterX = (zone.MinX + zone.MaxX) / 2 -- -130 (the buy button and the main gate)
+	f.GoalW = f.CenterX - 50 * YARD -- -230
+	f.GoalE = f.CenterX + 50 * YARD -- -30
+	-- end zones as deep as fits with a goal post and the fence behind the end line (7 yards here)
+	local room = (zone.MaxX - zone.MinX) / 2 - 50 * YARD
+	f.EndZoneDepth = math.min(10 * YARD, room - 6)
+	f.EndW = f.GoalW - f.EndZoneDepth -- -244
+	f.EndE = f.GoalE + f.EndZoneDepth -- -16
+	f.MinZ = zone.MinZ + 12 -- 408: near sideline (team area between it and the fence)
+	f.MaxZ = f.MinZ + 96 -- 504: far sideline (bleachers + coach tower behind it)
+	f.CenterZ = (f.MinZ + f.MaxZ) / 2 -- 456
+	f.HashInset = 34
+	f.FenceX0 = zone.MinX + 0.6
+	f.FenceX1 = zone.MaxX - 0.6
+	f.FenceZ0 = zone.MinZ + 1
+	f.FenceZ1 = zone.MaxZ - 1
+	f.GateX = f.CenterX
+	f.GateHalf = 8
+	f.SideGateZ = f.FenceZ0 + 10 -- side gate in the east fence, between the fence corner and this post
+	return f
+end
+
+-- Indoor dome: polygonal half-ellipse vault along X. Vertex k (0..Panels) sits at angle k*180/Panels.
+local function domeLayout(L)
+	local zone = L.Zones.indoor_dome
+	local d = { Zone = zone }
+	d.X0 = zone.MinX + 4 -- 34: outer face of the west end wall (door canopy + sign in front)
+	d.X1 = zone.MaxX - 4 -- 266
+	d.CenterX = (zone.MinX + zone.MaxX) / 2 -- 150 (the buy button)
+	d.CenterZ = (zone.MinZ + zone.MaxZ) / 2 -- 475
+	d.A = (zone.MaxZ - zone.MinZ) / 2 - 3 -- 62: half width (base z 413 .. 537)
+	d.Knee = 4
+	d.B = math.min(43, zone.MaxY - d.Knee - 3) -- rise of the vault (top ~47)
+	d.Panels = 11 -- odd, so there is a flat top panel for the team name
+	d.T = 1
+	d.DoorHalf = 12 -- entrance portal opening (-Z side, in front of the buy button)
+	d.PillarW = 4
+	d.FrontZ = zone.MinZ + 0.5
+	d.OpenTop = 15
+	d.HeaderTop = 23
+	d.WestDoorZ = d.CenterZ - 30
+	d.WestDoorHalf = 6
+	d.EastDoorZ = d.CenterZ + 30
+	d.EastDoorHalf = 10
+	return d
+end
+
+-- Point on the vault outline (inset > 0: a smaller ellipse inside it). Returns z, y.
+local function domeVertex(d, k, inset)
+	inset = inset or 0
+	local theta = math.pi * k / d.Panels
+	return d.CenterZ - (d.A - inset) * math.cos(theta), d.Knee + (d.B - inset) * math.sin(theta)
+end
 
 ---------------------------------------------------------------------------------------------
 -- Helpers
 ---------------------------------------------------------------------------------------------
+
+local function teamLabel(ctx, fallback)
+	local name = ctx.teamName
+	if type(name) ~= "string" or name == "" then
+		return fallback
+	end
+	return name
+end
 
 -- Relative luminance / contrast ratio (WCAG) so text stays readable for every team palette.
 local function luminance(color)
@@ -136,7 +193,6 @@ local function teamTextColors(background, team)
 	table.sort(candidates, function(a, b)
 		return contrast(a, background) > contrast(b, background)
 	end)
-	-- prefer a team colour when it reads well enough
 	for _, c in ipairs({ team.Trim, team.Secondary }) do
 		if contrast(c, background) >= 3 then
 			local outline = candidates[1] == c and candidates[2] or candidates[1]
@@ -162,7 +218,7 @@ local function faceText(part, face, text, background, team, opts)
 	if opts.Outline ~= false then
 		local stroke = Instance.new("UIStroke")
 		stroke.Name = "Outline"
-		stroke.Color = outline
+		stroke.Color = opts.OutlineColor or outline
 		stroke.Thickness = opts.Outline or 2
 		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 		stroke.Parent = label
@@ -175,8 +231,9 @@ local function span(ctx, name, minV, maxV, color, material, extra)
 	return BuildUtil.Box(ctx, name, maxV - minV, (minV + maxV) / 2, color, material, extra)
 end
 
--- Flat paint lying on the turf (bottom at TURF_TOP), given by its X/Z bounds.
-local function paint(ctx, name, minX, maxX, minZ, maxZ, thickness, color, material)
+-- Flat paint lying on the turf: bottom at TURF_TOP, top at `top`.
+local function paint(ctx, name, minX, maxX, minZ, maxZ, top, color, material)
+	local thickness = top - TURF_TOP
 	return BuildUtil.Box(
 		ctx,
 		name,
@@ -188,28 +245,46 @@ local function paint(ctx, name, minX, maxX, minZ, maxZ, thickness, color, materi
 	)
 end
 
--- Cylinder from point a to point b. Both points must share the same Z (the rod lies in an XY plane).
-local function rod(ctx, name, a, b, diameter, color, material)
-	local delta = b - a
-	return BuildUtil.Part(ctx, {
-		Name = name,
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(delta.Magnitude, diameter, diameter),
-		CFrame = CFrame.new((a + b) / 2) * CFrame.Angles(0, 0, math.atan2(delta.Y, delta.X)),
-		Color = color,
-		Material = material,
-	})
+-- CFrame at the middle of a -> b, looking from a to b (works for vertical segments too).
+local function along(a, b)
+	local dir = (b - a).Unit
+	local up = math.abs(dir.Y) > 0.99 and Vector3.new(0, 0, 1) or UP
+	return CFrame.lookAt((a + b) / 2, b, up)
 end
 
--- Square-section bar from point a to point b (any direction except straight up).
-local function strut(ctx, name, a, b, width, color, material)
-	return BuildUtil.Part(ctx, {
-		Name = name,
-		Size = Vector3.new(width, width, (b - a).Magnitude),
-		CFrame = CFrame.lookAt((a + b) / 2, b),
-		Color = color,
-		Material = material,
-	})
+-- Square-section bar from a to b.
+local function bar(ctx, name, a, b, width, color, material, extra)
+	local props = extra and table.clone(extra) or {}
+	props.Name = name
+	props.Size = Vector3.new(width, width, (b - a).Magnitude)
+	props.CFrame = along(a, b)
+	props.Color = color
+	props.Material = material
+	return BuildUtil.Part(ctx, props)
+end
+
+-- Round pipe from a to b.
+local function pipe(ctx, name, a, b, diameter, color, material, extra)
+	local props = extra and table.clone(extra) or {}
+	props.Name = name
+	props.Shape = Enum.PartType.Cylinder
+	props.Size = Vector3.new((b - a).Magnitude, diameter, diameter)
+	props.CFrame = along(a, b) * CFrame.Angles(0, math.pi / 2, 0) -- cylinder axis (local X) along a -> b
+	props.Color = color
+	props.Material = material
+	return BuildUtil.Part(ctx, props)
+end
+
+-- Upright cylinder standing on y = baseY.
+local function post(ctx, name, x, z, baseY, height, diameter, color, material, extra)
+	local props = extra and table.clone(extra) or {}
+	props.Name = name
+	props.Position = Vector3.new(x, baseY + height / 2, z)
+	props.Height = height
+	props.Diameter = diameter
+	props.Color = color
+	props.Material = material
+	return BuildUtil.Cylinder(ctx, props)
 end
 
 --[[
@@ -229,88 +304,125 @@ local function triangle(ctx, name, corner, u, a, w, b, thickness, color, materia
 	return BuildUtil.Wedge(ctx, props)
 end
 
-local function digitLabel(gui, text, xPixels, widthPixels, alignment, color)
+local function sheetLabel(gui, text, x, y, w, h, alignment, color)
 	local label = Instance.new("TextLabel")
 	label.Name = "Digit"
 	label.BackgroundTransparency = 1
 	label.BorderSizePixel = 0
-	label.Position = UDim2.new(0, xPixels, 0, 0)
-	label.Size = UDim2.new(0, widthPixels, 1, 0)
+	label.Position = UDim2.new(0, x, 0, y)
+	label.Size = UDim2.new(0, w, 0, h)
 	label.Font = Enum.Font.GothamBlack
 	label.Text = text
 	label.TextColor3 = color
-	label.TextSize = NUMBER_TEXT_SIZE
+	label.TextScaled = true
 	label.TextXAlignment = alignment
 	label.Parent = gui
 	return label
 end
 
 --[[
-	One row of yard numbers: an invisible carrier over X[minX, maxX] at `z` with the digits drawn on its
-	Top face (upright from the part's +Z side, so a row by the -Z sideline is turned 180 degrees).
-	marks: list of { x = world x of the yard line, text = "20" } - the line runs between the two digits.
+	Yard numbers + one-yard sideline ticks + inbound hash marks for one half of a field (between the
+	goal lines), drawn as GUI frames on an invisible sheet so they cost a single part.
+	side = -1: the -Z half (the sheet is turned 180 degrees so the numbers read upright from the -Z
+	sideline), +1: the +Z half. f: GoalW, GoalE, MinZ, MaxZ, HashInset.
 ]]
-local function yardNumberRow(ctx, name, minX, maxX, z, flip, marks, color)
-	local length = maxX - minX
-	local cx = (minX + maxX) / 2
+local function fieldMarks(ctx, name, f, side, color)
+	local flip = side < 0
+	local sideline = flip and f.MinZ or f.MaxZ
+	local inward = flip and 1 or -1
+	local depth = f.HashInset + 2
+	local minX, maxX = f.GoalW, f.GoalE
+	local minZ = math.min(sideline, sideline + inward * depth)
+	local maxZ = math.max(sideline, sideline + inward * depth)
 	local carrier = BuildUtil.Part(ctx, {
 		Name = name,
-		Size = Vector3.new(length, 0.02, NUMBER_HEIGHT),
-		CFrame = CFrame.new(cx, NUMBER_Y, z) * CFrame.Angles(0, flip and math.pi or 0, 0),
+		Size = Vector3.new(maxX - minX, 0.02, maxZ - minZ),
+		CFrame = CFrame.new((minX + maxX) / 2, SHEET_Y, (minZ + maxZ) / 2) * CFrame.Angles(0, flip and math.pi or 0, 0),
 		Transparency = 1,
 		CanCollide = false,
 		CastShadow = false,
 	})
 	local gui = Instance.new("SurfaceGui")
-	gui.Name = "YardNumbersGui"
+	gui.Name = name .. "Gui"
 	gui.Face = Enum.NormalId.Top
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	gui.PixelsPerStud = NUMBER_PPS
+	gui.PixelsPerStud = SHEET_PPS
 	gui.LightInfluence = 1
 	gui.Parent = carrier
 
-	local digitPixels = DIGIT_WIDTH * NUMBER_PPS
-	local gapPixels = DIGIT_GAP / 2 * NUMBER_PPS
-	for _, mark in ipairs(marks) do
-		local localX = flip and -(mark.x - cx) or (mark.x - cx)
-		local centerPixels = (localX + length / 2) * NUMBER_PPS
-		digitLabel(gui, mark.text:sub(1, 1), centerPixels - gapPixels - digitPixels, digitPixels, Enum.TextXAlignment.Right, color)
-		digitLabel(gui, mark.text:sub(2, 2), centerPixels + gapPixels, digitPixels, Enum.TextXAlignment.Left, color)
+	-- world -> sheet pixels (Top-face GUIs read upright from the part's +Z side)
+	local function px(x)
+		return (flip and (maxX - x) or (x - minX)) * SHEET_PPS
+	end
+	local function py(z)
+		return (flip and (maxZ - z) or (z - minZ)) * SHEET_PPS
+	end
+	local function mark(kind, x0, x1, z0, z1)
+		local a, b, c, e = px(x0), px(x1), py(z0), py(z1)
+		local frame = Instance.new("Frame")
+		frame.Name = kind
+		frame.BackgroundColor3 = color
+		frame.BorderSizePixel = 0
+		frame.Position = UDim2.new(0, math.min(a, b), 0, math.min(c, e))
+		frame.Size = UDim2.new(0, math.abs(b - a), 0, math.abs(e - c))
+		frame.Parent = gui
+	end
+
+	local yards = math.floor((f.GoalE - f.GoalW) / YARD + 0.5)
+	for yard = 1, yards - 1 do
+		if yard % 5 ~= 0 then
+			local x = f.GoalW + yard * YARD
+			mark("SidelineTick", x - 0.18, x + 0.18, sideline + inward * 0.6, sideline + inward * 2)
+			mark("HashMark", x - 0.18, x + 0.18, sideline + inward * (f.HashInset - 0.7), sideline + inward * (f.HashInset + 0.7))
+		end
+	end
+
+	local digitPixels = DIGIT_WIDTH * SHEET_PPS
+	local gapPixels = DIGIT_GAP / 2 * SHEET_PPS
+	local numberZ = sideline + inward * NUMBER_INSET
+	local topPixels = math.min(py(numberZ - NUMBER_HEIGHT / 2), py(numberZ + NUMBER_HEIGHT / 2))
+	local heightPixels = NUMBER_HEIGHT * SHEET_PPS
+	for yard = 10, yards - 10, 10 do
+		local text = tostring(math.min(yard, yards - yard))
+		local linePixels = px(f.GoalW + yard * YARD)
+		sheetLabel(
+			gui,
+			text:sub(1, 1),
+			linePixels - gapPixels - digitPixels,
+			topPixels,
+			digitPixels,
+			heightPixels,
+			Enum.TextXAlignment.Right,
+			color
+		)
+		sheetLabel(gui, text:sub(2, 2), linePixels + gapPixels, topPixels, digitPixels, heightPixels, Enum.TextXAlignment.Left, color)
 	end
 	return carrier
 end
 
--- Mowing stripes between consecutive X `edges`, covering Z[minZ, maxZ] (collidable turf, top 0.2).
-local function stripedTurf(ctx, edges, minZ, maxZ, C)
-	for i = 1, #edges - 1 do
-		local x0, x1 = edges[i], edges[i + 1]
-		BuildUtil.Box(
-			ctx,
-			"TurfStripe" .. i,
-			Vector3.new(x1 - x0, TURF_TOP, maxZ - minZ),
-			Vector3.new((x0 + x1) / 2, TURF_TOP / 2, (minZ + maxZ) / 2),
-			i % 2 == 0 and C.GrassDark or C.Grass,
-			Enum.Material.Grass
-		)
+-- Darker 5-yard mowing stripes between the goal lines.
+local function mowingStripes(ctx, f, minZ, maxZ, color)
+	local index = 0
+	for x = f.GoalW, f.GoalE - STEP / 2, STEP do
+		if index % 2 == 1 then
+			paint(ctx, "MowStripe", x, x + STEP, minZ, maxZ, STRIPE_TOP, color, Enum.Material.Grass)
+		end
+		index += 1
 	end
 end
 
---[[
-	Boundary + yard lines. f: MinX / MaxX (end lines, the paint lies just outside), MinZ / MaxZ
-	(sidelines, the paint lies just outside), GoalLines = { x, ... }, YardLines = { x, ... }
-]]
+-- Boundary (just outside the field), goal lines and a line every 5 yards.
 local function fieldLines(ctx, f, color)
-	local minX, maxX, minZ, maxZ = f.MinX, f.MaxX, f.MinZ, f.MaxZ
 	local bw = BOUNDARY_WIDTH
-	paint(ctx, "SidelineFront", minX - bw, maxX + bw, minZ - bw, minZ, LINE_THICKNESS, color)
-	paint(ctx, "SidelineBack", minX - bw, maxX + bw, maxZ, maxZ + bw, LINE_THICKNESS, color)
-	paint(ctx, "EndLineWest", minX - bw, minX, minZ, maxZ, LINE_THICKNESS, color)
-	paint(ctx, "EndLineEast", maxX, maxX + bw, minZ, maxZ, LINE_THICKNESS, color)
-	for _, x in ipairs(f.GoalLines) do
-		paint(ctx, "GoalLine", x - LINE_WIDTH / 2, x + LINE_WIDTH / 2, minZ, maxZ, LINE_THICKNESS, color)
+	paint(ctx, "SidelineFront", f.EndW - bw, f.EndE + bw, f.MinZ - bw, f.MinZ, LINE_TOP, color)
+	paint(ctx, "SidelineBack", f.EndW - bw, f.EndE + bw, f.MaxZ, f.MaxZ + bw, LINE_TOP, color)
+	paint(ctx, "EndLineWest", f.EndW - bw, f.EndW, f.MinZ, f.MaxZ, LINE_TOP, color)
+	paint(ctx, "EndLineEast", f.EndE, f.EndE + bw, f.MinZ, f.MaxZ, LINE_TOP, color)
+	for _, x in ipairs({ f.GoalW, f.GoalE }) do
+		paint(ctx, "GoalLine", x - GOAL_LINE_WIDTH / 2, x + GOAL_LINE_WIDTH / 2, f.MinZ, f.MaxZ, LINE_TOP, color)
 	end
-	for _, x in ipairs(f.YardLines) do
-		paint(ctx, "YardLine", x - LINE_WIDTH / 2, x + LINE_WIDTH / 2, minZ, maxZ, LINE_THICKNESS, color)
+	for x = f.GoalW + STEP, f.GoalE - STEP / 2, STEP do
+		paint(ctx, "YardLine", x - LINE_WIDTH / 2, x + LINE_WIDTH / 2, f.MinZ, f.MaxZ, LINE_TOP, color)
 	end
 end
 
@@ -318,21 +430,21 @@ end
 	Team-coloured end zone between the end line `outerX` and the goal line `goalX` with the owner's
 	name across it, reading upright for someone standing behind the end line (like Field.lua).
 ]]
-local function endZone(ctx, name, outerX, goalX, minZ, maxZ, team, teamName)
+local function endZone(ctx, name, outerX, goalX, minZ, maxZ, team, text)
 	local s = outerX < goalX and -1 or 1
-	local inner = goalX + s * LINE_WIDTH / 2
+	local inner = goalX + s * GOAL_LINE_WIDTH / 2
 	local depth = math.abs(outerX - inner)
+	local thickness = ENDZONE_TOP - TURF_TOP
 	local zone = BuildUtil.Part(ctx, {
 		Name = name,
-		Size = Vector3.new(maxZ - minZ, ENDZONE_THICKNESS, depth),
-		CFrame = CFrame.new((outerX + inner) / 2, TURF_TOP + ENDZONE_THICKNESS / 2, (minZ + maxZ) / 2)
-			* CFrame.Angles(0, s * math.rad(90), 0),
+		Size = Vector3.new(maxZ - minZ, thickness, depth),
+		CFrame = CFrame.new((outerX + inner) / 2, TURF_TOP + thickness / 2, (minZ + maxZ) / 2) * CFrame.Angles(0, s * math.rad(90), 0),
 		Color = team.Primary,
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		CastShadow = false,
 	})
-	faceText(zone, Enum.NormalId.Top, teamName, team.Primary, team, {
+	faceText(zone, Enum.NormalId.Top, text, team.Primary, team, {
 		LabelName = name .. "Name",
 		PixelsPerStud = 6,
 		InsetX = 0.06,
@@ -342,26 +454,33 @@ local function endZone(ctx, name, outerX, goalX, minZ, maxZ, team, teamName)
 	return zone
 end
 
+-- Orange end-zone pylon (not collidable, so nobody trips over it).
+local function pylon(ctx, x, z)
+	return BuildUtil.Block(
+		ctx,
+		"Pylon",
+		Vector3.new(0.7, 1.8, 0.7),
+		Vector3.new(x, 0, z),
+		PYLON_ORANGE,
+		Enum.Material.SmoothPlastic,
+		NO_COLLIDE,
+		TURF_TOP
+	)
+end
+
 --[[
-	Single "slingshot" goal post: uprights above x = planeX, the padded base post `POST_SETBACK`
-	studs behind it (dir = -1: the post stands west of the plane, +1: east).
+	Single "slingshot" goal post: uprights above x = planeX, the padded base post POST_SETBACK studs
+	behind it (dir = -1: the post stands west of the plane, +1: east).
 ]]
 local function goalPost(ctx, planeX, dir, z, uprightHeight, team, postColor, withRibbons)
 	local metal = Enum.Material.Metal
 	local baseX = planeX + dir * POST_SETBACK
 	local padTop = TURF_TOP + PAD_HEIGHT
-	BuildUtil.Cylinder(ctx, {
-		Name = "GoalPostPad",
-		Position = Vector3.new(baseX, TURF_TOP + PAD_HEIGHT / 2, z),
-		Height = PAD_HEIGHT,
-		Diameter = 2,
-		Color = team.Primary,
-		Material = Enum.Material.Fabric,
-	})
+	post(ctx, "GoalPostPad", baseX, z, TURF_TOP, PAD_HEIGHT, 2, team.Primary, Enum.Material.Fabric)
 	local elbow = Vector3.new(baseX, CROSSBAR_HEIGHT, z)
-	rod(ctx, "GoalPostStem", Vector3.new(baseX, padTop, z), elbow, 0.8, postColor, metal)
+	pipe(ctx, "GoalPostStem", Vector3.new(baseX, padTop, z), elbow, 0.8, postColor, metal)
 	BuildUtil.Ball(ctx, { Name = "GoalPostElbow", Position = elbow, Diameter = 0.8, Color = postColor, Material = metal })
-	rod(ctx, "GoalPostArm", elbow, Vector3.new(planeX, CROSSBAR_HEIGHT, z), 0.8, postColor, metal)
+	pipe(ctx, "GoalPostArm", elbow, Vector3.new(planeX, CROSSBAR_HEIGHT, z), 0.8, postColor, metal)
 	BuildUtil.Cylinder(ctx, {
 		Name = "Crossbar",
 		Axis = "Z",
@@ -372,25 +491,18 @@ local function goalPost(ctx, planeX, dir, z, uprightHeight, team, postColor, wit
 		Material = metal,
 	})
 	for _, s in ipairs({ -1, 1 }) do
-		BuildUtil.Cylinder(ctx, {
-			Name = "Upright",
-			Position = Vector3.new(planeX, CROSSBAR_HEIGHT + uprightHeight / 2, z + s * UPRIGHT_HALF_GAP),
-			Height = uprightHeight,
-			Diameter = 0.5,
-			Color = postColor,
-			Material = metal,
-		})
+		post(ctx, "Upright", planeX, z + s * UPRIGHT_HALF_GAP, CROSSBAR_HEIGHT, uprightHeight, 0.5, postColor, metal)
 		if withRibbons then
 			-- streamer tied to the top of the upright, blowing outward and drooping a little
 			local droop = math.rad(25)
 			local length = 2.2
-			local dir = Vector3.new(0, -math.sin(droop), s * math.cos(droop))
+			local d = Vector3.new(0, -math.sin(droop), s * math.cos(droop))
 			local tie = Vector3.new(planeX, CROSSBAR_HEIGHT + uprightHeight - 0.3, z + s * (UPRIGHT_HALF_GAP + 0.2))
-			local center = tie + dir * (length / 2)
+			local center = tie + d * (length / 2)
 			local ribbon = table.clone(PAINT)
 			ribbon.Name = "WindRibbon"
 			ribbon.Size = Vector3.new(0.1, 0.3, length)
-			ribbon.CFrame = CFrame.lookAt(center, center + dir)
+			ribbon.CFrame = CFrame.lookAt(center, center + d)
 			ribbon.Color = RIBBON_RED
 			ribbon.Material = Enum.Material.Fabric
 			BuildUtil.Part(ctx, ribbon)
@@ -399,179 +511,96 @@ local function goalPost(ctx, planeX, dir, z, uprightHeight, team, postColor, wit
 end
 
 ---------------------------------------------------------------------------------------------
--- practice_field: grass field, lines, one end zone + goal post, railing with a gate
+-- practice_field
 ---------------------------------------------------------------------------------------------
-function CampusFields.practice_field(ctx)
-	local C = ctx.config.Colors
-	local team = ctx.colors
-	local A = FIELD_AREA
 
-	-- Turf: 10-stud mowing stripes lined up with the yard lines, over the whole footprint
-	local edges = { A.MinX }
-	for x = PF.EndLineX, PF.FarLineX, STEP do
-		table.insert(edges, x)
-	end
-	table.insert(edges, A.MaxX)
-	stripedTurf(ctx, edges, A.MinZ, A.MaxZ, C)
+-- Team logo at midfield: a ring, a disc and the team name (reads upright from the -Z gate side).
+local function midfieldLogo(ctx, x, z, team, text)
+	post(ctx, "LogoRing", x, z, TURF_TOP, LOGO_RING_TOP - TURF_TOP, 21, team.Secondary, Enum.Material.SmoothPlastic, PAINT)
+	post(ctx, "LogoDisc", x, z, TURF_TOP, LOGO_TOP - TURF_TOP, 18.4, team.Primary, Enum.Material.SmoothPlastic, PAINT)
+	local carrier = BuildUtil.Part(ctx, {
+		Name = "LogoText",
+		Size = Vector3.new(15, 0.02, 6),
+		CFrame = CFrame.new(x, LOGO_TEXT_Y, z) * CFrame.Angles(0, math.pi, 0),
+		Transparency = 1,
+		CanCollide = false,
+		CastShadow = false,
+	})
+	faceText(carrier, Enum.NormalId.Top, text, team.Primary, team, { LabelName = "LogoName", PixelsPerStud = 12, Outline = 3 })
+end
 
-	-- Lines: boundary, goal line, a line every 5 yards up to the 60
-	local yardLines = {}
-	for x = PF.GoalLineX + STEP, PF.FarLineX - STEP, STEP do
-		table.insert(yardLines, x)
-	end
-	fieldLines(ctx, {
-		MinX = PF.EndLineX,
-		MaxX = PF.FarLineX,
-		MinZ = PF.MinZ,
-		MaxZ = PF.MaxZ,
-		GoalLines = { PF.GoalLineX },
-		YardLines = yardLines,
-	}, C.Line)
-
-	-- Yard numbers every 10 yards, one row along each sideline
-	local marks = {}
-	for yards = 10, 60, 10 do
-		table.insert(marks, { x = PF.GoalLineX + yards * 2, text = tostring(yards) })
-	end
-	yardNumberRow(ctx, "NumbersFront", PF.GoalLineX, PF.FarLineX, PF.MinZ + NUMBER_INSET, true, marks, C.Line)
-	yardNumberRow(ctx, "NumbersBack", PF.GoalLineX, PF.FarLineX, PF.MaxZ - NUMBER_INSET, false, marks, C.Line)
-
-	-- End zone with the team name + a single goal post above the end line
-	endZone(ctx, "EndZone", PF.EndLineX, PF.GoalLineX, PF.MinZ, PF.MaxZ, team, ctx.teamName)
-	goalPost(BuildUtil.Child(ctx, "GoalPost"), PF.EndLineX - BOUNDARY_WIDTH / 2, -1, PF.CenterZ, 20, team, C.GoalPost, true)
-
-	-- Low railing all round: white posts, team-coloured top rail, white mid rail
-	local fence = BuildUtil.Child(ctx, "Railing")
-	local x0, x1 = A.MinX + PF.FenceInset, A.MaxX - PF.FenceInset
-	local z0, z1 = A.MinZ + PF.FenceInset, A.MaxZ - PF.FenceInset
-	local gateMin, gateMax = PF.CenterZ - PF.GateHalfWidth, PF.CenterZ + PF.GateHalfWidth
-	local postSize = Vector3.new(0.5, PF.PostHeight, 0.5)
-	local function post(x, z)
-		BuildUtil.Block(fence, "RailPost", postSize, Vector3.new(x, 0, z), FENCE_WHITE, Enum.Material.Metal, nil, TURF_TOP)
-	end
-	local function rails(fromV, toV)
-		local alongX = math.abs(toV.X - fromV.X) > math.abs(toV.Z - fromV.Z)
-		local length = alongX and math.abs(toV.X - fromV.X) or math.abs(toV.Z - fromV.Z)
-		local size = alongX and Vector3.new(length, 0.3, 0.25) or Vector3.new(0.25, 0.3, length)
-		local mid = (fromV + toV) / 2
-		BuildUtil.Box(fence, "TopRail", size, Vector3.new(mid.X, 3.4, mid.Z), team.Primary, Enum.Material.Metal)
-		BuildUtil.Box(fence, "MidRail", size, Vector3.new(mid.X, 1.9, mid.Z), FENCE_WHITE, Enum.Material.Metal)
-	end
-	-- long sides (along X): a post every 28 studs
-	for i = 0, 6 do
-		local x = x0 + (x1 - x0) * i / 6
-		post(x, z0)
-		post(x, z1)
-	end
-	rails(Vector3.new(x0, 0, z0), Vector3.new(x1, 0, z0))
-	rails(Vector3.new(x0, 0, z1), Vector3.new(x1, 0, z1))
-	-- far (west) end
-	for i = 1, 3 do
-		post(x0, z0 + (z1 - z0) * i / 4)
-	end
-	rails(Vector3.new(x0, 0, z0), Vector3.new(x0, 0, z1))
-	-- near (east) end: two runs either side of the gate
-	post(x1, (z0 + gateMin) / 2)
-	post(x1, (gateMax + z1) / 2)
-	rails(Vector3.new(x1, 0, z0), Vector3.new(x1, 0, gateMin))
-	rails(Vector3.new(x1, 0, gateMax), Vector3.new(x1, 0, z1))
-
-	-- Gate: two tall team posts with a "PRACTICE FIELD" banner overhead (clear below y = 9)
-	local gate = BuildUtil.Child(ctx, "Gate")
-	for _, z in ipairs({ gateMin, gateMax }) do
-		BuildUtil.Block(gate, "GatePost", Vector3.new(1, 12.6, 1), Vector3.new(x1, 0, z), team.Primary, Enum.Material.Metal, nil, TURF_TOP)
-	end
-	local banner = span(
-		gate,
-		"GateBanner",
-		Vector3.new(x1 - 0.3, 9.4, gateMin + 0.5),
-		Vector3.new(x1 + 0.3, 12.8, gateMax - 0.5),
-		team.Primary,
-		Enum.Material.SmoothPlastic
+-- One straight chain-link run: translucent mesh, top rail and posts every <= 40 studs (not at the ends).
+local function fenceRun(ctx, x0, z0, x1, z1, railColor)
+	local alongX = math.abs(x1 - x0) > math.abs(z1 - z0)
+	local length = alongX and math.abs(x1 - x0) or math.abs(z1 - z0)
+	local midX, midZ = (x0 + x1) / 2, (z0 + z1) / 2
+	local meshHeight = FENCE_HEIGHT - 0.5
+	BuildUtil.Box(
+		ctx,
+		"FenceMesh",
+		alongX and Vector3.new(length, meshHeight, 0.12) or Vector3.new(0.12, meshHeight, length),
+		Vector3.new(midX, TURF_TOP + 0.15 + meshHeight / 2, midZ),
+		CHAIN_LINK,
+		Enum.Material.Metal,
+		{ Transparency = 0.55, CastShadow = false }
 	)
-	for _, face in ipairs({ Enum.NormalId.Right, Enum.NormalId.Left }) do
-		faceText(banner, face, "PRACTICE FIELD", team.Primary, team, { LabelName = "GateBanner" .. face.Name })
-	end
-
-	-- Team banners hung on the outside of the front (-Z) railing, facing the campus buildings
-	local bannerTexts = { ctx.teamName, "PRACTICE FIELD" }
-	for i, cx in ipairs({ x0 + 56 - 14, x1 - 56 + 14 }) do
-		local cloth = span(
-			fence,
-			"RailBanner",
-			Vector3.new(cx - 12, 0.9, z0 - 0.45),
-			Vector3.new(cx + 12, 3.7, z0 - 0.2),
-			team.Primary,
-			Enum.Material.Fabric,
-			NO_COLLIDE
-		)
-		faceText(cloth, Enum.NormalId.Front, bannerTexts[i], team.Primary, team, { LabelName = "RailBanner" .. i })
+	BuildUtil.Cylinder(ctx, {
+		Name = "FenceTopRail",
+		Axis = alongX and "X" or "Z",
+		Position = Vector3.new(midX, TURF_TOP + FENCE_HEIGHT - 0.15, midZ),
+		Height = length,
+		Diameter = 0.35,
+		Color = railColor,
+		Material = Enum.Material.Metal,
+	})
+	local intervals = math.ceil(length / 40)
+	for i = 1, intervals - 1 do
+		local t = i / intervals
+		post(ctx, "FencePost", x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, TURF_TOP, FENCE_HEIGHT + 0.2, 0.45, CHAIN_LINK, Enum.Material.Metal)
 	end
 end
 
----------------------------------------------------------------------------------------------
--- practice_gear: equipment on and around the practice field
----------------------------------------------------------------------------------------------
+-- Play clock on a pole behind an end line; the amber "40" faces the field (`face` side).
+local function playClock(ctx, x, z, face)
+	post(ctx, "PlayClockPole", x, z, TURF_TOP, 9, 0.4, DARK_METAL, Enum.Material.Metal)
+	local box = BuildUtil.Box(
+		ctx,
+		"PlayClock",
+		Vector3.new(0.8, 3, 5),
+		Vector3.new(x, TURF_TOP + 10.3, z),
+		CAMERA_BLACK,
+		Enum.Material.SmoothPlastic
+	)
+	local _, label = BuildUtil.SurfaceText(box, face, "40", {
+		LabelName = "PlayClockTime",
+		TextColor3 = Color3.fromRGB(255, 176, 30),
+		Font = Enum.Font.Code,
+		PixelsPerStud = 20,
+		LightInfluence = 0,
+	})
+	label.Size = UDim2.new(0.8, 0, 0.8, 0)
+	label.Position = UDim2.new(0.1, 0, 0.1, 0)
+end
 
--- Kicking net beside the end zone (in the -Z margin), open side toward the field (+Z).
-local function kickingNet(ctx, cx, z, team)
-	local halfW, height = 6, 10
+-- Team bench facing +Z (the field): aluminium seat, team backrest with the name toward the road.
+local function bench(ctx, cx, cz, length, team, text)
+	local metal = Enum.Material.Metal
+	BuildUtil.Box(ctx, "BenchSeat", Vector3.new(length, 0.4, 1.6), Vector3.new(cx, TURF_TOP + 2, cz + 0.6), ALUMINIUM, metal)
+	local back =
+		BuildUtil.Box(ctx, "BenchBack", Vector3.new(length, 1.8, 0.3), Vector3.new(cx, TURF_TOP + 3.4, cz - 0.4), team.Primary, metal)
+	faceText(back, Enum.NormalId.Front, text, team.Primary, team, { LabelName = "BenchName", InsetX = 0.2 })
 	for _, s in ipairs({ -1, 1 }) do
-		BuildUtil.Cylinder(ctx, {
-			Name = "NetPost",
-			Position = Vector3.new(cx + s * halfW, TURF_TOP + height / 2, z),
-			Height = height,
-			Diameter = 0.5,
-			Color = team.Secondary,
-			Material = Enum.Material.Metal,
-		})
 		BuildUtil.Block(
 			ctx,
-			"NetFoot",
-			Vector3.new(0.5, 0.4, 3.2),
-			Vector3.new(cx + s * halfW, 0, z + 0.4),
+			"BenchLeg",
+			Vector3.new(0.4, 4.3, 2.1),
+			Vector3.new(cx + s * (length / 2 - 0.8), 0, cz + 0.2),
 			DARK_METAL,
-			Enum.Material.Metal,
+			metal,
 			nil,
 			TURF_TOP
 		)
 	end
-	BuildUtil.Cylinder(ctx, {
-		Name = "NetTopBar",
-		Axis = "X",
-		Position = Vector3.new(cx, TURF_TOP + height, z),
-		Height = halfW * 2 + 0.5,
-		Diameter = 0.5,
-		Color = team.Secondary,
-		Material = Enum.Material.Metal,
-	})
-	BuildUtil.Box(
-		ctx,
-		"Netting",
-		Vector3.new(halfW * 2 - 0.5, height - 0.4, 0.15),
-		Vector3.new(cx, TURF_TOP + 0.2 + (height - 0.4) / 2, z - 0.2),
-		NET_WHITE,
-		Enum.Material.Fabric,
-		{ Transparency = 0.5 }
-	)
-	-- a ball on a kicking tee in front of the net
-	BuildUtil.Cylinder(ctx, {
-		Name = "KickingTee",
-		Position = Vector3.new(cx, TURF_TOP + 0.25, z + 5),
-		Height = 0.5,
-		Diameter = 0.7,
-		Color = CONE_ORANGE,
-		Material = Enum.Material.Plastic,
-	})
-	BuildUtil.Cylinder(ctx, {
-		Name = "Football",
-		Axis = "Z",
-		Position = Vector3.new(cx, TURF_TOP + 0.95, z + 5),
-		Height = 1.2,
-		Diameter = 0.8,
-		Color = LEATHER,
-		Material = Enum.Material.Leather,
-	})
 end
 
 -- Water table with two coolers and a stack of cups, front skirt facing the field (+Z).
@@ -594,86 +623,355 @@ local function waterStation(ctx, cx, cz, team)
 		BuildUtil.Box(ctx, "TableSkirt", Vector3.new(8, 2, 0.2), Vector3.new(cx, top - 1.4, cz + 1.6), team.Primary, Enum.Material.Fabric)
 	faceText(skirt, Enum.NormalId.Back, "WATER", team.Primary, team, { LabelName = "WaterSign", InsetX = 0.25 })
 	for _, dx in ipairs({ -2.2, 0.6 }) do
-		BuildUtil.Cylinder(ctx, {
-			Name = "Cooler",
-			Position = Vector3.new(cx + dx, top + 1.3, cz),
-			Height = 2.6,
-			Diameter = 2.2,
-			Color = COOLER_ORANGE,
-			Material = Enum.Material.SmoothPlastic,
-		})
-		BuildUtil.Cylinder(ctx, {
-			Name = "CoolerLid",
-			Position = Vector3.new(cx + dx, top + 2.75, cz),
-			Height = 0.3,
-			Diameter = 2.35,
-			Color = WHITE,
-			Material = Enum.Material.SmoothPlastic,
-		})
+		post(ctx, "Cooler", cx + dx, cz, top, 2.6, 2.2, COOLER_ORANGE, Enum.Material.SmoothPlastic)
+		post(ctx, "CoolerLid", cx + dx, cz, top + 2.6, 0.3, 2.35, WHITE, Enum.Material.SmoothPlastic)
 	end
-	BuildUtil.Cylinder(ctx, {
-		Name = "CupStack",
-		Position = Vector3.new(cx + 2.8, top + 0.8, cz + 0.4),
-		Height = 1.6,
-		Diameter = 0.7,
-		Color = WHITE,
-		Material = Enum.Material.SmoothPlastic,
-	})
+	post(ctx, "CupStack", cx + 2.8, cz + 0.4, top, 1.6, 0.7, WHITE, Enum.Material.SmoothPlastic)
 end
 
--- Flat agility ladder from x0 to x1 centred on z (yellow rungs on black straps).
-local function agilityLadder(ctx, x0, x1, z)
-	local halfW = 1.5
-	for _, s in ipairs({ -1, 1 }) do
-		BuildUtil.Box(
-			ctx,
-			"LadderStrap",
-			Vector3.new(x1 - x0, 0.18, 0.3),
-			Vector3.new((x0 + x1) / 2, TURF_TOP + 0.09, z + s * halfW),
-			STRAP_BLACK,
-			Enum.Material.Fabric,
-			PAINT
-		)
-	end
-	local rungs = 9
-	for i = 0, rungs - 1 do
-		local x = x0 + 0.15 + (x1 - x0 - 0.3) * i / (rungs - 1)
-		BuildUtil.Box(
-			ctx,
-			"LadderRung",
-			Vector3.new(0.3, 0.16, halfW * 2 - 0.3),
-			Vector3.new(x, TURF_TOP + 0.08, z),
-			LADDER_YELLOW,
-			Enum.Material.SmoothPlastic,
-			PAINT
-		)
+-- Ball bin full of footballs.
+local function ballBin(ctx, cx, cz)
+	BuildUtil.Block(ctx, "BallBin", Vector3.new(4, 2.2, 2.6), Vector3.new(cx, 0, cz), DARK_METAL, Enum.Material.DiamondPlate, nil, TURF_TOP)
+	local balls = { { -1.2, 0.2, 0 }, { 0.2, -0.3, 0.5 }, { 1.3, 0.4, -0.2 } }
+	for i, b in ipairs(balls) do
+		BuildUtil.Cylinder(ctx, {
+			Name = "Football",
+			Axis = i % 2 == 0 and "X" or "Z",
+			Position = Vector3.new(cx + b[1], TURF_TOP + 2.55 + b[3] * 0.2, cz + b[2]),
+			Height = 1.2,
+			Diameter = 0.8,
+			Color = LEATHER,
+			Material = Enum.Material.Leather,
+		})
 	end
 end
 
--- Two-man blocking sled: skids + bed, two arms with pads facing +Z (players drive it toward -Z).
-local function blockingSled(ctx, cx, cz, team)
+--[[
+	Aluminium bleachers over X[x0, x1], first row at frontZ, rising toward +Z (spectators face -Z, the
+	field). Seats + footboards, sloped stringers, a back guard rail with a team banner and team side
+	panels.
+]]
+local function bleachers(ctx, x0, x1, frontZ, team, text)
 	local metal = Enum.Material.Metal
-	for _, s in ipairs({ -1, 1 }) do
-		BuildUtil.Block(ctx, "SledSkid", Vector3.new(0.6, 0.5, 8), Vector3.new(cx + s * 3.5, 0, cz), DARK_METAL, metal, nil, TURF_TOP)
+	local rows, rowDepth, rowRise = 5, 2.2, 1.4
+	local backZ = frontZ + rows * rowDepth
+	local topSeat = TURF_TOP + 1.2 + (rows - 1) * rowRise
+	local railTop = topSeat + 3.4
+	for r = 1, rows do
+		local z = frontZ + (r - 1) * rowDepth
+		local seatTop = TURF_TOP + 1.2 + (r - 1) * rowRise
+		span(ctx, "BleacherSeat", Vector3.new(x0, seatTop - 0.3, z + 1), Vector3.new(x1, seatTop, z + rowDepth), ALUMINIUM, metal)
+		span(ctx, "BleacherFootboard", Vector3.new(x0, seatTop - 1.2, z), Vector3.new(x1, seatTop - 1, z + 1), ALUMINIUM_DARK, metal)
+		-- team-coloured riser under the nose of every seat
+		span(ctx, "BleacherRiser", Vector3.new(x0, seatTop - 1, z + 1), Vector3.new(x1, seatTop - 0.3, z + 1.15), team.Primary, metal)
 	end
-	BuildUtil.Block(ctx, "SledBackBar", Vector3.new(7.6, 0.5, 0.5), Vector3.new(cx, 0, cz - 3.75), DARK_METAL, metal, nil, TURF_TOP)
+	-- understructure: a sloped stringer + a rear post every <= 16 studs
+	local frames = math.ceil((x1 - x0) / 16)
+	for i = 0, frames do
+		local x = x0 + 0.4 + (x1 - x0 - 0.8) * i / frames
+		bar(
+			ctx,
+			"BleacherStringer",
+			Vector3.new(x, TURF_TOP, frontZ + 0.4),
+			Vector3.new(x, topSeat - 0.3, backZ - 0.6),
+			0.4,
+			ALUMINIUM_DARK,
+			metal
+		)
+		BuildUtil.Block(
+			ctx,
+			"BleacherPost",
+			Vector3.new(0.4, railTop - TURF_TOP, 0.4),
+			Vector3.new(x, 0, backZ - 0.2),
+			ALUMINIUM_DARK,
+			metal,
+			nil,
+			TURF_TOP
+		)
+	end
+	BuildUtil.Box(
+		ctx,
+		"BleacherBackRail",
+		Vector3.new(x1 - x0, 0.3, 0.3),
+		Vector3.new((x0 + x1) / 2, railTop - 0.15, backZ - 0.2),
+		ALUMINIUM,
+		metal
+	)
+	local banner = span(
+		ctx,
+		"BleacherBanner",
+		Vector3.new(x0 + 2, topSeat + 1.1, backZ - 0.62),
+		Vector3.new(x1 - 2, topSeat + 3, backZ - 0.47),
+		team.Primary,
+		Enum.Material.Fabric,
+		NO_COLLIDE
+	)
+	faceText(banner, Enum.NormalId.Front, text, team.Primary, team, { LabelName = "BleacherBannerText", InsetX = 0.08 })
+	-- team side panels (a triangle under each end of the seats) + sloped hand rails
+	for _, x in ipairs({ x0 - 0.15, x1 + 0.15 }) do
+		triangle(
+			ctx,
+			"BleacherSidePanel",
+			Vector3.new(x, TURF_TOP, backZ),
+			UP,
+			topSeat - TURF_TOP,
+			Vector3.new(0, 0, -1),
+			backZ - frontZ,
+			0.3,
+			team.Primary,
+			Enum.Material.Metal
+		)
+		BuildUtil.Block(
+			ctx,
+			"BleacherRailPost",
+			Vector3.new(0.25, 3.5, 0.25),
+			Vector3.new(x, 0, frontZ + 0.3),
+			ALUMINIUM,
+			metal,
+			nil,
+			TURF_TOP
+		)
+		bar(
+			ctx,
+			"BleacherHandRail",
+			Vector3.new(x, TURF_TOP + 3.5, frontZ + 0.3),
+			Vector3.new(x, railTop, backZ - 0.2),
+			0.25,
+			ALUMINIUM,
+			metal
+		)
+	end
+end
+
+function CampusFields.practice_field(ctx)
+	local C = ctx.config.Colors
+	local team = ctx.colors
+	local f = practiceLayout(ctx.config.Layout)
+	local zone = f.Zone
+	local name = teamLabel(ctx, "HOME")
+
+	-- STEP 1: Grass -----------------------------------------------------------------------------
+	BuildUtil.Stage(ctx, 1)
+	local grass = BuildUtil.Child(ctx, "Grass")
+	span(
+		grass,
+		"PracticeTurf",
+		Vector3.new(zone.MinX, 0, zone.MinZ),
+		Vector3.new(zone.MaxX, TURF_TOP, zone.MaxZ),
+		C.Grass,
+		Enum.Material.Grass
+	)
+	mowingStripes(grass, f, f.MinZ, f.MaxZ, C.GrassDark)
+
+	-- STEP 2: Yard Lines ------------------------------------------------------------------------
+	BuildUtil.Stage(ctx, 2)
+	local lines = BuildUtil.Child(ctx, "YardLines")
+	fieldLines(lines, f, C.Line)
+	fieldMarks(lines, "MarksFront", f, -1, C.Line)
+	fieldMarks(lines, "MarksBack", f, 1, C.Line)
+
+	-- STEP 3: End Zones -------------------------------------------------------------------------
+	BuildUtil.Stage(ctx, 3)
+	local zones = BuildUtil.Child(ctx, "EndZones")
+	endZone(zones, "EndZoneWest", f.EndW, f.GoalW, f.MinZ, f.MaxZ, team, name)
+	endZone(zones, "EndZoneEast", f.EndE, f.GoalE, f.MinZ, f.MaxZ, team, name)
+	for _, x in ipairs({ f.EndW - 0.5, f.GoalW, f.GoalE, f.EndE + 0.5 }) do
+		pylon(zones, x, f.MinZ - 0.5)
+		pylon(zones, x, f.MaxZ + 0.5)
+	end
+	midfieldLogo(zones, f.CenterX, f.CenterZ, team, name)
+
+	-- STEP 4: Goal Posts ------------------------------------------------------------------------
+	BuildUtil.Stage(ctx, 4)
+	goalPost(BuildUtil.Child(ctx, "GoalPostWest"), f.EndW - BOUNDARY_WIDTH / 2, -1, f.CenterZ, 16, team, C.GoalPost, true)
+	goalPost(BuildUtil.Child(ctx, "GoalPostEast"), f.EndE + BOUNDARY_WIDTH / 2, 1, f.CenterZ, 16, team, C.GoalPost, true)
+
+	-- STEP 5: Fence & Sideline ------------------------------------------------------------------
+	BuildUtil.Stage(ctx, 5)
+	local fence = BuildUtil.Child(ctx, "Fence")
+	local x0, x1, z0, z1 = f.FenceX0, f.FenceX1, f.FenceZ0, f.FenceZ1
+	local gateW, gateE = f.GateX - f.GateHalf, f.GateX + f.GateHalf
+	fenceRun(fence, x0, z0, gateW - 0.6, z0, team.Primary)
+	fenceRun(fence, gateE + 0.6, z0, x1, z0, team.Primary)
+	fenceRun(fence, x1, f.SideGateZ, x1, z1, team.Primary)
+	fenceRun(fence, x0, z1, x1, z1, team.Primary)
+	fenceRun(fence, x0, z0, x0, z1, team.Primary)
+	for _, p in ipairs({ { x0, z0 }, { x1, z0 }, { x0, z1 }, { x1, z1 }, { x1, f.SideGateZ } }) do
+		post(fence, "FenceCornerPost", p[1], p[2], TURF_TOP, FENCE_HEIGHT + 0.4, 0.6, CHAIN_LINK, Enum.Material.Metal)
+	end
+	-- side gate toward the dome (east fence), swung open into the field
+	span(
+		fence,
+		"SideGateLeaf",
+		Vector3.new(x1 - 9.2, TURF_TOP + 0.4, f.SideGateZ - 0.5),
+		Vector3.new(x1 - 0.4, TURF_TOP + FENCE_HEIGHT - 0.4, f.SideGateZ - 0.35),
+		CHAIN_LINK,
+		Enum.Material.Metal,
+		{ Transparency = 0.35 }
+	)
+
+	-- main gate behind the buy button: team posts with gold balls and an arch banner (clear to y 9.6)
+	local gate = BuildUtil.Child(ctx, "MainGate")
+	for _, x in ipairs({ gateW - 0.6, gateE + 0.6 }) do
+		BuildUtil.Block(
+			gate,
+			"GatePost",
+			Vector3.new(1.2, 12.8, 1.2),
+			Vector3.new(x, 0, z0),
+			team.Primary,
+			Enum.Material.Metal,
+			nil,
+			TURF_TOP
+		)
+		BuildUtil.Ball(gate, {
+			Name = "GatePostBall",
+			Position = Vector3.new(x, TURF_TOP + 13.5, z0),
+			Diameter = 1.6,
+			Color = C.Gold,
+			Material = Enum.Material.Metal,
+		})
+	end
+	local arch = span(
+		gate,
+		"GateBanner",
+		Vector3.new(gateW, 9.6, z0 - 0.3),
+		Vector3.new(gateE, 12.8, z0 + 0.3),
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	faceText(arch, Enum.NormalId.Front, "PRACTICE FIELD", team.Primary, team, { LabelName = "GateBannerFront" })
+	faceText(arch, Enum.NormalId.Back, "GO " .. name .. "!", team.Primary, team, { LabelName = "GateBannerBack" })
+	for _, s in ipairs({ -1, 1 }) do
+		local hingeX = s < 0 and gateW + 0.2 or gateE - 0.2
+		span(
+			gate,
+			"GateLeaf",
+			Vector3.new(hingeX - 0.08, TURF_TOP + 0.4, z0 + 0.6),
+			Vector3.new(hingeX + 0.08, TURF_TOP + FENCE_HEIGHT - 0.4, z0 + 0.6 + f.GateHalf - 0.6),
+			CHAIN_LINK,
+			Enum.Material.Metal,
+			{ Transparency = 0.35 }
+		)
+	end
+
+	-- banners on the outside of the front fence, facing the road
+	local bannerSpecs = { { (x0 + gateW) / 2, name .. " PRACTICE" }, { (gateE + x1) / 2, "PRACTICE LIKE A CHAMPION" } }
+	for i, spec in ipairs(bannerSpecs) do
+		local cloth = span(
+			fence,
+			"FenceBanner",
+			Vector3.new(spec[1] - 20, TURF_TOP + 0.8, z0 - 0.32),
+			Vector3.new(spec[1] + 20, TURF_TOP + 4.2, z0 - 0.12),
+			team.Primary,
+			Enum.Material.Fabric,
+			NO_COLLIDE
+		)
+		faceText(cloth, Enum.NormalId.Front, spec[2], team.Primary, team, { LabelName = "FenceBanner" .. i, InsetX = 0.04 })
+	end
+
+	-- team area between the fence and the near sideline
+	local side = BuildUtil.Child(ctx, "Sideline")
+	local areaZ = (z0 + f.MinZ - BOUNDARY_WIDTH) / 2 -- 402.5
+	paint(
+		side,
+		"TeamMat",
+		f.CenterX - 72,
+		f.CenterX + 72,
+		z0 + 1.4,
+		f.MinZ - BOUNDARY_WIDTH - 0.4,
+		MAT_TOP,
+		team.Primary,
+		Enum.Material.Fabric
+	)
+	bench(BuildUtil.Child(side, "BenchWest"), f.CenterX - 51, areaZ, 26, team, name)
+	bench(BuildUtil.Child(side, "BenchEast"), f.CenterX + 51, areaZ, 26, team, name)
+	waterStation(BuildUtil.Child(side, "WaterStation"), f.CenterX - 22, areaZ - 0.5, team)
+	ballBin(BuildUtil.Child(side, "BallBin"), f.CenterX + 22, areaZ)
+	-- play clocks behind both end lines (near corner, clear of the goal posts)
+	local clocks = BuildUtil.Child(ctx, "PlayClocks")
+	playClock(clocks, (f.EndW - BOUNDARY_WIDTH + x0) / 2, f.MinZ + 6, Enum.NormalId.Right)
+	playClock(clocks, (f.EndE + BOUNDARY_WIDTH + x1) / 2, f.MinZ + 6, Enum.NormalId.Left)
+
+	-- STEP 6: Bleachers -------------------------------------------------------------------------
+	BuildUtil.Stage(ctx, 6)
+	local stands = BuildUtil.Child(ctx, "Bleachers")
+	local bleacherText = name == "HOME" and "HOME OF CHAMPIONS" or ("HOME OF THE " .. name)
+	bleachers(stands, f.CenterX - 32, f.CenterX + 32, f.MaxZ + BOUNDARY_WIDTH + 1.5, team, bleacherText)
+end
+
+---------------------------------------------------------------------------------------------
+-- practice_gear
+---------------------------------------------------------------------------------------------
+
+--[[
+	Seven-man blocking sled, long axis along Z: skids, a diamond-plate bed with weight plates, a top
+	beam on two posts and seven pads facing -X (the linemen line up west of it and drive it east).
+]]
+local function sevenManSled(ctx, cx, cz, team, text)
+	local metal = Enum.Material.Metal
+	local length = 28
+	for _, s in ipairs({ -1, 1 }) do
+		BuildUtil.Block(
+			ctx,
+			"SledSkid",
+			Vector3.new(0.6, 0.5, length + 2),
+			Vector3.new(cx + s * 2.2, 0, cz),
+			DARK_METAL,
+			metal,
+			nil,
+			TURF_TOP
+		)
+		BuildUtil.Block(
+			ctx,
+			"SledPost",
+			Vector3.new(0.6, 3.8, 0.6),
+			Vector3.new(cx - 1, 0, cz + s * 12),
+			DARK_METAL,
+			metal,
+			nil,
+			TURF_TOP + 0.8
+		)
+		post(ctx, "SledWeight", cx + 1.1, cz + s * 6, TURF_TOP + 0.8, 0.9, 2.2, RUBBER_BLACK, Enum.Material.Rubber)
+	end
 	BuildUtil.Block(
 		ctx,
 		"SledBed",
-		Vector3.new(7.6, 0.3, 5),
-		Vector3.new(cx, 0, cz - 0.5),
+		Vector3.new(5, 0.3, length),
+		Vector3.new(cx, 0, cz),
 		DARK_METAL,
 		Enum.Material.DiamondPlate,
 		nil,
 		TURF_TOP + 0.5
 	)
-	local armZ = cz + 1.8
+	BuildUtil.Box(ctx, "SledBeam", Vector3.new(0.6, 0.6, length - 1), Vector3.new(cx - 1, TURF_TOP + 4.6, cz), DARK_METAL, metal)
+	for i = 1, 7 do
+		local color = i % 2 == 1 and team.Primary or team.Secondary
+		BuildUtil.Block(
+			ctx,
+			"SledPad",
+			Vector3.new(1.4, 3.8, 3.5),
+			Vector3.new(cx - 2.2, 0, cz + (i - 4) * 3.85),
+			color,
+			Enum.Material.Fabric,
+			nil,
+			TURF_TOP + 1.3
+		)
+	end
+	local plate =
+		BuildUtil.Box(ctx, "SledNamePlate", Vector3.new(0.25, 1.5, 14), Vector3.new(cx + 2.65, TURF_TOP + 1.6, cz), team.Primary, metal)
+	faceText(plate, Enum.NormalId.Right, text, team.Primary, team, { LabelName = "SledName" })
+end
+
+-- Two-man blocking sled, pads facing -X.
+local function twoManSled(ctx, cx, cz, team)
+	local metal = Enum.Material.Metal
 	for _, s in ipairs({ -1, 1 }) do
+		BuildUtil.Block(ctx, "SledSkid", Vector3.new(8, 0.5, 0.6), Vector3.new(cx, 0, cz + s * 3.5), DARK_METAL, metal, nil, TURF_TOP)
 		BuildUtil.Block(
 			ctx,
 			"SledArm",
 			Vector3.new(0.5, 3.8, 0.5),
-			Vector3.new(cx + s * 2.4, 0, armZ),
+			Vector3.new(cx - 1.8, 0, cz + s * 2.4),
 			DARK_METAL,
 			metal,
 			nil,
@@ -682,152 +980,276 @@ local function blockingSled(ctx, cx, cz, team)
 		BuildUtil.Block(
 			ctx,
 			"SledPad",
-			Vector3.new(3.2, 4, 1.2),
-			Vector3.new(cx + s * 2.4, 0, armZ + 0.85),
+			Vector3.new(1.2, 4, 3.2),
+			Vector3.new(cx - 2.65, 0, cz + s * 2.4),
 			team.Primary,
 			Enum.Material.Fabric,
 			nil,
 			TURF_TOP + 1.4
 		)
 	end
-	BuildUtil.Box(ctx, "SledTopBar", Vector3.new(5.3, 0.4, 0.4), Vector3.new(cx, TURF_TOP + 4.2, armZ), DARK_METAL, metal)
+	BuildUtil.Block(ctx, "SledBackBar", Vector3.new(0.5, 0.5, 7.6), Vector3.new(cx + 3.75, 0, cz), DARK_METAL, metal, nil, TURF_TOP)
+	BuildUtil.Block(
+		ctx,
+		"SledBed",
+		Vector3.new(5, 0.3, 7.6),
+		Vector3.new(cx + 0.5, 0, cz),
+		DARK_METAL,
+		Enum.Material.DiamondPlate,
+		nil,
+		TURF_TOP + 0.5
+	)
+	BuildUtil.Box(ctx, "SledTopBar", Vector3.new(0.4, 0.4, 5.3), Vector3.new(cx - 1.8, TURF_TOP + 4.6, cz), DARK_METAL, metal)
 end
 
--- Upright tackling dummy on a rubber base.
-local function tacklingDummy(ctx, x, z, color, bandColor)
+-- Upright tackling dummy on a rubber base (or knocked over, lying along X).
+local function tacklingDummy(ctx, x, z, color, bandColor, knockedOver)
+	if knockedOver then
+		BuildUtil.Cylinder(ctx, {
+			Name = "DummyBody",
+			Axis = "X",
+			Position = Vector3.new(x, TURF_TOP + 1.2, z),
+			Height = 5.4,
+			Diameter = 2.4,
+			Color = color,
+			Material = Enum.Material.Fabric,
+		})
+		BuildUtil.Cylinder(ctx, {
+			Name = "DummyBand",
+			Axis = "X",
+			Position = Vector3.new(x + 0.9, TURF_TOP + 1.2, z),
+			Height = 0.7,
+			Diameter = 2.5,
+			Color = bandColor,
+			Material = Enum.Material.Fabric,
+		})
+		BuildUtil.Cylinder(ctx, {
+			Name = "DummyBase",
+			Axis = "X",
+			Position = Vector3.new(x - 3, TURF_TOP + 1.6, z),
+			Height = 0.6,
+			Diameter = 3.2,
+			Color = RUBBER_BLACK,
+			Material = Enum.Material.Rubber,
+		})
+		return
+	end
+	post(ctx, "DummyBase", x, z, TURF_TOP, 0.6, 3.2, RUBBER_BLACK, Enum.Material.Rubber)
+	post(ctx, "DummyBody", x, z, TURF_TOP + 0.6, 5.4, 2.4, color, Enum.Material.Fabric)
+	post(ctx, "DummyBand", x, z, TURF_TOP + 3.85, 0.7, 2.5, bandColor, Enum.Material.Fabric)
+end
+
+-- Big foam tackle wheel standing on its rim (rolls along Z).
+local function tackleWheel(ctx, x, z, team)
+	local y = TURF_TOP + 2.6
 	BuildUtil.Cylinder(ctx, {
-		Name = "DummyBase",
-		Position = Vector3.new(x, TURF_TOP + 0.3, z),
+		Name = "TackleWheel",
+		Axis = "X",
+		Position = Vector3.new(x, y, z),
+		Height = 1.8,
+		Diameter = 5.2,
+		Color = team.Primary,
+		Material = Enum.Material.Fabric,
+	})
+	BuildUtil.Cylinder(ctx, {
+		Name = "TackleWheelStripe",
+		Axis = "X",
+		Position = Vector3.new(x, y, z),
 		Height = 0.6,
-		Diameter = 3.2,
-		Color = RUBBER_BLACK,
-		Material = Enum.Material.Rubber,
-	})
-	BuildUtil.Cylinder(ctx, {
-		Name = "DummyBody",
-		Position = Vector3.new(x, TURF_TOP + 0.6 + 2.7, z),
-		Height = 5.4,
-		Diameter = 2.4,
-		Color = color,
+		Diameter = 5.3,
+		Color = team.Secondary,
 		Material = Enum.Material.Fabric,
 	})
-	BuildUtil.Cylinder(ctx, {
-		Name = "DummyBand",
-		Position = Vector3.new(x, TURF_TOP + 4.2, z),
-		Height = 0.7,
-		Diameter = 2.5,
-		Color = bandColor,
-		Material = Enum.Material.Fabric,
-	})
+end
+
+-- Flat agility ladder from x0 to x1 centred on z (yellow rungs on black straps).
+local function agilityLadder(ctx, x0, x1, z)
+	local halfW = 1.5
+	for _, s in ipairs({ -1, 1 }) do
+		paint(ctx, "LadderStrap", x0, x1, z + s * halfW - 0.15, z + s * halfW + 0.15, STRAP_TOP, STRAP_BLACK, Enum.Material.Fabric)
+	end
+	local rungs = 8
+	for i = 0, rungs - 1 do
+		local x = x0 + 0.15 + (x1 - x0 - 0.3) * i / (rungs - 1)
+		paint(ctx, "LadderRung", x - 0.15, x + 0.15, z - halfW + 0.15, z + halfW - 0.15, RUNG_TOP, LADDER_YELLOW)
+	end
 end
 
 -- Traffic cone (not collidable, so nobody trips over the drill).
 local function cone(ctx, x, z)
-	BuildUtil.Box(
-		ctx,
-		"ConeBase",
-		Vector3.new(1.5, 0.15, 1.5),
-		Vector3.new(x, TURF_TOP + 0.075, z),
-		CONE_ORANGE,
-		Enum.Material.Plastic,
-		PAINT
-	)
+	paint(ctx, "ConeBase", x - 0.75, x + 0.75, z - 0.75, z + 0.75, CONE_BASE_TOP, CONE_ORANGE, Enum.Material.Plastic)
+	post(ctx, "ConeBody", x, z, CONE_BASE_TOP, 0.8, 1, CONE_ORANGE, Enum.Material.Plastic, NO_COLLIDE)
+	post(ctx, "ConeTip", x, z, CONE_BASE_TOP + 0.8, 0.7, 0.55, WHITE, Enum.Material.Plastic, NO_COLLIDE)
+end
+
+-- Mini hurdle (bar along Z, players hop along X); walk-through.
+local function miniHurdle(ctx, x, z)
+	for _, s in ipairs({ -1, 1 }) do
+		BuildUtil.Block(
+			ctx,
+			"HurdleLeg",
+			Vector3.new(0.25, 1.6, 0.25),
+			Vector3.new(x, 0, z + s * 1.5),
+			LADDER_YELLOW,
+			Enum.Material.Plastic,
+			NO_COLLIDE,
+			TURF_TOP
+		)
+	end
 	BuildUtil.Cylinder(ctx, {
-		Name = "ConeBody",
-		Position = Vector3.new(x, TURF_TOP + 0.15 + 0.4, z),
-		Height = 0.8,
-		Diameter = 1.0,
+		Name = "HurdleBar",
+		Axis = "Z",
+		Position = Vector3.new(x, TURF_TOP + 1.6, z),
+		Height = 3.4,
+		Diameter = 0.3,
 		Color = CONE_ORANGE,
-		Material = Enum.Material.Plastic,
-		CanCollide = false,
-	})
-	BuildUtil.Cylinder(ctx, {
-		Name = "ConeTip",
-		Position = Vector3.new(x, TURF_TOP + 0.95 + 0.35, z),
-		Height = 0.7,
-		Diameter = 0.55,
-		Color = WHITE,
 		Material = Enum.Material.Plastic,
 		CanCollide = false,
 	})
 end
 
--- Coach tower: scaffold with a platform, a team panel facing the field (-Z), a ladder on the +X
--- side, a megaphone on the rail and an umbrella.
-local function coachTower(ctx, cx, cz, team)
+--[[
+	Coach's filming tower: a braced scaffold with a diamond-plate deck, a team panel facing the field
+	(-Z), rails, a ladder on the +X side, a video camera on a tripod, a megaphone, a shade umbrella and
+	a team banner across the front legs.
+]]
+local function coachTower(ctx, cx, cz, team, text)
 	local metal = Enum.Material.Metal
-	local deckY = TURF_TOP + 12
-	local leg = 2.7
+	local deckY = TURF_TOP + 14
+	local leg = 3.2
 	for _, sx in ipairs({ -1, 1 }) do
 		for _, sz in ipairs({ -1, 1 }) do
 			BuildUtil.Block(
 				ctx,
 				"TowerLeg",
-				Vector3.new(0.6, 12, 0.6),
+				Vector3.new(0.6, 14, 0.6),
 				Vector3.new(cx + sx * leg, 0, cz + sz * leg),
-				FENCE_WHITE,
+				STEEL_WHITE,
 				metal,
 				nil,
 				TURF_TOP
 			)
 		end
-		-- one diagonal brace on each side face
-		strut(
+	end
+	-- X braces on the west and back faces (the ladder is on the east face, the field side stays open)
+	for _, s in ipairs({ -1, 1 }) do
+		bar(
 			ctx,
 			"TowerBrace",
-			Vector3.new(cx + sx * leg, TURF_TOP + 0.6, cz - leg),
-			Vector3.new(cx + sx * leg, deckY - 0.6, cz + leg),
+			Vector3.new(cx - leg, TURF_TOP + 0.6, cz + s * leg),
+			Vector3.new(cx - leg, deckY - 0.6, cz - s * leg),
 			0.3,
-			FENCE_WHITE,
+			STEEL_WHITE,
+			metal
+		)
+		bar(
+			ctx,
+			"TowerBrace",
+			Vector3.new(cx + s * leg, TURF_TOP + 0.6, cz + leg),
+			Vector3.new(cx - s * leg, deckY - 0.6, cz + leg),
+			0.3,
+			STEEL_WHITE,
 			metal
 		)
 	end
-	BuildUtil.Box(ctx, "TowerDeck", Vector3.new(7, 0.6, 7), Vector3.new(cx, deckY + 0.3, cz), DARK_METAL, Enum.Material.DiamondPlate)
-	local railTop = deckY + 0.6 + 2.8
-	local front = BuildUtil.Box(
+	BuildUtil.Box(ctx, "TowerDeck", Vector3.new(7.6, 0.6, 7.6), Vector3.new(cx, deckY + 0.3, cz), DARK_METAL, Enum.Material.DiamondPlate)
+	local floorY = deckY + 0.6
+	local panel = BuildUtil.Box(
 		ctx,
 		"TowerPanel",
-		Vector3.new(7, 2.8, 0.3),
-		Vector3.new(cx, deckY + 0.6 + 1.4, cz - 3.35),
+		Vector3.new(7.6, 2.8, 0.3),
+		Vector3.new(cx, floorY + 1.4, cz - 3.65),
 		team.Primary,
 		Enum.Material.SmoothPlastic
 	)
-	faceText(front, Enum.NormalId.Front, "COACH", team.Primary, team, { LabelName = "TowerPanelText", InsetX = 0.12 })
+	faceText(panel, Enum.NormalId.Front, "HEAD COACH", team.Primary, team, { LabelName = "TowerPanelText", InsetX = 0.08 })
+	local railY = floorY + 2.65
 	for _, sx in ipairs({ -1, 1 }) do
-		BuildUtil.Box(
+		BuildUtil.Block(
 			ctx,
 			"TowerRailPost",
 			Vector3.new(0.3, 2.8, 0.3),
-			Vector3.new(cx + sx * 3.35, deckY + 2, cz + 3.35),
-			FENCE_WHITE,
-			metal
+			Vector3.new(cx + sx * 3.65, 0, cz + 3.65),
+			STEEL_WHITE,
+			metal,
+			nil,
+			floorY
 		)
 	end
-	BuildUtil.Box(ctx, "TowerRailBack", Vector3.new(7, 0.3, 0.3), Vector3.new(cx, railTop - 0.15, cz + 3.35), FENCE_WHITE, metal)
-	BuildUtil.Box(ctx, "TowerRailSide", Vector3.new(0.3, 0.3, 6.5), Vector3.new(cx - 3.35, railTop - 0.15, cz + 0.1), FENCE_WHITE, metal)
-	-- ladder up the open +X side
-	local ladderX = cx + 3.7
+	BuildUtil.Box(ctx, "TowerRail", Vector3.new(7.6, 0.3, 0.3), Vector3.new(cx, railY, cz + 3.65), STEEL_WHITE, metal)
+	BuildUtil.Box(ctx, "TowerRail", Vector3.new(0.3, 0.3, 7.3), Vector3.new(cx - 3.65, railY, cz), STEEL_WHITE, metal)
+	BuildUtil.Box(ctx, "TowerRail", Vector3.new(0.3, 0.3, 3.4), Vector3.new(cx + 3.65, railY, cz - 1.95), STEEL_WHITE, metal)
+	-- ladder up the +X face (rungs 1.75 apart, climbable), arriving at the open back half of that side
+	local ladderX = cx + leg + 0.6
+	local ladderZ = cz + 1.6
 	for _, s in ipairs({ -1, 1 }) do
 		BuildUtil.Block(
 			ctx,
 			"LadderRail",
-			Vector3.new(0.3, 12.6, 0.3),
-			Vector3.new(ladderX, 0, cz + s * 1),
-			FENCE_WHITE,
+			Vector3.new(0.3, 16.6, 0.3),
+			Vector3.new(ladderX, 0, ladderZ + s * 1),
+			STEEL_WHITE,
 			metal,
 			nil,
 			TURF_TOP
 		)
 	end
-	for i = 1, 4 do
-		BuildUtil.Box(ctx, "LadderStep", Vector3.new(0.25, 0.25, 1.8), Vector3.new(ladderX, TURF_TOP + i * 2.5, cz), FENCE_WHITE, metal)
+	for i = 1, 8 do
+		BuildUtil.Box(
+			ctx,
+			"LadderStep",
+			Vector3.new(0.25, 0.25, 1.8),
+			Vector3.new(ladderX, TURF_TOP + i * 1.75, ladderZ),
+			STEEL_WHITE,
+			metal
+		)
 	end
+	-- video camera on a tripod, aimed at the field
+	local camX, camZ = cx - 1.6, cz - 1.8
+	local headY = floorY + 3.4
+	for i = 0, 2 do
+		local a = math.rad(90 + i * 120)
+		bar(
+			ctx,
+			"TripodLeg",
+			Vector3.new(camX + math.cos(a) * 1.1, floorY, camZ + math.sin(a) * 1.1),
+			Vector3.new(camX, headY, camZ),
+			0.15,
+			CAMERA_BLACK,
+			metal
+		)
+	end
+	BuildUtil.Box(
+		ctx,
+		"CameraBody",
+		Vector3.new(1.2, 1.3, 2.2),
+		Vector3.new(camX, headY + 0.65, camZ),
+		CAMERA_BLACK,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.Cylinder(ctx, {
+		Name = "CameraLens",
+		Axis = "Z",
+		Position = Vector3.new(camX, headY + 0.65, camZ - 1.6),
+		Height = 1,
+		Diameter = 0.9,
+		Color = CAMERA_BLACK,
+		Material = Enum.Material.Glass,
+	})
+	BuildUtil.Box(
+		ctx,
+		"CameraTally",
+		Vector3.new(0.25, 0.25, 0.25),
+		Vector3.new(camX, headY + 1.42, camZ - 0.8),
+		TALLY_RED,
+		Enum.Material.Neon
+	)
 	-- megaphone resting on the front panel, pointing at the field
-	local megaY = railTop + 0.45
+	local megaY = floorY + 3.25
 	BuildUtil.Cylinder(ctx, {
 		Name = "MegaphoneBody",
 		Axis = "Z",
-		Position = Vector3.new(cx + 1.8, megaY, cz - 3.2),
+		Position = Vector3.new(cx + 2, megaY, cz - 3.5),
 		Height = 1.6,
 		Diameter = 0.8,
 		Color = WHITE,
@@ -836,417 +1258,487 @@ local function coachTower(ctx, cx, cz, team)
 	BuildUtil.Cylinder(ctx, {
 		Name = "MegaphoneBell",
 		Axis = "Z",
-		Position = Vector3.new(cx + 1.8, megaY, cz - 4.2),
+		Position = Vector3.new(cx + 2, megaY, cz - 4.5),
 		Height = 0.5,
 		Diameter = 1.6,
 		Color = team.Secondary,
 		Material = Enum.Material.SmoothPlastic,
 	})
 	-- shade umbrella
-	BuildUtil.Cylinder(ctx, {
-		Name = "UmbrellaPole",
-		Position = Vector3.new(cx - 1.5, deckY + 0.6 + 4, cz + 1.5),
-		Height = 8,
-		Diameter = 0.3,
-		Color = FENCE_WHITE,
-		Material = metal,
-	})
-	BuildUtil.Cylinder(ctx, {
-		Name = "UmbrellaCanopy",
-		Position = Vector3.new(cx - 1.5, deckY + 0.6 + 8, cz + 1.5),
-		Height = 0.4,
-		Diameter = 9,
-		Color = team.Secondary,
-		Material = Enum.Material.Fabric,
-	})
+	post(ctx, "UmbrellaPole", cx + 1.5, cz + 1.5, floorY, 7.2, 0.3, STEEL_WHITE, metal)
+	post(ctx, "UmbrellaCanopy", cx + 1.5, cz + 1.5, floorY + 7.2, 0.4, 9, team.Secondary, Enum.Material.Fabric)
+	-- team banner tied across the front legs, facing the field
+	local banner = span(
+		ctx,
+		"TowerBanner",
+		Vector3.new(cx - leg - 0.3, TURF_TOP + 5, cz - leg - 0.55),
+		Vector3.new(cx + leg + 0.3, TURF_TOP + 8.6, cz - leg - 0.35),
+		team.Primary,
+		Enum.Material.Fabric,
+		NO_COLLIDE
+	)
+	faceText(banner, Enum.NormalId.Front, text, team.Primary, team, { LabelName = "TowerBannerText", InsetX = 0.08 })
 end
 
 function CampusFields.practice_gear(ctx)
 	local team = ctx.colors
+	local f = practiceLayout(ctx.config.Layout)
+	local name = teamLabel(ctx, "HOME")
 
-	-- -Z margin (between the railing and the front sideline): kicking net + water station
-	kickingNet(BuildUtil.Child(ctx, "KickingNet"), PF.EndLineX + 9, FIELD_AREA.MinZ + 3.5, team)
-	waterStation(BuildUtil.Child(ctx, "WaterStation"), -150, FIELD_AREA.MinZ + 5.5, team)
+	-- STEP 1: Blocking Sleds (west half) -------------------------------------------------------
+	BuildUtil.Stage(ctx, 1)
+	sevenManSled(BuildUtil.Child(ctx, "SevenManSled"), f.GoalW + 32, f.CenterZ - 16, team, name)
+	twoManSled(BuildUtil.Child(ctx, "TwoManSled"), f.GoalW + 32, f.CenterZ + 26, team)
 
-	-- along the front sideline: agility ladder (flat) and the blocking sled
-	agilityLadder(BuildUtil.Child(ctx, "AgilityLadder"), -150, -128, PF.MinZ + 4.5)
-	blockingSled(BuildUtil.Child(ctx, "BlockingSled"), -80, PF.MinZ + 8, team)
-
-	-- along the back sideline: a row of tackling dummies
+	-- STEP 2: Tackling Dummies (east half) -----------------------------------------------------
+	BuildUtil.Stage(ctx, 2)
 	local dummies = BuildUtil.Child(ctx, "TacklingDummies")
-	for i = 0, 3 do
+	for i = 0, 5 do
 		local color = i % 2 == 0 and team.Primary or team.Secondary
 		local band = i % 2 == 0 and team.Secondary or team.Primary
-		tacklingDummy(dummies, -158 + i * 8, PF.MaxZ - 6.5, color, band)
+		local x = f.GoalE - 40 + (i % 2) * 8
+		tacklingDummy(dummies, x, f.MinZ + 14 + i * 13, color, band, i == 4)
+	end
+	tackleWheel(dummies, f.GoalE - 18, f.CenterZ - 14, team)
+	tackleWheel(dummies, f.GoalE - 18, f.CenterZ + 14, team)
+
+	-- STEP 3: Agility Ladder & Cones (flat / walk-through) --------------------------------------
+	BuildUtil.Stage(ctx, 3)
+	local drills = BuildUtil.Child(ctx, "AgilityDrills")
+	agilityLadder(drills, f.CenterX + 12, f.CenterX + 34, f.MinZ + 12)
+	agilityLadder(drills, f.CenterX - 40, f.CenterX - 18, f.MaxZ - 14)
+	for i = 0, 7 do
+		cone(drills, f.CenterX + 18 + i * 4, f.CenterZ + 14 + (i % 2) * 6)
+	end
+	for i = 0, 3 do
+		miniHurdle(drills, f.GoalW + 58 + i * 6, f.MinZ + 22)
 	end
 
-	-- cone drill near the open (east) end
-	local cones = BuildUtil.Child(ctx, "ConeDrill")
-	for i = 0, 4 do
-		cone(cones, -78 + i * 7, PF.CenterZ + 10 + (i % 2) * 7)
-	end
-
-	-- coach tower just outside the back sideline at midfield
-	coachTower(BuildUtil.Child(ctx, "CoachTower"), (PF.EndLineX + PF.FarLineX) / 2, PF.MaxZ + 4.5, team)
+	-- STEP 4: Coach Tower (far sideline, east of the bleachers) ---------------------------------
+	BuildUtil.Stage(ctx, 4)
+	coachTower(BuildUtil.Child(ctx, "CoachTower"), f.CenterX + 60, f.MaxZ + BOUNDARY_WIDTH + 6.5, team, name)
 end
 
 ---------------------------------------------------------------------------------------------
--- indoor_dome: translucent barrel-vault practice bubble with an indoor field
+-- indoor_dome
 ---------------------------------------------------------------------------------------------
-
--- Arch vertex k (0 .. DOME.Panels): returns z, y.
-local function archVertex(k)
-	local theta = math.pi * k / DOME.Panels
-	return DOME.CenterZ - DOME.Radius * math.cos(theta), DOME.KneeHeight + DOME.Radius * math.sin(theta)
-end
 
 --[[
-	Flat end wall of the vault at x = wallX (DOME.Thickness thick): an opaque team-coloured strip up to
-	the knee height, then horizontal layers of the arch polygon (a box in the middle + a wedge at each
-	shoulder). doorHalf (optional) cuts a door, as high as the first layer, in the middle.
+	Flat end wall of the vault at x = wallX (d.T thick): an opaque team band up to the first arch
+	vertex (knee strip + first layer), translucent layers of the arch polygon above it (a box in the
+	middle + a wedge at each shoulder). A door [doorZ +- doorHalf] is cut through the opaque band.
 ]]
-local function endWall(ctx, wallX, doorHalf, team)
-	local n = DOME.Panels
-	local t = DOME.Thickness
+local function endWall(ctx, d, wallX, doorZ, doorHalf, team)
+	local n = d.Panels
+	local t = d.T
 	local x0, x1 = wallX - t / 2, wallX + t / 2
-	local zc = DOME.CenterZ
-	local membrane = { Transparency = 0.25, CastShadow = false }
+	local membrane = { Transparency = 0.35, CastShadow = false }
 	local function wallBox(name, minZ, maxZ, minY, maxY, color, material, extra)
 		if maxZ - minZ > 0.01 then
 			span(ctx, name, Vector3.new(x0, minY, minZ), Vector3.new(x1, maxY, maxZ), color, material, extra)
 		end
 	end
 	local function boxWithDoor(name, minZ, maxZ, minY, maxY, color, material, extra)
-		if doorHalf then
-			wallBox(name, minZ, zc - doorHalf, minY, maxY, color, material, extra)
-			wallBox(name, zc + doorHalf, maxZ, minY, maxY, color, material, extra)
+		wallBox(name, minZ, doorZ - doorHalf, minY, maxY, color, material, extra)
+		wallBox(name, doorZ + doorHalf, maxZ, minY, maxY, color, material, extra)
+	end
+
+	local zFirst = domeVertex(d, 0)
+	local zLast = domeVertex(d, n)
+	boxWithDoor("EndWallBase", zFirst + t / 2, zLast - t / 2, 0, d.Knee, team.Primary, Enum.Material.Concrete)
+	for j = 0, math.floor(n / 2) - 1 do
+		local zA, yA = domeVertex(d, j)
+		local zB, yB = domeVertex(d, j + 1)
+		local zC = domeVertex(d, n - 1 - j)
+		local zD = domeVertex(d, n - j)
+		local opaque = j == 0
+		local color = opaque and team.Primary or MEMBRANE
+		local material = opaque and Enum.Material.Metal or Enum.Material.SmoothPlastic
+		local extra = not opaque and membrane or nil
+		if opaque then
+			boxWithDoor("EndWallBand", zB, zC, yA, yB, color, material, extra)
 		else
-			wallBox(name, minZ, maxZ, minY, maxY, color, material, extra)
+			wallBox("EndWallPanel", zB, zC, yA, yB, color, material, extra)
 		end
+		triangle(ctx, "EndWallShoulder", Vector3.new(wallX, yA, zB), UP, yB - yA, Vector3.new(0, 0, -1), zB - zA, t, color, material, extra)
+		triangle(ctx, "EndWallShoulder", Vector3.new(wallX, yA, zC), UP, yB - yA, Vector3.new(0, 0, 1), zD - zC, t, color, material, extra)
 	end
+end
 
-	local zFirst = archVertex(0)
-	local zLast = archVertex(n)
-	boxWithDoor("EndWallBase", zFirst + t / 2, zLast - t / 2, 0, DOME.KneeHeight, team.Primary, Enum.Material.Concrete)
+--[[
+	Roof panel k of the vault between x0 and x1, outward normal on the part's +Y. The panels on the
+	-Z side (and the flat top one) are turned 180 degrees about that normal, so text on their Top
+	face reads upright from the road (-Z); on the +Z side it reads upright from behind the dome.
+]]
+local function roofPanel(ctx, d, k, x0, x1, props)
+	local zA, yA = domeVertex(d, k)
+	local zB, yB = domeVertex(d, k + 1)
+	local chord = Vector3.new(0, yB - yA, zB - zA)
+	local length = chord.Magnitude
+	local dir = chord / length
+	local normal = Vector3.new(0, dir.Z, -dir.Y)
+	local center = Vector3.new((x0 + x1) / 2, (yA + yB) / 2, (zA + zB) / 2)
+	local p = table.clone(props)
+	p.Size = Vector3.new(x1 - x0, d.T, length + d.T)
+	local top = (d.Panels - 1) / 2
+	local xAxis = k <= top and Vector3.new(-1, 0, 0) or Vector3.new(1, 0, 0)
+	p.CFrame = CFrame.fromMatrix(center, xAxis, k == top and UP or normal)
+	return BuildUtil.Part(ctx, p)
+end
 
-	local layers = math.floor(n / 2)
-	for j = 0, layers - 1 do
-		local zA, yA = archVertex(j)
-		local zB, yB = archVertex(j + 1)
-		local zC = archVertex(n - 1 - j)
-		local zD = archVertex(n - j)
-		local box = j == 0 and boxWithDoor or wallBox
-		box("EndWallLayer" .. j, zB, zC, yA, yB, MEMBRANE, Enum.Material.SmoothPlastic, membrane)
-		local corner = Vector3.new(wallX, yA, zB)
-		triangle(
-			ctx,
-			"EndWallShoulder",
-			corner,
-			UP,
-			yB - yA,
-			Vector3.new(0, 0, -1),
-			zB - zA,
-			t,
-			MEMBRANE,
-			Enum.Material.SmoothPlastic,
-			membrane
-		)
-		corner = Vector3.new(wallX, yA, zC)
-		triangle(
-			ctx,
-			"EndWallShoulder",
-			corner,
-			UP,
-			yB - yA,
-			Vector3.new(0, 0, 1),
-			zD - zC,
-			t,
-			MEMBRANE,
-			Enum.Material.SmoothPlastic,
-			membrane
-		)
-	end
+-- z of the vault outline between vertices k and k+1 at height y (on the -Z side).
+local function domeZAt(d, k, y)
+	local zA, yA = domeVertex(d, k)
+	local zB, yB = domeVertex(d, k + 1)
+	return zA + (y - yA) * (zB - zA) / (yB - yA)
 end
 
 function CampusFields.indoor_dome(ctx)
 	local C = ctx.config.Colors
 	local team = ctx.colors
-	local n = DOME.Panels
-	local t = DOME.Thickness
-	local zc = DOME.CenterZ
-	local doorMinX = DOME.PortalCenterX - DOME.PortalHalfWidth
-	local doorMaxX = DOME.PortalCenterX + DOME.PortalHalfWidth
-	local JAMB = 0.5 -- roof + knee wall stop this far inside the portal pillars (no shared faces)
-	local zFront = archVertex(0) -- 265: -Z foot of the arch
-	local zBack = archVertex(n) -- 349
+	local d = domeLayout(ctx.config.Layout)
+	local name = teamLabel(ctx, "HOME")
+	local n = d.Panels
+	local t = d.T
+	local zc = d.CenterZ
+	local doorMinX, doorMaxX = d.CenterX - d.DoorHalf, d.CenterX + d.DoorHalf
+	local cutMinX, cutMaxX = doorMinX - 0.5, doorMaxX + 0.5 -- roof/knee wall stop inside the portal pillars
+	local zFront = domeVertex(d, 0) -- 413
+	local zBack = domeVertex(d, n) -- 537
+	local _, y1 = domeVertex(d, 1)
+	local westWallX = d.X0 + t / 2 + 0.05 -- end walls sit just inside the roof ends
+	local eastWallX = d.X1 - t / 2 - 0.05
+	local inX0, inX1 = westWallX + t / 2 + 0.05, eastWallX - t / 2 - 0.05
+	local inZ0, inZ1 = zFront + t / 2 + 0.05, zBack - t / 2 - 0.05
 
-	-- Roof: n long panels around the arch (lowest panel each side team-coloured, the rest translucent)
+	-- STEP 1: Frame ----------------------------------------------------------------------------
+	BuildUtil.Stage(ctx, 1)
+	local frame = BuildUtil.Child(ctx, "Frame")
+	-- knee walls along both long sides (the -Z one split around the entrance portal)
+	for _, seg in ipairs({ { d.X0, cutMinX, zFront }, { cutMaxX, d.X1, zFront }, { d.X0, d.X1, zBack } }) do
+		span(
+			frame,
+			"KneeWall",
+			Vector3.new(seg[1], 0, seg[3] - t / 2),
+			Vector3.new(seg[2], d.Knee, seg[3] + t / 2),
+			team.Primary,
+			Enum.Material.Concrete
+		)
+	end
+	-- steel arches just inside the roof (the middle one starts on top of the portal header)
+	local ribInset = t / 2 + 0.7
+	for i = 1, 3 do
+		local x = d.X0 + (d.X1 - d.X0) * i / 4
+		for k = 0, n - 1 do
+			local overPortal = k == 0 and x > cutMinX and x < cutMaxX
+			if not overPortal then
+				local za, ya = domeVertex(d, k, ribInset)
+				local zb, yb = domeVertex(d, k + 1, ribInset)
+				local a, b = Vector3.new(x, ya, za), Vector3.new(x, yb, zb)
+				local dir = (b - a).Unit
+				bar(frame, "Arch", a - dir * 0.6, b + dir * 0.6, 1.2, team.Secondary, Enum.Material.Metal)
+			end
+		end
+	end
+	-- purlins along the vault (the top two carry the lamps)
+	local purlinInset = t / 2 + 1.9
+	for _, k in ipairs({ 3, 5, 6, 8 }) do
+		local z, y = domeVertex(d, k, purlinInset)
+		BuildUtil.Box(
+			frame,
+			"Purlin",
+			Vector3.new(d.X1 - d.X0 - 2.4, 0.8, 0.8),
+			Vector3.new((d.X0 + d.X1) / 2, y, z),
+			STEEL_WHITE,
+			Enum.Material.Metal
+		)
+	end
+	-- end walls: west door toward the practice field, east loading door
+	endWall(frame, d, westWallX, d.WestDoorZ, d.WestDoorHalf, team)
+	endWall(frame, d, eastWallX, d.EastDoorZ, d.EastDoorHalf, team)
+	-- entrance portal in front of the -Z side (team pillars with accent stripes, header, cap); it
+	-- reaches back to the second roof panel so the cut in the first one is closed
+	local portalBackZ = domeZAt(d, 1, d.HeaderTop) + 0.3
+	local capBackZ = domeZAt(d, 1, d.HeaderTop + 1.2) + 0.3
+	for _, s in ipairs({ -1, 1 }) do
+		local innerX = s < 0 and doorMinX or doorMaxX
+		local outerX = innerX + s * d.PillarW
+		local pMin, pMax = math.min(innerX, outerX), math.max(innerX, outerX)
+		span(
+			frame,
+			"PortalPillar",
+			Vector3.new(pMin, 0, d.FrontZ),
+			Vector3.new(pMax, d.HeaderTop, portalBackZ),
+			team.Primary,
+			Enum.Material.SmoothPlastic
+		)
+		span(
+			frame,
+			"PortalStripe",
+			Vector3.new((pMin + pMax) / 2 - 0.5, 0, d.FrontZ - 0.2),
+			Vector3.new((pMin + pMax) / 2 + 0.5, d.HeaderTop, d.FrontZ),
+			team.Secondary,
+			Enum.Material.SmoothPlastic
+		)
+	end
+	span(
+		frame,
+		"PortalHeader",
+		Vector3.new(doorMinX, d.OpenTop, d.FrontZ),
+		Vector3.new(doorMaxX, d.HeaderTop, portalBackZ),
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	span(
+		frame,
+		"PortalCap",
+		Vector3.new(doorMinX - d.PillarW - 0.5, d.HeaderTop, d.FrontZ - 0.3),
+		Vector3.new(doorMaxX + d.PillarW + 0.5, d.HeaderTop + 1.2, capBackZ),
+		team.Secondary,
+		Enum.Material.SmoothPlastic
+	)
+
+	-- STEP 2: Turf & Lines ---------------------------------------------------------------------
+	BuildUtil.Stage(ctx, 2)
+	local floor = BuildUtil.Child(ctx, "IndoorField")
+	span(floor, "IndoorTurf", Vector3.new(inX0, 0, inZ0), Vector3.new(inX1, TURF_TOP, inZ1), C.Grass, Enum.Material.Grass)
+	span(floor, "PortalMat", Vector3.new(doorMinX, 0, d.FrontZ), Vector3.new(doorMaxX, TURF_TOP, inZ0), team.Primary, Enum.Material.Fabric)
+	local f = {
+		GoalW = d.CenterX - 40 * YARD,
+		GoalE = d.CenterX + 40 * YARD,
+		MinZ = zc - 53,
+		MaxZ = zc + 53,
+		HashInset = 37,
+	}
+	f.EndW = f.GoalW - 10 * YARD
+	f.EndE = f.GoalE + 10 * YARD
+	mowingStripes(floor, f, f.MinZ, f.MaxZ, C.GrassDark)
+	fieldLines(floor, f, C.Line)
+	fieldMarks(floor, "MarksFront", f, -1, C.Line)
+	fieldMarks(floor, "MarksBack", f, 1, C.Line)
+	endZone(floor, "EndZoneWest", f.EndW, f.GoalW, f.MinZ, f.MaxZ, team, name)
+	endZone(floor, "EndZoneEast", f.EndE, f.GoalE, f.MinZ, f.MaxZ, team, name)
+	goalPost(BuildUtil.Child(floor, "GoalPostWest"), f.EndW - BOUNDARY_WIDTH / 2, -1, zc, 14, team, C.GoalPost, false)
+	goalPost(BuildUtil.Child(floor, "GoalPostEast"), f.EndE + BOUNDARY_WIDTH / 2, 1, zc, 14, team, C.GoalPost, false)
+
+	-- STEP 3: Roof Panels ----------------------------------------------------------------------
+	BuildUtil.Stage(ctx, 3)
 	local roof = BuildUtil.Child(ctx, "Roof")
-	local delta = math.pi / n
-	local width = 2 * DOME.Radius * math.sin(delta / 2) + t * math.tan(delta / 2) -- closes the outer seams
-	local mid = DOME.Radius * math.cos(delta / 2)
 	local topPanel
 	for k = 0, n - 1 do
-		local phi = (k + 0.5) * delta
-		local y = DOME.KneeHeight + mid * math.sin(phi)
-		local z = zc - mid * math.cos(phi)
-		local rotation = CFrame.Angles(phi - math.pi / 2, 0, 0)
-		if k == (n - 1) / 2 then
-			rotation = CFrame.Angles(0, math.pi, 0) -- flat top panel, turned so its Top text reads from -Z
-		end
 		local isBase = k == 0 or k == n - 1
 		local props = {
 			Name = isBase and "RoofBasePanel" or "RoofPanel",
-			Color = MEMBRANE,
-			Material = Enum.Material.SmoothPlastic,
-			Transparency = isBase and 0.25 or 0.3,
-			CastShadow = false,
+			Color = isBase and team.Primary or MEMBRANE,
+			Material = isBase and Enum.Material.Metal or Enum.Material.SmoothPlastic,
+			Transparency = isBase and 0 or 0.35,
+			CastShadow = isBase,
 		}
-		local segments = { { DOME.MinX, DOME.MaxX } }
 		if k == 0 then
-			segments = { { DOME.MinX, doorMinX - JAMB }, { doorMaxX + JAMB, DOME.MaxX } } -- the main portal
-		end
-		for _, seg in ipairs(segments) do
-			local p = table.clone(props)
-			p.Size = Vector3.new(seg[2] - seg[1], t, width)
-			p.CFrame = CFrame.new((seg[1] + seg[2]) / 2, y, z) * rotation
-			local panel = BuildUtil.Part(roof, p)
+			-- big lettering on the team band either side of the portal, read from the road
+			local east = roofPanel(roof, d, k, cutMaxX, d.X1, props)
+			local west = roofPanel(roof, d, k, d.X0, cutMinX, props)
+			local bandText = { PixelsPerStud = 5, InsetX = 0.1, InsetY = 0.2, Outline = 3 }
+			bandText.LabelName = "BandNameEast"
+			faceText(east, Enum.NormalId.Top, name, team.Primary, team, bandText)
+			bandText.LabelName = "BandNameWest"
+			faceText(west, Enum.NormalId.Top, "INDOOR PRACTICE", team.Primary, team, bandText)
+		elseif k == n - 1 then
+			local back = roofPanel(roof, d, k, d.X0, d.X1, props)
+			faceText(back, Enum.NormalId.Top, name .. "  INDOOR PRACTICE", team.Primary, team, {
+				LabelName = "BandNameBack",
+				PixelsPerStud = 4,
+				InsetX = 0.15,
+				InsetY = 0.2,
+				Outline = 3,
+			})
+		else
+			local panel = roofPanel(roof, d, k, d.X0, d.X1, props)
 			if k == (n - 1) / 2 then
 				topPanel = panel
 			end
 		end
 	end
-	faceText(topPanel, Enum.NormalId.Top, ctx.teamName .. "  INDOOR PRACTICE", MEMBRANE, team, {
+	local _, topY = domeVertex(d, (n - 1) / 2)
+	BuildUtil.Box(
+		roof,
+		"RoofRidge",
+		Vector3.new(d.X1 - d.X0, 0.3, 1.6),
+		Vector3.new((d.X0 + d.X1) / 2, topY + t / 2 + 0.15, zc - 7),
+		team.Secondary,
+		Enum.Material.Metal
+	)
+	faceText(topPanel, Enum.NormalId.Top, name .. "  INDOOR PRACTICE", MEMBRANE, team, {
 		LabelName = "RoofName",
 		PixelsPerStud = 4,
 		InsetX = 0.04,
-		InsetY = 0.1,
+		InsetY = 0.12,
 		Outline = false,
 		TextColor3 = team.Primary,
 	})
 
-	-- Knee walls along both long sides (team colour), the -Z one split around the portal
-	local walls = BuildUtil.Child(ctx, "Walls")
-	local kneeSegments = {
-		{ DOME.MinX, doorMinX - JAMB, zFront },
-		{ doorMaxX + JAMB, DOME.MaxX, zFront },
-		{ DOME.MinX, DOME.MaxX, zBack },
-	}
-	for _, seg in ipairs(kneeSegments) do
-		span(
-			walls,
-			"KneeWall",
-			Vector3.new(seg[1], 0, seg[3] - t / 2),
-			Vector3.new(seg[2], DOME.KneeHeight, seg[3] + t / 2),
-			team.Primary,
-			Enum.Material.Concrete
-		)
-	end
-
-	-- End walls: the west one has a field door facing the practice field gate
-	-- (set 0.05 inside the roof ends so the wall faces never share a plane with the panel ends)
-	endWall(walls, DOME.MinX + t / 2 + 0.05, DOME.EndDoorHalfWidth, team)
-	endWall(walls, DOME.MaxX - t / 2 - 0.05, nil, team)
-
-	-- Floor: turf + darker mowing stripes between the goal lines
-	local floor = BuildUtil.Child(ctx, "IndoorField")
-	local inX0, inX1 = DOME.MinX + t, DOME.MaxX - t
-	local inZ0, inZ1 = zFront + t / 2, zBack - t / 2
-	BuildUtil.Box(
-		floor,
-		"IndoorTurf",
-		Vector3.new(inX1 - inX0, TURF_TOP, inZ1 - inZ0),
-		Vector3.new((inX0 + inX1) / 2, TURF_TOP / 2, (inZ0 + inZ1) / 2),
-		C.Grass,
-		Enum.Material.Grass
-	)
-	local f = {
-		MinX = DOME.CenterX - 90,
-		MaxX = DOME.CenterX + 90,
-		MinZ = zc - 30,
-		MaxZ = zc + 30,
-	}
-	local goalWest, goalEast = f.MinX + 20, f.MaxX - 20
-	for x = goalWest, goalEast - STEP, 2 * STEP do
-		paint(floor, "MowStripe", x, x + STEP, inZ0, inZ1, STRIPE_THICKNESS, C.GrassDark, Enum.Material.Grass)
-	end
-	local yardLines = {}
-	for x = goalWest + STEP, goalEast - STEP, STEP do
-		table.insert(yardLines, x)
-	end
-	f.GoalLines = { goalWest, goalEast }
-	f.YardLines = yardLines
-	fieldLines(floor, f, C.Line)
-	endZone(floor, "EndZoneWest", f.MinX, goalWest, f.MinZ, f.MaxZ, team, ctx.teamName)
-	endZone(floor, "EndZoneEast", f.MaxX, goalEast, f.MinZ, f.MaxZ, team, ctx.teamName)
-	local marks = {}
-	local half = (goalEast - goalWest) / 2
-	for d = 20, half - 1, 20 do
-		local yards = tostring(math.floor(d / 2 + 0.5))
-		table.insert(marks, { x = goalWest + d, text = yards })
-		table.insert(marks, { x = goalEast - d, text = yards })
-	end
-	yardNumberRow(floor, "NumbersFront", goalWest, goalEast, f.MinZ + NUMBER_INSET, true, marks, C.Line)
-	yardNumberRow(floor, "NumbersBack", goalWest, goalEast, f.MaxZ - NUMBER_INSET, false, marks, C.Line)
-	goalPost(BuildUtil.Child(floor, "GoalPost"), f.MaxX + BOUNDARY_WIDTH / 2, 1, zc, 16, team, C.GoalPost, false)
-
-	-- Ceiling lights hanging under the flat top panel
-	local lights = BuildUtil.Child(ctx, "CeilingLights")
-	local ceilingY = DOME.KneeHeight + mid - t / 2
-	for i = 0, 5 do
-		local x = DOME.CenterX + (i - 2.5) * 35
-		local lamp = BuildUtil.Box(
-			lights,
-			"CeilingLamp",
-			Vector3.new(14, 0.6, 2.4),
-			Vector3.new(x, ceilingY - 0.3, zc),
-			LAMP_WHITE,
-			Enum.Material.Neon,
-			{ CastShadow = false }
-		)
-		BuildUtil.Light(lamp, "PointLight", {
-			Name = "CeilingLight",
-			Range = 60,
-			Brightness = 1.4,
-			Color = LAMP_WHITE,
-			Shadows = false,
-		})
-	end
-
-	-- Main portal (-Z side, at the end of the campus walk): team pillars with accent stripes, a
-	-- header with the team name and "INDOOR PRACTICE", chamfered top corners, glass doors slid open.
-	local portal = BuildUtil.Child(ctx, "Portal")
-	local outerZ = DOME_AREA.MinZ
-	local backZ = outerZ + PORTAL.Depth
+	-- STEP 4: Doors & Lights -------------------------------------------------------------------
+	BuildUtil.Stage(ctx, 4)
+	local doors = BuildUtil.Child(ctx, "Doors")
+	-- entrance: glass sliding doors pushed to the sides, transom, signs, wall lanterns
 	for _, s in ipairs({ -1, 1 }) do
-		local innerX = s < 0 and doorMinX or doorMaxX
-		local outerX = innerX + s * PORTAL.PillarWidth
-		local pillarMinX, pillarMaxX = math.min(innerX, outerX), math.max(innerX, outerX)
+		local edgeX = s < 0 and doorMinX or doorMaxX
 		span(
-			portal,
-			"PortalPillar",
-			Vector3.new(pillarMinX, 0, outerZ + 0.2),
-			Vector3.new(pillarMaxX, PORTAL.Top, backZ),
-			team.Primary,
-			Enum.Material.SmoothPlastic
-		)
-		span(
-			portal,
-			"PortalStripe",
-			Vector3.new((pillarMinX + pillarMaxX) / 2 - 0.5, 0, outerZ),
-			Vector3.new((pillarMinX + pillarMaxX) / 2 + 0.5, PORTAL.Top, outerZ + 0.2),
-			team.Secondary,
-			Enum.Material.SmoothPlastic
-		)
-		-- chamfer in the top corner of the opening
-		triangle(
-			portal,
-			"PortalChamfer",
-			Vector3.new(innerX, PORTAL.OpenTop, (outerZ + 0.5 + backZ) / 2),
-			-UP,
-			PORTAL.Chamfer,
-			Vector3.new(-s, 0, 0),
-			PORTAL.Chamfer,
-			backZ - outerZ - 0.5,
-			team.Primary,
-			Enum.Material.SmoothPlastic
-		)
-		-- sliding glass door, open
-		span(
-			portal,
-			"PortalDoor",
-			Vector3.new(math.min(innerX, innerX - s * 4), TURF_TOP, zFront - 0.2),
-			Vector3.new(math.max(innerX, innerX - s * 4), PORTAL.OpenTop - PORTAL.Chamfer, zFront + 0.2),
-			C.Glass,
+			doors,
+			"EntranceDoor",
+			Vector3.new(math.min(edgeX, edgeX - s * 6.5), TURF_TOP, d.FrontZ + 0.7),
+			Vector3.new(math.max(edgeX, edgeX - s * 6.5), d.OpenTop - 1.4, d.FrontZ + 1.1),
+			GLASS_TINT,
 			Enum.Material.Glass,
-			{ Transparency = 0.55 }
+			{ Transparency = 0.5 }
 		)
+		local lantern = BuildUtil.Box(
+			doors,
+			"EntranceLantern",
+			Vector3.new(0.9, 1.6, 0.4),
+			Vector3.new(edgeX + s * d.PillarW / 2, 10.5, d.FrontZ - 0.4),
+			LAMP_WHITE,
+			Enum.Material.Neon
+		)
+		BuildUtil.Light(lantern, "PointLight", { Name = "LanternLight", Range = 16, Brightness = 1.5, Color = LAMP_WHITE })
 	end
-	local header = span(
-		portal,
-		"PortalHeader",
-		Vector3.new(doorMinX, PORTAL.OpenTop, outerZ + 0.5),
-		Vector3.new(doorMaxX, PORTAL.Top, backZ),
-		team.Primary,
-		Enum.Material.SmoothPlastic
-	)
-	local nameColor, outline = teamTextColors(team.Primary, team)
-	local _, nameLabel = BuildUtil.SurfaceText(header, Enum.NormalId.Front, ctx.teamName, {
-		LabelName = "PortalTeamName",
-		TextColor3 = nameColor,
-		PixelsPerStud = 20,
-	})
-	nameLabel.Size = UDim2.new(0.9, 0, 0.5, 0)
-	nameLabel.Position = UDim2.new(0.05, 0, 0.06, 0)
-	local stroke = Instance.new("UIStroke")
-	stroke.Name = "Outline"
-	stroke.Color = outline
-	stroke.Thickness = 3
-	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	stroke.Parent = nameLabel
-	local sub = Instance.new("TextLabel")
-	sub.Name = "PortalSubtitle"
-	sub.BackgroundTransparency = 1
-	sub.BorderSizePixel = 0
-	sub.Font = Enum.Font.GothamBold
-	sub.Text = "INDOOR PRACTICE"
-	sub.TextColor3 = nameColor
-	sub.TextScaled = true
-	sub.Size = UDim2.new(0.9, 0, 0.3, 0)
-	sub.Position = UDim2.new(0.05, 0, 0.62, 0)
-	sub.Parent = nameLabel.Parent
-	-- cap reaches back to the membrane so there is no gap above the header
-	span(
-		portal,
-		"PortalCap",
-		Vector3.new(doorMinX - PORTAL.PillarWidth - 0.5, PORTAL.Top, outerZ),
-		Vector3.new(doorMaxX + PORTAL.PillarWidth + 0.5, PORTAL.Top + 1.2, outerZ + 10),
+	BuildUtil.Box(
+		doors,
+		"EntranceTransom",
+		Vector3.new(doorMaxX - doorMinX, 1.4, 0.8),
+		Vector3.new(d.CenterX, d.OpenTop - 0.7, d.FrontZ + 0.9),
 		team.Secondary,
+		Enum.Material.Metal
+	)
+	local sign = span(
+		doors,
+		"EntranceSign",
+		Vector3.new(doorMinX + 1, d.OpenTop + 0.6, d.FrontZ - 0.35),
+		Vector3.new(doorMaxX - 1, d.HeaderTop - 0.6, d.FrontZ),
+		INK,
 		Enum.Material.SmoothPlastic
 	)
-	span(
-		portal,
-		"PortalMat",
-		Vector3.new(doorMinX, 0, outerZ),
-		Vector3.new(doorMaxX, TURF_TOP, zFront + t / 2),
+	faceText(sign, Enum.NormalId.Front, "INDOOR PRACTICE", INK, team, { LabelName = "EntranceSignText", InsetY = 0.16 })
+	local nameBoard = span(
+		doors,
+		"EntranceNameBoard",
+		Vector3.new(doorMinX - 1, d.HeaderTop + 1.2, d.FrontZ + 0.4),
+		Vector3.new(doorMaxX + 1, d.HeaderTop + 5.6, d.FrontZ + 1),
 		team.Primary,
-		Enum.Material.Fabric
+		Enum.Material.SmoothPlastic
 	)
+	faceText(nameBoard, Enum.NormalId.Front, name, team.Primary, team, { LabelName = "EntranceNameText", Outline = 3 })
 
-	-- West field door frame (faces the practice field gate across the corridor)
-	local door = BuildUtil.Child(ctx, "FieldDoor")
-	local wallOuterX = DOME.MinX
-	local frameX0 = DOME_AREA.MinX
-	local dh = DOME.EndDoorHalfWidth
-	local _, doorTop = archVertex(1)
-	for _, s in ipairs({ -1, 1 }) do
+	-- west door (toward the practice field): doors swung in, a canopy and a sign above
+	local wz0, wz1 = d.WestDoorZ - d.WestDoorHalf, d.WestDoorZ + d.WestDoorHalf
+	for _, z in ipairs({ wz0 + 0.3, wz1 - 0.3 }) do
 		span(
-			door,
-			"DoorFramePost",
-			Vector3.new(frameX0, 0, zc + s * dh + (s < 0 and -2 or 0)),
-			Vector3.new(wallOuterX, doorTop + 3, zc + s * dh + (s < 0 and 0 or 2)),
-			team.Primary,
-			Enum.Material.SmoothPlastic
+			doors,
+			"WestDoorLeaf",
+			Vector3.new(inX0 + 0.1, TURF_TOP, z - 0.15),
+			Vector3.new(inX0 + 0.1 + d.WestDoorHalf - 0.2, y1 - 3, z + 0.15),
+			team.Secondary,
+			Enum.Material.Metal
 		)
 	end
-	local doorHeader = span(
-		door,
-		"DoorFrameHeader",
-		Vector3.new(frameX0, doorTop, zc - dh),
-		Vector3.new(wallOuterX, doorTop + 3, zc + dh),
+	span(
+		doors,
+		"WestDoorCanopy",
+		Vector3.new(d.X0 - 3, y1 + 0.2, wz0 - 2),
+		Vector3.new(d.X0, y1 + 0.8, wz1 + 2),
+		team.Secondary,
+		Enum.Material.Metal
+	)
+	local westSign = span(
+		doors,
+		"WestDoorSign",
+		Vector3.new(d.X0 - 0.4, y1 + 1.6, wz0 - 6),
+		Vector3.new(d.X0 - 0.05, y1 + 6, wz1 + 6),
 		team.Primary,
 		Enum.Material.SmoothPlastic
 	)
-	faceText(doorHeader, Enum.NormalId.Left, "INDOOR PRACTICE", team.Primary, team, { LabelName = "FieldDoorSign" })
-	-- threshold through the wall opening, ending where the indoor turf starts (no shared top face)
-	span(
-		door,
-		"DoorThreshold",
-		Vector3.new(frameX0, 0, zc - dh),
-		Vector3.new(inX0, TURF_TOP, zc + dh),
-		C.ConcreteDark,
-		Enum.Material.Concrete
+	faceText(westSign, Enum.NormalId.Left, "INDOOR FIELD", team.Primary, team, { LabelName = "WestDoorSignText" })
+
+	-- east loading door: roll-up door half open + its roll housing
+	local ez0, ez1 = d.EastDoorZ - d.EastDoorHalf, d.EastDoorZ + d.EastDoorHalf
+	local rollDoor = span(
+		doors,
+		"LoadingDoor",
+		Vector3.new(d.X1 + 0.05, 10, ez0 - 0.5),
+		Vector3.new(d.X1 + 0.45, y1, ez1 + 0.5),
+		ALUMINIUM,
+		Enum.Material.CorrodedMetal
 	)
+	faceText(rollDoor, Enum.NormalId.Right, "EQUIPMENT", ALUMINIUM, team, { LabelName = "LoadingDoorText", InsetX = 0.15, InsetY = 0.2 })
+	BuildUtil.Cylinder(doors, {
+		Name = "LoadingDoorRoll",
+		Axis = "Z",
+		Position = Vector3.new(d.X1 + 0.9, y1 + 0.6, d.EastDoorZ),
+		Height = ez1 - ez0 + 1,
+		Diameter = 1.4,
+		Color = team.Secondary,
+		Material = Enum.Material.Metal,
+	})
+
+	-- ceiling lamps hanging from the two top purlins
+	local lights = BuildUtil.Child(ctx, "CeilingLights")
+	for _, k in ipairs({ 5, 6 }) do
+		local z, y = domeVertex(d, k, purlinInset)
+		for i = 0, 3 do
+			local x = d.X0 + (d.X1 - d.X0) * (0.125 + i * 0.25)
+			local lamp = BuildUtil.Box(
+				lights,
+				"CeilingLamp",
+				Vector3.new(14, 1.6, 2.2),
+				Vector3.new(x, y - 1.2, z),
+				LAMP_WHITE,
+				Enum.Material.Neon,
+				{ CastShadow = false }
+			)
+			BuildUtil.Light(lamp, "SpotLight", {
+				Name = "CeilingLight",
+				Face = Enum.NormalId.Bottom,
+				Range = 60,
+				Angle = 120,
+				Brightness = 2,
+				Color = LAMP_WHITE,
+				Shadows = false,
+			})
+		end
+	end
+
+	-- banners inside: championship banners hanging from the far purlin and a welcome board on the
+	-- far wall, all facing the entrance (-Z)
+	local banners = BuildUtil.Child(ctx, "Banners")
+	local purlinZ, purlinY = domeVertex(d, 8, purlinInset)
+	for i, text in ipairs({ "LEAGUE CHAMPIONS", "DIVISION CHAMPIONS" }) do
+		local x = d.CenterX + (i == 1 and -29 or 29)
+		local flag = span(
+			banners,
+			"ChampionBanner",
+			Vector3.new(x - 4, purlinY - 13, purlinZ - 0.65),
+			Vector3.new(x + 4, purlinY - 0.1, purlinZ - 0.45),
+			team.Primary,
+			Enum.Material.Fabric,
+			NO_COLLIDE
+		)
+		local label = faceText(flag, Enum.NormalId.Front, text, team.Primary, team, { LabelName = "ChampionBannerText", InsetX = 0.1 })
+		label.TextWrapped = true
+	end
+	local wallZ = zc + (zc - domeZAt(d, 0, 13.5)) - t - 0.2 -- just inside the far team band
+	local board = span(
+		banners,
+		"WelcomeBoard",
+		Vector3.new(d.CenterX - 30, 5, wallZ - 0.4),
+		Vector3.new(d.CenterX + 30, 13.5, wallZ),
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	faceText(board, Enum.NormalId.Front, name == "HOME" and "HOME OF CHAMPIONS" or ("HOME OF THE " .. name), team.Primary, team, {
+		LabelName = "WelcomeBoardText",
+		InsetX = 0.06,
+		Outline = 3,
+	})
 end
 
 return CampusFields
