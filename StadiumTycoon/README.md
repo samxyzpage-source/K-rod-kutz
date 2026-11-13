@@ -3,9 +3,10 @@
 A Roblox tycoon where every player builds a pro-football franchise from nothing. You start with
 the **Front Office**, build a **practice facility** (practice field, locker room, weight room,
 training room, film room, practice gear, and later an indoor practice dome), then build the
-**stadium** piece by piece. The stadium goes from turf and yard lines up to stands, lights,
-upper decks, a jumbotron, a press box, luxury suites and a canopy. The last piece is a giant
-championship trophy.
+**stadium** piece by piece. It grows from turf and yard lines into a **full bowl**, with
+seating all the way round on two decks, home and visitor locker rooms, a two-level press box,
+a TV broadcast booth, luxury suites, a jumbotron and a ring canopy. The last piece is a
+giant championship trophy.
 
 Every few minutes a **game day** starts. Fans walk in through your gate, fill the stands you
 built and cheer, and your income is doubled for a minute.
@@ -18,7 +19,7 @@ built and cheer, and your income is doubled for a minute.
 | --- | --- |
 | 1 | Core stadium: 23 pieces, plots claimed at a gold gate, vault + collect pad, saving, day/night, HUD |
 | 1.1 | Polish: pulsing buy buttons, a guide beam to your next button, sounds, "Unlocked: ..." messages, vault hints, full-server handling |
-| 2 | Front Office + practice campus behind the stadium (8 new pieces), Team Bus between the plaza and the campus, a second collect pad (Team Safe) |
+| 2 | Front Office + practice campus behind the stadium, Team Bus between the plaza and the campus, a second collect pad (Team Safe). The stadium becomes a full bowl (corner seats, upper bowl ends) with a home tunnel, home + visitor locker rooms, a bigger press box and a TV broadcast booth |
 | 3 | Game days with NPC fans, double income, a countdown in the HUD, and an excited jumbotron and scoreboard |
 
 ## Play it in Roblox Studio
@@ -33,7 +34,8 @@ built and cheer, and your income is doubled for a minute.
    Step on the **green pad** beside the vault to collect it (standing on it keeps collecting).
    The **Team Safe** pad at the practice campus collects from the same vault.
 7. The practice campus is behind the stadium. Ride the **Team Bus** (the blue pad in the plaza)
-   to get there, or walk the path along the right side of the plot.
+   to get there, or walk through the stadium: in the front tunnel, across the field and out the
+   home tunnel behind the home bench.
 
 The plots, buttons and buildings are built by the scripts when the game starts, so in edit mode
 you only see the ground and the spawn point. That's expected: press Play.
@@ -87,15 +89,18 @@ Each plot gets its own team colours (navy & orange, crimson & gold, forest & sil
 teal & black, royal & white). Team names come from the owner's display name, so no real NFL teams,
 logos or trademarks are used.
 
-### The build order (31 pieces, about 35-45 minutes to finish)
+### The build order (36 pieces, about 40-45 minutes to finish)
 
-**Franchise:** Front Office (free) -> Practice Field -> Locker Room + Practice Gear -> Weight Room ->
-Training Room -> Film Room
+**Franchise:** Front Office (free) -> Practice Field -> Practice Locker Room + Practice Gear ->
+Weight Room -> Training Room -> Film Room
 
 **Stadium:** Turf Field -> Yard Lines -> Team Benches -> End Zones -> Ticket Booth -> Goal Posts ->
-Midfield Logo -> Concession Stand -> Home Stands -> Visitor Stands -> Scoreboard -> Parking Lot ->
-West + East End Zone Seats -> Team Store -> Stadium Lights -> Home Upper Deck -> Indoor Practice Dome ->
-Visitor Upper Deck -> Jumbotron -> Press Box -> Luxury Suites -> Stadium Canopy -> Championship Trophy
+Midfield Logo -> Concession Stand -> Home Stands -> Home Locker Room -> Visitor Stands ->
+Visitor Locker Room -> Scoreboard -> Parking Lot -> West + East End Zone Seats ->
+Corner Seats (the lower bowl closes) -> Team Store -> Stadium Lights -> Home Upper Deck ->
+Indoor Practice Dome -> Visitor Upper Deck -> Jumbotron -> Press Box ->
+Upper Bowl Ends (the upper ring closes) -> Luxury Suites -> TV Broadcast Booth -> Stadium Canopy ->
+Championship Trophy
 
 Prices and income are in `src/shared/Items.lua`.
 
@@ -119,12 +124,13 @@ StadiumTycoon/
     BuildUtil.lua                helpers for making parts, text and lights
     Builders/                    the geometry, one function per item id
       PlotBase.lua               slab, paths, gate, vault, collect pads, team bus stops
-      CampusBuildings.lua        front office, locker room, weight room, training room, film room
+      CampusBuildings.lua        front office, practice locker room, weight room, training room, film room
       CampusFields.lua           practice field, practice gear, indoor practice dome
+      StadiumRooms.lua           home + visitor locker rooms
       Field.lua                  turf, yard lines, end zones, goal posts, midfield, benches
-      Stands.lua                 lower bowls, end-zone seats, upper decks
+      Stands.lua                 the full bowl: lower + upper sideline decks, end zones, corners
       Plaza.lua                  ticket booth, concessions, parking, team store, trophy
-      Features.lua               scoreboard, lights, jumbotron, press box, suites, canopy
+      Features.lua               scoreboard, lights, jumbotron, press box, suites, broadcast booth, canopy
   src/client/   -> StarterPlayer.StarterPlayerScripts.TycoonClient
     HUD.client.lua               cash / income / progress / game day / save status / pop-ups
     Effects.client.lua           pulsing buttons, guide beam, sounds, cheering fans
