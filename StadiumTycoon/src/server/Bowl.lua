@@ -230,6 +230,9 @@ Bowl.InGap = inGap
 ]]
 function Bowl.SeatSpots(layout, rowInfo, segmentName, spacing)
 	spacing = spacing or 2.6
+	if rowInfo.tier == "upper" and rowInfo.row == Bowl.Vomitory.FirstRow - 1 then
+		return {} -- upper row 3 is the cross-aisle the vomitories open onto: no seats
+	end
 	local segment = Bowl.Segment(layout, segmentName, rowInfo.inner, rowInfo.outer)
 	local usable = segment.innerLength - 3
 	if usable < spacing then
