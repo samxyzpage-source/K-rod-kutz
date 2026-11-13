@@ -11,7 +11,13 @@ giant championship trophy.
 Every few minutes a **game day** starts. Fans walk in through your gate, fill the stands you
 built and cheer, and your income is doubled for a minute.
 
-![Finished stadium](docs/preview-aerial.png)
+![The finished franchise: full-bowl stadium, plaza and practice campus](docs/preview-aerial.png)
+
+| Game day from the 50-yard line | From the end zone | Practice campus |
+| --- | --- | --- |
+| ![Game day crowd, home tunnel and two-level press box](docs/preview-gameday.png) | ![End zone view with the ring canopy](docs/preview-endzone.png) | ![Practice campus: locker room, weight room, training room, film room, indoor dome](docs/preview-campus.png) |
+
+*Previews are rendered offline from the real build code (tools/), so signs and text aren't shown.*
 
 ## Versions
 
