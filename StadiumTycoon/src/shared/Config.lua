@@ -118,7 +118,7 @@ local L = {}
 L.PlotWidth = 420 -- X
 L.PlotDepth = 400 -- Z depth of the original stadium area (front edge at -PlotDepth/2)
 L.PlotFrontZ = -200 -- front edge of the plot (faces the street)
-L.PlotBackZ = 200 -- back edge of the plot
+L.PlotBackZ = 360 -- back edge of the plot (the practice campus sits behind the stadium)
 L.StreetWidth = 60 -- gap between the two rows of plots (spawn is in the middle)
 L.PlotGap = 30 -- gap between neighbouring plots on the same side of the street
 L.Yard = 2
@@ -160,6 +160,31 @@ L.BackUpperOuterZ = L.BackLowerOuterZ + L.UpperDepth -- 143
 L.EndLowerOuterX = L.SurfaceHalfX + L.LowerDepth -- 159
 L.PlazaFrontZ = -L.PlotDepth / 2 -- -200
 L.PlazaBackZ = L.FrontUpperOuterZ -- -83
+L.EndUpperOuterX = L.EndLowerOuterX + L.UpperDepth -- 183
+L.CornerStartX = L.SidelineStandsHalfLength -- 120: corner seats fill the bowl from here outward
+L.BackTunnelHalfWidth = 14 -- gap in the home stands (lower + upper) for the home team tunnel
+
+-- Full bowl: every seating row r (1-6 lower, 7-12 upper) is a rectangular ring around the turf.
+-- Row r covers the band between these two rectangles (half-widths in X, front/back edges in Z):
+--   inner: X = SurfaceHalfX + (r-1)*RowDepth, Z from SurfaceMinZ - (r-1)*RowDepth to SurfaceMaxZ + (r-1)*RowDepth
+--   outer: the same with r instead of r-1
+-- Row heights: lower r -> r*RowRise; upper r -> UpperStartHeight + (r-7)*RowRise.
+
+-- Outside the bowl
+L.LightTowerPositions = {
+	Vector3.new(194, 0, 156),
+	Vector3.new(-194, 0, 156),
+	Vector3.new(194, 0, -90),
+	Vector3.new(-194, 0, -90),
+}
+
+-- Practice campus (behind the stadium)
+L.BackWalk = { MinX = -12, MaxX = 12, MinZ = 95, MaxZ = 172 } -- home tunnel -> campus road
+L.CampusRoad = { MinX = -206, MaxX = 206, MinZ = 172, MaxZ = 186 }
+L.CampusWalk = { MinX = -20, MaxX = 20, MinZ = 186, MaxZ = 258 }
+L.BusStopPlaza = Vector3.new(-26, 0, -145)
+L.BusStopCampus = Vector3.new(-34, 0, 179)
+L.CampusSafePosition = Vector3.new(34, 0, 179)
 
 -- Fixed (always present) plot features
 L.GateZ = L.PlazaFrontZ + 3 -- -197

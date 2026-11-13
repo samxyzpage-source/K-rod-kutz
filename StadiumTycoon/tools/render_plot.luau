@@ -431,6 +431,19 @@ local corridors = {
 		},
 	},
 }
+if L.BackWalk then
+	table.insert(corridors, {
+		name = "home tunnel + back walk",
+		box = {
+			minX = L.BackWalk.MinX + 1,
+			maxX = L.BackWalk.MaxX - 1,
+			minY = 0.8,
+			maxY = 9,
+			minZ = L.FieldBackZ + 1, -- from the sideline (benches must leave the lane open)
+			maxZ = L.BackWalk.MaxZ - 1,
+		},
+	})
+end
 if L.CampusWalk then
 	table.insert(corridors, {
 		name = "campus walk",

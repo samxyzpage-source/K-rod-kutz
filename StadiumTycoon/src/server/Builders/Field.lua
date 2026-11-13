@@ -488,16 +488,34 @@ function Field.benches(ctx)
 	local areaBack = L.SurfaceMaxZ - 1 -- 94
 	local matTop = TURF_TOP + 0.06
 
-	-- rubber sideline mat with a team-coloured front edge
-	paint(ctx, "SidelineMat", 80, areaBack - areaFront, 0, (areaFront + areaBack) / 2, 0.06, MAT_GREY, Enum.Material.Fabric)
-	paint(ctx, "MatEdge", 80, 0.5, 0, areaFront + 0.25, 0.08, team.Secondary)
+	-- The bench area is split in two halves so the home team tunnel (behind the middle of the
+	-- sideline) has a clear lane onto the field: |x| < BENCH_LANE stays empty.
+	local BENCH_LANE = L.BackTunnelHalfWidth + 2
+	local MAT_WIDTH = 42
+	local matX = BENCH_LANE + MAT_WIDTH / 2 -- 37
+
+	-- rubber sideline mats with a team-coloured front edge
+	for _, side in ipairs({ -1, 1 }) do
+		paint(
+			ctx,
+			"SidelineMat",
+			MAT_WIDTH,
+			areaBack - areaFront,
+			side * matX,
+			(areaFront + areaBack) / 2,
+			0.06,
+			MAT_GREY,
+			Enum.Material.Fabric
+		)
+		paint(ctx, "MatEdge", MAT_WIDTH, 0.5, side * matX, areaFront + 0.25, 0.08, team.Secondary)
+	end
 
 	-- two long team benches facing the field (-Z): metal legs, team-coloured seat and backrest
 	local seatZ = areaFront + 3.5
 	local seatTop = matTop + 2
 	for _, s in ipairs({ -1, 1 }) do
 		local bench = BuildUtil.Child(ctx, s < 0 and "BenchWest" or "BenchEast")
-		local bx = s * 19
+		local bx = s * (BENCH_LANE + 14) -- 30: bench spans 18..42
 		for _, offset in ipairs({ -10.5, -3.5, 3.5, 10.5 }) do
 			BuildUtil.Block(
 				bench,
@@ -543,8 +561,9 @@ function Field.benches(ctx)
 	end
 	local benchBackTop = seatTop + 1.9 -- top of the backrest stripe
 
-	-- drinks table with two orange coolers between the benches
+	-- drinks table with two orange coolers at the west end of the benches
 	local drinks = BuildUtil.Child(ctx, "DrinksTable")
+	local drinksX = -(BENCH_LANE + 34) -- -50
 	-- table at seat height so the cooler lids (top 4.16) stay below the HOME TEAM lettering on the board
 	local tableHeight = 2
 	local tableTop = matTop + tableHeight
@@ -552,7 +571,7 @@ function Field.benches(ctx)
 		drinks,
 		"Table",
 		Vector3.new(5, tableHeight, 2.2),
-		Vector3.new(0, 0, seatZ),
+		Vector3.new(drinksX, 0, seatZ),
 		team.Primary,
 		Enum.Material.Fabric,
 		nil,
@@ -561,7 +580,7 @@ function Field.benches(ctx)
 	for _, s in ipairs({ -1, 1 }) do
 		BuildUtil.Cylinder(drinks, {
 			Name = "Cooler",
-			Position = Vector3.new(s * 1.2, tableTop + 0.8, seatZ + 0.2),
+			Position = Vector3.new(drinksX + s * 1.2, tableTop + 0.8, seatZ + 0.2),
 			Height = 1.6,
 			Diameter = 1.6,
 			Color = COOLER_ORANGE,
@@ -569,7 +588,7 @@ function Field.benches(ctx)
 		})
 		BuildUtil.Cylinder(drinks, {
 			Name = "CoolerLid",
-			Position = Vector3.new(s * 1.2, tableTop + 1.75, seatZ + 0.2),
+			Position = Vector3.new(drinksX + s * 1.2, tableTop + 1.75, seatZ + 0.2),
 			Height = 0.3,
 			Diameter = 1.75,
 			Color = WHITE,
@@ -578,7 +597,7 @@ function Field.benches(ctx)
 	end
 	BuildUtil.Cylinder(drinks, {
 		Name = "CupStack",
-		Position = Vector3.new(0, tableTop + 0.6, seatZ - 0.6),
+		Position = Vector3.new(drinksX, tableTop + 0.6, seatZ - 0.6),
 		Height = 1.2,
 		Diameter = 0.55,
 		Color = WHITE,
@@ -586,7 +605,7 @@ function Field.benches(ctx)
 	})
 
 	-- medical tent footprint (built below); the east board's lettering stays clear of its roof
-	local tentX, tentZ = 36.5, areaFront + 3.6
+	local tentX, tentZ = BENCH_LANE + 36, areaFront + 3.6 -- 52
 	local tentW, tentD, tentH, roofH = 6, 5.4, 4, 1.6
 	local tentEaveX = tentX - tentW / 2 - 0.3
 
@@ -600,9 +619,8 @@ function Field.benches(ctx)
 	local bandBottom = benchBackTop + 0.2
 	local bandTopInset = 0.12
 	local panels = {
-		{ x = -26, text = ctx.teamName },
-		{ x = 0, text = "HOME TEAM" },
-		{ x = 26, text = ctx.teamName },
+		{ x = -matX, text = ctx.teamName },
+		{ x = matX, text = "HOME TEAM" },
 	}
 	for _, info in ipairs(panels) do
 		local panel = BuildUtil.Block(

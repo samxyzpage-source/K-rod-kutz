@@ -10,7 +10,7 @@
 
 local Builders = {}
 
-local MODULES = { "PlotBase", "Field", "Stands", "Plaza", "Features" }
+local MODULES = { "PlotBase", "Field", "Stands", "Plaza", "Features", "StadiumRooms", "CampusBuildings", "CampusFields" }
 
 for _, moduleName in ipairs(MODULES) do
 	local moduleScript = script:FindFirstChild(moduleName)

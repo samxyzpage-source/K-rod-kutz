@@ -34,29 +34,80 @@ local VISITOR_COLOR = Color3.fromRGB(150, 150, 158)
 function Crowd.SeatSections(layout, owned)
 	local L = layout
 	local sections = {}
-	local function add(itemId, origin, length, firstHeight, gaps, visitor)
+	local function add(itemId, origin, length, firstHeight, rows, gaps, visitor)
 		if owned[itemId] then
 			table.insert(sections, {
 				origin = origin,
 				length = length,
-				rows = itemId:find("upper") and L.UpperRows or L.LowerRows,
+				rows = rows,
 				firstHeight = firstHeight,
 				gaps = gaps or {},
 				visitor = visitor or false,
 			})
 		end
 	end
-	local sideLength = L.SidelineStandsHalfLength * 2
-	local tunnel = { { -L.TunnelHalfWidth - 1, L.TunnelHalfWidth + 1 } }
+	local lower, upper = L.LowerRows, L.UpperRows
+	local sideLength = L.CornerStartX * 2
+	local frontTunnel = { { -L.TunnelHalfWidth - 1, L.TunnelHalfWidth + 1 } }
+	local homeTunnel = { { -(L.BackTunnelHalfWidth or 0) - 1, (L.BackTunnelHalfWidth or 0) + 1 } }
 	local endLength = L.FieldWidth
 	local back = CFrame.Angles(0, math.pi, 0)
+	local east = CFrame.Angles(0, -math.pi / 2, 0) -- rows step toward +X
+	local west = CFrame.Angles(0, math.pi / 2, 0) -- rows step toward -X
 
-	add("bleachers_home", CFrame.new(0, 0, L.SurfaceMaxZ) * back, sideLength, L.RowRise)
-	add("upper_home", CFrame.new(0, 0, L.BackLowerOuterZ) * back, sideLength, L.UpperStartHeight)
-	add("bleachers_visitor", CFrame.new(0, 0, L.SurfaceMinZ), sideLength, L.RowRise, tunnel, true)
-	add("upper_visitor", CFrame.new(0, 0, L.FrontLowerOuterZ), sideLength, L.UpperStartHeight, tunnel, true)
-	add("endzone_stands_east", CFrame.new(L.SurfaceHalfX, 0, L.FieldCenterZ) * CFrame.Angles(0, -math.pi / 2, 0), endLength, L.RowRise)
-	add("endzone_stands_west", CFrame.new(-L.SurfaceHalfX, 0, L.FieldCenterZ) * CFrame.Angles(0, math.pi / 2, 0), endLength, L.RowRise)
+	-- sidelines
+	add("bleachers_home", CFrame.new(0, 0, L.SurfaceMaxZ) * back, sideLength, L.RowRise, lower, homeTunnel)
+	add("upper_home", CFrame.new(0, 0, L.BackLowerOuterZ) * back, sideLength, L.UpperStartHeight, upper, homeTunnel)
+	add("bleachers_visitor", CFrame.new(0, 0, L.SurfaceMinZ), sideLength, L.RowRise, lower, frontTunnel, true)
+	add("upper_visitor", CFrame.new(0, 0, L.FrontLowerOuterZ), sideLength, L.UpperStartHeight, upper, frontTunnel, true)
+	-- end zones
+	add("endzone_stands_east", CFrame.new(L.SurfaceHalfX, 0, L.FieldCenterZ) * east, endLength, L.RowRise, lower)
+	add("endzone_stands_west", CFrame.new(-L.SurfaceHalfX, 0, L.FieldCenterZ) * west, endLength, L.RowRise, lower)
+	add("upper_bowl_ends", CFrame.new(L.EndLowerOuterX, 0, L.FieldCenterZ) * east, endLength, L.UpperStartHeight, upper)
+	add("upper_bowl_ends", CFrame.new(-L.EndLowerOuterX, 0, L.FieldCenterZ) * west, endLength, L.UpperStartHeight, upper)
+
+	-- corners: only the part of each corner band that every row covers is used for seats
+	local lowerCornerX = (L.CornerStartX + L.SurfaceHalfX) / 2
+	local lowerCornerLength = L.SurfaceHalfX - L.CornerStartX
+	local upperCornerX = (L.CornerStartX + L.EndLowerOuterX) / 2
+	local upperCornerLength = L.EndLowerOuterX - L.CornerStartX
+	local backCornerZ = (L.FieldBackZ + L.SurfaceMaxZ) / 2
+	local frontCornerZ = (L.FieldFrontZ + L.SurfaceMinZ) / 2
+	local upperBackCornerZ = (L.FieldBackZ + L.BackLowerOuterZ) / 2
+	local upperFrontCornerZ = (L.FieldFrontZ + L.FrontLowerOuterZ) / 2
+	for _, sx in ipairs({ -1, 1 }) do
+		local endRotation = sx > 0 and east or west
+		-- lower corners: extension of the sideline rows + extension of the end rows
+		add("corner_seats", CFrame.new(sx * lowerCornerX, 0, L.SurfaceMaxZ) * back, lowerCornerLength, L.RowRise, lower)
+		add("corner_seats", CFrame.new(sx * lowerCornerX, 0, L.SurfaceMinZ), lowerCornerLength, L.RowRise, lower, nil, true)
+		add("corner_seats", CFrame.new(sx * L.SurfaceHalfX, 0, backCornerZ) * endRotation, L.SurfaceMaxZ - L.FieldBackZ, L.RowRise, lower)
+		add("corner_seats", CFrame.new(sx * L.SurfaceHalfX, 0, frontCornerZ) * endRotation, L.FieldFrontZ - L.SurfaceMinZ, L.RowRise, lower)
+		-- upper corners
+		add("upper_bowl_ends", CFrame.new(sx * upperCornerX, 0, L.BackLowerOuterZ) * back, upperCornerLength, L.UpperStartHeight, upper)
+		add(
+			"upper_bowl_ends",
+			CFrame.new(sx * upperCornerX, 0, L.FrontLowerOuterZ),
+			upperCornerLength,
+			L.UpperStartHeight,
+			upper,
+			nil,
+			true
+		)
+		add(
+			"upper_bowl_ends",
+			CFrame.new(sx * L.EndLowerOuterX, 0, upperBackCornerZ) * endRotation,
+			L.BackLowerOuterZ - L.FieldBackZ,
+			L.UpperStartHeight,
+			upper
+		)
+		add(
+			"upper_bowl_ends",
+			CFrame.new(sx * L.EndLowerOuterX, 0, upperFrontCornerZ) * endRotation,
+			L.FieldFrontZ - L.FrontLowerOuterZ,
+			L.UpperStartHeight,
+			upper
+		)
+	end
 	return sections
 end
 
@@ -107,16 +158,20 @@ function Crowd.SeatedFans(ctx, owned, maxFans, rng)
 	if #sections == 0 or maxFans <= 0 then
 		return fans
 	end
-	local perSection = math.max(1, math.floor(maxFans / #sections))
+	local totalSize = 0
+	for _, section in ipairs(sections) do
+		totalSize += section.length * section.rows
+	end
 	local count = 0
 	for _, section in ipairs(sections) do
+		local perSection = math.max(1, math.floor(maxFans * section.length * section.rows / totalSize + 0.5))
 		local placed = 0
 		local attempts = 0
 		local used = {}
 		while placed < perSection and attempts < perSection * 6 do
 			attempts += 1
 			local row = rng:NextInteger(1, section.rows)
-			local offset = (rng:NextNumber() - 0.5) * (section.length - 4)
+			local offset = (rng:NextNumber() - 0.5) * math.max(section.length - 4, 1)
 			local slot = row .. ":" .. math.floor(offset / 2.6)
 			if not inGap(offset, section.gaps) and not used[slot] then
 				used[slot] = true

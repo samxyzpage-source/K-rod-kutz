@@ -605,10 +605,13 @@ local function runTests()
 	check(claimTrigger(1).Transparency == 1, "claim trigger hidden after claim")
 	local gateLabel = plotModel(1).Base:FindFirstChild("GateSign", true)
 	check(gateLabel and gateLabel.Text == "ALICE'S STADIUM", "gate sign shows owner: " .. tostring(gateLabel and gateLabel.Text))
-	check(button(1, "turf") ~= nil, "turf button appears")
+	check(button(1, "frontoffice") ~= nil, "Front Office button appears first")
 	check(countChildren(plotModel(1).Buttons) == 1, "only the first button is visible")
-	check(alice:GetAttribute("NextGoal") == "turf", "NextGoal points at the cheapest button: " .. tostring(alice:GetAttribute("NextGoal")))
-	check(CollectionServiceMock:HasTag(button(1, "turf"), "TycoonBuyButton"), "buy buttons are tagged for the client effects")
+	check(
+		alice:GetAttribute("NextGoal") == "frontoffice",
+		"NextGoal points at the cheapest button: " .. tostring(alice:GetAttribute("NextGoal"))
+	)
+	check(CollectionServiceMock:HasTag(button(1, "frontoffice"), "TycoonBuyButton"), "buy buttons are tagged for the client effects")
 	check(tycoons:GetAttribute("FreePlots") == Config.PlotCount - 1, "FreePlots attribute counts free plots")
 	touch(claimTrigger(2), alice)
 	check(alice:GetAttribute("PlotIndex") == 1 and claimTrigger(2).Transparency < 1, "can't claim a second plot")
@@ -618,29 +621,29 @@ local function runTests()
 	check(lastNotification(bob) and lastNotification(bob).message:find("Alice's stadium") ~= nil, "Bob is told whose stadium it is")
 
 	section("Buying")
-	touch(button(1, "turf"), bob)
-	check(not aliceProfile.Owned.turf, "Bob can't buy on Alice's plot")
+	touch(button(1, "frontoffice"), bob)
+	check(not aliceProfile.Owned.frontoffice, "Bob can't buy on Alice's plot")
 	check(
 		lastNotification(bob) and lastNotification(bob).message:find("Alice's stadium") ~= nil,
 		"Bob (no stadium) is pointed to a free gate"
 	)
-	touch(button(1, "turf"), alice)
+	touch(button(1, "frontoffice"), alice)
 	check(
 		lastNotification(alice).message:find("Unlocked") ~= nil,
 		"purchase message lists unlocked pieces: " .. lastNotification(alice).message
 	)
-	check(aliceProfile.Owned.turf == true, "free turf bought")
-	check(button(1, "turf") == nil, "turf button removed after buying")
-	check(plotModel(1).Items:FindFirstChild("turf") ~= nil, "turf model built")
-	check(#plotModel(1).Items.turf:GetDescendants() > 0, "turf model has parts")
+	check(aliceProfile.Owned.frontoffice == true, "free Front Office bought")
+	check(button(1, "frontoffice") == nil, "Front Office button removed after buying")
+	check(plotModel(1).Items:FindFirstChild("frontoffice") ~= nil, "Front Office model built")
+	check(#plotModel(1).Items.frontoffice:GetDescendants() > 0, "Front Office model has parts")
 	check(
-		button(1, "yardlines") and button(1, "benches") and button(1, "ticketbooth"),
-		"next buttons unlocked (yardlines, benches, ticketbooth)"
+		button(1, "practice_field") ~= nil and button(1, "turf") == nil,
+		"the practice field unlocks next and the stadium waits for the practice facility"
 	)
-	check(button(1, "endzones") == nil, "locked buttons stay hidden")
-	check(alice:GetAttribute("Income") == Items.ById.turf.Income * Config.IncomeMultiplier, "Income attribute updated")
+	check(button(1, "practice_gear") == nil, "locked buttons stay hidden")
+	check(alice:GetAttribute("Income") == Items.ById.frontoffice.Income * Config.IncomeMultiplier, "Income attribute updated")
 	check(alice:GetAttribute("Built") == 1, "Built attribute = 1")
-	local yardButton = button(1, "yardlines")
+	local yardButton = button(1, "practice_field")
 	check(yardButton.Color == Config.Colors.ButtonTooExpensive, "unaffordable button is red")
 	touch(yardButton, alice)
 	check(not aliceProfile.Owned.yardlines, "can't buy without enough cash")
@@ -681,7 +684,7 @@ local function runTests()
 	PlayerData.AddCash(alice, 10000000)
 	check(yardButton.Parent ~= nil, "yard button still visible")
 	task.wait(0.1)
-	check(button(1, "yardlines").Color == Config.Colors.ButtonAffordable, "affordable button turns green")
+	check(button(1, "practice_field").Color == Config.Colors.ButtonAffordable, "affordable button turns green")
 	local safety = 0
 	while safety < 200 do
 		safety += 1
@@ -744,6 +747,29 @@ local function runTests()
 		end
 	end
 	check(not anyOn, "flood lights switch off in the day")
+
+	section("Team bus + campus safe")
+	local refs1 = plot1.Refs
+	check(
+		refs1.BusStopPlaza ~= nil and refs1.BusStopCampus ~= nil and refs1.CampusCollectPad ~= nil,
+		"plot has bus stops and a campus collect pad"
+	)
+	local aliceRoot = alice.Character.HumanoidRootPart
+	aliceRoot.CFrame = CFrame.new(0, 3, 0)
+	touch(refs1.BusStopPlaza, alice)
+	check((aliceRoot.CFrame.Position - refs1.BusArriveCampus.Position).Magnitude < 0.01, "the plaza bus stop rides to the campus")
+	touch(refs1.BusStopCampus, alice)
+	check((aliceRoot.CFrame.Position - refs1.BusArriveCampus.Position).Magnitude < 0.01, "a short cooldown stops instant bouncing back")
+	task.wait(2.1)
+	touch(refs1.BusStopCampus, alice)
+	check((aliceRoot.CFrame.Position - refs1.BusArrivePlaza.Position).Magnitude < 0.01, "the campus bus stop rides back to the plaza")
+	plot1.Vault += 50
+	local cashBeforeSafe = PlayerData.GetCash(alice)
+	touch(refs1.CampusCollectPad, alice)
+	check(PlayerData.GetCash(alice) > cashBeforeSafe, "the campus team safe collects the vault")
+	local campusLabel = plotModel(1).Base:FindFirstChild("CampusVaultAmount", true)
+	check(campusLabel ~= nil and campusLabel.Text:sub(1, 1) == "$", "the team safe shows the vault amount")
+	aliceRoot.CFrame = CFrame.new(0, 3, 0)
 
 	section("Respawn at plot")
 	local newCharacter = makeCharacter("AliceCharacter2")
