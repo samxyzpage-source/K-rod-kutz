@@ -1,19 +1,25 @@
 --[[
 	Features
-	The "big league" upgrades that sit around and above the seating bowl.
+	The "big league" upgrades that sit around and above the full seating bowl.
 
-	  scoreboard  east, behind the east end-zone stands; three LED panels face the field (-X)
-	  lights      four flood-light towers in the open corners of the bowl, aimed at the field
-	  jumbotron   west, behind the west end-zone stands; one giant screen faces the field (+X)
-	  pressbox    glass box on columns behind the back (home) upper deck, windows face the field
-	  suites      two glass-fronted luxury suite levels behind the front (visitor) upper deck
-	  canopy      cantilevered roofs over both sideline upper decks, masts on the outer side
+	  scoreboard       east, outside the bowl on two steel legs; three LED panels face the field (-X)
+	  lights           four lattice flood-light towers outside the bowl corners: a big bank on top
+	                   aimed at the field centre and a smaller mid bank aimed at the nearby stands
+	  jumbotron        west, outside the bowl on two steel legs; one giant screen faces the field (+X)
+	  pressbox         two-level glass press box behind the top of the home (back) upper deck,
+	                   on stair cores + columns, rooftop "PRESS BOX" sign, TV camera platforms
+	  suites           two glass-fronted luxury suite levels behind the front (visitor) upper deck
+	  broadcast_booth  glass TV booth bridging the front players' tunnel on top of the visitor
+	                   upper deck, "ON AIR" box, satellite dish and camera on the roof
+	  canopy           one ring roof over the whole upper ring, cantilevered from columns that
+	                   stand on the upper decks' top row; the middle above the field stays open
 
 	Runtime contracts (the PlotManager finds these by name, do not rename them):
 	  scoreboard  TextLabels "ScoreboardTitle", "ScoreboardScore", "ScoreboardAttendance"
 	  lights      SpotLights named "FloodLight" (start disabled) and Parts named "FloodPanel"
 	              (SmoothPlastic by day, the server switches them to Neon at night)
 	  jumbotron   TextLabel "JumbotronText"
+	  canopy      uses the same FloodLight / FloodPanel names for its ring of roof-edge lights
 ]]
 
 local BuildUtil = require(script.Parent.Parent.BuildUtil)
@@ -29,9 +35,12 @@ local ROOF_WHITE = Color3.fromRGB(232, 235, 240)
 local LED_AMBER = Color3.fromRGB(255, 196, 40)
 local LED_GREEN = Color3.fromRGB(110, 255, 140)
 local BEACON_RED = Color3.fromRGB(255, 40, 40)
+local ON_AIR_RED = Color3.fromRGB(220, 24, 30)
 local DOOR_DARK = Color3.fromRGB(32, 32, 38)
+local CAMERA_BLACK = Color3.fromRGB(24, 24, 28)
 
 local NO_COLLIDE = { CanCollide = false }
+local GLOW = { CanCollide = false, CastShadow = false }
 
 ---------------------------------------------------------------------------------------------
 -- Helpers
@@ -52,12 +61,40 @@ local function readable(background, preferred)
 	return Color3.fromRGB(250, 250, 250)
 end
 
+-- Axis-aligned block between two corners (plot-local; each pair may be given in either order).
+local function span(ctx, name, x0, x1, y0, y1, z0, z1, color, material, extra)
+	x0, x1 = math.min(x0, x1), math.max(x0, x1)
+	z0, z1 = math.min(z0, z1), math.max(z0, z1)
+	return BuildUtil.Box(
+		ctx,
+		name,
+		Vector3.new(x1 - x0, y1 - y0, z1 - z0),
+		Vector3.new((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2),
+		color,
+		material or Enum.Material.SmoothPlastic,
+		extra
+	)
+end
+
 -- A square-section bar running from local point `a` to local point `b`.
 local function strut(ctx, name, a, b, width, color, material)
 	return BuildUtil.Part(ctx, {
 		Name = name,
 		Size = Vector3.new(width, width, (b - a).Magnitude),
 		CFrame = CFrame.lookAt((a + b) / 2, b),
+		Color = color,
+		Material = material or Enum.Material.Metal,
+	})
+end
+
+-- A vertical round post from y0 to y1.
+local function post(ctx, name, x, z, y0, y1, diameter, color, material)
+	return BuildUtil.Cylinder(ctx, {
+		Name = name,
+		Position = Vector3.new(x, (y0 + y1) / 2, z),
+		Height = y1 - y0,
+		Diameter = diameter,
+		Axis = "Y",
 		Color = color,
 		Material = material or Enum.Material.Metal,
 	})
@@ -79,33 +116,73 @@ local function screen(ctx, name, size, position, face, text, opts)
 	return part, label
 end
 
--- A sign board with team-coloured text on one face.
-local function sign(ctx, name, size, cframe, background, face, text, textColor, pixelsPerStud)
-	local part = BuildUtil.Part(ctx, {
-		Name = name,
-		Size = size,
-		CFrame = cframe,
-		Color = background,
-		Material = Enum.Material.SmoothPlastic,
-	})
-	BuildUtil.SurfaceText(part, face, text, {
-		LabelName = name .. "Text",
-		TextColor3 = readable(background, textColor),
-		PixelsPerStud = pixelsPerStud or 16,
-		Font = Enum.Font.GothamBlack,
-	})
-	return part
+--[[
+	Several text labels side by side (or stacked) on one face of a part.
+	list = { { text = "...", from = 0..1, to = 0..1, top = 0..1?, bottom = 0..1? }, ... }
+	from/to are fractions of the face width (left to right as seen from the face),
+	top/bottom optional fractions of its height (default the full height).
+]]
+local function labels(part, face, list, textColor, pixelsPerStud)
+	for index, entry in ipairs(list) do
+		local _, label = BuildUtil.SurfaceText(part, face, entry.text, {
+			LabelName = part.Name .. "Text" .. index,
+			TextColor3 = textColor,
+			PixelsPerStud = pixelsPerStud or 16,
+			Font = Enum.Font.GothamBlack,
+		})
+		local top, bottom = entry.top or 0, entry.bottom or 1
+		label.Position = UDim2.new(entry.from, 0, top, 0)
+		label.Size = UDim2.new(entry.to - entry.from, 0, bottom - top, 0)
+	end
 end
 
--- Concrete footing + pylon pair holding up a display board (scoreboard / jumbotron).
--- `centre` is the footprint centre of the pylon, the pylon top is at `topY`.
-local function pylon(ctx, centre, topY, size, C)
-	BuildUtil.Block(ctx, "Footing", Vector3.new(size + 2.5, 1, size + 2.5), centre, C.ConcreteDark, Enum.Material.Concrete)
-	BuildUtil.Block(ctx, "Pylon", Vector3.new(size, topY - 1, size), centre, C.Concrete, Enum.Material.Concrete, nil, 1)
+-- Steel leg with a concrete footing, from the ground up to `topY` (scoreboard / jumbotron).
+local function boardLeg(ctx, x, z, topY, size, C)
+	BuildUtil.Block(ctx, "LegFooting", Vector3.new(size + 2.4, 1, size + 2.4), Vector3.new(x, 0, z), C.ConcreteDark, Enum.Material.Concrete)
+	BuildUtil.Block(ctx, "Leg", Vector3.new(size, topY - 1, size), Vector3.new(x, 0, z), STEEL, Enum.Material.Metal, nil, 1)
+end
+
+-- A TV camera on a tripod standing on a surface at `baseY`, lens pointing along `facing`
+-- (a horizontal unit vector).
+local function tvCamera(ctx, base, baseY, facing)
+	post(ctx, "CameraTripod", base.X, base.Z, baseY, baseY + 1.3, 0.35, STEEL)
+	local bodyCentre = Vector3.new(base.X, baseY + 1.9, base.Z)
+	BuildUtil.Part(ctx, {
+		Name = "CameraBody",
+		Size = Vector3.new(1.1, 1.2, 2.2),
+		CFrame = CFrame.lookAt(bodyCentre, bodyCentre + facing),
+		Color = CAMERA_BLACK,
+		Material = Enum.Material.SmoothPlastic,
+	})
+	local lensCentre = bodyCentre + facing * 1.5
+	BuildUtil.Part(ctx, {
+		Name = "CameraLens",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.9, 0.8, 0.8),
+		-- cylinders run along local X: turn it so X points along `facing`
+		CFrame = CFrame.lookAt(lensCentre, lensCentre + facing) * CFrame.Angles(0, math.rad(90), 0),
+		Color = STEEL,
+		Material = Enum.Material.Metal,
+	})
+end
+
+-- A satellite dish on a short stand whose foot sits at `base` (y = surface height).
+-- `aim` is the direction the dish faces (any vector); the dish is tilted toward it.
+local function satelliteDish(ctx, base, diameter, aim, C)
+	post(ctx, "DishStand", base.X, base.Z, base.Y, base.Y + 0.6, 0.5, STEEL)
+	local centre = base + Vector3.new(0, 0.6 + diameter * 0.25, 0)
+	BuildUtil.Part(ctx, {
+		Name = "Dish",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.35, diameter, diameter),
+		CFrame = CFrame.lookAt(centre, centre + aim) * CFrame.Angles(0, math.rad(90), 0),
+		Color = C.Line,
+		Material = Enum.Material.SmoothPlastic,
+	})
 end
 
 ---------------------------------------------------------------------------------------------
--- Scoreboard (east)
+-- Scoreboard (east, outside the bowl)
 ---------------------------------------------------------------------------------------------
 
 function Features.scoreboard(ctx)
@@ -113,39 +190,34 @@ function Features.scoreboard(ctx)
 	local C = ctx.config.Colors
 	local team = ctx.colors
 
-	local centreZ = L.FieldCenterZ
-	local faceX = L.EndLowerOuterX + 9 -- 168: the field-facing (-X) face of the housing
-	local depth = 4
+	local centreZ = L.FieldCenterZ -- 30
+	local faceX = L.EndUpperOuterX + 5 -- 188: the field-facing (-X) face of the housing
+	local depth = 5
 	local midX = faceX + depth / 2
-	local width = 46 -- along Z
-	local bottom, top = 18, 44
-	local girderBottom = bottom - 1.5
+	local width = 46 -- along Z: z 7..53
+	-- bottom clears the end upper deck's rail (y 28) as seen from the field; the top stays low
+	-- enough to be seen under the canopy's inner edge from most of the field
+	local bottom, top = 30, 56
+	local girderBottom = bottom - 1.6
 
-	-- Supports: two concrete pylons, a steel girder, a service catwalk and a ladder
-	for _, dz in ipairs({ -17, 17 }) do
-		pylon(ctx, Vector3.new(midX + 0.5, 0, centreZ + dz), girderBottom, 3.5, C)
+	-- Two steel legs from the ground, a cross beam, a girder under the housing and a ladder
+	for _, dz in ipairs({ -15, 15 }) do
+		boardLeg(ctx, midX, centreZ + dz, girderBottom, 3, C)
 	end
+	BuildUtil.Box(ctx, "CrossBeam", Vector3.new(1.6, 1.6, 27), Vector3.new(midX, 15, centreZ), STEEL, Enum.Material.Metal)
 	BuildUtil.Box(
 		ctx,
 		"Girder",
-		Vector3.new(3, 1.5, width - 4),
-		Vector3.new(midX, girderBottom + 0.75, centreZ),
+		Vector3.new(depth - 1, 1.6, width - 6),
+		Vector3.new(midX, girderBottom + 0.8, centreZ),
 		STEEL,
 		Enum.Material.Metal
 	)
 	BuildUtil.Box(
 		ctx,
-		"Catwalk",
-		Vector3.new(2.4, 0.3, width),
-		Vector3.new(faceX - 1.2, bottom - 0.15, centreZ),
-		STEEL,
-		Enum.Material.DiamondPlate
-	)
-	BuildUtil.Box(
-		ctx,
 		"Ladder",
-		Vector3.new(0.3, girderBottom - 1, 1.6),
-		Vector3.new(midX + 0.5 - 1.9, 1 + (girderBottom - 1) / 2, centreZ - 17),
+		Vector3.new(1.6, girderBottom - 1, 0.3),
+		Vector3.new(midX, 1 + (girderBottom - 1) / 2, centreZ - 15 - 1.65),
 		STEEL,
 		Enum.Material.Metal,
 		NO_COLLIDE
@@ -190,62 +262,49 @@ function Features.scoreboard(ctx)
 	screen(
 		ctx,
 		"TitleScreen",
-		Vector3.new(0.4, 5.4, panelWidth),
-		Vector3.new(screenX, 39.9, centreZ),
+		Vector3.new(0.4, 4.6, panelWidth),
+		Vector3.new(screenX, 52.6, centreZ),
 		Enum.NormalId.Left,
 		ctx.teamName .. " STADIUM",
-		{
-			LabelName = "ScoreboardTitle",
-			TextColor3 = team.Trim,
-			PixelsPerStud = 20,
-		}
+		{ LabelName = "ScoreboardTitle", TextColor3 = team.Trim, PixelsPerStud = 20 }
 	)
 	screen(
 		ctx,
 		"ScoreScreen",
 		Vector3.new(0.4, 9.6, panelWidth),
-		Vector3.new(screenX, 31.2, centreZ),
+		Vector3.new(screenX, 44.4, centreZ),
 		Enum.NormalId.Left,
 		"HOME 0  -  AWAY 0",
-		{
-			LabelName = "ScoreboardScore",
-			TextColor3 = LED_AMBER,
-			Font = Enum.Font.Arcade,
-			PixelsPerStud = 20,
-		}
+		{ LabelName = "ScoreboardScore", TextColor3 = LED_AMBER, Font = Enum.Font.Arcade, PixelsPerStud = 20 }
 	)
 	screen(
 		ctx,
 		"AttendanceScreen",
 		Vector3.new(0.4, 5, panelWidth),
-		Vector3.new(screenX, 22.7, centreZ),
+		Vector3.new(screenX, 35.9, centreZ),
 		Enum.NormalId.Left,
 		"ATTENDANCE 0",
-		{
-			LabelName = "ScoreboardAttendance",
-			TextColor3 = LED_GREEN,
-			Font = Enum.Font.GothamBold,
-			PixelsPerStud = 20,
-		}
+		{ LabelName = "ScoreboardAttendance", TextColor3 = LED_GREEN, Font = Enum.Font.GothamBold, PixelsPerStud = 20 }
 	)
 	BuildUtil.Box(
 		ctx,
 		"LedStrip",
 		Vector3.new(0.3, 0.6, panelWidth),
-		Vector3.new(faceX - 0.15, 19.1, centreZ),
+		Vector3.new(faceX - 0.15, bottom + 1.4, centreZ),
 		team.Secondary,
 		Enum.Material.Neon,
-		NO_COLLIDE
+		GLOW
 	)
 end
 
 ---------------------------------------------------------------------------------------------
--- Light towers (four corners)
+-- Light towers (outside the four bowl corners)
 ---------------------------------------------------------------------------------------------
 
-local MAST_TOP = 63 -- the main light bank is centred here
-local LEG_TOP = 40 -- the four lattice legs meet the mast here
-local LOW_BANK_Y = 33 -- a smaller second bank low enough for its lights to reach the field
+local LEG_TOP = 58 -- the four lattice legs meet the mast here
+local MID_PLATFORM_Y = 41 -- service platform carrying the mid bank
+local MAIN_BANK_Y = 78 -- centre of the big bank on top (its beacon stays below 90)
+local MID_BANK_Y = 44.5 -- centre of the smaller bank aimed at the nearby stands
 
 -- A grid of FloodPanels on a dark back plate. `cframe` faces the target (Front face = -Z).
 -- lit = list of { column, row, angle, brightness } panels that carry a FloodLight SpotLight.
@@ -265,7 +324,7 @@ local function floodBank(ctx, cframe, columns, rows, panelSize, lit)
 		for row = 1, rows do
 			local x = (column - (columns + 1) / 2) * (panelSize.X + gap)
 			local y = (row - (rows + 1) / 2) * (panelSize.Y + gap)
-			local panel = BuildUtil.Part(ctx, {
+			panels[column .. "," .. row] = BuildUtil.Part(ctx, {
 				Name = "FloodPanel",
 				Size = panelSize,
 				CFrame = cframe * CFrame.new(x, y, -panelSize.Z / 2),
@@ -273,7 +332,6 @@ local function floodBank(ctx, cframe, columns, rows, panelSize, lit)
 				Material = Enum.Material.SmoothPlastic,
 				CastShadow = false,
 			})
-			panels[column .. "," .. row] = panel
 		end
 	end
 	for _, spec in ipairs(lit) do
@@ -290,22 +348,24 @@ local function floodBank(ctx, cframe, columns, rows, panelSize, lit)
 	return plateWidth, plateHeight
 end
 
-local function lightTower(ctx, name, base, target)
+local function lightTower(ctx, name, base, fieldTarget, standTarget)
 	local C = ctx.config.Colors
 	local team = ctx.colors
 	local tower = BuildUtil.Child(ctx, name)
-	local toField = Vector3.new(target.X - base.X, 0, target.Z - base.Z).Unit
+	local toField = Vector3.new(fieldTarget.X - base.X, 0, fieldTarget.Z - base.Z).Unit
+	local toStand = Vector3.new(standTarget.X - base.X, 0, standTarget.Z - base.Z).Unit
 
 	BuildUtil.Block(tower, "TowerFooting", Vector3.new(8, 1.2, 8), base, C.ConcreteDark, Enum.Material.Concrete)
-	-- tapered lattice legs from a wide base up to the service platform
+	-- tapered lattice legs from the wide footing up to the top platform
+	local footOffset, topOffset = 3.2, 1.2
 	for _, sx in ipairs({ -1, 1 }) do
 		for _, sz in ipairs({ -1, 1 }) do
 			strut(
 				tower,
 				"TowerLeg",
-				Vector3.new(base.X + sx * 3.2, 1.2, base.Z + sz * 3.2),
-				Vector3.new(base.X + sx * 1, LEG_TOP, base.Z + sz * 1),
-				0.8,
+				Vector3.new(base.X + sx * footOffset, 1.2, base.Z + sz * footOffset),
+				Vector3.new(base.X + sx * topOffset, LEG_TOP, base.Z + sz * topOffset),
+				1,
 				C.Metal
 			)
 		end
@@ -313,16 +373,25 @@ local function lightTower(ctx, name, base, target)
 	BuildUtil.Box(
 		tower,
 		"TowerPlatform",
-		Vector3.new(5.5, 0.5, 5.5),
+		Vector3.new(5.4, 0.5, 5.4),
 		Vector3.new(base.X, LEG_TOP + 0.25, base.Z),
 		team.Secondary,
 		Enum.Material.DiamondPlate
 	)
+	-- service platform part-way up (the legs pass through it), carrying the mid bank
+	BuildUtil.Box(
+		tower,
+		"ServicePlatform",
+		Vector3.new(8, 0.5, 8),
+		Vector3.new(base.X, MID_PLATFORM_Y, base.Z) + toStand * 0.8,
+		team.Primary,
+		Enum.Material.DiamondPlate
+	)
 
-	-- main light bank on top, its back resting against the mast, aimed at the field centre
-	local headPosition = Vector3.new(base.X, MAST_TOP, base.Z) + toField * 1.9
-	local head = CFrame.lookAt(headPosition, target)
-	local plateWidth, plateHeight = floodBank(tower, head, 3, 2, Vector3.new(5.4, 4.6, 0.5), {
+	-- main bank on top, its back resting against the mast, aimed at the field centre
+	local headPosition = Vector3.new(base.X, MAIN_BANK_Y, base.Z) + toField * 1.9
+	local head = CFrame.lookAt(headPosition, fieldTarget)
+	local plateWidth, plateHeight = floodBank(tower, head, 3, 2, Vector3.new(6.4, 5.2, 0.5), {
 		{ 2, 1, 60, 5 },
 		{ 2, 2, 60, 5 },
 	})
@@ -352,39 +421,33 @@ local function lightTower(ctx, name, base, target)
 		Color = STEEL,
 		Material = Enum.Material.Metal,
 	})
-	local mastTop = armTop - 0.5
-	BuildUtil.Cylinder(tower, {
-		Name = "TowerMast",
-		Position = Vector3.new(base.X, (1.2 + mastTop) / 2, base.Z),
-		Height = mastTop - 1.2,
-		Diameter = 2.2,
-		Axis = "Y",
-		Color = C.Metal,
-		Material = Enum.Material.Metal,
-	})
+	post(tower, "TowerMast", base.X, base.Z, LEG_TOP + 0.5, armTop - 0.5, 2.2, C.Metal)
 
-	-- a smaller bank lower down (the main bank is too high for a 60 stud light to reach the turf),
-	-- held far enough out that the lattice leg on the field side passes behind it
-	local lowPosition = Vector3.new(base.X, LOW_BANK_Y, base.Z) + toField * 3.8
-	floodBank(tower, CFrame.lookAt(lowPosition, target), 2, 1, Vector3.new(3.8, 3.2, 0.5), {
-		{ 1, 1, 80, 3 },
+	-- Smaller bank on the service platform. A 60 stud light from the top bank can't reach the
+	-- seats, so this one is aimed at the corner of the upper deck right next to the tower.
+	local midPosition = Vector3.new(base.X, MID_BANK_Y, base.Z) + toStand * 3.6
+	floodBank(tower, CFrame.lookAt(midPosition, standTarget), 2, 1, Vector3.new(3.8, 3.2, 0.5), {
+		{ 1, 1, 90, 3 },
+		{ 2, 1, 90, 3 },
 	})
 end
 
 function Features.lights(ctx)
 	local L = ctx.config.Layout
-	local target = Vector3.new(0, 0, L.FieldCenterZ)
-	local x = L.EndLowerOuterX - 17 -- 142: centre of the open corner between the stands
-	local frontZ = L.FrontLowerOuterZ + 7 -- -52
-	local backZ = L.BackLowerOuterZ - 7 -- 112
-	lightTower(ctx, "TowerFrontWest", Vector3.new(-x, 0, frontZ), target)
-	lightTower(ctx, "TowerFrontEast", Vector3.new(x, 0, frontZ), target)
-	lightTower(ctx, "TowerBackWest", Vector3.new(-x, 0, backZ), target)
-	lightTower(ctx, "TowerBackEast", Vector3.new(x, 0, backZ), target)
+	local fieldTarget = Vector3.new(0, 0, L.FieldCenterZ)
+	for _, base in ipairs(L.LightTowerPositions) do
+		local front = base.Z < L.FieldCenterZ
+		local sx = base.X < 0 and -1 or 1
+		-- a point a few rows into the upper deck at the corner nearest to the tower
+		local standTarget =
+			Vector3.new(sx * (L.EndLowerOuterX + 8), L.UpperStartHeight, front and (L.FrontLowerOuterZ - 8) or (L.BackLowerOuterZ + 8))
+		local name = ("Tower%s%s"):format(front and "Front" or "Back", sx < 0 and "West" or "East")
+		lightTower(ctx, name, base, fieldTarget, standTarget)
+	end
 end
 
 ---------------------------------------------------------------------------------------------
--- Jumbotron (west)
+-- Jumbotron (west, outside the bowl)
 ---------------------------------------------------------------------------------------------
 
 function Features.jumbotron(ctx)
@@ -392,26 +455,28 @@ function Features.jumbotron(ctx)
 	local C = ctx.config.Colors
 	local team = ctx.colors
 
-	local centreZ = L.FieldCenterZ
-	local faceX = -(L.EndLowerOuterX + 12) -- -171: the field-facing (+X) face of the housing
+	local centreZ = L.FieldCenterZ -- 30
+	local faceX = -(L.EndUpperOuterX + 5) -- -188: the field-facing (+X) face of the housing
 	local depth = 5
 	local midX = faceX - depth / 2
-	local width = 48 -- along Z
-	local bottom, top = 20, 52
+	local width = 52 -- along Z: z 4..56
+	-- bottom clears the end upper deck's rail as seen from the field; the screen top stays under
+	-- the sight line past the canopy's notch edge (about y 57-59 from the field)
+	local bottom, top = 30, 58.6
 	local girderBottom = bottom - 2
 
 	-- Supports
-	for _, dz in ipairs({ -16, 16 }) do
-		pylon(ctx, Vector3.new(midX, 0, centreZ + dz), girderBottom, 4, C)
+	for _, dz in ipairs({ -17, 17 }) do
+		boardLeg(ctx, midX, centreZ + dz, girderBottom, 3.5, C)
 	end
-	BuildUtil.Box(ctx, "Girder", Vector3.new(3.5, 2, width - 4), Vector3.new(midX, girderBottom + 1, centreZ), STEEL, Enum.Material.Metal)
+	BuildUtil.Box(ctx, "CrossBeam", Vector3.new(1.8, 1.8, 31), Vector3.new(midX, 14, centreZ), STEEL, Enum.Material.Metal)
 	BuildUtil.Box(
 		ctx,
-		"Catwalk",
-		Vector3.new(2.4, 0.3, width),
-		Vector3.new(faceX + 1.2, bottom - 0.15, centreZ),
+		"Girder",
+		Vector3.new(depth - 1, 2, width - 6),
+		Vector3.new(midX, girderBottom + 1, centreZ),
 		STEEL,
-		Enum.Material.DiamondPlate
+		Enum.Material.Metal
 	)
 
 	-- Housing, crown and a team-coloured bezel around the screen
@@ -439,14 +504,14 @@ function Features.jumbotron(ctx)
 	BuildUtil.Box(
 		ctx,
 		"Bezel",
-		Vector3.new(0.2, top - bottom - 2, width - 2),
+		Vector3.new(0.2, top - bottom - 1.4, width - 2),
 		Vector3.new(faceX + 0.1, (bottom + top) / 2, centreZ),
 		team.Secondary,
 		Enum.Material.SmoothPlastic
 	)
 
 	-- The screen (unrotated part: +X is the Right face)
-	screen(ctx, "Screen", Vector3.new(0.4, 27, width - 6), Vector3.new(faceX + 0.4, 36, centreZ), Enum.NormalId.Right, ctx.teamName, {
+	screen(ctx, "Screen", Vector3.new(0.4, 24, width - 6), Vector3.new(faceX + 0.4, 45.4, centreZ), Enum.NormalId.Right, ctx.teamName, {
 		LabelName = "JumbotronText",
 		TextColor3 = team.Trim,
 		BackgroundColor3 = team.Primary,
@@ -457,17 +522,17 @@ function Features.jumbotron(ctx)
 		ctx,
 		"LedStrip",
 		Vector3.new(0.3, 0.6, width - 6),
-		Vector3.new(faceX + 0.35, bottom + 1.7, centreZ),
+		Vector3.new(faceX + 0.35, bottom + 1.8, centreZ),
 		team.Trim,
 		Enum.Material.Neon,
-		NO_COLLIDE
+		GLOW
 	)
 
-	-- Speaker stacks hanging off both sides
+	-- Speaker stacks on both sides of the housing
 	for _, side in ipairs({ -1, 1 }) do
 		local z = centreZ + side * (width / 2 + 2)
-		BuildUtil.Box(ctx, "Speaker", Vector3.new(4, 14, 4), Vector3.new(faceX - 2, 35, z), SPEAKER_GREY, Enum.Material.Fabric)
-		for _, y in ipairs({ 31.5, 38.5 }) do
+		BuildUtil.Box(ctx, "Speaker", Vector3.new(4, 14, 4), Vector3.new(faceX - 2, 45, z), SPEAKER_GREY, Enum.Material.Fabric)
+		for _, y in ipairs({ 41.5, 48.5 }) do
 			BuildUtil.Cylinder(ctx, {
 				Name = "SpeakerCone",
 				Position = Vector3.new(faceX + 0.2, y, z),
@@ -482,194 +547,115 @@ function Features.jumbotron(ctx)
 end
 
 ---------------------------------------------------------------------------------------------
--- Press box (behind the back upper deck)
+-- Press box (two levels, behind the top of the home upper deck)
 ---------------------------------------------------------------------------------------------
 
 function Features.pressbox(ctx)
 	local L = ctx.config.Layout
 	local C = ctx.config.Colors
 	local team = ctx.colors
+	local name = ctx.teamName
 
-	-- Footprint X[-40, 40], Z[143, 158]. The roof covers all of it; the walls sit inside so the
-	-- roof overhangs 2.5 studs on the field side (and 2 at each end).
-	local deckBack = L.BackUpperOuterZ -- 143: outside wall of the upper deck (its bands reach 143.7)
-	local slabFront = deckBack + 1 -- 144
-	local z0 = deckBack + 2.5 -- 145.5: window wall
-	local z1 = deckBack + 14 -- 157: inside of the back wall
-	local roofFront = deckBack + 0.4 -- the fascia sign hangs in front of this, inside the footprint
-	local halfX = 38
-	local roofHalfX = 40
-	local floorY = L.UpperTopHeight -- level with the top row of the upper deck
-	local ceilingY = floorY + 9
-	local zMid = (z0 + z1) / 2
-	local slabBottom = floorY - 1.6
-	local glassBottom, glassTop = floorY + 0.8, ceilingY - 1.2
+	-- Footprint X[-44, 44], Z[143, 161]. The upper deck's outside wall (and its bands / gate
+	-- signs) is at z 143..143.7, so the building starts at z 145 and only the roof fascia
+	-- reaches forward to 143.6.
+	local deckBack = L.BackUpperOuterZ -- 143
+	local zFront = deckBack + 2 -- 145: window wall
+	local zBack = deckBack + 17.6 -- 160.6: outside of the back wall
+	local halfX = 44
+	local wallInner = halfX - 0.7 -- side walls are 0.7 thick
+	local floor1 = L.UpperTopHeight -- 26: level with the top row of the upper deck
+	local slab1Bottom = floor1 - 1.4
+	local girderBottom = slab1Bottom - 3 -- 21.6: well above the home tunnel / back walk
+	local floor2 = floor1 + 9.5 -- 35.5
+	local slab2Bottom = floor2 - 1.2
+	local roofBottom = floor2 + 7 -- 42.5
+	local roofTop = roofBottom + 1 -- 43.5
+	local glass1 = { floor1 + 1, slab2Bottom - 1.1 } -- 27 .. 33.2
+	local glass2 = { floor2 + 0.8, roofBottom - 0.2 } -- 36.3 .. 42.3
+	local coreX = 37
+	local coreZ0, coreZ1 = zFront + 3.5, zFront + 11.5
 
-	-- Supports: two stair cores with doors and two round columns (clear of GATE F at x = 0)
+	-- Supports: two stair cores with doors (facing the back walk) and four round columns.
+	-- Everything that reaches the ground stays at |x| >= 16 (the back walk is X[-12, 12]).
 	for _, side in ipairs({ -1, 1 }) do
-		BuildUtil.Block(
-			ctx,
-			"StairCore",
-			Vector3.new(8, slabBottom, 10),
-			Vector3.new(side * 31, 0, zMid),
-			C.Concrete,
-			Enum.Material.Concrete
-		)
-		BuildUtil.Block(
-			ctx,
-			"CoreDoor",
-			Vector3.new(3.5, 7, 0.2),
-			Vector3.new(side * 31, 0, zMid + 5.1),
-			DOOR_DARK,
-			Enum.Material.SmoothPlastic
-		)
-		BuildUtil.Cylinder(ctx, {
-			Name = "Column",
-			Position = Vector3.new(side * 14, slabBottom / 2, zMid),
-			Height = slabBottom,
-			Diameter = 2.4,
-			Axis = "Y",
-			Color = C.Concrete,
-			Material = Enum.Material.Concrete,
-		})
+		span(ctx, "StairCore", side * (coreX - 4), side * (coreX + 4), 0, slab1Bottom, coreZ0, coreZ1, C.Concrete, Enum.Material.Concrete)
+		local doorX = side * (coreX - 4.1)
+		span(ctx, "CoreDoor", doorX - 0.1, doorX + 0.1, 0, 7, (coreZ0 + coreZ1) / 2 - 1.8, (coreZ0 + coreZ1) / 2 + 1.8, DOOR_DARK)
+		for _, z in ipairs({ zFront + 1.2, zBack - 2.1 }) do
+			post(ctx, "Column", side * 18, z, 0, girderBottom, 2.4, C.Concrete, Enum.Material.Concrete)
+		end
 	end
-
-	-- Shell
-	BuildUtil.Box(
-		ctx,
-		"FloorSlab",
-		Vector3.new(halfX * 2, 1.6, z1 + 1 - slabFront),
-		Vector3.new(0, floorY - 0.8, (slabFront + z1 + 1) / 2),
-		C.ConcreteDark,
-		Enum.Material.Concrete
-	)
-	local backWall = BuildUtil.Box(
-		ctx,
-		"BackWall",
-		Vector3.new(halfX * 2, ceilingY - floorY, 1),
-		Vector3.new(0, (floorY + ceilingY) / 2, z1 + 0.5),
-		team.Primary,
-		Enum.Material.SmoothPlastic
-	)
-	BuildUtil.SurfaceText(backWall, Enum.NormalId.Back, ctx.teamName .. " MEDIA CENTER", {
-		LabelName = "MediaCenterText",
-		TextColor3 = readable(team.Primary, team.Trim),
-		PixelsPerStud = 8,
-	})
-	for _, side in ipairs({ -1, 1 }) do
-		BuildUtil.Box(
-			ctx,
-			"SideWall",
-			Vector3.new(1, ceilingY - floorY, z1 - z0),
-			Vector3.new(side * (halfX - 0.5), (floorY + ceilingY) / 2, zMid),
-			team.Primary,
-			Enum.Material.SmoothPlastic
-		)
-	end
-
-	-- Field-facing window wall
-	local frontZ = z0 + 0.4
-	BuildUtil.Box(
-		ctx,
-		"Sill",
-		Vector3.new(halfX * 2 - 2, glassBottom - floorY, 0.8),
-		Vector3.new(0, (floorY + glassBottom) / 2, frontZ),
-		team.Secondary,
-		Enum.Material.SmoothPlastic
-	)
-	BuildUtil.Box(
-		ctx,
-		"Windows",
-		Vector3.new(halfX * 2 - 2, glassTop - glassBottom, 0.3),
-		Vector3.new(0, (glassBottom + glassTop) / 2, frontZ),
-		C.Glass,
-		Enum.Material.Glass,
-		{ Transparency = 0.4 }
-	)
-	BuildUtil.Box(
-		ctx,
-		"Header",
-		Vector3.new(halfX * 2 - 2, ceilingY - glassTop, 0.8),
-		Vector3.new(0, (glassTop + ceilingY) / 2, frontZ),
-		team.Secondary,
-		Enum.Material.SmoothPlastic
-	)
-	for _, x in ipairs({ -26, -13, 0, 13, 26 }) do
-		BuildUtil.Box(
-			ctx,
-			"Mullion",
-			Vector3.new(0.5, glassTop - glassBottom, 0.5),
-			Vector3.new(x, (glassBottom + glassTop) / 2, frontZ),
-			STEEL,
-			Enum.Material.Metal
-		)
-	end
-
-	-- Roof with an overhang toward the field and the sign on its fascia
-	BuildUtil.Box(
-		ctx,
-		"Roof",
-		Vector3.new(roofHalfX * 2, 0.8, z1 + 1 - roofFront),
-		Vector3.new(0, ceilingY + 0.4, (roofFront + z1 + 1) / 2),
-		C.Concrete,
-		Enum.Material.Concrete
-	)
-	sign(
-		ctx,
-		"PressSign",
-		Vector3.new(roofHalfX * 2, 2.4, 0.4),
-		CFrame.new(0, ceilingY + 0.4, roofFront - 0.2),
-		team.Primary,
-		Enum.NormalId.Front,
-		"PRESS BOX  |  " .. ctx.teamName .. " MEDIA",
-		team.Trim,
+	span(ctx, "FrontGirder", -halfX, halfX, girderBottom, slab1Bottom, zFront, zFront + 2, STEEL, Enum.Material.Metal)
+	local backGirder = span(ctx, "BackGirder", -halfX, halfX, girderBottom, slab1Bottom, zBack - 2, zBack, team.Primary)
+	-- facing the campus: the back walk passes underneath on its way into the home tunnel
+	labels(
+		backGirder,
+		Enum.NormalId.Back,
+		{ { text = "TO THE FIELD", from = 0.36, to = 0.64, top = 0.15, bottom = 0.85 } },
+		readable(team.Primary, team.Trim),
 		16
 	)
 
-	-- Inside: a long desk with monitors (seen through the glass)
-	BuildUtil.Box(ctx, "Desk", Vector3.new(halfX * 2 - 4, 3, 2), Vector3.new(0, floorY + 1.5, z0 + 3), C.Wood, Enum.Material.WoodPlanks)
-	for _, x in ipairs({ -24, -8, 8, 24 }) do
-		BuildUtil.Box(
-			ctx,
-			"Monitor",
-			Vector3.new(3, 2, 0.3),
-			Vector3.new(x, floorY + 4, z0 + 3.4),
-			SCREEN_BLACK,
-			Enum.Material.SmoothPlastic
-		)
+	-- Shell: floor slabs, side walls, back wall and roof
+	span(ctx, "Level1Slab", -wallInner, wallInner, slab1Bottom, floor1, zFront, zBack, C.ConcreteDark, Enum.Material.Concrete)
+	span(ctx, "Level2Slab", -wallInner, wallInner, slab2Bottom, floor2, zFront + 0.8, zBack - 0.8, C.ConcreteDark, Enum.Material.Concrete)
+	for _, side in ipairs({ -1, 1 }) do
+		span(ctx, "SideWall", side * wallInner, side * halfX, slab1Bottom, roofBottom, zFront, zBack, team.Primary)
+	end
+	local backWall = span(ctx, "BackWall", -wallInner, wallInner, floor1, roofBottom, zBack - 0.8, zBack, team.Primary)
+	labels(backWall, Enum.NormalId.Back, {
+		{ text = name .. " MEDIA CENTER", from = 0.08, to = 0.92, top = 0.3, bottom = 0.7 },
+	}, readable(team.Primary, team.Trim), 10)
+	span(ctx, "Roof", -halfX, halfX, roofBottom, roofTop, zFront - 1, zBack, C.Concrete, Enum.Material.Concrete)
+	span(ctx, "RoofFascia", -halfX, halfX, roofBottom - 0.3, roofTop + 0.3, zFront - 1.4, zFront - 1, team.Secondary)
+
+	-- Field-facing window wall: two long glass bands with a team band between the levels
+	span(ctx, "Sill", -wallInner, wallInner, floor1, glass1[1], zFront, zFront + 0.6, team.Secondary)
+	for level, band in ipairs({ glass1, glass2 }) do
+		span(ctx, "Windows" .. level, -wallInner, wallInner, band[1], band[2], zFront + 0.2, zFront + 0.5, C.Glass, Enum.Material.Glass, {
+			Transparency = 0.4,
+		})
+		for _, x in ipairs({ -37.2, -24.8, -12.4, 12.4, 24.8, 37.2 }) do
+			span(ctx, "Mullion", x - 0.25, x + 0.25, band[1], band[2], zFront - 0.1, zFront + 0.6, STEEL, Enum.Material.Metal)
+		end
+	end
+	local band = span(ctx, "LevelBand", -wallInner, wallInner, glass1[2], glass2[1], zFront - 0.2, zFront + 0.6, team.Primary)
+	labels(band, Enum.NormalId.Front, {
+		{ text = name, from = 0.03, to = 0.3, top = 0.12, bottom = 0.88 },
+		{ text = name .. " MEDIA", from = 0.36, to = 0.64, top = 0.12, bottom = 0.88 },
+		{ text = name, from = 0.7, to = 0.97, top = 0.12, bottom = 0.88 },
+	}, readable(team.Primary, team.Trim), 16)
+
+	-- Inside: a long press desk with monitors on each level, and ceiling lights
+	for level, floorY in ipairs({ floor1, floor2 }) do
+		local ceiling = level == 1 and slab2Bottom or roofBottom
+		span(ctx, "PressDesk", -40, 40, floorY, floorY + 2.8, zFront + 1.3, zFront + 3.3, C.Wood, Enum.Material.WoodPlanks)
+		for _, x in ipairs({ -26, 0, 26 }) do
+			span(ctx, "Monitor", x - 1.6, x + 1.6, floorY + 2.8, floorY + 4.8, zFront + 2.6, zFront + 2.9, SCREEN_BLACK)
+		end
+		span(ctx, "CeilingLight", -38, 38, ceiling - 0.2, ceiling, zFront + 5, zFront + 6.2, WARM_WHITE, Enum.Material.Neon, GLOW)
 	end
 
-	-- Roof gear (behind the canopy's rear edge): broadcast dish + antenna
-	local roofTop = ceilingY + 0.8
-	local dishBase = Vector3.new(28, roofTop, z1 - 1.5)
-	BuildUtil.Cylinder(ctx, {
-		Name = "DishStand",
-		Position = dishBase + Vector3.new(0, 0.8, 0),
-		Height = 1.6,
-		Diameter = 0.6,
-		Axis = "Y",
-		Color = STEEL,
-		Material = Enum.Material.Metal,
-	})
-	local dishCentre = dishBase + Vector3.new(0, 2.6, 0)
-	BuildUtil.Part(ctx, {
-		Name = "Dish",
-		Shape = Enum.PartType.Cylinder,
-		Size = Vector3.new(0.4, 4, 4),
-		-- cylinder axis (local X) aimed up toward the field
-		CFrame = CFrame.lookAt(dishCentre, dishCentre + Vector3.new(0, 1, -1)) * CFrame.Angles(0, math.rad(90), 0),
-		Color = C.Line,
-		Material = Enum.Material.SmoothPlastic,
-	})
-	BuildUtil.Cylinder(ctx, {
-		Name = "Antenna",
-		Position = Vector3.new(-28, roofTop + 3.5, z1 - 1.5),
-		Height = 7,
-		Diameter = 0.3,
-		Axis = "Y",
-		Color = C.Metal,
-		Material = Enum.Material.Metal,
-	})
+	-- Roof: big "PRESS BOX" sign, TV camera platforms on the front corners, antennas + a dish
+	local roofSign = span(ctx, "PressBoxSign", -30, 30, roofTop, roofTop + 4.3, zFront - 0.2, zFront + 0.4, team.Secondary)
+	labels(roofSign, Enum.NormalId.Front, { { text = "PRESS BOX", from = 0.04, to = 0.96 } }, readable(team.Secondary, team.Primary), 12)
+	labels(
+		roofSign,
+		Enum.NormalId.Back,
+		{ { text = name .. " PRESS BOX", from = 0.04, to = 0.96 } },
+		readable(team.Secondary, team.Primary),
+		12
+	)
+	for _, side in ipairs({ -1, 1 }) do
+		local cx = side * 37.5
+		span(ctx, "CameraPlatform", cx - 4, cx + 4, roofTop, roofTop + 0.4, zFront - 0.8, zFront + 4.2, STEEL, Enum.Material.DiamondPlate)
+		span(ctx, "PlatformRail", cx - 4, cx + 4, roofTop + 0.4, roofTop + 1.6, zFront - 0.8, zFront - 0.6, C.Metal, Enum.Material.Metal)
+		tvCamera(ctx, Vector3.new(cx, 0, zFront + 1.4), roofTop + 0.4, Vector3.new(-side * 0.25, 0, -1).Unit)
+		post(ctx, "Antenna", side * 41, zBack - 2, roofTop, 47.9, 0.3, C.Metal)
+	end
+	satelliteDish(ctx, Vector3.new(22, roofTop, zBack - 5), 3.4, Vector3.new(0, 1, -1), C)
+	span(ctx, "AirHandler", -26, -18, roofTop, roofTop + 2, zBack - 7, zBack - 3, C.Metal, Enum.Material.Metal)
 end
 
 ---------------------------------------------------------------------------------------------
@@ -731,18 +717,9 @@ function Features.suites(ctx)
 			C.Concrete,
 			Enum.Material.Concrete
 		)
-		sign(
-			section,
-			"SuiteBackSign",
-			Vector3.new(34, 3.2, 0.3),
-			-- centred between the canopy masts at |x| = 28 and 67 so they never hide it
-			CFrame.new(side * 47.5, floorY + 5, zBack - 0.15),
-			team.Primary,
-			Enum.NormalId.Front,
-			"LUXURY SUITES",
-			team.Trim,
-			16
-		)
+		local backSign =
+			span(section, "SuiteBackSign", side * 47.5 - 17, side * 47.5 + 17, floorY + 3.4, floorY + 6.6, zBack - 0.3, zBack, team.Primary)
+		labels(backSign, Enum.NormalId.Front, { { text = "LUXURY SUITES", from = 0, to = 1 } }, readable(team.Primary, team.Trim), 16)
 		for _, x in ipairs({ inner + 0.4, outer - 0.4 }) do
 			BuildUtil.Box(
 				section,
@@ -782,15 +759,19 @@ function Features.suites(ctx)
 			Enum.Material.Glass,
 			{ Transparency = 0.35 }
 		)
-		sign(
+		local header = BuildUtil.Box(
 			section,
 			"SuiteHeader",
 			Vector3.new(between, ceilingY - glassTop, 0.6),
-			CFrame.new(cx, (glassTop + ceilingY) / 2, frontZ),
+			Vector3.new(cx, (glassTop + ceilingY) / 2, frontZ),
 			team.Secondary,
+			Enum.Material.SmoothPlastic
+		)
+		labels(
+			header,
 			Enum.NormalId.Back,
-			ctx.teamName .. " CLUB SUITES",
-			team.Primary,
+			{ { text = ctx.teamName .. " CLUB SUITES", from = 0, to = 1 } },
+			readable(team.Secondary, team.Primary),
 			16
 		)
 
@@ -829,147 +810,392 @@ function Features.suites(ctx)
 			Vector3.new(cx, ceilingY - 0.1, zMid),
 			WARM_WHITE,
 			Enum.Material.Neon,
-			{ CanCollide = false, CastShadow = false }
+			GLOW
 		)
 	end
 end
 
 ---------------------------------------------------------------------------------------------
--- Canopy roofs over the sideline upper decks
+-- TV broadcast booth (bridging the front players' tunnel on top of the visitor upper deck)
 ---------------------------------------------------------------------------------------------
 
-local FIN_HEIGHT = 5
-local GLASS_DEPTH = 10
-
---[[
-	One cantilevered roof. Built in "roof space": a frame at the rear edge (x = 0) looking at the
-	leading edge, so local -Z runs toward the field and the panel rises slightly toward it.
-	spec:
-	  rear, front   plot-local points (x = 0) on the panel's centre line at the rear / leading edge
-	  halfWidth     half the roof length along X
-	  masts         world X of the masts at the rear edge
-	  fins          roof-space X of the tapered fins on top of the panel (symmetric lists)
-	  braceY        optional: height on the masts where knee braces start (to the panel underside)
-	  text          sign on the leading-edge fascia (faces the field)
-]]
-local function canopyRoof(ctx, spec)
+function Features.broadcast_booth(ctx)
+	local L = ctx.config.Layout
 	local C = ctx.config.Colors
 	local team = ctx.colors
-	local frame = CFrame.lookAt(spec.rear, spec.front)
-	local length = (spec.front - spec.rear).Magnitude
-	local width = spec.halfWidth * 2
-	local metalLength = length - GLASS_DEPTH
-	local function at(x, y, d)
-		return frame * CFrame.new(x, y, -d)
+	local name = ctx.teamName
+
+	-- Footprint X[-22, 22], Z[-84, -68]. The back wall stands just inside the top row's seat strip
+	-- and glass rail (z -83..-82); the slab rests on the top row (y 26) and cantilevers over
+	-- rows 9-11 toward the field. Nothing comes below y 20 and nothing at all is placed in the
+	-- tunnel lane |x| < 14 below the slab.
+	local halfX = L.TunnelHalfWidth + 8 -- 22
+	local zBack = L.FrontUpperOuterZ + 1.2 -- -81.8
+	local zFront = L.FrontUpperOuterZ + 14.5 -- -68.5: glass front, facing the field (+Z)
+	local slabBottom = L.UpperTopHeight + 0.05 -- 26.05
+	local floorY = slabBottom + 1.2 -- 27.25
+	local roofBottom = floorY + 8 -- 35.25
+	local roofTop = roofBottom + 0.8 -- 36.05
+	local glassBottom, glassTop = floorY + 1, roofBottom - 2.65
+	local wallInner = halfX - 0.8
+	local postX = L.TunnelHalfWidth + 4 -- 18
+	local row9Top = L.UpperStartHeight + 2 * L.RowRise -- 20: the row under the front girder
+
+	-- Supports: a deep girder under the front edge on two posts standing on row 9 (outside the
+	-- tunnel lane) and a shallow girder across the middle
+	local frontGirderBottom = slabBottom - 2.5
+	span(ctx, "FrontGirder", -halfX, halfX, frontGirderBottom, slabBottom, zFront - 2, zFront, STEEL, Enum.Material.Metal)
+	span(ctx, "MidGirder", -halfX, halfX, slabBottom - 1.4, slabBottom, zFront - 7.7, zFront - 5.7, STEEL, Enum.Material.Metal)
+	for _, side in ipairs({ -1, 1 }) do
+		span(
+			ctx,
+			"GirderPost",
+			side * postX - 0.5,
+			side * postX + 0.5,
+			row9Top,
+			frontGirderBottom,
+			zFront - 1.5,
+			zFront - 0.5,
+			STEEL,
+			Enum.Material.Metal
+		)
 	end
 
-	-- Panels: metal over the seats, translucent glass along the leading edge
-	BuildUtil.Part(ctx, {
-		Name = "RoofPanel",
-		Size = Vector3.new(width, 0.6, metalLength),
-		CFrame = at(0, 0, metalLength / 2),
-		Color = ROOF_WHITE,
-		Material = Enum.Material.Metal,
-	})
-	BuildUtil.Part(ctx, {
-		Name = "RoofGlass",
-		Size = Vector3.new(width, 0.4, GLASS_DEPTH),
-		CFrame = at(0, 0, metalLength + GLASS_DEPTH / 2),
-		Color = C.Glass,
-		Material = Enum.Material.Glass,
-		Transparency = 0.45,
-	})
+	-- Shell
+	span(ctx, "BoothSlab", -halfX, halfX, slabBottom, floorY, zBack, zFront, team.Primary)
+	local backWall = span(ctx, "BackWall", -halfX, halfX, floorY, roofBottom, zBack, zBack + 0.8, team.Primary)
+	-- facing the plaza; the suites hide the outer ends of the wall, so the text stays central
+	labels(backWall, Enum.NormalId.Front, {
+		{ text = name .. " TV", from = 0.2, to = 0.8, top = 0.08, bottom = 0.5 },
+		{ text = "BROADCAST CENTER", from = 0.2, to = 0.8, top = 0.55, bottom = 0.9 },
+	}, readable(team.Primary, team.Trim), 16)
+	for _, side in ipairs({ -1, 1 }) do
+		local endWall = span(ctx, "EndWall", side * wallInner, side * halfX, floorY, roofBottom, zBack + 0.8, zFront, team.Primary)
+		labels(endWall, side > 0 and Enum.NormalId.Right or Enum.NormalId.Left, {
+			{ text = "TV", from = 0.15, to = 0.85, top = 0.1, bottom = 0.9 },
+		}, readable(team.Primary, team.Trim), 12)
+	end
+	span(ctx, "Roof", -halfX, halfX, roofBottom, roofTop, zBack, zFront + 0.5, C.Concrete, Enum.Material.Concrete)
 
-	-- Leading edge: team fascia, centre sign and a light strip underneath
-	BuildUtil.Part(ctx, {
-		Name = "Fascia",
-		Size = Vector3.new(width + 1, 2.6, 0.5),
-		CFrame = at(0, -0.7, length + 0.25),
-		Color = team.Primary,
-		Material = Enum.Material.SmoothPlastic,
+	-- Field-facing glass front with a header sign
+	span(ctx, "Sill", -wallInner, wallInner, floorY, glassBottom, zFront - 0.6, zFront, team.Secondary)
+	span(ctx, "Glass", -wallInner, wallInner, glassBottom, glassTop, zFront - 0.45, zFront - 0.15, C.Glass, Enum.Material.Glass, {
+		Transparency = 0.35,
 	})
-	sign(
-		ctx,
-		"CanopySign",
-		Vector3.new(80, 2.2, 0.2),
-		at(0, -0.7, length + 0.6),
-		team.Secondary,
-		Enum.NormalId.Front,
-		spec.text,
-		team.Primary,
-		16
-	)
-	BuildUtil.Part(ctx, {
-		Name = "CanopyLightStrip",
-		Size = Vector3.new(width - 4, 0.25, 0.8),
-		CFrame = at(0, -0.35, length - 1.5),
-		Color = WARM_WHITE,
-		Material = Enum.Material.Neon,
-		CanCollide = false,
-		CastShadow = false,
-	})
+	for _, x in ipairs({ -10.5, 0, 10.5 }) do
+		span(ctx, "Mullion", x - 0.25, x + 0.25, glassBottom, glassTop, zFront - 0.6, zFront, STEEL, Enum.Material.Metal)
+	end
+	local header = span(ctx, "Header", -wallInner, wallInner, glassTop, roofBottom, zFront - 0.6, zFront, team.Secondary)
+	labels(header, Enum.NormalId.Back, {
+		{ text = name .. " TV  -  BROADCAST BOOTH", from = 0.03, to = 0.97, top = 0.1, bottom = 0.9 },
+	}, readable(team.Secondary, team.Primary), 16)
 
-	-- Structure: rear spine beam, tapered fins on top, masts down to the ground
-	BuildUtil.Part(ctx, {
-		Name = "Spine",
-		Size = Vector3.new(width, 2.2, 2.2),
-		CFrame = at(0, -1.4, 1.1),
+	-- Inside: commentary desk with monitors, a studio camera at the glass and a ceiling light
+	span(ctx, "CommentaryDesk", -16, 16, floorY, floorY + 2.8, zFront - 4, zFront - 2, C.Wood, Enum.Material.WoodPlanks)
+	for _, x in ipairs({ -8, 8 }) do
+		span(ctx, "Monitor", x - 1.6, x + 1.6, floorY + 2.8, floorY + 4.6, zFront - 3.2, zFront - 2.9, SCREEN_BLACK)
+	end
+	tvCamera(ctx, Vector3.new(-18.5, 0, zFront - 2.7), floorY, Vector3.new(0, 0, 1)) -- lens stops short of the glass
+	span(ctx, "CeilingLight", -18, 18, roofBottom - 0.2, roofBottom, zFront - 7, zFront - 6, WARM_WHITE, Enum.Material.Neon, GLOW)
+
+	-- Roof: "ON AIR" box facing the field, a camera, a satellite dish and an antenna (top <= 39)
+	local onAir = span(ctx, "OnAirSign", -5, 5, roofTop, roofTop + 2.2, zFront - 1.2, zFront - 0.6, CAMERA_BLACK)
+	BuildUtil.SurfaceText(onAir, Enum.NormalId.Back, "ON AIR", {
+		LabelName = "OnAirText",
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		BackgroundColor3 = ON_AIR_RED,
+		BackgroundTransparency = 0,
+		LightInfluence = 0,
+		PixelsPerStud = 20,
+	})
+	tvCamera(ctx, Vector3.new(12, 0, zFront - 2.5), roofTop, Vector3.new(0, 0, 1))
+	satelliteDish(ctx, Vector3.new(-12, roofTop, zBack + 4.5), 3, Vector3.new(0, 1, -1), C)
+	post(ctx, "Antenna", 18, zBack + 2, roofTop, 38.9, 0.25, C.Metal)
+end
+
+---------------------------------------------------------------------------------------------
+-- Canopy: one ring roof over the whole upper ring
+---------------------------------------------------------------------------------------------
+
+--[[
+	The roof is a flat band around the bowl: its outer edge is the upper ring's outer edge,
+	its inner edge is RING_DEPTH studs further in (above the back half of the lower bowl), so the
+	middle above the field stays open. The outer 24 studs are white metal, the inner strip glass.
+	It is carried by columns on the upper decks' top row, each topped by a tapered rib that hangs
+	under the deck and cantilevers out to the inner edge. Nothing reaches the ground.
+	At both ends the outer part of the roof is notched out in front of the scoreboard / jumbotron
+	(and the fascia is slimmer there), so the boards can be seen whole from the field and stands.
+	Heights: ribs 46.8..52.8, deck 52.8..53.6, fascia + outer band 50.6..54 (52.4..54 at the notch).
+]]
+local RING_DEPTH = 36
+local METAL_DEPTH = 24
+local DECK_BOTTOM = 52.8
+local DECK_THICKNESS = 0.8
+local RIB_DEPTH = 6
+local BAND_BOTTOM = 50.6
+local BAND_TOP = 54
+local COLUMN_INSET = 2.5 -- column centres sit this far inside the outer edge (clear of the rail)
+-- The scoreboard / jumbotron stand just outside the ends (z 0..60). A full-depth roof there would
+-- hide their upper half from the field, so the ends keep only the inner NOTCH_DEPTH studs of roof
+-- in front of them (a notch in the outer edge, NOTCH_HALF studs either side of the field centre).
+local NOTCH_DEPTH = 18
+local NOTCH_HALF = 34
+local NOTCH_BAND_BOTTOM = 52.4 -- slimmer edge band along the notch (keeps the sight lines open)
+
+-- A tapered rib under the deck from `outerPoint` (deepest, at the column) to `innerPoint`.
+-- Points are plot-local x/z (their Y is ignored). Returns the rib's length.
+local function roofRib(ctx, outerPoint, innerPoint)
+	local flat = Vector3.new(innerPoint.X - outerPoint.X, 0, innerPoint.Z - outerPoint.Z)
+	local length = flat.Magnitude
+	local centre = Vector3.new((outerPoint.X + innerPoint.X) / 2, DECK_BOTTOM - RIB_DEPTH / 2, (outerPoint.Z + innerPoint.Z) / 2)
+	BuildUtil.Wedge(ctx, {
+		Name = "RoofRib",
+		Size = Vector3.new(1.2, RIB_DEPTH, length),
+		-- the wedge's tall face is at local +Z (outer end); turned upside down so the flat face
+		-- is against the deck and the sloped face rises toward the field
+		CFrame = CFrame.lookAt(centre, centre + flat) * CFrame.Angles(0, 0, math.pi),
 		Color = STEEL,
 		Material = Enum.Material.Metal,
 	})
-	for _, x in ipairs(spec.fins) do
-		-- wedge: tall face at local +Z (the rear), slope runs down toward the field
-		BuildUtil.Wedge(ctx, {
-			Name = "Fin",
-			Size = Vector3.new(1.2, FIN_HEIGHT, metalLength),
-			CFrame = at(x, 0.3 + FIN_HEIGHT / 2, metalLength / 2),
-			Color = team.Primary,
-			Material = Enum.Material.SmoothPlastic,
-		})
-	end
-	local mastTop = at(0, -2.5, 1.1).Position
-	for _, x in ipairs(spec.masts) do
-		local foot = Vector3.new(x, 0, mastTop.Z)
-		BuildUtil.Block(ctx, "MastFooting", Vector3.new(3, 0.6, 3), foot, C.ConcreteDark, Enum.Material.Concrete)
-		BuildUtil.Block(ctx, "Mast", Vector3.new(2.2, mastTop.Y + 0.6, 2.2), foot, STEEL, Enum.Material.Metal)
-		if spec.braceY then
-			local reach = at(0, -0.3, spec.braceDistance).Position
-			strut(ctx, "KneeBrace", Vector3.new(x, spec.braceY, mastTop.Z), Vector3.new(x, reach.Y, reach.Z), 1.2, STEEL)
-		end
-	end
+	return length
+end
+
+-- A column on the top row at `column` (x/z) holding up the rib that starts at `outerPoint`.
+local function roofColumn(ctx, column, outerPoint, ribLength, baseY)
+	local fromOuter = Vector3.new(column.X - outerPoint.X, 0, column.Z - outerPoint.Z).Magnitude
+	local ribBottom = DECK_BOTTOM - RIB_DEPTH * (1 - fromOuter / ribLength)
+	post(ctx, "RoofColumn", column.X, column.Z, baseY, ribBottom + 0.3, 2, STEEL)
+end
+
+-- One FloodPanel bar hanging just inside the roof's inner edge, tilted down toward the field.
+-- `edge` is the point on the inner edge, `inward` the horizontal unit vector toward the field.
+local function roofLightBar(ctx, edge, inward, length)
+	local centre = Vector3.new(edge.X, BAND_BOTTOM - 0.7, edge.Z) + inward * 1
+	local panel = BuildUtil.Part(ctx, {
+		Name = "FloodPanel",
+		Size = Vector3.new(length, 1.2, 0.4),
+		CFrame = CFrame.lookAt(centre, centre + inward) * CFrame.Angles(math.rad(-40), 0, 0),
+		Color = WARM_WHITE,
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		CastShadow = false,
+	})
+	BuildUtil.Light(panel, "SpotLight", {
+		Name = "FloodLight",
+		Enabled = false,
+		Face = Enum.NormalId.Front,
+		Range = 60,
+		Angle = 100,
+		Brightness = 3,
+		Color = WARM_WHITE,
+	})
 end
 
 function Features.canopy(ctx)
 	local L = ctx.config.Layout
+	local C = ctx.config.Colors
+	local team = ctx.colors
 	local name = ctx.teamName
-	local halfWidth = L.SidelineStandsHalfLength + 5
 
-	-- Back (home) roof: masts behind the upper deck, clear of the press box (|x| <= 40),
-	-- the concourse gates (x = +-80) and the flags on the deck (x = +-70, +-110)
-	local backCtx = BuildUtil.Child(ctx, "BackRoof")
-	canopyRoof(backCtx, {
-		rear = Vector3.new(0, 40, L.BackUpperOuterZ + 7),
-		front = Vector3.new(0, 44, L.BackLowerOuterZ - 14),
-		halfWidth = halfWidth,
-		masts = { -100, -55, 55, 100 },
-		fins = { -124, -100, -55, 0, 55, 100, 124 },
-		-- high enough that the braces clear the heads of fans standing on the deck's top row (y 26)
-		braceY = L.UpperTopHeight + 5,
-		braceDistance = 22,
-		text = "HOME OF THE " .. name,
-	})
+	local outerX = L.EndUpperOuterX -- 183
+	local frontZ = L.FrontUpperOuterZ -- -83
+	local backZ = L.BackUpperOuterZ -- 143
+	local innerX = outerX - RING_DEPTH -- 147
+	local innerFrontZ = frontZ + RING_DEPTH -- -47
+	local innerBackZ = backZ - RING_DEPTH -- 107
+	local seamX = outerX - METAL_DEPTH -- 159: metal / glass seam
+	local seamFrontZ = frontZ + METAL_DEPTH -- -59
+	local seamBackZ = backZ - METAL_DEPTH -- 119
+	local deckTop = DECK_BOTTOM + DECK_THICKNESS
+	local topRow = L.UpperTopHeight -- 26: the columns stand on the top row of the upper ring
+	local glassExtra = { Transparency = 0.45 }
 
-	-- Front (visitor) roof: masts in the plaza just behind the suites, clear of the walkway,
-	-- the plaza gates (x = +-41, +-93) and the parking lot (x <= -100)
-	local frontCtx = BuildUtil.Child(ctx, "FrontRoof")
-	canopyRoof(frontCtx, {
-		rear = Vector3.new(0, 37.5, L.FrontUpperOuterZ - 16),
-		front = Vector3.new(0, 42, L.FrontLowerOuterZ + 1),
-		halfWidth = halfWidth,
-		masts = { -98.5, -67, -28, 28, 67, 98.5 },
-		fins = { -124, -98.5, -67, -28, 0, 28, 67, 98.5, 124 },
-		text = "GO " .. name .. "!",
-	})
+	-- Deck: two full-width metal bands (front / back, including the corners) and two end bands
+	-- between them, then the inner glass strip the same way
+	local deck = BuildUtil.Child(ctx, "Deck")
+	-- the metal stops half a stud inside the outer band so its edges are never coplanar with it
+	local deckX = outerX - 0.5
+	span(deck, "RoofPanel", -deckX, deckX, DECK_BOTTOM, deckTop, frontZ + 0.5, seamFrontZ, ROOF_WHITE, Enum.Material.Metal)
+	span(deck, "RoofPanel", -deckX, deckX, DECK_BOTTOM, deckTop, seamBackZ, backZ - 0.5, ROOF_WHITE, Enum.Material.Metal)
+	span(
+		deck,
+		"RoofGlass",
+		-innerX,
+		innerX,
+		DECK_BOTTOM + 0.1,
+		deckTop - 0.1,
+		seamFrontZ,
+		innerFrontZ,
+		C.Glass,
+		Enum.Material.Glass,
+		glassExtra
+	)
+	span(
+		deck,
+		"RoofGlass",
+		-innerX,
+		innerX,
+		DECK_BOTTOM + 0.1,
+		deckTop - 0.1,
+		innerBackZ,
+		seamBackZ,
+		C.Glass,
+		Enum.Material.Glass,
+		glassExtra
+	)
+	-- end metal: full depth either side of the notch, a narrow strip in front of the boards
+	local notchX = innerX + NOTCH_DEPTH -- 165: the notch runs from here to the outer edge
+	local notchZ0, notchZ1 = L.FieldCenterZ - NOTCH_HALF, L.FieldCenterZ + NOTCH_HALF -- -4 .. 64
+	for _, side in ipairs({ -1, 1 }) do
+		span(
+			deck,
+			"RoofPanel",
+			side * seamX,
+			side * deckX,
+			DECK_BOTTOM,
+			deckTop,
+			seamFrontZ,
+			notchZ0 - 0.5,
+			ROOF_WHITE,
+			Enum.Material.Metal
+		)
+		span(deck, "RoofPanel", side * seamX, side * deckX, DECK_BOTTOM, deckTop, notchZ1 + 0.5, seamBackZ, ROOF_WHITE, Enum.Material.Metal)
+		span(
+			deck,
+			"RoofPanel",
+			side * seamX,
+			side * (notchX - 0.5),
+			DECK_BOTTOM,
+			deckTop,
+			notchZ0 - 0.5,
+			notchZ1 + 0.5,
+			ROOF_WHITE,
+			Enum.Material.Metal
+		)
+		span(
+			deck,
+			"RoofGlass",
+			side * innerX,
+			side * seamX,
+			DECK_BOTTOM + 0.1,
+			deckTop - 0.1,
+			seamFrontZ,
+			seamBackZ,
+			C.Glass,
+			Enum.Material.Glass,
+			glassExtra
+		)
+	end
+
+	-- Team-coloured band around the outer edge (lettered toward the plaza and the campus)
+	local edge = BuildUtil.Child(ctx, "Edges")
+	local outerFront = span(edge, "OuterBand", -outerX, outerX, BAND_BOTTOM, BAND_TOP, frontZ, frontZ + 1, team.Primary)
+	labels(outerFront, Enum.NormalId.Front, {
+		{ text = name .. " STADIUM", from = 0.32, to = 0.68, top = 0.08, bottom = 0.92 },
+	}, readable(team.Primary, team.Trim), 10)
+	local outerBack = span(edge, "OuterBand", -outerX, outerX, BAND_BOTTOM, BAND_TOP, backZ - 1, backZ, team.Primary)
+	labels(outerBack, Enum.NormalId.Back, {
+		{ text = "HOME OF THE " .. name, from = 0.3, to = 0.7, top = 0.08, bottom = 0.92 },
+	}, readable(team.Primary, team.Trim), 10)
+	for _, side in ipairs({ -1, 1 }) do
+		span(edge, "OuterBand", side * (outerX - 1), side * outerX, BAND_BOTTOM, BAND_TOP, frontZ + 1, notchZ0, team.Primary)
+		span(edge, "OuterBand", side * (outerX - 1), side * outerX, BAND_BOTTOM, BAND_TOP, notchZ1, backZ - 1, team.Primary)
+		-- the band follows the notch round: two returns and a slim edge along its inner side
+		span(edge, "OuterBand", side * notchX, side * (outerX - 1), BAND_BOTTOM, BAND_TOP, notchZ0 - 1, notchZ0, team.Primary)
+		span(edge, "OuterBand", side * notchX, side * (outerX - 1), BAND_BOTTOM, BAND_TOP, notchZ1, notchZ1 + 1, team.Primary)
+		span(edge, "NotchBand", side * (notchX - 1), side * notchX, NOTCH_BAND_BOTTOM, BAND_TOP, notchZ0 - 1, notchZ1 + 1, team.Primary)
+	end
+
+	-- Fascia around the inner edge, lettered toward the field
+	local textColor = readable(team.Primary, team.Trim)
+	local frontFascia =
+		span(edge, "Fascia", -innerX - 0.4, innerX + 0.4, BAND_BOTTOM, BAND_TOP, innerFrontZ - 0.4, innerFrontZ + 0.4, team.Primary)
+	labels(frontFascia, Enum.NormalId.Back, {
+		{ text = "GO " .. name .. "!", from = 0.06, to = 0.3, top = 0.1, bottom = 0.9 },
+		{ text = name .. " STADIUM", from = 0.37, to = 0.63, top = 0.1, bottom = 0.9 },
+		{ text = "DE-FENSE!", from = 0.7, to = 0.94, top = 0.1, bottom = 0.9 },
+	}, textColor, 10)
+	local backFascia =
+		span(edge, "Fascia", -innerX - 0.4, innerX + 0.4, BAND_BOTTOM, BAND_TOP, innerBackZ - 0.4, innerBackZ + 0.4, team.Primary)
+	labels(backFascia, Enum.NormalId.Front, {
+		{ text = name, from = 0.06, to = 0.3, top = 0.1, bottom = 0.9 },
+		{ text = "HOME OF THE " .. name, from = 0.35, to = 0.65, top = 0.1, bottom = 0.9 },
+		{ text = name, from = 0.7, to = 0.94, top = 0.1, bottom = 0.9 },
+	}, textColor, 10)
+	-- End fascias: full height either side of the boards, slim in front of them (the notch range)
+	-- so the fans in the upper ring see the top of the scoreboard / jumbotron over it. Seen from
+	-- the field the -Z piece is on the left at the east end and on the right at the west end.
+	for _, side in ipairs({ -1, 1 }) do
+		local face = side > 0 and Enum.NormalId.Left or Enum.NormalId.Right
+		local words = side > 0 and { "TOUCHDOWN", name .. "!" } or { name .. "!", "LET'S GO" }
+		for index, zs in ipairs({ { innerFrontZ + 0.4, notchZ0 }, { notchZ1, innerBackZ - 0.4 } }) do
+			local piece =
+				span(edge, "Fascia", side * (innerX - 0.4), side * (innerX + 0.4), BAND_BOTTOM, BAND_TOP, zs[1], zs[2], team.Primary)
+			labels(piece, face, { { text = words[index], from = 0.08, to = 0.92, top = 0.1, bottom = 0.9 } }, textColor, 10)
+		end
+		span(edge, "Fascia", side * (innerX - 0.4), side * (innerX + 0.4), NOTCH_BAND_BOTTOM, BAND_TOP, notchZ0, notchZ1, team.Primary)
+	end
+
+	-- Columns + ribs. Sideline columns avoid the broadcast booth (|x| <= 22) and the press box
+	-- (|x| <= 44); end columns avoid the scoreboard / jumbotron sight lines (z 0..60).
+	local structure = BuildUtil.Child(ctx, "Structure")
+	local stripeTop = deckTop + 0.2
+	-- a team-coloured stripe on top of the deck above every rib (gives the roof its rhythm)
+	local function stripe(outerPoint, innerPoint)
+		local flat = Vector3.new(innerPoint.X - outerPoint.X, 0, innerPoint.Z - outerPoint.Z)
+		local centre = Vector3.new((outerPoint.X + innerPoint.X) / 2, deckTop + 0.1, (outerPoint.Z + innerPoint.Z) / 2)
+		BuildUtil.Part(structure, {
+			Name = "RoofStripe",
+			Size = Vector3.new(1.6, stripeTop - deckTop, flat.Magnitude),
+			CFrame = CFrame.lookAt(centre, centre + flat),
+			Color = team.Secondary,
+			Material = Enum.Material.SmoothPlastic,
+			CanCollide = false,
+			CastShadow = false,
+		})
+	end
+	local function bay(column, outerPoint, innerPoint)
+		local length = roofRib(structure, outerPoint, innerPoint)
+		roofColumn(structure, column, outerPoint, length, topRow)
+		stripe(outerPoint, innerPoint)
+	end
+	for _, x in ipairs({ -145, -100, -55, 55, 100, 145 }) do
+		bay(Vector3.new(x, 0, frontZ + COLUMN_INSET), Vector3.new(x, 0, frontZ + 1), Vector3.new(x, 0, innerFrontZ))
+		bay(Vector3.new(x, 0, backZ - COLUMN_INSET), Vector3.new(x, 0, backZ - 1), Vector3.new(x, 0, innerBackZ))
+	end
+	for _, side in ipairs({ -1, 1 }) do
+		for _, z in ipairs({ -30, 90 }) do
+			bay(Vector3.new(side * (outerX - COLUMN_INSET), 0, z), Vector3.new(side * (outerX - 1), 0, z), Vector3.new(side * innerX, 0, z))
+		end
+		-- Corners: a diagonal rib from the outer corner to the inner corner. The corner aisle of the
+		-- upper ring climbs along that diagonal, so instead of one column on top of the stairs
+		-- there are two, one either side of the aisle, reaching straight up to the deck.
+		for _, corner in ipairs({ { frontZ, innerFrontZ, 1 }, { backZ, innerBackZ, -1 } }) do
+			local oz, iz, dz = corner[1], corner[2], corner[3]
+			local outerPoint = Vector3.new(side * (outerX - 1), 0, oz + dz * 1)
+			local innerPoint = Vector3.new(side * innerX, 0, iz)
+			roofRib(structure, outerPoint, innerPoint)
+			stripe(outerPoint, innerPoint)
+			local inset = COLUMN_INSET
+			for _, offset in ipairs({ { inset, 7 }, { 7, inset } }) do
+				local cx, cz = side * (outerX - offset[1]), oz + dz * offset[2]
+				post(structure, "RoofColumn", cx, cz, topRow, DECK_BOTTOM + 0.3, 2, STEEL)
+			end
+		end
+	end
+
+	-- Ring of light bars just inside the inner edge (FloodPanel / FloodLight like the towers)
+	local lightsCtx = BuildUtil.Child(ctx, "RoofLights")
+	for _, x in ipairs({ -110, -40, 40, 110 }) do
+		roofLightBar(lightsCtx, Vector3.new(x, 0, innerFrontZ), Vector3.new(0, 0, 1), 28)
+		roofLightBar(lightsCtx, Vector3.new(x, 0, innerBackZ), Vector3.new(0, 0, -1), 28)
+	end
+	for _, side in ipairs({ -1, 1 }) do
+		-- under the full-height end fascias, either side of the boards
+		for _, z in ipairs({ (innerFrontZ + notchZ0) / 2, (notchZ1 + innerBackZ) / 2 }) do
+			roofLightBar(lightsCtx, Vector3.new(side * innerX, 0, z), Vector3.new(-side, 0, 0), 28)
+		end
+	end
 end
 
 return Features

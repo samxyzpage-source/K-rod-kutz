@@ -1048,7 +1048,7 @@ local function runTests()
 
 	section("Client effects")
 	viewer:SetAttribute("PlotIndex", 2)
-	viewer:SetAttribute("NextGoal", "turf")
+	viewer:SetAttribute("NextGoal", "frontoffice")
 	local okFx, fxErr = pcall(runScript, "StarterPlayer/StarterPlayerScripts/TycoonClient/Effects")
 	check(okFx, "Effects script runs: " .. tostring(fxErr))
 	task.wait(0.4)

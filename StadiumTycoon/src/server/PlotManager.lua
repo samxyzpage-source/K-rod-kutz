@@ -151,18 +151,22 @@ local function updateScoreboard(plot)
 	end
 end
 
+-- Flood lights live on the light towers and under the canopy roof.
+local LIGHT_ITEMS = { "lights", "canopy" }
+
 local function applyLights(plot)
-	local model = plot.ItemModels.lights
-	if not model then
-		return
-	end
-	for _, descendant in ipairs(model:GetDescendants()) do
-		if descendant:IsA("SpotLight") or descendant:IsA("PointLight") or descendant:IsA("SurfaceLight") then
-			if descendant.Name == "FloodLight" then
-				descendant.Enabled = isNight
+	for _, itemId in ipairs(LIGHT_ITEMS) do
+		local model = plot.ItemModels[itemId]
+		if model then
+			for _, descendant in ipairs(model:GetDescendants()) do
+				if descendant:IsA("SpotLight") or descendant:IsA("PointLight") or descendant:IsA("SurfaceLight") then
+					if descendant.Name == "FloodLight" then
+						descendant.Enabled = isNight
+					end
+				elseif descendant:IsA("BasePart") and descendant.Name == "FloodPanel" then
+					descendant.Material = isNight and Enum.Material.Neon or Enum.Material.SmoothPlastic
+				end
 			end
-		elseif descendant:IsA("BasePart") and descendant.Name == "FloodPanel" then
-			descendant.Material = isNight and Enum.Material.Neon or Enum.Material.SmoothPlastic
 		end
 	end
 end
@@ -273,7 +277,7 @@ local function buildItem(plot, item, animate)
 		end
 	end
 
-	if item.Id == "lights" then
+	if item.Id == "lights" or item.Id == "canopy" then
 		applyLights(plot)
 	elseif item.Id == "scoreboard" then
 		updateScoreboard(plot)
