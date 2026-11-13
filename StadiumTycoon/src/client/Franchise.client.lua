@@ -11,6 +11,7 @@
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
@@ -45,12 +46,12 @@ local function corner(radius)
 	return create("UICorner", { CornerRadius = UDim.new(0, radius) })
 end
 
-local function label(props)
+local function label(props, children)
 	props.BackgroundTransparency = props.BackgroundTransparency or 1
 	props.Font = props.Font or Enum.Font.GothamBold
 	props.TextColor3 = props.TextColor3 or WHITE
 	props.TextScaled = true
-	return create("TextLabel", props)
+	return create("TextLabel", props, children)
 end
 
 local function button(props, children)
@@ -79,6 +80,13 @@ local screen = create("ScreenGui", {
 	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	Parent = player:WaitForChild("PlayerGui"),
 })
+
+local function screenSize()
+	local ok, size = pcall(function()
+		return screen.AbsoluteSize
+	end)
+	return ok and size or Vector2.new(0, 0)
+end
 
 ---------------------------------------------------------------------------------------------
 -- Button bar (right side)
@@ -152,16 +160,39 @@ end)
 ---------------------------------------------------------------------------------------------
 -- Quest tracker (left side)
 ---------------------------------------------------------------------------------------------
+local questScale = create("UIScale", { Scale = 1 })
 local questPanel = create("Frame", {
 	Name = "Quests",
 	AnchorPoint = Vector2.new(0, 0.5),
 	Position = UDim2.new(0, 10, 0.5, 0),
-	Size = UDim2.new(0, 250, 0, 200),
+	Size = UDim2.new(0, 260, 0, 230),
 	BackgroundColor3 = DARK,
 	BackgroundTransparency = 0.25,
 	Visible = false,
 	Parent = screen,
-}, { corner(12), create("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 8) }) })
+}, {
+	corner(12),
+	questScale,
+	create("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 8) }),
+})
+
+-- On short touch screens the middle-left is where the thumbstick lives: move the tracker up
+-- to the top-left corner and shrink it a little.
+local function fitQuestPanel()
+	local size = screenSize()
+	if size.Y <= 0 then
+		return
+	end
+	if UserInputService.TouchEnabled and size.Y < 500 then
+		questPanel.AnchorPoint = Vector2.new(0, 0)
+		questPanel.Position = UDim2.new(0, 8, 0, 8)
+		questScale.Scale = 0.75
+	else
+		questPanel.AnchorPoint = Vector2.new(0, 0.5)
+		questPanel.Position = UDim2.new(0, 10, 0.5, 0)
+		questScale.Scale = 1
+	end
+end
 local questTitle = label({
 	Name = "Title",
 	Size = UDim2.new(1, 0, 0, 22),
@@ -174,15 +205,23 @@ local questRows = {}
 for index = 1, 3 do
 	local row = create("Frame", {
 		Name = "Quest" .. index,
-		Position = UDim2.new(0, 0, 0, 26 + (index - 1) * 56),
-		Size = UDim2.new(1, 0, 0, 52),
+		Position = UDim2.new(0, 0, 0, 26 + (index - 1) * 66),
+		Size = UDim2.new(1, 0, 0, 62),
 		BackgroundTransparency = 1,
 		Parent = questPanel,
 	})
-	local text = label({ Name = "Text", Size = UDim2.new(1, 0, 0, 20), TextXAlignment = Enum.TextXAlignment.Left, Text = "", Parent = row })
+	local text = label({
+		Name = "Text",
+		Size = UDim2.new(1, 0, 0, 30),
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Bottom,
+		TextWrapped = true,
+		Text = "",
+		Parent = row,
+	}, { create("UITextSizeConstraint", { MaxTextSize = 15, MinTextSize = 9 }) })
 	local track = create("Frame", {
 		Name = "Track",
-		Position = UDim2.new(0, 0, 0, 23),
+		Position = UDim2.new(0, 0, 0, 33),
 		Size = UDim2.new(1, 0, 0, 10),
 		BackgroundColor3 = Color3.fromRGB(60, 64, 75),
 		Parent = row,
@@ -194,7 +233,7 @@ for index = 1, 3 do
 	)
 	local reward = label({
 		Name = "Reward",
-		Position = UDim2.new(0, 0, 0, 35),
+		Position = UDim2.new(0, 0, 0, 45),
 		Size = UDim2.new(1, 0, 0, 15),
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextColor3 = Color3.fromRGB(255, 225, 120),
@@ -232,21 +271,37 @@ end)
 ---------------------------------------------------------------------------------------------
 -- Modal windows
 ---------------------------------------------------------------------------------------------
+-- Windows are laid out at 560 x 470 and scaled down as a whole on small (phone) screens.
+local MODAL_SIZE = Vector2.new(560, 470)
+local modalScales = {}
+local function fitModals()
+	local size = screenSize()
+	if size.X > 0 and size.Y > 0 then
+		local scale = math.min(1, size.X * 0.95 / MODAL_SIZE.X, size.Y * 0.92 / MODAL_SIZE.Y)
+		for _, uiScale in ipairs(modalScales) do
+			uiScale.Scale = scale
+		end
+	end
+end
+
 local function modal(name, title)
+	local fit = create("UIScale", { Scale = 1 })
+	table.insert(modalScales, fit)
 	local frame = create("Frame", {
 		Name = name,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
-		Size = UDim2.new(0.9, 0, 0.8, 0),
+		Size = UDim2.fromOffset(MODAL_SIZE.X, MODAL_SIZE.Y),
 		BackgroundColor3 = DARK,
 		BackgroundTransparency = 0.05,
 		Visible = false,
 		Parent = screen,
 	}, {
 		corner(16),
-		create("UISizeConstraint", { MaxSize = Vector2.new(560, 470) }),
+		fit,
 		create("UIStroke", { Color = GOLD, Thickness = 2 }),
 	})
+	fitModals()
 	label({
 		Name = "Title",
 		Position = UDim2.new(0, 16, 0, 10),
@@ -613,6 +668,11 @@ for _, attribute in ipairs({
 	player:GetAttributeChangedSignal(attribute):Connect(updateRoster)
 end
 player:GetAttributeChangedSignal("PlotIndex"):Connect(onPlotOrTeam)
+fitQuestPanel()
+screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+	fitModals()
+	fitQuestPanel()
+end)
 player:GetAttributeChangedSignal("TeamChosen"):Connect(onPlotOrTeam)
 onPlotOrTeam()
 updateRoster()

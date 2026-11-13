@@ -22,7 +22,8 @@ Config.AttendancePerIncome = 25 -- scoreboard "attendance" = income/sec * this
 
 -- Saving -----------------------------------------------------------------------------------
 Config.SaveEnabled = true
-Config.DataStoreName = "GridironStadiumTycoon_v1"
+-- (v4: every piece is now built in steps with new ids, so V1-V3 test saves are not carried over)
+Config.DataStoreName = "GridironStadiumTycoon_v4"
 Config.AutosaveSeconds = 90
 
 -- World ------------------------------------------------------------------------------------
@@ -108,6 +109,9 @@ Config.KickGame = {
 	PowerPerYard = 0.0105,
 	PowerMax = 0.95,
 	MeterSeconds = 1.6, -- how long one sweep of the aim / power meter takes
+	MinMeterSeconds = 0.8, -- a kick sent back faster than this after the offer is ignored (no bots)
+	RewardCooldownSeconds = 60, -- good kicks pay at most once per minute (the rest are practice)
+	RewardIncomeSecondsPerYard = 0.25, -- reward = yards * 8 + base income * yards * this
 	Spots = {
 		{ Name = "SHORT", Yards = 25, Position = Vector3.new(70, 0, 30) },
 		{ Name = "MEDIUM", Yards = 40, Position = Vector3.new(40, 0, 30) },

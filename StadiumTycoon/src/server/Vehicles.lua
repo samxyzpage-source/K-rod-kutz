@@ -281,6 +281,11 @@ local function spawnCart(plot, index)
 	local home = padCFrame(plot, index)
 	local model = Vehicles.BuildCart(home, plot.Palette, index)
 	model.Parent = folder
+	-- the server simulates parked carts (clients only get a cart while they drive it), so a
+	-- nearby exploiter can't take a parked cart over and fling or delete it
+	pcall(function()
+		model.PrimaryPart:SetNetworkOwner(nil)
+	end)
 	local info = {
 		model = model,
 		seat = model:FindFirstChild("DriverSeat"),
@@ -307,10 +312,20 @@ end
 -- Sends idle carts home and rescues carts that fell off the world. Returns how many moved.
 function Vehicles.Tidy(now)
 	local moved = 0
-	for _, list in pairs(carts) do
-		for _, info in pairs(list) do
-			local chassis = info.model.PrimaryPart
-			if chassis and info.model.Parent then
+	local broken = {} -- carts that were destroyed or lost their chassis: rebuilt below
+	for plot, list in pairs(carts) do
+		for index, info in pairs(list) do
+			-- (pcall: some tools error on reading a destroyed instance; Roblox just returns nil)
+			local alive, chassis = pcall(function()
+				local primary = info.model.PrimaryPart
+				if info.model.Parent ~= nil and primary ~= nil and primary.Parent == info.model then
+					return primary
+				end
+				return nil
+			end)
+			if not alive or not chassis then
+				table.insert(broken, { plot = plot, index = index, info = info })
+			else
 				local position = chassis.CFrame.Position
 				local occupant = info.seat and info.seat.Occupant
 				local occupied = occupant ~= nil and occupant.Parent ~= nil
@@ -323,6 +338,16 @@ function Vehicles.Tidy(now)
 					moved += 1
 				end
 			end
+		end
+	end
+	for _, entry in ipairs(broken) do
+		pcall(function()
+			entry.info.model:Destroy()
+		end)
+		carts[entry.plot][entry.index] = nil
+		if entry.plot.Owner then
+			spawnCart(entry.plot, entry.index)
+			moved += 1
 		end
 	end
 	return moved

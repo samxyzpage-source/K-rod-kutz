@@ -33,6 +33,8 @@ local kickStart = nil
 local spotsByPlot = {} -- [plot] = { [index] = pad }
 local lastKick = {} -- [player] = os.clock()
 local pending = {} -- [player] = spotIndex (the spot they were offered)
+local offeredAt = {} -- [player] = os.clock() when the kick meter was opened
+local lastReward = {} -- [player] = os.clock() of the last paid kick
 
 local function notify(player, message, kind)
 	if notifyRemote and player.Parent then
@@ -65,8 +67,8 @@ function KickGame.Judge(yards, aim, power)
 end
 
 function KickGame.Reward(player, yards)
-	local income = plotManager.GetIncome(player)
-	return math.max(150, math.floor(yards * 8 + income * yards / 2))
+	local income = plotManager.GetBaseIncome(player) -- (no game-day boost)
+	return math.max(150, math.floor(yards * 8 + income * yards * Config.KickGame.RewardIncomeSecondsPerYard))
 end
 
 local function flyBall(plot, spot, aim, power, made)
@@ -114,6 +116,11 @@ local function onAttempt(player, spotIndex, aim, power)
 		return -- only the spot we offered
 	end
 	pending[player] = nil
+	local elapsed = os.clock() - (offeredAt[player] or math.huge)
+	offeredAt[player] = nil
+	if elapsed < Config.KickGame.MinMeterSeconds then
+		return -- nobody can aim and power a kick that fast
+	end
 	if type(aim) ~= "number" or type(power) ~= "number" or aim ~= aim or power ~= power then
 		return
 	end
@@ -135,9 +142,17 @@ local function onAttempt(player, spotIndex, aim, power)
 	local made, reason = KickGame.Judge(spot.Yards, aim, power)
 	flyBall(plot, spot, aim, power, made)
 	if made then
-		local reward = KickGame.Reward(player, spot.Yards)
-		PlayerData.AddCash(player, reward)
-		notify(player, ("IT'S GOOD! %d-yard field goal!  +%s"):format(spot.Yards, Format.MoneyExact(reward)), "success")
+		local now = os.clock()
+		local cooldown = Config.KickGame.RewardCooldownSeconds
+		if not lastReward[player] or now - lastReward[player] >= cooldown then
+			lastReward[player] = now
+			local reward = KickGame.Reward(player, spot.Yards)
+			PlayerData.AddCash(player, reward)
+			notify(player, ("IT'S GOOD! %d-yard field goal!  +%s"):format(spot.Yards, Format.MoneyExact(reward)), "success")
+		else
+			local wait = math.ceil(cooldown - (now - lastReward[player]))
+			notify(player, ("IT'S GOOD! %d yards. (Practice kick - the next reward is in %ds)"):format(spot.Yards, wait), "success")
+		end
 	else
 		notify(player, ("No good - %s! Try again."):format(reason), "error")
 	end
@@ -158,6 +173,7 @@ local function onPadTouched(plot, index, hit)
 	end
 	lastKick[player] = now
 	pending[player] = index
+	offeredAt[player] = now
 	local spot = Config.KickGame.Spots[index]
 	kickStart:FireClient(player, index, spot.Yards, spot.Name)
 end
@@ -249,6 +265,8 @@ function KickGame.Init(manager, remoteFolder, notify, franchiseModule)
 	Players.PlayerRemoving:Connect(function(player)
 		lastKick[player] = nil
 		pending[player] = nil
+		offeredAt[player] = nil
+		lastReward[player] = nil
 	end)
 end
 

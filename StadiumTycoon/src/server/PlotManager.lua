@@ -229,8 +229,13 @@ local function animateIn(model)
 				table.insert(hidden, { descendant, "CanCollide", true })
 				descendant.CanCollide = false
 			end
-		elseif descendant:IsA("LayerCollector") or (descendant:IsA("Light") and descendant.Name ~= "FloodLight") then
-			-- SurfaceGui / BillboardGui / lights (flood lights are handled by the night logic)
+		elseif
+			descendant:IsA("LayerCollector")
+			or descendant:IsA("ProximityPrompt")
+			or (descendant:IsA("Light") and descendant.Name ~= "FloodLight")
+		then
+			-- SurfaceGui / BillboardGui / lights (flood lights are handled by the night logic) /
+			-- prompts (a door opened mid-animation would cancel the fade-in tween)
 			if descendant.Enabled then
 				table.insert(hidden, { descendant, "Enabled", true })
 				descendant.Enabled = false
@@ -982,21 +987,40 @@ function PlotManager.GetIncome(player)
 	return plot and plot.Income * Config.IncomeMultiplier * incomeBoost or 0
 end
 
+-- The player's income per second WITHOUT the game-day boost (for prices and rewards, so they
+-- don't jump when a game day starts or ends).
+function PlotManager.GetBaseIncome(player)
+	local plot = plotByPlayer[player]
+	return plot and plot.Income * Config.IncomeMultiplier or 0
+end
+
 -- Re-colours / re-names a player's whole franchise (rebuilds every owned step).
 function PlotManager.ApplyTeam(player, palette, teamName)
 	local plot = plotByPlayer[player]
 	if not plot then
 		return false
 	end
-	plot.Palette = palette or plot.Palette
-	plot.TeamName = teamName or plot.TeamName
-	plot.ItemsFolder:ClearAllChildren()
+	palette = palette or plot.Palette
+	teamName = teamName or plot.TeamName
+	if palette == plot.Palette and teamName == plot.TeamName then
+		return false -- nothing changes, so don't rebuild
+	end
+	plot.Palette = palette
+	plot.TeamName = teamName
+	-- Build the new pieces into a fresh folder BEFORE removing the old one, so clients receive
+	-- the new floors first (nobody standing in the stands or the press box falls through).
+	local oldFolder = plot.ItemsFolder
+	local newFolder = Instance.new("Folder")
+	newFolder.Name = "Items"
+	newFolder.Parent = plot.Model
+	plot.ItemsFolder = newFolder
 	plot.ItemModels = {}
 	for _, item in ipairs(Items.List) do
 		if plot.Owned[item.Id] then
 			buildItem(plot, item, false)
 		end
 	end
+	oldFolder:Destroy()
 	setGateClaimed(plot, player)
 	updateScoreboard(plot)
 	applyLights(plot)

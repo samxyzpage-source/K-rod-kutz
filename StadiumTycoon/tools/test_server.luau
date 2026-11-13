@@ -817,6 +817,9 @@ local function runTests()
 	check(aliceProfile.Franchise.Team and aliceProfile.Franchise.Team.Palette == 3, "the team choice is saved in the profile")
 	Franchise._onChooseTeam(alice, 2, 2)
 	check(alicePlot.Palette == Config.TeamColors[3], "changing the team again is rate limited")
+	check(lastNotification(alice).message:find("repainted") ~= nil, "told to wait before repainting again")
+	Franchise._onChooseTeam(alice, 3, 5)
+	check(lastNotification(alice).message:find("already") ~= nil, "picking the same team again changes nothing")
 	local cashBeforeBonus = PlayerData.GetCash(alice)
 	Franchise._onClaimBonus(alice)
 	check(
@@ -926,6 +929,7 @@ local function runTests()
 		"carts have drive constraints"
 	)
 	check(CollectionServiceMock:HasTag(cart, "TycoonCart"), "carts are tagged for the drive controller")
+	check(chassis and networkOwners[instanceKey(chassis)] == false, "parked carts are simulated by the server")
 	check(chassis and chassis.Color == Config.TeamColors[3].Primary, "carts come in the team colours")
 	Vehicles.Recolor(cart, Config.TeamColors[1])
 	check(chassis and chassis.Color == Config.TeamColors[1].Primary, "carts can be repainted for a new team")
@@ -958,6 +962,10 @@ local function runTests()
 	info1.lastUsed = -1000
 	local moved = Vehicles.Tidy(os.clock())
 	check(moved >= 1 and (cart.PrimaryPart.CFrame.Position - info1.home.Position).Magnitude < 5, "abandoned carts drive themselves home")
+	cart:Destroy()
+	Vehicles.Tidy(os.clock())
+	local respawned = Vehicles.GetCarts(PlotManager.GetPlot(alice))[1]
+	check(respawned ~= nil and respawned.model ~= cart and respawned.model.Parent ~= nil, "a destroyed cart is rebuilt")
 
 	section("Draft + roster")
 	do
@@ -1039,6 +1047,7 @@ local function runTests()
 		check(pads and #pads == #Config.KickGame.Spots, "the goal posts add kick spots to the field")
 		check(plotModel(1):FindFirstChild("KickSpots") ~= nil, "kick spots are in the plot model")
 		Config.KickGame.CooldownSeconds = 0
+		Config.KickGame.MinMeterSeconds = 0 -- (the tests answer instantly)
 		local function kickFrom(index, aim, power)
 			alice.Character.HumanoidRootPart.CFrame = pads[index].CFrame * CFrame.new(0, 3, 0)
 			local firesBefore = #clientFires
@@ -1062,6 +1071,17 @@ local function runTests()
 		local cashNoOffer = PlayerData.GetCash(alice)
 		KickGame._onAttempt(alice, 3, 0, 1)
 		check(PlayerData.GetCash(alice) == cashNoOffer, "a kick that wasn't offered is ignored")
+		local cashBeforeRepeat = PlayerData.GetCash(alice)
+		kickFrom(1, 0, 1)
+		check(
+			PlayerData.GetCash(alice) == cashBeforeRepeat and lastNotification(alice).message:find("Practice kick") ~= nil,
+			"good kicks pay once a minute (the rest are practice): " .. lastNotification(alice).message
+		)
+		Config.KickGame.MinMeterSeconds = 0.8
+		local notesBeforeBot = #notifications
+		kickFrom(1, 0, 1)
+		check(#notifications == notesBeforeBot, "a kick sent back instantly (a bot) is ignored")
+		Config.KickGame.MinMeterSeconds = 0
 		kickFrom(1, 0.95, 1)
 		check(lastNotification(alice).message:find("wide right") ~= nil, "missed wide right: " .. lastNotification(alice).message)
 		kickFrom(2, 0, 0.1)
@@ -1075,6 +1095,7 @@ local function runTests()
 		touch(pads[1], bob)
 		check(clientFires[#clientFires].player ~= bob, "only the owner can kick on their field")
 		Config.KickGame.CooldownSeconds = 3
+		Config.KickGame.MinMeterSeconds = 0.8
 	end
 
 	section("Staff + game-day results")
@@ -1140,6 +1161,18 @@ local function runTests()
 			("most quests done by a finished franchise (%d)"):format(alice:GetAttribute("QuestsDone") or 0)
 		)
 		check(aliceProfile.Franchise.Quests.champion == true, "the trophy quest completes")
+		local bobProfile = PlayerData.GetProfile(bob)
+		bobProfile.Franchise = { Season = { Number = 3, Week = 99, Wins = 4, Losses = -1, Stage = "bogus" } }
+		Franchise.GetStat(bob, "Wins")
+		local repaired = bobProfile.Franchise.Season
+		check(
+			repaired.Number == 3
+				and repaired.Week == Config.Season.Weeks
+				and repaired.Wins == 4
+				and repaired.Losses == 0
+				and repaired.Stage == "regular",
+			"a damaged season is repaired field by field (not wiped)"
+		)
 	end
 
 	section("Doors, seats, elevators")
@@ -1200,7 +1233,9 @@ local function runTests()
 		task.wait(0.4)
 		check(slider:GetAttribute("IsOpen") == true, "AutoClose = 0 doors stay open")
 		trigger(slider:FindFirstChild("Interact", true), bob)
-		check(slider:GetAttribute("IsOpen") == false, "anyone can close it again")
+		check(slider:GetAttribute("IsOpen") == true, "visitors can't close the owner's doors")
+		trigger(slider:FindFirstChild("Interact", true), alice)
+		check(slider:GetAttribute("IsOpen") == false, "the owner can close them")
 
 		local camSeat = BuildUtil.Seat(fixCtx, {
 			Name = "TestSeat",
@@ -1297,8 +1332,13 @@ local function runTests()
 		local pongPrompt = BuildUtil.Use(fixCtx, cabinet, "pingpong")
 		alice.Character.HumanoidRootPart.CFrame = cabinet.CFrame * CFrame.new(0, 0, 4)
 		bob.Character.HumanoidRootPart.CFrame = cabinet.CFrame * CFrame.new(0, 0, 4)
+		local function playGame(who, prompt, score, seconds)
+			trigger(prompt, who)
+			Interactions._backdateSession(who, seconds or 25)
+			Interactions._onUseResult(who, prompt, score)
+		end
 		local cashBeforeGames = PlayerData.GetCash(alice)
-		Interactions._onUseResult(alice, arcadePrompt, 23)
+		playGame(alice, arcadePrompt, 23)
 		check(
 			plotModel(1):GetAttribute("ArcadeHigh") == 23 and plotModel(1):GetAttribute("ArcadeHighName") == "Alice",
 			"arcade high scores are kept on the plot"
@@ -1308,31 +1348,38 @@ local function runTests()
 			"the arcade quest completes"
 		)
 		check(PlayerData.GetCash(alice) > cashBeforeGames, "playing in your own lounge pays a little")
-		Interactions._onUseResult(alice, arcadePrompt, 50)
-		check(plotModel(1):GetAttribute("ArcadeHigh") == 23, "arcade results that arrive too fast are ignored")
+		Interactions._onUseResult(alice, arcadePrompt, 29)
+		check(plotModel(1):GetAttribute("ArcadeHigh") == 23, "a result without a started game is ignored")
+		trigger(arcadePrompt, alice)
+		Interactions._onUseResult(alice, arcadePrompt, 29)
+		check(plotModel(1):GetAttribute("ArcadeHigh") == 23, "an arcade game that ended too early is ignored")
 		Interactions._resetCooldowns(bob)
-		Interactions._onUseResult(bob, arcadePrompt, 9999)
+		playGame(bob, arcadePrompt, 9999)
 		check(plotModel(1):GetAttribute("ArcadeHigh") == Interact.MaxScores.arcade, "impossible scores are capped")
 		check(plotModel(1):GetAttribute("ArcadeHighName") == "Bob", "visitors can beat the high score")
 		local bobFranchise = PlayerData.GetProfile(bob).Franchise or {}
 		check(((bobFranchise.Stats or {}).ArcadeBest or 0) == 0, "visitors don't get stats from someone else's lounge")
 		Interactions._resetCooldowns(alice)
 		local workoutsBefore = aliceProfile.Franchise.Stats.Workouts or 0
-		Interactions._onUseResult(alice, liftPrompt, 12)
+		playGame(alice, liftPrompt, 12)
 		check((aliceProfile.Franchise.Stats.Workouts or 0) == workoutsBefore + 1, "lifting weights counts a workout")
 		check(lastNotification(alice).message:find("12 reps") ~= nil, "told how many reps: " .. lastNotification(alice).message)
 		local hypeBefore = aliceProfile.Franchise.Hype or 0
-		Interactions._onUseResult(alice, podiumPrompt, 2)
+		playGame(alice, podiumPrompt, 2, 3)
 		check(
 			aliceProfile.Franchise.Hype == math.min(3, hypeBefore + 1) and alice:GetAttribute("Hype") == aliceProfile.Franchise.Hype,
 			"press conferences add team hype"
 		)
 		check(aliceProfile.Franchise.Quests.presser == true, "the press conference quest completes")
-		Interactions._onUseResult(alice, pongPrompt, 14)
+		playGame(bob, pongPrompt, 100, 2)
+		check(plotModel(1):GetAttribute("RallyBest") == 5, "scores are capped by how long the game ran")
+		playGame(alice, pongPrompt, 14)
 		check(plotModel(1):GetAttribute("RallyBest") == 14, "longest ping-pong rally is kept")
+		playGame(alice, liftPrompt, 10)
+		check(lastNotification(alice).message:find("next cash reward in") ~= nil, "told when the next cash reward comes")
 		alice.Character.HumanoidRootPart.CFrame = CFrame.new(500, 3, 500)
 		Interactions._resetCooldowns(alice)
-		Interactions._onUseResult(alice, pongPrompt, 30)
+		playGame(alice, pongPrompt, 30)
 		check(plotModel(1):GetAttribute("RallyBest") == 14, "results from far away are ignored")
 		Interactions._onUseResult(alice, "not a prompt", 30)
 		Interactions._onUseResult(alice, doorPrompt, 30)

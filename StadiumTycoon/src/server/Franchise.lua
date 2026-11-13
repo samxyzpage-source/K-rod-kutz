@@ -104,7 +104,7 @@ local QUESTS = {
 	{ Id = "cart", Text = "Drive a golf cart", Stat = "Drives", Goal = 1, Reward = 3000 },
 	{ Id = "lift", Text = "Lift weights in the Weight Room", Stat = "Workouts", Goal = 1, Reward = 3500 },
 	{ Id = "draft1", Text = "Draft your first player", Stat = "Drafted", Goal = 1, Reward = 4000 },
-	{ Id = "train1", Text = "Train a player in the Weight Room", Stat = "Trainings", Goal = 1, Reward = 8000 },
+	{ Id = "train1", Text = "Train a player (ROSTER > TRAIN)", Stat = "Trainings", Goal = 1, Reward = 8000 },
 	{ Id = "rooms6", Text = "Finish 6 HQ rooms", Stat = "RoomsDone", Goal = 6, Reward = 12000 },
 	{ Id = "turf", Text = "Lay the stadium turf", Stat = "Piece:turf", Goal = 1, Reward = 15000 },
 	{ Id = "roster", Text = "Fill every roster position", Stat = "PositionsFilled", Goal = #POSITIONS, Reward = 30000 },
@@ -127,6 +127,7 @@ local QUESTS = {
 }
 local QUESTS_SHOWN = 3
 local SEASON_STAGES = { regular = true, semifinal = true, final = true }
+local TEAM_CHANGE_COOLDOWN = 30 -- seconds between team changes (each one repaints the whole plot)
 local MAX_HYPE = 3 -- press conferences add hype: +1 team rating each for the next game day
 
 ---------------------------------------------------------------------------------------------
@@ -203,16 +204,18 @@ local function sanitize(f)
 		f.Hype = 0
 	end
 	f.Hype = math.min(math.floor(f.Hype), MAX_HYPE)
-	local season = f.Season
-	if
-		type(season) ~= "table"
-		or not (isNumber(season.Number) and season.Number >= 1)
-		or not (isNumber(season.Week) and season.Week >= 0 and season.Week <= Config.Season.Weeks)
-		or not (isNumber(season.Wins) and season.Wins >= 0 and isNumber(season.Losses) and season.Losses >= 0)
-		or not SEASON_STAGES[season.Stage]
-	then
-		f.Season = { Number = 1, Week = 0, Wins = 0, Losses = 0, Stage = "regular" }
+	-- repair the season field by field (a bad or outdated value shouldn't wipe the whole season)
+	local season = type(f.Season) == "table" and f.Season or {}
+	local function count(value)
+		return isNumber(value) and value >= 0 and math.floor(value) or 0
 	end
+	f.Season = {
+		Number = (isNumber(season.Number) and season.Number >= 1) and math.floor(season.Number) or 1,
+		Week = math.clamp(count(season.Week), 0, Config.Season.Weeks),
+		Wins = count(season.Wins),
+		Losses = count(season.Losses),
+		Stage = SEASON_STAGES[season.Stage] and season.Stage or "regular",
+	}
 	sanitized[f] = true
 	return f
 end
@@ -277,12 +280,12 @@ function Franchise.TeamRating(player)
 end
 
 local function draftCost(player)
-	local income = plotManager and plotManager.GetIncome(player) or 0
+	local income = plotManager and plotManager.GetBaseIncome(player) or 0
 	return math.max(Config.Draft.MinimumCost, math.floor(income * Config.Draft.CostIncomeSeconds))
 end
 
 local function trainCost(player)
-	local income = plotManager and plotManager.GetIncome(player) or 0
+	local income = plotManager and plotManager.GetBaseIncome(player) or 0
 	return math.max(Config.Draft.MinimumTrainCost, math.floor(income * Config.Draft.TrainCostIncomeSeconds))
 end
 
@@ -457,11 +460,17 @@ local function onChooseTeam(player, paletteIndex, nicknameIndex)
 	if not (isNumber(nicknameIndex) and Config.TeamNicknames[nicknameIndex]) then
 		return
 	end
-	if not cooldownReady(player, "team", 3) then
-		return -- re-colouring rebuilds the whole plot, so not too often
-	end
 	local f = franchiseOf(player)
 	if not f then
+		return
+	end
+	if f.Team and f.Team.Palette == paletteIndex and f.Team.Nickname == nicknameIndex then
+		notify(player, ("You're already the %s!"):format(Config.TeamNicknames[nicknameIndex]), "info")
+		return
+	end
+	if not cooldownReady(player, "team", TEAM_CHANGE_COOLDOWN) then
+		-- re-colouring rebuilds the whole plot, so not too often
+		notify(player, "Your stadium is still being repainted - try again in a little while.", "info")
 		return
 	end
 	f.Team = { Palette = paletteIndex, Nickname = nicknameIndex }
@@ -485,7 +494,7 @@ local function onClaimBonus(player)
 		return
 	end
 	local settings = Config.OwnerBonus
-	local amount = math.max(settings.MinimumCash, math.floor(plotManager.GetIncome(player) * settings.IncomeSeconds))
+	local amount = math.max(settings.MinimumCash, math.floor(plotManager.GetBaseIncome(player) * settings.IncomeSeconds))
 	if PlayerData.AddCash(player, amount) then
 		f.NextBonus = os.time() + settings.IntervalSeconds
 		f.Stats.Bonuses = (f.Stats.Bonuses or 0) + 1
@@ -688,7 +697,7 @@ local function advanceSeason(player, f, won)
 	if won then
 		f.Stats.Championships = (f.Stats.Championships or 0) + 1
 		local prize =
-			math.max(settings.MinimumChampionshipPrize, math.floor(plotManager.GetIncome(player) * settings.ChampionshipIncomeSeconds))
+			math.max(settings.MinimumChampionshipPrize, math.floor(plotManager.GetBaseIncome(player) * settings.ChampionshipIncomeSeconds))
 		return ("CHAMPIONS!!! Title #%d"):format(f.Stats.Championships), prize
 	end
 	return "Lost the championship game. So close! New season!", 0
@@ -714,7 +723,7 @@ function Franchise.PlayGameDay()
 			local loserScore = math.min(footballScore(0), winnerScore - 1)
 			local home, away = won and winnerScore or loserScore, won and loserScore or winnerScore
 			plotManager.SetScore(plot, home, away)
-			local income = plotManager.GetIncome(player)
+			local income = plotManager.GetBaseIncome(player)
 			local prize
 			if won then
 				f.Stats.Wins = (f.Stats.Wins or 0) + 1

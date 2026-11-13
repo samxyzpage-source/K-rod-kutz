@@ -49,8 +49,8 @@ Interact.Uses = {
 -- Mini-game score limits (the server ignores anything above these)
 Interact.MaxScores = {
 	lift = 40, -- reps
-	arcade = 80, -- footballs caught
-	pingpong = 150, -- rally length
+	arcade = 30, -- footballs caught (a perfect 20-second game is about 29)
+	pingpong = 115, -- rally length (a perfect 90-second rally is about 112)
 	podium = 3, -- answer number
 }
 
