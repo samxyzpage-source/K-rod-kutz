@@ -92,8 +92,8 @@ local SPINE_BRANCH = { MinX = 16, MaxX = 31, MinZ = 439, MaxZ = 449 }
 
 -- cameras (campus coordinates; the stadium's field centre is at campus (0, 0, -90))
 local STADIUM_CAM = { From = Vector3.new(90, 170, 180), To = Vector3.new(0, 0, -90), Fov = 50, Label = "STADIUM CAM" }
-local HALL_CAM = { From = Vector3.new(122, 46, 222), To = Vector3.new(195, 8, 266), Fov = 50, Label = "HALL OF FAME CAM" }
-local CART_CAM = { From = Vector3.new(112, 34, 318), To = Vector3.new(146, 2, 350), Fov = 55, Label = "CART CAM" }
+local HALL_CAM = { From = Vector3.new(150, 22, 168), To = Vector3.new(195, 12, 230), Fov = 55, Label = "HALL OF FAME CAM" }
+local CART_CAM = { From = Vector3.new(119, 12, 322), To = Vector3.new(150, 3, 352), Fov = 65, Label = "CART CAM" }
 
 local PAINT = { CanCollide = false, CastShadow = false }
 local DECOR = { CanCollide = false }
@@ -122,10 +122,10 @@ local LEAVES = Color3.fromRGB(72, 140, 70)
 local LEAVES_DARK = Color3.fromRGB(56, 118, 58)
 local TRUNK = Color3.fromRGB(104, 74, 48)
 local PLANTER_GREY = Color3.fromRGB(96, 98, 104)
-local SOIL = Color3.fromRGB(70, 52, 38)
 local COOLER_ORANGE = Color3.fromRGB(247, 128, 10)
 local GOLD = Color3.fromRGB(255, 196, 60)
 local SMOOTHIE_PINK = Color3.fromRGB(236, 92, 140)
+local VENDING_RED = Color3.fromRGB(196, 36, 40)
 
 ---------------------------------------------------------------------------------------------
 -- Helpers
@@ -312,12 +312,34 @@ local function glassElevator(ctx, name, s, team)
 		if s.Face == "+X" then
 			local cz = (s.Z0 + s.Z1) / 2
 			doors = span(ctx, name .. "Doors", s.X1, y, cz - 2.5, s.X1 + 0.3, y + 8.4, cz + 2.5, BRUSHED, Enum.Material.Metal)
-			panel = span(ctx, name .. "CallPanel", s.X1, y + 3.4, cz + 2.9, s.X1 + 0.3, y + 5.6, cz + 4.1, SIGN_DARK, Enum.Material.SmoothPlastic)
+			panel = span(
+				ctx,
+				name .. "CallPanel",
+				s.X1,
+				y + 3.4,
+				cz + 2.9,
+				s.X1 + 0.3,
+				y + 5.6,
+				cz + 4.1,
+				SIGN_DARK,
+				Enum.Material.SmoothPlastic
+			)
 			face = Enum.NormalId.Right
 		else
 			local cx = (s.X0 + s.X1) / 2
 			doors = span(ctx, name .. "Doors", cx - 2.5, y, s.Z0 - 0.3, cx + 2.5, y + 8.4, s.Z0, BRUSHED, Enum.Material.Metal)
-			panel = span(ctx, name .. "CallPanel", cx + 2.9, y + 3.4, s.Z0 - 0.3, cx + 4.1, y + 5.6, s.Z0, SIGN_DARK, Enum.Material.SmoothPlastic)
+			panel = span(
+				ctx,
+				name .. "CallPanel",
+				cx + 2.9,
+				y + 3.4,
+				s.Z0 - 0.3,
+				cx + 4.1,
+				y + 5.6,
+				s.Z0,
+				SIGN_DARK,
+				Enum.Material.SmoothPlastic
+			)
 			face = Enum.NormalId.Front
 		end
 		faceText(doors, face, { { Text = level.Name, Color = dark, Y0 = 0.02, Y1 = 0.1 } }, { LightInfluence = 0 })
@@ -349,14 +371,38 @@ local function signpost(ctx, name, x, z, boards, team, title, info)
 		local left = "<  " .. board.Text
 		if board.Dir == "+X" or board.Dir == "-X" then
 			local xa, xb = x + s * 0.4, x + s * (0.4 + len)
-			part = span(ctx, name .. "Board", math.min(xa, xb), y - 0.65, z - 0.15, math.max(xa, xb), y + 0.65, z + 0.15, team.Primary, Enum.Material.SmoothPlastic, DECOR)
+			part = span(
+				ctx,
+				name .. "Board",
+				math.min(xa, xb),
+				y - 0.65,
+				z - 0.15,
+				math.max(xa, xb),
+				y + 0.65,
+				z + 0.15,
+				team.Primary,
+				Enum.Material.SmoothPlastic,
+				DECOR
+			)
 			-- Back face (+Z): its viewer's right is +X; Front face (-Z): its viewer's right is -X
 			faceA, faceB = Enum.NormalId.Back, Enum.NormalId.Front
 			textA = s > 0 and right or left
 			textB = s > 0 and left or right
 		else
 			local za, zb = z + s * 0.4, z + s * (0.4 + len)
-			part = span(ctx, name .. "Board", x - 0.15, y - 0.65, math.min(za, zb), x + 0.15, y + 0.65, math.max(za, zb), team.Primary, Enum.Material.SmoothPlastic, DECOR)
+			part = span(
+				ctx,
+				name .. "Board",
+				x - 0.15,
+				y - 0.65,
+				math.min(za, zb),
+				x + 0.15,
+				y + 0.65,
+				math.max(za, zb),
+				team.Primary,
+				Enum.Material.SmoothPlastic,
+				DECOR
+			)
 			-- Left face (-X): its viewer's right is +Z; Right face (+X): its viewer's right is -Z
 			faceA, faceB = Enum.NormalId.Left, Enum.NormalId.Right
 			textA = s > 0 and right or left
@@ -365,8 +411,12 @@ local function signpost(ctx, name, x, z, boards, team, title, info)
 		faceText(part, faceA, { { Text = textA, Color = accent } })
 		faceText(part, faceB, { { Text = textB, Color = accent } })
 	end
-	BuildUtil.Ball(ctx, { Name = name .. "Cap", Diameter = 1, Position = Vector3.new(x, 11.4, z), Color = GOLD, Material = Enum.Material.Metal })
-	BuildUtil.Look(postPart, title, info, { At = Vector3.new(0, 4.5 - (11.2 - PAVE) / 2, 0) })
+	BuildUtil.Ball(
+		ctx,
+		{ Name = name .. "Cap", Diameter = 1, Position = Vector3.new(x, 11.4, z), Color = GOLD, Material = Enum.Material.Metal }
+	)
+	-- (a vertical cylinder's local X axis points up)
+	BuildUtil.Look(postPart, title, info, { At = Vector3.new(4.5 - (11.2 - PAVE) / 2, 0, 0) })
 	return postPart
 end
 
@@ -416,10 +466,22 @@ local function buildWalkway(ctx, team)
 	for _, r in ipairs({ PORCH, HQ_WALK, PROMENADE, FIELD_PLAZA }) do
 		span(walk, "WalkwayPaving", r.MinX, 0, r.MinZ, r.MaxX, PAVE, r.MaxZ, PAVER, Enum.Material.Slate)
 	end
-	-- the zebra crossing painted on the back road
+	-- the zebra crossing painted on the back road (team colour: the road itself is light)
 	for i = 0, 4 do
 		local x = CROSSING.MinX + 1.6 + i * 3.2
-		span(walk, "ZebraStripe", x - 0.9, STRIPE0, CROSSING.MinZ + 0.6, x + 0.9, STRIPE1, CROSSING.MaxZ - 0.6, WHITE, Enum.Material.SmoothPlastic, PAINT)
+		span(
+			walk,
+			"ZebraStripe",
+			x - 0.9,
+			STRIPE0,
+			CROSSING.MinZ + 0.6,
+			x + 0.9,
+			STRIPE1,
+			CROSSING.MaxZ - 0.6,
+			team.Primary,
+			Enum.Material.SmoothPlastic,
+			PAINT
+		)
 	end
 
 	-- canopy roofs (white) with team-colour fascia bands along their long edges
@@ -433,9 +495,13 @@ local function buildWalkway(ctx, team)
 	roof("PorchCanopyRoof", PORCH.MinX + 0.1, PORCH.MinZ, PORCH.MaxX, PORCH.MaxZ)
 	roof("HQWalkCanopyRoof", HQ_WALK.MinX, HQ_WALK.MinZ + 0.1, 117.4, promRoofZ)
 	roof("PromenadeCanopyRoof", PROMENADE.MinX, promRoofZ, PROMENADE.MaxX, PROMENADE.MaxZ)
-	fascia("PorchFascia", PORCH.MaxX - 0.2, PORCH.MinZ, PORCH.MaxX + 0.2, PORCH.MaxZ)
+	local walkName = withTeam(ctx, "", " CAMPUS WALK", "CAMPUS WALK")
+	local porchBand = fascia("PorchFascia", PORCH.MaxX - 0.2, PORCH.MinZ, PORCH.MaxX + 0.2, PORCH.MaxZ)
+	faceText(porchBand, Enum.NormalId.Right, { { Text = walkName, Color = accent, X0 = 0.1, X1 = 0.9 } })
 	fascia("HQWalkFascia", 100.4, HQ_WALK.MinZ + 0.1, 100.8, 370)
-	fascia("HQWalkFascia", 117.2, HQ_WALK.MinZ + 0.1, 117.6, 370)
+	local walkBand = fascia("HQWalkFascia", 117.2, HQ_WALK.MinZ + 0.1, 117.6, 370)
+	-- (Right face: seen from the cart lane; +Z, toward the fields, is on the reader's left)
+	faceText(walkBand, Enum.NormalId.Right, { { Text = "<  PRACTICE FIELD + INDOOR DOME", Color = accent, X0 = 0.3, X1 = 0.7 } })
 	fascia("PromenadeFascia", PROMENADE.MinX, promRoofZ - 0.2, PROMENADE.MaxX, promRoofZ + 0.2)
 	fascia("PromenadeFascia", PROMENADE.MinX, PROMENADE.MaxZ - 0.4, PROMENADE.MaxX, PROMENADE.MaxZ)
 	-- over the back road the fascias become taller signs, read by the cart drivers on the road
@@ -491,7 +557,19 @@ local function buildWalkway(ctx, team)
 	bench(walk, "PromenadeBench", 62, 397, PAVE, Vector3.new(0, 0, -1), 6, team, { Object = "Bench" })
 
 	-- a direction sign under the promenade's front beam, where the crossing arrives
-	local sign = span(walk, "PromenadeSign", 102.4, 9.6, promRoofZ - 0.2, 115.6, FASCIA0, promRoofZ + 0.2, SIGN_DARK, Enum.Material.SmoothPlastic, DECOR)
+	local sign = span(
+		walk,
+		"PromenadeSign",
+		102.4,
+		9.6,
+		promRoofZ - 0.2,
+		115.6,
+		FASCIA0,
+		promRoofZ + 0.2,
+		SIGN_DARK,
+		Enum.Material.SmoothPlastic,
+		DECOR
+	)
 	-- Front (-Z): read walking north across the road (+X is on your left)
 	faceText(sign, Enum.NormalId.Front, {
 		{ Text = "<  INDOOR DOME", Color = WHITE, X0 = 0.04, X1 = 0.47, Align = Enum.TextXAlignment.Left },
@@ -532,7 +610,8 @@ local function buildHallBridge(ctx, team)
 	glass(m, "LinkGlass", l.MinX, DECK, l.MinZ, l.MaxX, GLASS_TOP, l.MinZ + 0.4)
 	glass(m, "LinkGlass", l.MinX, DECK, l.MaxZ - 0.4, l.MaxX, GLASS_TOP, l.MaxZ)
 	span(m, "LinkRoof", l.MinX, GLASS_TOP, l.MinZ - 0.4, l.MaxX, ROOF_TOP, l.MaxZ + 0.4, team.Primary, Enum.Material.SmoothPlastic)
-	local linkLight = span(m, "LinkCeilingLight", 120, GLASS_TOP - 0.3, 270, 124, GLASS_TOP, 272, LAMP, Enum.Material.Neon, PAINT)
+	span(m, "LinkCeiling", l.MinX, GLASS_TOP - 0.3, l.MinZ + 0.4, l.MaxX, GLASS_TOP, l.MaxZ - 0.4, PANEL_WHITE, Enum.Material.SmoothPlastic)
+	local linkLight = span(m, "LinkCeilingLight", 120, GLASS_TOP - 0.55, 270, 124, GLASS_TOP - 0.3, 272, LAMP, Enum.Material.Neon, PAINT)
 	pointLight(linkLight, nil, 16, 1.2)
 	-- the "TEAM HQ" sign at the tower's glass carries players in and out of the tower's landing
 	local doorSign = span(m, "SkybridgeDoorSign", l.MinX + 0.2, 23.4, 267, l.MinX + 0.6, 25.3, 275, SIGN_DARK, Enum.Material.SmoothPlastic)
@@ -570,15 +649,38 @@ local function buildHallBridge(ctx, team)
 	local southHeader =
 		span(m, "LoungeHeader", g.MinX + 1, GLASS_TOP, g.MinZ, g.MaxX - 1, TALL_ROOF, g.MinZ + 1, team.Primary, Enum.Material.SmoothPlastic)
 	faceText(southHeader, Enum.NormalId.Front, { { Text = "SKY LOUNGE", Color = accent } })
-	span(m, "LoungeRoof", g.MinX - 0.4, TALL_ROOF, g.MinZ - 0.4, g.MaxX + 0.4, TALL_ROOF + 1, g.MaxZ + 0.4, team.Primary, Enum.Material.SmoothPlastic)
-	local loungeLight = span(m, "LoungeCeilingLight", 129, TALL_ROOF - 0.35, 269.5, 139, TALL_ROOF, 271.5, LAMP, Enum.Material.Neon, PAINT)
+	span(
+		m,
+		"LoungeRoof",
+		g.MinX - 0.4,
+		TALL_ROOF,
+		g.MinZ - 0.4,
+		g.MaxX + 0.4,
+		TALL_ROOF + 1,
+		g.MaxZ + 0.4,
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	span(
+		m,
+		"LoungeCeiling",
+		g.MinX + 1,
+		TALL_ROOF - 0.3,
+		g.MinZ + 1,
+		g.MaxX - 1,
+		TALL_ROOF,
+		g.MaxZ - 1,
+		PANEL_WHITE,
+		Enum.Material.SmoothPlastic
+	)
+	local loungeLight =
+		span(m, "LoungeCeilingLight", 129, TALL_ROOF - 0.6, 269.5, 139, TALL_ROOF - 0.3, 271.5, LAMP, Enum.Material.Neon, PAINT)
 	pointLight(loungeLight, Vector3.new(-3, -0.6, 0), 20, 1.3)
 	pointLight(loungeLight, Vector3.new(3, -0.6, 0), 20, 1.3)
 
 	-- smoothie bar along the north glass
 	span(m, "SmoothieCounter", 130, DECK, 278.2, 138, DECK + 3.6, 280.2, DARK_WOOD, Enum.Material.Wood)
-	local counterTop =
-		span(m, "SmoothieCounterTop", 129.8, DECK + 3.6, 277.9, 138.2, DECK + 4, 280.2, MARBLE, Enum.Material.Marble)
+	local counterTop = span(m, "SmoothieCounterTop", 129.8, DECK + 3.6, 277.9, 138.2, DECK + 4, 280.2, MARBLE, Enum.Material.Marble)
 	local menu = span(m, "SmoothieMenu", 130.5, DECK + 5, 279.8, 137.5, DECK + 8, 280.1, SMOOTHIE_PINK, Enum.Material.SmoothPlastic)
 	faceText(menu, Enum.NormalId.Front, {
 		{ Text = "SMOOTHIE BAR", Color = WHITE, Y0 = 0.1, Y1 = 0.55 },
@@ -591,6 +693,15 @@ local function buildHallBridge(ctx, team)
 		At = Vector3.new(0, 0.6, -1.2),
 	})
 
+	post(m, "LoungePlanter", 139.9, 278.9, DECK, DECK + 1.8, 1.8, PLANTER_GREY, Enum.Material.Concrete)
+	BuildUtil.Ball(m, {
+		Name = "LoungePlant",
+		Diameter = 3,
+		Position = Vector3.new(139.9, DECK + 3.2, 278.9),
+		Color = LEAVES,
+		Material = Enum.Material.Grass,
+	})
+
 	-- lounge chairs facing the Hall of Fame (one is a TV camera seat)
 	bench(m, "LoungeChair", 139.6, 266, DECK, Vector3.new(1, 0, 0), 3, team, { Camera = HALL_CAM, Object = "Hall of Fame Cam" })
 	bench(m, "LoungeChair", 139.6, 274.5, DECK, Vector3.new(1, 0, 0), 3, team, { Object = "Lounge Chair" })
@@ -599,10 +710,10 @@ local function buildHallBridge(ctx, team)
 	local map = span(m, "CampusMap", g.MinX + 0.6, DECK + 1.5, 277.3, g.MinX + 0.9, DECK + 7, 280.2, SIGN_DARK, Enum.Material.SmoothPlastic)
 	faceText(map, Enum.NormalId.Right, {
 		{ Text = "CAMPUS MAP", Color = dark, Y0 = 0.05, Y1 = 0.2 },
-		{ Text = "HALL OF FAME: SOUTH SKYBRIDGE", Color = WHITE, Y0 = 0.28, Y1 = 0.4, Font = Enum.Font.GothamBold },
-		{ Text = "TEAM HQ: WEST", Color = WHITE, Y0 = 0.46, Y1 = 0.58, Font = Enum.Font.GothamBold },
-		{ Text = "FIELDS + DOME: CAMPUS WALK", Color = WHITE, Y0 = 0.64, Y1 = 0.76, Font = Enum.Font.GothamBold },
-		{ Text = "GOLF CARTS: NORTH", Color = WHITE, Y0 = 0.82, Y1 = 0.94, Font = Enum.Font.GothamBold },
+		{ Text = "HALL OF FAME: ACROSS THE SKYBRIDGE", Color = WHITE, Y0 = 0.28, Y1 = 0.4, Font = Enum.Font.GothamBold },
+		{ Text = "TEAM HQ: THROUGH THE GLASS LINK", Color = WHITE, Y0 = 0.46, Y1 = 0.58, Font = Enum.Font.GothamBold },
+		{ Text = "FIELDS + DOME: DOWN THE CAMPUS WALK", Color = WHITE, Y0 = 0.64, Y1 = 0.76, Font = Enum.Font.GothamBold },
+		{ Text = "GOLF CARTS: NEXT TO THE CAMPUS WALK", Color = WHITE, Y0 = 0.82, Y1 = 0.94, Font = Enum.Font.GothamBold },
 	}, { LightInfluence = 0 })
 	BuildUtil.Look(
 		map,
@@ -610,7 +721,8 @@ local function buildHallBridge(ctx, team)
 		"You are in the Sky Lounge! Skybridges join the Team HQ to the Hall of Fame (and later the Dome & Garage tower). Down below, the Campus Walk leads to the practice field and the indoor dome.",
 		{ At = Vector3.new(1, -1.5, 0) }
 	)
-	local tv = span(m, "LoungeTV", g.MaxX - 1.1, DECK + 4.6, 268.5, g.MaxX - 0.8, DECK + 7.6, 272.5, SCREEN_DARK, Enum.Material.SmoothPlastic)
+	local tv =
+		span(m, "LoungeTV", g.MaxX - 1.1, DECK + 4.6, 268.5, g.MaxX - 0.8, DECK + 7.6, 272.5, SCREEN_DARK, Enum.Material.SmoothPlastic)
 	BuildUtil.LiveText(tv, Enum.NormalId.Left, "summary", {
 		Text = "TEAM HQ",
 		BackgroundTransparency = 0,
@@ -628,13 +740,48 @@ local function buildHallBridge(ctx, team)
 	span(m, "BridgeRoof", b.MinX - 0.4, GLASS_TOP, b.MinZ, b.MaxX + 0.4, ROOF_TOP, b.MaxZ, team.Primary, Enum.Material.SmoothPlastic)
 	local bridgeName = withTeam(ctx, "", " HALL OF FAME SKYBRIDGE", "HALL OF FAME SKYBRIDGE")
 	for _, side in ipairs({ { b.MinX - 0.3, b.MinX, Enum.NormalId.Left }, { b.MaxX, b.MaxX + 0.3, Enum.NormalId.Right } }) do
-		local band = span(m, "BridgeFascia", side[1], DECK_BOTTOM + 0.3, b.MinZ, side[2], DECK - 0.3, b.MaxZ, team.Primary, Enum.Material.SmoothPlastic)
+		local band = span(
+			m,
+			"BridgeFascia",
+			side[1],
+			DECK_BOTTOM + 0.3,
+			b.MinZ,
+			side[2],
+			DECK - 0.3,
+			b.MaxZ,
+			team.Primary,
+			Enum.Material.SmoothPlastic
+		)
 		faceText(band, side[3], { { Text = bridgeName, Color = accent, X0 = 0.2, X1 = 0.8 } })
 	end
 	for _, x in ipairs({ b.MinX + 0.4, b.MaxX - 0.7 }) do
 		span(m, "BridgeHandrail", x, DECK + 2.8, b.MinZ, x + 0.3, DECK + 3.2, b.MaxZ, BRUSHED, Enum.Material.Metal)
 	end
-	local bridgeLight = span(m, "BridgeCeilingLight", 133.7, GLASS_TOP - 0.3, b.MinZ + 2, 134.3, GLASS_TOP, b.MaxZ - 2, LAMP, Enum.Material.Neon, PAINT)
+	span(
+		m,
+		"BridgeCeiling",
+		b.MinX + 0.4,
+		GLASS_TOP - 0.3,
+		b.MinZ,
+		b.MaxX - 0.4,
+		GLASS_TOP,
+		b.MaxZ,
+		PANEL_WHITE,
+		Enum.Material.SmoothPlastic
+	)
+	local bridgeLight = span(
+		m,
+		"BridgeCeilingLight",
+		133.7,
+		GLASS_TOP - 0.55,
+		b.MinZ + 2,
+		134.3,
+		GLASS_TOP - 0.3,
+		b.MaxZ - 2,
+		LAMP,
+		Enum.Material.Neon,
+		PAINT
+	)
 	pointLight(bridgeLight, Vector3.new(0, -0.6, -7), 18, 1.1)
 	pointLight(bridgeLight, Vector3.new(0, -0.6, 7), 18, 1.1)
 
@@ -657,12 +804,36 @@ local function buildHallBridge(ctx, team)
 	glass(m, "HallTowerGlassWest", t.MinX + 0.2, DECK, t.MinZ + 1, t.MinX + 0.6, TALL_ROOF, t.MaxZ - 1)
 	glass(m, "HallTowerGlassSouth", t.MinX + 1, DECK, t.MinZ + 0.2, t.MaxX - 1, TALL_ROOF, t.MinZ + 0.6)
 	span(m, "HallTowerHeader", t.MinX + 1, GLASS_TOP, t.MaxZ - 1, t.MaxX - 1, TALL_ROOF, t.MaxZ, team.Primary, Enum.Material.SmoothPlastic)
-	span(m, "HallTowerRoof", t.MinX - 0.4, TALL_ROOF, t.MinZ - 0.4, t.MaxX + 0.4, TALL_ROOF + 1, t.MaxZ + 0.4, team.Primary, Enum.Material.SmoothPlastic)
-	local crown = span(m, "HallTowerSign", t.MinX + 1, TALL_ROOF + 1, 221.7, t.MaxX - 1, TALL_ROOF + 4, 222.3, SIGN_DARK, Enum.Material.SmoothPlastic)
-	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
-		faceText(crown, face, { { Text = "HALL OF FAME", Color = dark } }, { LightInfluence = 0 })
-	end
-	for _, y in ipairs({ DECK_BOTTOM, TALL_ROOF }) do
+	span(
+		m,
+		"HallTowerRoof",
+		t.MinX - 0.4,
+		TALL_ROOF,
+		t.MinZ - 0.4,
+		t.MaxX + 0.4,
+		TALL_ROOF + 1,
+		t.MaxZ + 0.4,
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	local crown =
+		span(m, "HallTowerSign", t.MinX + 1, TALL_ROOF + 1, 221.7, t.MaxX - 1, TALL_ROOF + 4, 222.3, SIGN_DARK, Enum.Material.SmoothPlastic)
+	-- (the Hall of Fame is to the east: on the left seen from the south, on the right from the north)
+	faceText(crown, Enum.NormalId.Front, { { Text = "<  HALL OF FAME", Color = dark } }, { LightInfluence = 0 })
+	faceText(crown, Enum.NormalId.Back, { { Text = "HALL OF FAME  >", Color = dark } }, { LightInfluence = 0 })
+	span(
+		m,
+		"HallTowerCeiling",
+		t.MinX + 1,
+		TALL_ROOF - 0.3,
+		t.MinZ + 1,
+		t.MaxX - 1,
+		TALL_ROOF,
+		t.MaxZ - 1,
+		PANEL_WHITE,
+		Enum.Material.SmoothPlastic
+	)
+	for _, y in ipairs({ DECK_BOTTOM, TALL_ROOF - 0.3 }) do
 		local lamp = span(m, "HallTowerCeilingLight", 134, y - 0.35, 219, 140, y, 225, LAMP, Enum.Material.Neon, PAINT)
 		pointLight(lamp, Vector3.new(0, -0.6, 0), 20, 1.3)
 	end
@@ -678,7 +849,7 @@ local function buildHallBridge(ctx, team)
 		Transparency = 0.45,
 		Object = "Glass Doors",
 		Title = "Hall of Fame Tower",
-		Info = "Out these doors and up the steps on your left: the Hall of Fame. Up the glass elevator: the skybridge back to the Team HQ.",
+		Info = "Out these doors and up the steps on your right: the Hall of Fame. Up the glass elevator: the skybridge back to the Team HQ.",
 		Distance = 8,
 	})
 	glassElevator(m, "HallTowerElevator", {
@@ -703,18 +874,25 @@ local function buildHallBridge(ctx, team)
 			},
 		},
 	}, team)
-	local plaque = span(m, "WalkOfChampionsPlaque", t.MinX + 1, 3, 213.6, t.MinX + 1.2, 7, 217.4, GOLD, Enum.Material.Metal, { Reflectance = 0.2 })
+	local plaque =
+		span(m, "WalkOfChampionsPlaque", t.MinX + 1, 3, 213.6, t.MinX + 1.2, 7, 217.4, GOLD, Enum.Material.Metal, { Reflectance = 0.2 })
 	faceText(plaque, Enum.NormalId.Right, {
 		{ Text = "WALK OF CHAMPIONS", Color = INK, Y0 = 0.12, Y1 = 0.42 },
 		{ Text = "EVERY LEGEND CROSSED THIS BRIDGE", Color = INK, Y0 = 0.55, Y1 = 0.85, Font = Enum.Font.GothamBold },
 	})
-	BuildUtil.Look(plaque, "Walk of Champions", "Every legend in the Hall of Fame walked across this skybridge. How many championships has your team won?", {
-		LookKey = "titles",
-		At = Vector3.new(1.5, 0, 0),
-	})
+	BuildUtil.Look(
+		plaque,
+		"Walk of Champions",
+		"Every legend in the Hall of Fame walked across this skybridge. How many championships has your team won?",
+		{
+			LookKey = "titles",
+			At = Vector3.new(1.5, 0, 0),
+		}
+	)
 	bench(m, "TowerWindowBench", 134, 214.4, DECK, Vector3.new(0, 0, -1), 5, team, { Camera = STADIUM_CAM, Object = "Stadium Cam" })
 
-	-- the forecourt in front of the tower doors
+	-- paving: under the lounge + bridge (HQ tower portal -> tower), and the forecourt in front of the doors
+	span(m, "SkybridgeUnderpass", PORCH.MaxX, 0, t.MaxZ, g.MaxX - 1, PAVE, g.MaxZ, PAVER, Enum.Material.Slate)
 	span(m, "HallTowerForecourt", FORECOURT.MinX, 0, FORECOURT.MinZ, FORECOURT.MaxX, PAVE, FORECOURT.MaxZ, PAVER, Enum.Material.Slate)
 end
 
@@ -738,7 +916,31 @@ local function buildDomeBridge(ctx, team)
 	for _, x in ipairs({ b.MinX - 0.3, b.MaxX }) do
 		span(m, "DomeBridgeFascia", x, DECK_BOTTOM + 0.3, b.MinZ, x + 0.3, DECK - 0.3, b.MaxZ, team.Primary, Enum.Material.SmoothPlastic)
 	end
-	local strip = span(m, "DomeBridgeCeilingLight", 108.7, GLASS_TOP - 0.3, b.MinZ + 2, 109.3, GLASS_TOP, b.MaxZ - 2, LAMP, Enum.Material.Neon, PAINT)
+	span(
+		m,
+		"DomeBridgeCeiling",
+		b.MinX + 0.4,
+		GLASS_TOP - 0.3,
+		b.MinZ,
+		b.MaxX - 0.4,
+		GLASS_TOP,
+		b.MaxZ,
+		PANEL_WHITE,
+		Enum.Material.SmoothPlastic
+	)
+	local strip = span(
+		m,
+		"DomeBridgeCeilingLight",
+		108.7,
+		GLASS_TOP - 0.55,
+		b.MinZ + 2,
+		109.3,
+		GLASS_TOP - 0.3,
+		b.MaxZ - 2,
+		LAMP,
+		Enum.Material.Neon,
+		PAINT
+	)
 	for i = -2, 2 do
 		pointLight(strip, Vector3.new(0, -0.6, i * 22), 20, 1.1)
 	end
@@ -758,13 +960,26 @@ local function buildDomeBridge(ctx, team)
 		for _, x in ipairs({ WALK_W, WALK_E }) do
 			post(m, "PierLeg", x, z, 0, DECK_BOTTOM - 1, 1.6, PANEL_WHITE, Enum.Material.SmoothPlastic)
 		end
-		span(m, "PierBeam", WALK_W - 0.8, DECK_BOTTOM - 1, z - 0.6, WALK_E + 0.8, DECK_BOTTOM, z + 0.6, team.Primary, Enum.Material.SmoothPlastic)
+		span(
+			m,
+			"PierBeam",
+			WALK_W - 0.8,
+			DECK_BOTTOM - 1,
+			z - 0.6,
+			WALK_E + 0.8,
+			DECK_BOTTOM,
+			z + 0.6,
+			team.Primary,
+			Enum.Material.SmoothPlastic
+		)
 	end
 	-- signs for the cart drivers on the back road
 	local roadText = withTeam(ctx, "", " SKYBRIDGE", "CAMPUS SKYBRIDGE")
-	local westBoard = span(m, "RoadSign", b.MinX - 1.1, DECK_BOTTOM - 0.2, 374, b.MinX - 0.7, DECK + 0.2, 384, SIGN_DARK, Enum.Material.SmoothPlastic)
+	local westBoard =
+		span(m, "RoadSign", b.MinX - 1.1, DECK_BOTTOM - 0.2, 374, b.MinX - 0.7, DECK + 0.2, 384, SIGN_DARK, Enum.Material.SmoothPlastic)
 	faceText(westBoard, Enum.NormalId.Left, { { Text = roadText, Color = dark } }, { LightInfluence = 0 })
-	local eastBoard = span(m, "RoadSign", b.MaxX + 0.7, DECK_BOTTOM - 0.2, 374, b.MaxX + 1.1, DECK + 0.2, 384, SIGN_DARK, Enum.Material.SmoothPlastic)
+	local eastBoard =
+		span(m, "RoadSign", b.MaxX + 0.7, DECK_BOTTOM - 0.2, 374, b.MaxX + 1.1, DECK + 0.2, 384, SIGN_DARK, Enum.Material.SmoothPlastic)
 	faceText(eastBoard, Enum.NormalId.Right, { { Text = roadText, Color = dark } }, { LightInfluence = 0 })
 
 	-- the "TEAM HQ" sign at the HQ tower's north glass (carries players in and out of its landing)
@@ -789,7 +1004,8 @@ local function buildDomeBridge(ctx, team)
 
 	-- the garage overlook: a TV camera bench and a sign looking across at the golf cart garage
 	bench(m, "GarageOverlookBench", 104.8, 348, DECK, Vector3.new(1, 0, 0), 5, team, { Camera = CART_CAM, Object = "Cart Cam" })
-	local garageSign = span(m, "GarageOverlookSign", b.MaxX - 1, DECK + 4, 345, b.MaxX - 0.7, DECK + 6.2, 351, SIGN_DARK, Enum.Material.SmoothPlastic)
+	local garageSign =
+		span(m, "GarageOverlookSign", b.MaxX - 1, DECK + 4, 345, b.MaxX - 0.7, DECK + 6.2, 351, SIGN_DARK, Enum.Material.SmoothPlastic)
 	faceText(garageSign, Enum.NormalId.Left, { { Text = "GOLF CART GARAGE", Color = dark } }, { LightInfluence = 0 })
 	BuildUtil.Look(
 		garageSign,
@@ -798,7 +1014,18 @@ local function buildDomeBridge(ctx, team)
 		{ At = Vector3.new(-1.5, -1, 0) }
 	)
 
-	-- THE DOME & GARAGE TOWER at the north end, beside the promenade
+	-- over the back road: a window plaque
+	local roadPlaque =
+		span(m, "RoadViewPlaque", b.MinX + 0.7, DECK + 4, 376, b.MinX + 1, DECK + 6.2, 382, SIGN_DARK, Enum.Material.SmoothPlastic)
+	faceText(roadPlaque, Enum.NormalId.Right, { { Text = "BACK ROAD BELOW", Color = dark } }, { LightInfluence = 0 })
+	BuildUtil.Look(
+		roadPlaque,
+		"Over the Back Road",
+		"You are 15 studs above the back road! Golf carts zoom underneath while the team walks across in the dry.",
+		{ At = Vector3.new(1.5, -1, 0) }
+	)
+
+	-- THE DOME & GARAGE TOWER at the end, beside the promenade
 	local t = DOME_TOWER
 	local doorX0, doorX1 = 105, 113
 	span(m, "DomeTowerFloor", t.MinX, 0, t.MinZ, t.MaxX, 0.2, t.MaxZ, MARBLE, Enum.Material.Marble)
@@ -820,11 +1047,35 @@ local function buildDomeBridge(ctx, team)
 	glass(m, "DomeTowerGlassNorth", t.MinX + 1, DECK, t.MaxZ - 0.6, t.MaxX - 1, TALL_ROOF, t.MaxZ - 0.2)
 	glass(m, "DomeTowerGlassEast", t.MaxX - 0.6, 0.2, t.MinZ + 1, t.MaxX - 0.2, TALL_ROOF, t.MaxZ - 1)
 	glass(m, "DomeTowerGlassWest", t.MinX + 0.2, 0.2, t.MinZ + 1, t.MinX + 0.6, TALL_ROOF, t.MaxZ - 1)
-	span(m, "DomeTowerRoof", t.MinX - 0.4, TALL_ROOF, t.MinZ - 0.4, t.MaxX + 0.4, TALL_ROOF + 1, t.MaxZ + 0.4, team.Primary, Enum.Material.SmoothPlastic)
-	local crown = span(m, "DomeTowerSign", t.MinX + 1, TALL_ROOF + 1, 404.7, t.MaxX - 1, TALL_ROOF + 4, 405.3, SIGN_DARK, Enum.Material.SmoothPlastic)
+	span(
+		m,
+		"DomeTowerRoof",
+		t.MinX - 0.4,
+		TALL_ROOF,
+		t.MinZ - 0.4,
+		t.MaxX + 0.4,
+		TALL_ROOF + 1,
+		t.MaxZ + 0.4,
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	local crown =
+		span(m, "DomeTowerSign", t.MinX + 1, TALL_ROOF + 1, 404.7, t.MaxX - 1, TALL_ROOF + 4, 405.3, SIGN_DARK, Enum.Material.SmoothPlastic)
 	faceText(crown, Enum.NormalId.Front, { { Text = "DOME + FIELDS", Color = dark } }, { LightInfluence = 0 })
 	faceText(crown, Enum.NormalId.Back, { { Text = withTeam(ctx, "", " CAMPUS", "TEAM CAMPUS"), Color = dark } }, { LightInfluence = 0 })
-	for _, y in ipairs({ DECK_BOTTOM, TALL_ROOF }) do
+	span(
+		m,
+		"DomeTowerCeiling",
+		t.MinX + 1,
+		TALL_ROOF - 0.3,
+		t.MinZ + 1,
+		t.MaxX - 1,
+		TALL_ROOF,
+		t.MaxZ - 1,
+		PANEL_WHITE,
+		Enum.Material.SmoothPlastic
+	)
+	for _, y in ipairs({ DECK_BOTTOM, TALL_ROOF - 0.3 }) do
 		local lamp = span(m, "DomeTowerCeilingLight", 105, y - 0.35, 400.8, 113, y, 403.2, LAMP, Enum.Material.Neon, PAINT)
 		pointLight(lamp, Vector3.new(0, -0.6, 0), 18, 1.3)
 	end
@@ -839,7 +1090,7 @@ local function buildDomeBridge(ctx, team)
 		Transparency = 0.45,
 		Object = "Glass Doors",
 		Title = "Dome & Garage Tower",
-		Info = "Out onto the Campus Walk: the indoor dome is a few steps to the left, the practice field down the walk to the right, the golf carts back across the road.",
+		Info = "Out onto the Campus Walk: the indoor dome is a few steps to the right, the practice field down the walk to the left, the golf carts back across the road.",
 		Distance = 8,
 	})
 	glassElevator(m, "DomeTowerElevator", {
@@ -864,17 +1115,28 @@ local function buildDomeBridge(ctx, team)
 			},
 		},
 	}, team)
+	local vending = span(m, "VendingMachine", t.MinX + 1.2, 0.2, 401.2, t.MinX + 3.4, 7.2, 403.8, VENDING_RED, Enum.Material.SmoothPlastic)
+	faceText(vending, Enum.NormalId.Right, {
+		{ Text = "ICE COLD", Color = WHITE, Y0 = 0.08, Y1 = 0.2 },
+		{ Text = "SODA", Color = WHITE, Y0 = 0.22, Y1 = 0.45 },
+	}, { LightInfluence = 0 })
+	BuildUtil.Use(m, vending, "soda", {
+		Object = "Vending Machine",
+		Title = "Vending Machine",
+		Info = "A cold soda for the walk to practice. Press the big button and listen for the clunk!",
+		At = Vector3.new(1.4, -0.5, 0),
+	})
 	local directory = span(m, "DomeTowerDirectory", t.MaxX - 1, 2.6, 401, t.MaxX - 0.7, 7.4, 404, SIGN_DARK, Enum.Material.SmoothPlastic)
 	faceText(directory, Enum.NormalId.Left, {
 		{ Text = "DIRECTORY", Color = dark, Y0 = 0.06, Y1 = 0.24 },
-		{ Text = "INDOOR DOME: OUT + LEFT", Color = WHITE, Y0 = 0.34, Y1 = 0.5, Font = Enum.Font.GothamBold },
-		{ Text = "PRACTICE FIELD: OUT + RIGHT", Color = WHITE, Y0 = 0.56, Y1 = 0.72, Font = Enum.Font.GothamBold },
+		{ Text = "INDOOR DOME: OUT + RIGHT", Color = WHITE, Y0 = 0.34, Y1 = 0.5, Font = Enum.Font.GothamBold },
+		{ Text = "PRACTICE FIELD: OUT + LEFT", Color = WHITE, Y0 = 0.56, Y1 = 0.72, Font = Enum.Font.GothamBold },
 		{ Text = "GOLF CARTS: ACROSS THE ROAD", Color = WHITE, Y0 = 0.78, Y1 = 0.94, Font = Enum.Font.GothamBold },
 	}, { LightInfluence = 0 })
 	BuildUtil.Look(
 		directory,
 		"Dome & Garage Tower",
-		"The skybridge's north end. Ride up to walk back to the Team HQ above the cart garage and the back road, or head out to the indoor dome and the practice field.",
+		"The far end of the Dome & Garage skybridge. Ride up to walk back to the Team HQ above the cart garage and the back road, or head out to the indoor dome and the practice field.",
 		{ LookKey = "season", At = Vector3.new(-1.5, -1, 0) }
 	)
 end
@@ -890,6 +1152,25 @@ local function buildLandscaping(ctx, team)
 	-- paths: the Hall of Fame walk and the path from the promenade to the dome's west door
 	for _, r in ipairs({ HOF_WALK, SPINE, SPINE_BRANCH }) do
 		span(m, "CampusPath", r.MinX, 0, r.MinZ, r.MaxX, PAVE, r.MaxZ, PAVER, Enum.Material.Slate)
+	end
+
+	-- hedge planters against the HQ wall under the Campus Walk canopy
+	for _, z in ipairs({ { 288.5, 305 }, { 352, 368.5 } }) do
+		span(m, "WalkPlanter", HQ_WALK.MinX + 0.2, 0, z[1], HQ_WALK.MinX + 2, 1.5, z[2], PLANTER_GREY, Enum.Material.Concrete)
+		span(m, "WalkHedge", HQ_WALK.MinX + 0.4, 1.5, z[1] + 0.2, HQ_WALK.MinX + 1.8, 3.2, z[2] - 0.2, LEAVES_DARK, Enum.Material.Grass)
+	end
+
+	-- team banners on the promenade columns, facing the back road
+	local initial = withTeam(ctx, "", "", "")
+	initial = initial ~= "" and string.sub(initial, 1, 1) or "GO"
+	for i, x in ipairs({ 15, 39, 63, 87 }) do
+		local color = i % 2 == 1 and team.Primary or team.Secondary
+		local banner = span(m, "TeamBanner", x - 1.2, 6, PROM_S - 0.8, x + 1.2, 11.6, PROM_S - 0.6, color, Enum.Material.Fabric, DECOR)
+		faceText(
+			banner,
+			Enum.NormalId.Front,
+			{ { Text = initial, Color = textColorOn(color, { team.Trim, WHITE, INK }), Y0 = 0.2, Y1 = 0.8 } }
+		)
 	end
 
 	-- lamp posts along the open paths
@@ -909,15 +1190,18 @@ local function buildLandscaping(ctx, team)
 	-- team flags beside the Hall of Fame tower
 	local flagColors = { team.Primary, team.Secondary, team.Trim }
 	local flagPoles = {}
-	for i, x in ipairs({ 113, 117.5, 122 }) do
+	for i, x in ipairs({ 110, 116, 122 }) do
 		local pole = post(m, "FlagPole", x, 206, PAVE, 22, 0.5, BRUSHED, Enum.Material.Metal)
-		span(m, "TeamFlag", x + 0.25, 18.4, 205.9, x + 5.2, 21.6, 206.1, flagColors[i], Enum.Material.Fabric, DECOR)
-		BuildUtil.Ball(m, { Name = "FlagPoleCap", Diameter = 0.9, Position = Vector3.new(x, 22.3, 206), Color = GOLD, Material = Enum.Material.Metal })
+		span(m, "TeamFlag", x + 0.25, 18.4, 205.9, x + 4.9, 21.6, 206.1, flagColors[i], Enum.Material.Fabric, DECOR)
+		BuildUtil.Ball(
+			m,
+			{ Name = "FlagPoleCap", Diameter = 0.9, Position = Vector3.new(x, 22.3, 206), Color = GOLD, Material = Enum.Material.Metal }
+		)
 		flagPoles[i] = pole
 	end
 	BuildUtil.Look(flagPoles[2], "Team Flags", "The team colours fly over the campus every day of the season.", {
 		LookKey = "team",
-		At = Vector3.new(0, 4.5 - (22 - PAVE) / 2, 0),
+		At = Vector3.new(4.5 - (22 - PAVE) / 2, 0, 0), -- (a vertical cylinder's local X axis points up)
 	})
 
 	-- benches beside the dome path
@@ -925,21 +1209,48 @@ local function buildLandscaping(ctx, team)
 	bench(m, "PathBench", 4.2, 434, PAVE, Vector3.new(1, 0, 0), 5, team, { Object = "Bench" })
 
 	-- wayfinding signposts
-	signpost(m, "PorchSignpost", PORCH.MaxX - 0.8, 284.5, {
-		{ Dir = "-Z", Text = "HALL OF FAME" },
-		{ Dir = "+Z", Text = "FIELDS + DOME" },
-		{ Dir = "+Z", Text = "GOLF CARTS" },
-	}, team, "Campus Signpost", "Hall of Fame: this way past the Sky Lounge. Practice field, indoor dome and golf carts: follow the Campus Walk along the HQ.")
-	signpost(m, "JunctionSignpost", 92, 403, {
-		{ Dir = "-X", Text = "PRACTICE FIELD" },
-		{ Dir = "+X", Text = "INDOOR DOME" },
-		{ Dir = "-Z", Text = "TEAM HQ" },
-	}, team, "Campus Signpost", "Practice field: down the promenade. Indoor dome: the big entrance just past the tower. Team HQ and the Hall of Fame: back across the road.")
-	signpost(m, "FieldSignpost", 5.5, 403.6, {
-		{ Dir = "-X", Text = "PRACTICE FIELD" },
-		{ Dir = "+Z", Text = "DOME WEST DOOR" },
-		{ Dir = "+X", Text = "TEAM HQ" },
-	}, team, "Campus Signpost", "The practice field's side gate is right here. The dome's west door is up the path, and the Team HQ is back along the Campus Walk.")
+	signpost(
+		m,
+		"PorchSignpost",
+		PORCH.MaxX - 0.8,
+		284.5,
+		{
+			{ Dir = "-Z", Text = "HALL OF FAME" },
+			{ Dir = "+Z", Text = "FIELDS + DOME" },
+			{ Dir = "+Z", Text = "GOLF CARTS" },
+		},
+		team,
+		"Campus Signpost",
+		"Hall of Fame: this way past the Sky Lounge. Practice field, indoor dome and golf carts: follow the Campus Walk along the HQ."
+	)
+	signpost(
+		m,
+		"JunctionSignpost",
+		92,
+		403,
+		{
+			{ Dir = "-X", Text = "PRACTICE FIELD" },
+			{ Dir = "+X", Text = "INDOOR DOME" },
+			{ Dir = "-Z", Text = "TEAM HQ" },
+		},
+		team,
+		"Campus Signpost",
+		"Practice field: down the promenade. Indoor dome: the big entrance just past the tower. Team HQ and the Hall of Fame: back across the road."
+	)
+	signpost(
+		m,
+		"FieldSignpost",
+		5.5,
+		403.6,
+		{
+			{ Dir = "-X", Text = "PRACTICE FIELD" },
+			{ Dir = "+Z", Text = "DOME WEST DOOR" },
+			{ Dir = "+X", Text = "TEAM HQ" },
+		},
+		team,
+		"Campus Signpost",
+		"The practice field's side gate is right here. The dome's west door is up the path, and the Team HQ is back along the Campus Walk."
+	)
 end
 
 ---------------------------------------------------------------------------------------------
