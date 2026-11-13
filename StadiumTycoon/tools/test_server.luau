@@ -682,6 +682,80 @@ local function runTests()
 		check(World.IsNight(Config, 20) and World.IsNight(Config, 3) and not World.IsNight(Config, 12), "IsNight boundaries")
 	end
 
+	section("Bowl geometry (V5)")
+	do
+		local Bowl = requireNode("ServerScriptService/TycoonServer/Bowl")
+		local L = Config.Layout
+		local row1 = Bowl.Row(L, "lower", 1)
+		local row14 = Bowl.Row(L, "lower", 14)
+		check(row1.inner == 0 and row1.outer == 4 and row1.top == 4, "lower row 1: offsets 0..4, top 4")
+		check(row14.outer == 56 and row14.top == 30, "lower row 14 ends at offset 56, flush with the main concourse (y 30)")
+		local upper18 = Bowl.Row(L, "upper", 18)
+		check(upper18.outer == 152 and upper18.top == 104, "the upper deck ends at offset 152, top 104")
+		local segments = Bowl.Segments(L, 20, 24)
+		check(#segments == 8, "every band has 8 segments (4 straight + 4 corners)")
+		local byName = {}
+		for _, seg in ipairs(segments) do
+			byName[seg.name] = seg
+		end
+		local home = byName.home
+		check(
+			math.abs(home.cframe.Position.Z - (L.SurfaceMaxZ + 22)) < 1e-6 and home.cframe.LookVector.Z > 0.99,
+			"home side: centre line at offset 22, facing outward (+Z)"
+		)
+		check(
+			byName.visitor.cframe.LookVector.Z < -0.99
+				and byName.east.cframe.LookVector.X > 0.99
+				and byName.west.cframe.LookVector.X < -0.99,
+			"the other sides face outward too"
+		)
+		local corner = byName.corner_he
+		check(corner.cframe.LookVector.X > 0.7 and corner.cframe.LookVector.Z > 0.7, "corners face outward diagonally")
+		check(
+			math.abs(home.innerLength - 2 * (L.SurfaceHalfX + (math.sqrt(2) - 1) * 20)) < 1e-6,
+			"straight sides grow by 0.83 studs per stud of offset"
+		)
+		check(math.abs(corner.midLength - 2 * (math.sqrt(2) - 1) * 22) < 1e-6, "corners grow from nothing")
+		-- the corner segment's ends meet the straight segments' ends
+		local sideEnd = home.cframe * CFrame.new(-home.midLength / 2, 0, 0) -- (RightVector of the home side is -X)
+		local cornerEnd = corner.cframe * CFrame.new(corner.midLength / 2, 0, 0)
+		local cornerOther = corner.cframe * CFrame.new(-corner.midLength / 2, 0, 0)
+		local gap = math.min((sideEnd.Position - cornerEnd.Position).Magnitude, (sideEnd.Position - cornerOther.Position).Magnitude)
+		check(gap < 0.01, ("the home side and its corner meet (gap %.3f)"):format(gap))
+		local aisles = Bowl.Aisles(L, "side", 300)
+		check(table.find(aisles, -26) ~= nil and table.find(aisles, 78) ~= nil, "aisles at +-26, +-78 ...")
+		local tunnelRow = Bowl.Row(L, "lower", 3)
+		local spots = Bowl.SeatSpots(L, tunnelRow, "home")
+		local inTunnel = false
+		for _, spot in ipairs(spots) do
+			if math.abs(spot.Position.X) < L.Bowl.TunnelHalfWidth then
+				inTunnel = true
+			end
+		end
+		check(#spots > 50 and not inTunnel, ("no fans in the players' tunnel (%d seats on the row)"):format(#spots))
+		local vomRow = Bowl.Row(L, "upper", 5)
+		local vomSpots = Bowl.SeatSpots(L, vomRow, "visitor")
+		local inVom = false
+		for _, spot in ipairs(vomSpots) do
+			if math.abs(math.abs(spot.Position.X) - 52) < 4 then
+				inVom = true
+			end
+		end
+		check(not inVom, "no fans in the upper-deck vomitories")
+		local facing = spots[1].LookVector
+		check(facing.Z < -0.99, "fans face the field")
+		local owned = { ["lower_home:1"] = true, ["upper_ends:1"] = true }
+		local built = Bowl.BuiltRows(L, owned)
+		local tiers = {}
+		for _, entry in ipairs(built) do
+			tiers[entry.row.tier .. ":" .. entry.segment] = true
+		end
+		check(
+			tiers["lower:home"] and tiers["upper:east"] and tiers["upper:west"] and not tiers["upper:corner_he"],
+			"built rows follow the owned steps (upper corners come with step 2)"
+		)
+	end
+
 	section("Plot setup")
 	PlotManager.Init(tycoons, notifyRemote)
 	local Vehicles = requireNode("ServerScriptService/TycoonServer/Vehicles")
