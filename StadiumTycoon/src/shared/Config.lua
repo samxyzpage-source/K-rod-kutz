@@ -14,7 +14,7 @@ local Config = {}
 
 -- General ----------------------------------------------------------------------------------
 Config.GameTitle = "Gridiron Stadium Tycoon"
-Config.PlotCount = 4 -- how many stadium plots per server (1 - 6)
+Config.PlotCount = 6 -- stadium plots per server (1 - 6). Set Max Players in Game Settings to the same number!
 Config.StartingCash = 0
 Config.IncomeMultiplier = 1 -- set to 10 or 100 while testing to build faster
 Config.IncomeTickSeconds = 1 -- how often income is added to the vault

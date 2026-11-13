@@ -8,6 +8,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
 local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
@@ -22,6 +23,10 @@ local TOAST_COLORS = {
 	info = Color3.fromRGB(45, 100, 190),
 }
 local MAX_TOASTS = 5
+local TOAST_HEIGHT = 40
+local TOAST_GAP = 6
+local CLAIM_HINT = "Walk through a glowing GOLD GATE to claim your stadium!"
+local FULL_HINT = "All stadiums are taken right now - one opens when a player leaves."
 local TOAST_SECONDS = 3.5
 
 local function create(className, props, children)
@@ -114,7 +119,7 @@ local hintLabel = create("TextLabel", {
 	BackgroundColor3 = Color3.fromRGB(255, 196, 37),
 	BackgroundTransparency = 0.1,
 	Font = Enum.Font.GothamBlack,
-	Text = "Walk through a glowing GOLD GATE to claim your stadium!",
+	Text = CLAIM_HINT,
 	TextColor3 = Color3.fromRGB(25, 25, 30),
 	TextScaled = true,
 	Parent = screen,
@@ -138,18 +143,22 @@ local saveLabel = create("TextLabel", {
 	Parent = screen,
 }, { corner(6) })
 
+-- Pop-up messages stack upward from the bottom centre (clear of the player list, the chat,
+-- and the mobile thumbstick / jump button).
 local toastContainer = create("Frame", {
 	Name = "Toasts",
-	AnchorPoint = Vector2.new(1, 0),
-	Position = UDim2.new(1, -12, 0, 130),
-	Size = UDim2.new(0, 330, 0.6, 0),
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -40),
+	Size = UDim2.new(0.9, 0, 0, MAX_TOASTS * (TOAST_HEIGHT + TOAST_GAP)),
 	BackgroundTransparency = 1,
 	Parent = screen,
 }, {
+	create("UISizeConstraint", { MaxSize = Vector2.new(440, MAX_TOASTS * (TOAST_HEIGHT + TOAST_GAP)) }),
 	create("UIListLayout", {
-		Padding = UDim.new(0, 6),
+		Padding = UDim.new(0, TOAST_GAP),
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Bottom,
 	}),
 })
 
@@ -183,10 +192,14 @@ local function onIncomeChanged()
 	incomeLabel.Text = ("+%s/s"):format(Format.Money(income))
 end
 
+local tycoonsFolder = Workspace:WaitForChild("Tycoons", 10)
+
 local function onPlotChanged()
 	local hasPlot = player:GetAttribute("PlotIndex") ~= nil
 	hintLabel.Visible = not hasPlot
 	progressLabel.Visible = hasPlot
+	local freePlots = tycoonsFolder and tycoonsFolder:GetAttribute("FreePlots")
+	hintLabel.Text = (freePlots == 0) and FULL_HINT or CLAIM_HINT
 end
 
 local function onBuiltChanged()
@@ -207,6 +220,9 @@ local function onSaveStatusChanged()
 	elseif status == "off" then
 		saveLabel.Text = "Progress saving: OFF"
 		saveLabel.TextColor3 = Color3.fromRGB(255, 150, 150)
+	elseif status == "loadfailed" then
+		saveLabel.Text = "Save didn't load - rejoin later"
+		saveLabel.TextColor3 = Color3.fromRGB(255, 190, 120)
 	else
 		saveLabel.Text = "Loading save..."
 		saveLabel.TextColor3 = Color3.fromRGB(220, 220, 225)
@@ -218,6 +234,9 @@ player:GetAttributeChangedSignal("Income"):Connect(onIncomeChanged)
 player:GetAttributeChangedSignal("PlotIndex"):Connect(onPlotChanged)
 player:GetAttributeChangedSignal("Built"):Connect(onBuiltChanged)
 player:GetAttributeChangedSignal("SaveStatus"):Connect(onSaveStatusChanged)
+if tycoonsFolder then
+	tycoonsFolder:GetAttributeChangedSignal("FreePlots"):Connect(onPlotChanged)
+end
 onCashChanged()
 onIncomeChanged()
 onPlotChanged()
@@ -228,6 +247,7 @@ onSaveStatusChanged()
 -- Toast notifications
 ---------------------------------------------------------------------------------------------
 local toastOrder = 0
+local cashToast = nil -- the current "+$X" toast, reused so collecting doesn't stack up toasts
 
 local function fadeOut(toast)
 	local tweenInfo = TweenInfo.new(0.4)
@@ -242,12 +262,41 @@ local function fadeOut(toast)
 	toast:Destroy()
 end
 
+-- Fades the toast after TOAST_SECONDS unless it was refreshed in the meantime.
+local function scheduleFade(toast)
+	local token = (toast:GetAttribute("FadeToken") or 0) + 1
+	toast:SetAttribute("FadeToken", token)
+	task.delay(TOAST_SECONDS, function()
+		if toast.Parent and toast:GetAttribute("FadeToken") == token then
+			fadeOut(toast)
+		end
+	end)
+end
+
+-- How many toasts fit without covering the middle of small (phone) screens.
+local function maxToasts()
+	local ok, size = pcall(function()
+		return screen.AbsoluteSize
+	end)
+	if not ok or size.Y <= 0 then
+		return MAX_TOASTS -- not laid out yet
+	end
+	return math.clamp(math.floor(size.Y * 0.4 / (TOAST_HEIGHT + TOAST_GAP)), 2, MAX_TOASTS)
+end
+
 local function showToast(message, kind)
 	toastOrder += 1
+	if kind == "cash" and cashToast and cashToast.Parent then
+		cashToast.LayoutOrder = toastOrder
+		cashToast:FindFirstChildOfClass("TextLabel").Text = tostring(message)
+		scheduleFade(cashToast)
+		return
+	end
+
 	local toast = create("Frame", {
 		Name = "Toast",
 		LayoutOrder = toastOrder,
-		Size = UDim2.new(1, 0, 0, 40),
+		Size = UDim2.new(1, 0, 0, TOAST_HEIGHT),
 		BackgroundColor3 = TOAST_COLORS[kind] or TOAST_COLORS.info,
 		BackgroundTransparency = 0.1,
 		Parent = toastContainer,
@@ -264,6 +313,9 @@ local function showToast(message, kind)
 			TextWrapped = true,
 		}),
 	})
+	if kind == "cash" then
+		cashToast = toast
+	end
 
 	-- keep only the newest few
 	local toasts = {}
@@ -275,15 +327,11 @@ local function showToast(message, kind)
 	table.sort(toasts, function(a, b)
 		return a.LayoutOrder < b.LayoutOrder
 	end)
-	for index = 1, #toasts - MAX_TOASTS do
+	for index = 1, #toasts - maxToasts() do
 		toasts[index]:Destroy()
 	end
 
-	task.delay(TOAST_SECONDS, function()
-		if toast.Parent then
-			fadeOut(toast)
-		end
-	end)
+	scheduleFade(toast)
 end
 
 notifyRemote.OnClientEvent:Connect(showToast)

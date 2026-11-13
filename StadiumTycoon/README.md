@@ -24,10 +24,16 @@ The plots, buttons and stadium pieces are built by the scripts when the game sta
 edit mode you only see the ground and the spawn point. That's expected: press Play.
 
 **Multiplayer test:** in Studio open the **Test** tab, set *Clients and Servers* to 2 players
-and press **Start**. Each player can claim a different stadium (4 plots per server).
+and press **Start**. Each player can claim a different stadium (6 plots per server).
 
 **Build faster while testing:** open `ReplicatedStorage > TycoonShared > Config` and set
 `Config.IncomeMultiplier = 50`. Put it back to `1` before publishing.
+
+### Before you publish: set the server size
+
+Each server has 6 stadium plots (`Config.PlotCount`). In **Home > Game Settings > Places**, set
+**Max Players** to **6** so every player gets a stadium. If a server is ever full, players without a
+stadium are told that all stadiums are taken and get a message when one opens up.
 
 ### Turning on saving
 

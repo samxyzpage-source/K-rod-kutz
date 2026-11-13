@@ -158,7 +158,7 @@ local function deepCopy(value)
 end
 
 local function newStore()
-	local store = { data = {}, failWith = nil, delay = 0, writes = 0 }
+	local store = { data = {}, failWith = nil, failNext = 0, delay = 0, writes = 0 }
 	function store:UpdateAsync(key, transform)
 		if self.delay > 0 then
 			task.wait(self.delay)
@@ -167,6 +167,10 @@ local function newStore()
 		end
 		if self.failWith then
 			error(self.failWith)
+		end
+		if self.failNext > 0 then
+			self.failNext -= 1
+			error("502: API Services rejected request with error. HTTP 500 (Internal Server Error)")
 		end
 		local result = transform(deepCopy(self.data[key]))
 		if result ~= nil then
@@ -360,10 +364,75 @@ local fakeGame = {
 	JobId = "server-A",
 	closeHandlers = {},
 }
+local studioMode = false
+local RunServiceMock = {
+	RenderStepped = Signal.new(),
+	Heartbeat = Signal.new(),
+}
+function RunServiceMock:IsStudio()
+	return studioMode
+end
+local guidCounter = 0
+local HttpServiceMock = {}
+function HttpServiceMock:GenerateGUID()
+	guidCounter += 1
+	return "guid-" .. guidCounter
+end
+local tags = {} -- tag -> { instances }
+local tagSignals = {}
+local function tagSignal(tag, kind)
+	local key = tag .. ":" .. kind
+	tagSignals[key] = tagSignals[key] or Signal.new()
+	return tagSignals[key]
+end
+local CollectionServiceMock = {}
+function CollectionServiceMock:AddTag(inst, tag)
+	tags[tag] = tags[tag] or {}
+	table.insert(tags[tag], inst)
+	tagSignal(tag, "added"):Fire(inst)
+end
+function CollectionServiceMock:HasTag(inst, tag)
+	local id = instanceKey(inst)
+	for _, other in ipairs(tags[tag] or {}) do
+		if instanceKey(other) == id then
+			return true
+		end
+	end
+	return false
+end
+function CollectionServiceMock:GetTagged(tag)
+	local list = {}
+	for _, inst in ipairs(tags[tag] or {}) do
+		if inst.Parent then
+			table.insert(list, inst)
+		end
+	end
+	return list
+end
+function CollectionServiceMock:GetInstanceAddedSignal(tag)
+	return tagSignal(tag, "added")
+end
+function CollectionServiceMock:GetInstanceRemovedSignal(tag)
+	return tagSignal(tag, "removed")
+end
+local playedSounds = {}
+local soundService = Instance.new("Folder")
+soundService.Name = "SoundService"
+roblox.implementMethod("Folder", "PlayLocalSound", function(_, sound)
+	table.insert(playedSounds, sound.Name)
+end)
+roblox.implementMethod("Instance", "GetAttributeChangedSignal", function(inst, name)
+	return instanceSignal(inst, "Attr" .. name)
+end)
+
 local services = {
 	Players = Players,
 	TweenService = TweenService,
 	DataStoreService = DataStoreService,
+	RunService = RunServiceMock,
+	HttpService = HttpServiceMock,
+	CollectionService = CollectionServiceMock,
+	SoundService = soundService,
 }
 local lighting = Instance.new("Lighting")
 function fakeGame:GetService(name)
@@ -411,6 +480,8 @@ local function makeEnv(scriptPath)
 		"UDim2",
 		"Enum",
 		"NumberSequence",
+		"NumberSequenceKeypoint",
+		"ColorSequenceKeypoint",
 		"ColorSequence",
 		"NumberRange",
 		"Font",
@@ -460,6 +531,7 @@ end
 
 local tycoons = Instance.new("Folder")
 tycoons.Name = "Tycoons"
+tycoons.Parent = workspace
 
 local function plotModel(index)
 	return tycoons:FindFirstChild("Plot" .. index)
@@ -532,17 +604,28 @@ local function runTests()
 	check(gateLabel and gateLabel.Text == "ALICE'S STADIUM", "gate sign shows owner: " .. tostring(gateLabel and gateLabel.Text))
 	check(button(1, "turf") ~= nil, "turf button appears")
 	check(countChildren(plotModel(1).Buttons) == 1, "only the first button is visible")
+	check(alice:GetAttribute("NextGoal") == "turf", "NextGoal points at the cheapest button: " .. tostring(alice:GetAttribute("NextGoal")))
+	check(CollectionServiceMock:HasTag(button(1, "turf"), "TycoonBuyButton"), "buy buttons are tagged for the client effects")
+	check(tycoons:GetAttribute("FreePlots") == Config.PlotCount - 1, "FreePlots attribute counts free plots")
 	touch(claimTrigger(2), alice)
 	check(alice:GetAttribute("PlotIndex") == 1 and claimTrigger(2).Transparency < 1, "can't claim a second plot")
 	check(lastNotification(alice) and lastNotification(alice).message:find("already own") ~= nil, "told they already own one")
 	touch(claimTrigger(1), bob)
 	check(bob:GetAttribute("PlotIndex") == nil, "Bob can't claim Alice's plot")
+	check(lastNotification(bob) and lastNotification(bob).message:find("Alice's stadium") ~= nil, "Bob is told whose stadium it is")
 
 	section("Buying")
 	touch(button(1, "turf"), bob)
 	check(not aliceProfile.Owned.turf, "Bob can't buy on Alice's plot")
-	check(lastNotification(bob) and lastNotification(bob).message:find("isn't your stadium") ~= nil, "Bob is told it isn't his stadium")
+	check(
+		lastNotification(bob) and lastNotification(bob).message:find("Alice's stadium") ~= nil,
+		"Bob (no stadium) is pointed to a free gate"
+	)
 	touch(button(1, "turf"), alice)
+	check(
+		lastNotification(alice).message:find("Unlocked") ~= nil,
+		"purchase message lists unlocked pieces: " .. lastNotification(alice).message
+	)
 	check(aliceProfile.Owned.turf == true, "free turf bought")
 	check(button(1, "turf") == nil, "turf button removed after buying")
 	check(plotModel(1).Items:FindFirstChild("turf") ~= nil, "turf model built")
@@ -577,8 +660,16 @@ local function runTests()
 	local pad = plotModel(1).Base:FindFirstChild("CollectPad", true)
 	alice.Character.HumanoidRootPart.CFrame = pad.CFrame * CFrame.new(0, 3, 0)
 	local cashOnPad = PlayerData.GetCash(alice)
+	local notificationsBefore = #notifications
 	task.wait(0.3)
 	check(PlayerData.GetCash(alice) > cashOnPad and plot1.Vault < 1, "standing on the pad auto-collects")
+	local cashToasts = 0
+	for index = notificationsBefore + 1, #notifications do
+		if notifications[index].kind == "cash" then
+			cashToasts += 1
+		end
+	end
+	check(cashToasts == 0, ("auto-collect is silent (%d pop-ups)"):format(cashToasts))
 	alice.Character.HumanoidRootPart.CFrame = CFrame.new(0, 3, 0)
 	task.wait(0.1)
 	check(plot1.Vault > 0, "stepping off stops auto-collect")
@@ -723,7 +814,14 @@ local function runTests()
 	local erin = makePlayer("Erin", 3001)
 	local erinProfile = PlayerData.Load(erin)
 	check(erinProfile.Cash == Config.StartingCash, "negative cash ignored")
-	check(erinProfile.Owned.turf and not erinProfile.Owned.not_a_real_item, "unknown item ids dropped")
+	check(erinProfile.Owned.turf and not erinProfile.Owned.not_a_real_item, "unknown item ids aren't built")
+	check(
+		#erinProfile.UnknownOwned == 1 and erinProfile.UnknownOwned[1] == "not_a_real_item",
+		"unknown item ids are remembered (non-strings dropped)"
+	)
+	PlayerData.Save(erin)
+	local erinSaved = dataStore.data.Player_3001
+	check(erinSaved and table.find(erinSaved.Owned, "not_a_real_item") ~= nil, "unknown item ids are written back, not deleted")
 	dataStore.data.Player_3002 = "garbage"
 	local frank = makePlayer("Frank", 3002)
 	local frankProfile = PlayerData.Load(frank)
@@ -743,6 +841,34 @@ local function runTests()
 	check(ginaResult == nil, "Load returns nil when the player left")
 	check(dataStore.data.Player_4001 == nil or dataStore.data.Player_4001.Session == nil, "lock given back after leaving mid-load")
 
+	section("Temporary DataStore errors")
+	dataStore.failNext = 1
+	PlayerData.AddCash(erin, 7)
+	local savedAfterBlip = PlayerData.Save(erin)
+	check(savedAfterBlip == true and erinProfile.CanSave, "a temporary 502 is retried instead of turning saving off")
+	check(PlayerData.IsSavingAvailable(), "saving stays available after a temporary error")
+
+	section("Save from a newer game version")
+	dataStore.data.Player_3003 = { Version = 99, Cash = 50, Owned = { "turf" }, FutureField = true }
+	local ivy = makePlayer("Ivy", 3003)
+	local ivyProfile = PlayerData.Load(ivy)
+	check(ivyProfile and ivyProfile.Cash == 50 and ivyProfile.CanSave == false, "newer-version save is loaded read-only")
+	check(dataStore.data.Player_3003.Session == nil and dataStore.data.Player_3003.Version == 99, "newer-version save is not touched")
+
+	section("Rejoining the same server during the final save")
+	local jack = makePlayer("Jack", 3004)
+	local jackProfile = PlayerData.Load(jack)
+	PlayerData.AddCash(jack, 4321)
+	dataStore.delay = 0.4
+	removePlayer(jack)
+	task.spawn(PlayerData.Release, jack)
+	task.wait(0.05)
+	local jack2 = makePlayer("Jack", 3004)
+	local jack2Profile = PlayerData.Load(jack2)
+	dataStore.delay = 0
+	check(jackProfile.Released and jack2Profile and jack2Profile.Cash == 4321, "rejoin waits for the final save and gets the newest cash")
+	check(jack2Profile and jack2Profile.CanSave, "the new session can save")
+
 	section("Autosave + shutdown")
 	local writesBefore = dataStore.writes
 	task.wait(0.8)
@@ -755,6 +881,7 @@ local function runTests()
 	check(PlayerData.GetProfile(alice2) == nil, "profiles released on shutdown")
 
 	section("DataStore unavailable (Studio API access off)")
+	studioMode = true
 	dataStore.failWith = "502: API Services rejected request with error. Error code: 403 Reason: Studio access to APIs is not allowed."
 	local hank = makePlayer("Hank", 5001)
 	local started = os.clock()
@@ -775,6 +902,8 @@ local function runTests()
 	viewer.PlayerGui = playerGui
 	Players.LocalPlayer = viewer
 	viewer:SetAttribute("Cash", 0)
+	local realFreePlots = tycoons:GetAttribute("FreePlots")
+	tycoons:SetAttribute("FreePlots", 0)
 	local okHud, hudErr = pcall(runScript, "StarterPlayer/StarterPlayerScripts/TycoonClient/HUD")
 	check(okHud, "HUD script runs: " .. tostring(hudErr))
 	local hud = playerGui:FindFirstChild("TycoonHUD")
@@ -783,6 +912,8 @@ local function runTests()
 		local cash = hud:FindFirstChild("Cash", true)
 		local hint = hud:FindFirstChild("Hint", true)
 		check(hint and hint.Visible == true, "claim hint visible before owning a plot")
+		check(hint and hint.Text:find("All stadiums are taken") ~= nil, "hint explains when every stadium is taken")
+		tycoons:SetAttribute("FreePlots", realFreePlots)
 		viewer:SetAttribute("Cash", 1234)
 		task.wait(0.05)
 		check(cash and cash.Text == "$1,234", "cash label updates: " .. tostring(cash and cash.Text))
@@ -819,7 +950,42 @@ local function runTests()
 			end
 		end
 		check(remaining == 0, "toasts fade away")
+		for i = 1, 3 do
+			notifyRemote.OnClientEvent:Fire("+$" .. i, "cash")
+		end
+		task.wait(0.05)
+		local cashFrames = 0
+		for _, child in ipairs(toasts:GetChildren()) do
+			if child:IsA("Frame") then
+				cashFrames += 1
+			end
+		end
+		check(cashFrames == 1, ("cash pop-ups reuse one toast (%d)"):format(cashFrames))
 	end
+
+	section("Client effects")
+	viewer:SetAttribute("PlotIndex", 2)
+	viewer:SetAttribute("NextGoal", "turf")
+	local okFx, fxErr = pcall(runScript, "StarterPlayer/StarterPlayerScripts/TycoonClient/Effects")
+	check(okFx, "Effects script runs: " .. tostring(fxErr))
+	task.wait(0.4)
+	local beam = viewer.Character.HumanoidRootPart:FindFirstChild("TycoonGuide")
+	check(beam ~= nil and beam.Enabled, "guide beam points at the next goal")
+	RunServiceMock.RenderStepped:Fire(0.016)
+	task.wait(0.05)
+	local pulsing = false
+	for _, pad in ipairs(CollectionServiceMock:GetTagged("TycoonBuyButton")) do
+		local ok, value = pcall(function()
+			return pad.LocalTransparencyModifier
+		end)
+		if ok and value ~= nil then
+			pulsing = true
+		end
+	end
+	check(pulsing, "buy buttons pulse")
+	notifyRemote.OnClientEvent:Fire("Built X", "success")
+	task.wait(0.05)
+	check(table.find(playedSounds, "Purchase") ~= nil, "purchase sound plays")
 end
 
 local ranOk, runError = xpcall(runTests, function(err)

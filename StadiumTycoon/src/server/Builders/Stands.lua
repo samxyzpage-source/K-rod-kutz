@@ -24,6 +24,7 @@ local FIELD_WALL_HEIGHT = 3.5
 local FACADE_BOTTOM = 12.8 -- just above the seat strips on the lower bowl's top row
 local FACADE_TOP = 17 -- one stud above the upper deck's first row (acts as its front parapet)
 local GATE_DARK = Color3.fromRGB(28, 28, 34)
+local TUNNEL_WALL_OVERHANG = 0.2 -- lower tunnel walls stick out this far past the visitor bowl's back wall
 
 ---------------------------------------------------------------------------------------------
 -- Small helpers
@@ -181,7 +182,8 @@ local function endCaps(ctx, frame, length, sides, firstHeight, rows, color)
 	end
 end
 
--- Glass safety rail along the top back edge of a stand.
+-- Glass safety rail along the top back edge of a stand. It stands inside the top row's seat strip
+-- (which ends flush with the back wall) so none of its faces are coplanar with the strip's.
 local function backRail(ctx, frame, length, topHeight, depth)
 	standBox(
 		ctx,
@@ -190,7 +192,7 @@ local function backRail(ctx, frame, length, topHeight, depth)
 		Vector3.new(length, 1.6, 0.25),
 		0,
 		topHeight + 0.8,
-		depth - 0.125,
+		depth - 0.45,
 		ctx.config.Colors.Glass,
 		Enum.Material.Glass,
 		{ Transparency = 0.4 }
@@ -262,28 +264,22 @@ end
 local function flag(ctx, frame, x, d, baseY, height, side, color)
 	local C = ctx.config.Colors
 	local polePos = at(frame, x, baseY + height / 2, d).Position
-	BuildUtil.Cylinder(
-		ctx,
-		{
-			Name = "FlagPole",
-			Position = polePos,
-			Height = height,
-			Diameter = 0.4,
-			Axis = "Y",
-			Color = C.Metal,
-			Material = Enum.Material.Metal,
-		}
-	)
-	BuildUtil.Ball(
-		ctx,
-		{
-			Name = "FlagPoleTop",
-			Position = polePos + Vector3.new(0, height / 2 + 0.3, 0),
-			Diameter = 0.8,
-			Color = C.Gold,
-			Material = Enum.Material.Metal,
-		}
-	)
+	BuildUtil.Cylinder(ctx, {
+		Name = "FlagPole",
+		Position = polePos,
+		Height = height,
+		Diameter = 0.4,
+		Axis = "Y",
+		Color = C.Metal,
+		Material = Enum.Material.Metal,
+	})
+	BuildUtil.Ball(ctx, {
+		Name = "FlagPoleTop",
+		Position = polePos + Vector3.new(0, height / 2 + 0.3, 0),
+		Diameter = 0.8,
+		Color = C.Gold,
+		Material = Enum.Material.Metal,
+	})
 	standBox(
 		ctx,
 		frame,
@@ -379,12 +375,16 @@ function Stands.bleachers_visitor(ctx)
 	local wallInner = tunnel - 0.4 -- a little proud of the row ends so their faces don't z-fight
 	local wallOuter = tunnel + 0.8
 	local wallX = (wallInner + wallOuter) / 2
+	-- the walls run 0.2 past the stand's plaza-facing back wall so their back faces don't z-fight
+	-- with it (the upper deck's tunnel walls start where these end)
+	local wallDepth = depth + TUNNEL_WALL_OVERHANG
+	local wallZ = frontZ - wallDepth / 2
 	for _, side in ipairs({ -1, 1 }) do
 		BuildUtil.Box(
 			tunnelCtx,
 			"TunnelWall",
-			Vector3.new(wallOuter - wallInner, wallHeight, depth),
-			Vector3.new(side * wallX, wallHeight / 2, midZ),
+			Vector3.new(wallOuter - wallInner, wallHeight, wallDepth),
+			Vector3.new(side * wallX, wallHeight / 2, wallZ),
 			team.Primary,
 			Enum.Material.Brick
 		)
@@ -401,8 +401,8 @@ function Stands.bleachers_visitor(ctx)
 		BuildUtil.Box(
 			tunnelCtx,
 			"TunnelWallCap",
-			Vector3.new(wallOuter - wallInner + 0.4, 0.4, depth),
-			Vector3.new(side * wallX, wallHeight + 0.2, midZ),
+			Vector3.new(wallOuter - wallInner + 0.4, 0.4, wallDepth),
+			Vector3.new(side * wallX, wallHeight + 0.2, wallZ),
 			team.Trim,
 			Enum.Material.SmoothPlastic
 		)
@@ -486,7 +486,9 @@ end
 
 -- Team-coloured facade band on the front face of an upper deck, filling the gap between the
 -- lower bowl's top row (12) and the upper deck's first row (16), plus a parapet cap.
-local function facade(ctx, frame, length, text)
+-- labels = { { text = "...", from = 0..1, to = 0..1 }, ... }: from/to are fractions of the band's
+-- length, left to right as seen from the field.
+local function facade(ctx, frame, length, labels)
 	local team = ctx.colors
 	local height = FACADE_TOP - FACADE_BOTTOM
 	local band = standBox(
@@ -500,15 +502,25 @@ local function facade(ctx, frame, length, text)
 		team.Primary,
 		Enum.Material.SmoothPlastic
 	)
-	addText(band, TOWARD_FIELD, text, readable(team.Primary, team.Trim), 12)
+	for index, label in ipairs(labels) do
+		local _, textLabel = BuildUtil.SurfaceText(band, TOWARD_FIELD, label.text, {
+			LabelName = band.Name .. "Text" .. index,
+			TextColor3 = readable(team.Primary, team.Trim),
+			PixelsPerStud = 12,
+			Font = Enum.Font.GothamBlack,
+		})
+		textLabel.Position = UDim2.new(label.from, 0, 0, 0)
+		textLabel.Size = UDim2.new(label.to - label.from, 0, 1, 0)
+	end
 	standBox(ctx, frame, "FacadeCap", Vector3.new(length, 0.3, 0.7), 0, FACADE_TOP + 0.15, -0.2, team.Trim, Enum.Material.SmoothPlastic)
+	-- kept low, under the letters' baseline, so it never cuts through the text
 	standBox(
 		ctx,
 		frame,
 		"FacadeStripe",
 		Vector3.new(length, 0.35, 0.1),
 		0,
-		FACADE_BOTTOM + 0.6,
+		FACADE_BOTTOM + 0.3,
 		-0.45,
 		team.Secondary,
 		Enum.Material.SmoothPlastic,
@@ -550,7 +562,7 @@ function Stands.upper_home(ctx)
 		aisles = SIDELINE_AISLES,
 		caps = { -1, 1 },
 	})
-	facade(ctx, frame, length, name .. "      HOME OF THE " .. name .. "      " .. name)
+	facade(ctx, frame, length, { { text = name .. "      HOME OF THE " .. name .. "      " .. name, from = 0, to = 1 } })
 
 	-- Outside (back) wall: concrete cladding, team bands, stadium name and concourse gates
 	local cladding = 0.3
@@ -671,13 +683,15 @@ function Stands.upper_visitor(ctx)
 		Enum.Material.SmoothPlastic
 	)
 	addText(nameSign, Enum.NormalId.Front, name .. " STADIUM", readable(team.Primary, team.Trim))
-	-- tunnel walls under the bridge (a little proud of the row ends) + the runway continues
+	-- tunnel walls under the bridge (a little proud of the row ends) + the runway continues.
+	-- They start where the lower bowl's tunnel walls end (those overhang z = frontZ slightly).
+	local bridgeWallFront = frontZ - TUNNEL_WALL_OVERHANG
 	for _, side in ipairs({ -1, 1 }) do
 		BuildUtil.Box(
 			bridgeCtx,
 			"TunnelWall",
-			Vector3.new(0.4, bridgeBottom, depth),
-			Vector3.new(side * (tunnel - 0.2), bridgeBottom / 2, (frontZ + backZ) / 2),
+			Vector3.new(0.4, bridgeBottom, bridgeWallFront - backZ),
+			Vector3.new(side * (tunnel - 0.2), bridgeBottom / 2, (bridgeWallFront + backZ) / 2),
 			team.Primary,
 			Enum.Material.Brick
 		)
@@ -692,8 +706,12 @@ function Stands.upper_visitor(ctx)
 		{ CanCollide = false }
 	)
 
-	-- Facade across the whole front face (both sections and the bridge)
-	facade(ctx, CFrame.new(0, 0, frontZ), outer * 2, "WELCOME TO " .. name .. " STADIUM")
+	-- Facade across the whole front face (both sections and the bridge). Seen from the field the
+	-- middle of it is hidden behind the tunnel header, so the text sits over the two sections.
+	facade(ctx, CFrame.new(0, 0, frontZ), outer * 2, {
+		{ text = name .. " STADIUM", from = 0.04, to = 0.42 },
+		{ text = "GO " .. name .. "!", from = 0.58, to = 0.96 },
+	})
 end
 
 return Stands

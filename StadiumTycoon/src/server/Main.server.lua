@@ -34,7 +34,13 @@ World.StartDayNight(Config, PlotManager.SetNight)
 local function onPlayerAdded(player)
 	PlotManager.OnPlayerAdded(player)
 	local profile = PlayerData.Load(player)
-	if profile and not profile.CanSave and Config.SaveEnabled then
+	if profile and profile.LoadFailed then
+		notifyRemote:FireClient(
+			player,
+			"We couldn't load your saved stadium right now. Your save is safe - rejoin in a few minutes to get it back.",
+			"error"
+		)
+	elseif profile and not profile.CanSave and Config.SaveEnabled then
 		notifyRemote:FireClient(player, "Saving is off in this server, so progress won't be kept.", "info")
 	end
 end

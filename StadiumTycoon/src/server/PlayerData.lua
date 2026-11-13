@@ -7,16 +7,18 @@
 	  * in Studio: Game Settings > Security > "Enable Studio Access to API Services" is ON.
 	If saving is not available the game still works, progress just isn't kept.
 
-	A light "session lock" stops two servers from overwriting each other's saves when a player
-	quickly hops from one server to another.
+	A "session lock" (a unique id per load, stored with the save) stops two servers - or a
+	quick leave-and-rejoin on the same server - from overwriting each other's saves.
 
 	Player attributes set here (read by the HUD):
 	  Cash        current cash
-	  SaveStatus  "loading" | "on" | "off"
+	  SaveStatus  "loading" | "on" | "off" | "loadfailed"
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
+local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -29,8 +31,10 @@ local LOCK_TIMEOUT = 300 -- a session lock older than this (seconds) is consider
 local LOCK_WAIT_ATTEMPTS = 6 -- how many times to wait for another server to release the lock
 local LOCK_WAIT_SECONDS = 4
 local REQUEST_RETRIES = 3
+local MAX_UNKNOWN_IDS = 200
 
 local profiles = {} -- [Player] = profile
+local releasing = {} -- [userId] = true while that user's final save / unlock is running
 local store = nil
 
 if Config.SaveEnabled then
@@ -57,9 +61,13 @@ end
 local function newProfile(userId)
 	return {
 		Key = keyFor(userId),
+		UserId = userId,
+		SessionId = HttpService:GenerateGUID(false),
 		Cash = Config.StartingCash,
 		Owned = {},
+		UnknownOwned = {}, -- saved item ids this server doesn't know (e.g. from a newer version); kept as-is
 		CanSave = false,
+		LoadFailed = false,
 		Changes = 0, -- bumped on every change
 		SavedChanges = 0, -- value of Changes at the last successful save
 		Saving = false,
@@ -81,62 +89,101 @@ local function applySavedData(profile, data)
 	end
 	if type(data.Owned) == "table" then
 		for _, id in ipairs(data.Owned) do
-			if type(id) == "string" and Items.ById[id] then
-				profile.Owned[id] = true
+			if type(id) == "string" then
+				if Items.ById[id] then
+					profile.Owned[id] = true
+				elseif #profile.UnknownOwned < MAX_UNKNOWN_IDS then
+					table.insert(profile.UnknownOwned, id)
+				end
 			end
 		end
 	end
 end
 
-local function serialize(profile)
+-- Builds the table to save. Fields this version doesn't know about (from `old`) are kept.
+local function serialize(profile, old)
+	local data = {}
+	if type(old) == "table" then
+		for key, value in pairs(old) do
+			data[key] = value
+		end
+	end
 	local owned = {}
 	for id in pairs(profile.Owned) do
 		table.insert(owned, id)
 	end
+	for _, id in ipairs(profile.UnknownOwned) do
+		if not profile.Owned[id] then
+			table.insert(owned, id)
+		end
+	end
 	table.sort(owned)
-	return {
-		Version = DATA_VERSION,
-		Cash = math.floor(profile.Cash),
-		Owned = owned,
-		SavedAt = os.time(),
-	}
+	data.Version = DATA_VERSION
+	data.Cash = math.floor(profile.Cash)
+	data.Owned = owned
+	data.SavedAt = os.time()
+	return data
 end
 
-local function lockIsHeldByOtherServer(data)
+local function newSession(profile)
+	return { JobId = game.JobId, Id = profile.SessionId, Time = os.time() }
+end
+
+-- True if some other session (another server, or an earlier session on this server) still owns the data.
+local function lockedByOtherSession(data, sessionId)
 	if type(data) ~= "table" or type(data.Session) ~= "table" then
 		return false
 	end
 	local session = data.Session
-	if session.JobId == game.JobId then
+	if session.Id == sessionId then
 		return false
+	end
+	if RunService:IsStudio() and session.JobId == "" then
+		return false -- a lock left behind by an earlier Studio test session
 	end
 	return isNumber(session.Time) and os.time() - session.Time < LOCK_TIMEOUT
 end
 
--- Errors that will never go away by retrying (e.g. Studio API access is switched off).
+local function isNewerVersion(data)
+	return type(data) == "table" and isNumber(data.Version) and data.Version > DATA_VERSION
+end
+
+-- Errors that can never succeed by retrying. Only Studio produces these
+-- (API access switched off, or the place isn't published).
 local function isPermanentError(message)
 	message = tostring(message)
 	return message:find("StudioAccessToApisNotAllowed", 1, true) ~= nil
-		or message:find("API Services", 1, true) ~= nil
-		or message:find("403", 1, true) ~= nil
-		or message:find("publish", 1, true) ~= nil
+		or message:find("Studio access to APIs", 1, true) ~= nil
+		or message:find("must publish", 1, true) ~= nil
+end
+
+local function disableSaving(reason)
+	if not store then
+		return
+	end
+	warn("[PlayerData] Saving is turned off for this server: " .. reason)
+	store = nil
+	for player, profile in pairs(profiles) do
+		profile.CanSave = false
+		player:SetAttribute("SaveStatus", "off")
+	end
 end
 
 -- Runs a DataStore request with retries. Returns success, result.
 local function withRetries(description, callback)
 	local lastError
 	for attempt = 1, REQUEST_RETRIES do
+		if not store then
+			return false, "saving is disabled"
+		end
 		local ok, result = pcall(callback)
 		if ok then
 			return true, result
 		end
 		lastError = result
 		warn(("[PlayerData] %s failed (attempt %d/%d): %s"):format(description, attempt, REQUEST_RETRIES, tostring(result)))
-		if isPermanentError(result) then
-			warn(
-				"[PlayerData] Saving is turned off for this server. In Studio, enable Game Settings > Security > 'Enable Studio Access to API Services'."
-			)
-			store = nil
+		if RunService:IsStudio() and isPermanentError(result) then
+			disableSaving("in Studio, enable Game Settings > Security > 'Enable Studio Access to API Services'.")
 			break
 		end
 		if attempt < REQUEST_RETRIES then
@@ -144,6 +191,21 @@ local function withRetries(description, callback)
 		end
 	end
 	return false, lastError
+end
+
+-- Gives the session lock back without changing anything else (only if we still hold it).
+local function unlock(profile)
+	releasing[profile.UserId] = true
+	withRetries("Unlock " .. profile.Key, function()
+		return store:UpdateAsync(profile.Key, function(old)
+			if type(old) == "table" and type(old.Session) == "table" and old.Session.Id == profile.SessionId then
+				old.Session = nil
+				return old
+			end
+			return nil
+		end)
+	end)
+	releasing[profile.UserId] = nil
 end
 
 -- Loads (and session-locks) a player's data. Yields. Returns the profile, or nil if the player left.
@@ -154,22 +216,34 @@ function PlayerData.Load(player)
 	player:SetAttribute("SaveStatus", "loading")
 	local profile = newProfile(player.UserId)
 
+	-- If this player just left this server and their final save is still running, wait for it
+	-- so we read the newest data.
+	while releasing[player.UserId] and player.Parent ~= nil do
+		task.wait(0.1)
+	end
+
 	if store then
 		local loaded = false
 		local requestFailed = false
+		local tooNew = false
 		for lockAttempt = 1, LOCK_WAIT_ATTEMPTS + 1 do
 			local forceSteal = lockAttempt > LOCK_WAIT_ATTEMPTS
 			local lockedElsewhere = false
 			local savedData = nil
 			local ok = withRetries("Load " .. profile.Key, function()
 				return store:UpdateAsync(profile.Key, function(old)
-					if not forceSteal and lockIsHeldByOtherServer(old) then
-						lockedElsewhere = true
-						return nil -- don't write; another server still owns this data
+					lockedElsewhere, tooNew = false, false
+					if isNewerVersion(old) then
+						tooNew = true
+						savedData = old
+						return nil -- saved by a newer version of the game: read it, never write it
 					end
-					lockedElsewhere = false
+					if not forceSteal and lockedByOtherSession(old, profile.SessionId) then
+						lockedElsewhere = true
+						return nil -- don't write; another session still owns this data
+					end
 					local data = type(old) == "table" and old or {}
-					data.Session = { JobId = game.JobId, Time = os.time() }
+					data.Session = newSession(profile)
 					savedData = data
 					return data
 				end)
@@ -188,31 +262,29 @@ function PlayerData.Load(player)
 			end
 			task.wait(LOCK_WAIT_SECONDS)
 		end
-		profile.CanSave = loaded and not requestFailed
+		profile.CanSave = loaded and not requestFailed and not tooNew and store ~= nil
+		profile.LoadFailed = requestFailed and store ~= nil
+		if tooNew then
+			warn("[PlayerData] " .. profile.Key .. " was saved by a newer version of the game; this server won't save it.")
+		end
 	end
 
 	if player.Parent == nil then
 		-- The player left while we were loading: give the lock back without touching their data.
 		if profile.CanSave then
 			profile.Released = true
-			task.spawn(function()
-				withRetries("Unlock " .. profile.Key, function()
-					return store:UpdateAsync(profile.Key, function(old)
-						if type(old) == "table" and type(old.Session) == "table" and old.Session.JobId == game.JobId then
-							old.Session = nil
-							return old
-						end
-						return nil
-					end)
-				end)
-			end)
+			task.spawn(unlock, profile)
 		end
 		return nil
 	end
 
 	profiles[player] = profile
 	player:SetAttribute("Cash", profile.Cash)
-	player:SetAttribute("SaveStatus", profile.CanSave and "on" or "off")
+	if profile.LoadFailed then
+		player:SetAttribute("SaveStatus", "loadfailed")
+	else
+		player:SetAttribute("SaveStatus", profile.CanSave and "on" or "off")
+	end
 	return profile
 end
 
@@ -224,28 +296,31 @@ local function saveProfile(profile, release)
 	while profile.Saving do
 		task.wait(0.1)
 	end
+	if not store or not profile.CanSave then
+		return false
+	end
 	profile.Saving = true
 	local changesAtSave = profile.Changes
-	local data = serialize(profile)
-	local stolen = false
+	local lost = false
 	local ok = withRetries("Save " .. profile.Key, function()
 		return store:UpdateAsync(profile.Key, function(old)
-			if lockIsHeldByOtherServer(old) then
-				stolen = true
-				return nil -- another server took over this player's data; don't overwrite it
+			if type(old) ~= "table" or type(old.Session) ~= "table" or old.Session.Id ~= profile.SessionId then
+				lost = true
+				return nil -- another session owns this data now; never overwrite it
 			end
-			stolen = false
-			data.Session = (not release) and { JobId = game.JobId, Time = os.time() } or nil
+			lost = false
+			local data = serialize(profile, old)
+			data.Session = (not release) and newSession(profile) or nil
 			return data
 		end)
 	end)
 	profile.Saving = false
-	if ok and not stolen then
+	if ok and not lost then
 		profile.SavedChanges = math.max(profile.SavedChanges, changesAtSave)
 		return true
 	end
-	if stolen then
-		warn("[PlayerData] " .. profile.Key .. " is now owned by another server; this server will stop saving it.")
+	if lost then
+		warn("[PlayerData] " .. profile.Key .. " is owned by another session now; this server will stop saving it.")
 		profile.CanSave = false
 	end
 	return false
@@ -320,7 +395,9 @@ function PlayerData.Release(player)
 		return
 	end
 	profile.Released = true
+	releasing[profile.UserId] = true
 	saveProfile(profile, true)
+	releasing[profile.UserId] = nil
 	profiles[player] = nil
 end
 
@@ -340,15 +417,14 @@ end
 
 -- Periodically saves every profile (this also refreshes the session lock).
 function PlayerData.StartAutosave()
-	if not store then
-		return
-	end
 	task.spawn(function()
 		while true do
 			task.wait(Config.AutosaveSeconds)
-			for _, profile in pairs(profiles) do
-				if not profile.Released and profile.CanSave then
-					task.spawn(saveProfile, profile, false)
+			if store then
+				for _, profile in pairs(profiles) do
+					if not profile.Released and profile.CanSave then
+						task.spawn(saveProfile, profile, false)
+					end
 				end
 			end
 		end

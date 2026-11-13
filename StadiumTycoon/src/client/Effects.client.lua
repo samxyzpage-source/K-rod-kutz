@@ -114,7 +114,7 @@ local function updateGuide()
 	if beam.Parent ~= root then
 		beam.Parent = root
 	end
-	beam.Enabled = (root.Position - pad.Position).Magnitude > GUIDE_HIDE_DISTANCE
+	beam.Enabled = (root.CFrame.Position - pad.CFrame.Position).Magnitude > GUIDE_HIDE_DISTANCE
 end
 
 task.spawn(function()

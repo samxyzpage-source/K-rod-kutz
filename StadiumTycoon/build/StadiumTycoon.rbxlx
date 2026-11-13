@@ -52,7 +52,7 @@ local Config = {}
 
 -- General ----------------------------------------------------------------------------------
 Config.GameTitle = "Gridiron Stadium Tycoon"
-Config.PlotCount = 4 -- how many stadium plots per server (1 - 6)
+Config.PlotCount = 6 -- stadium plots per server (1 - 6). Set Max Players in Game Settings to the same number!
 Config.StartingCash = 0
 Config.IncomeMultiplier = 1 -- set to 10 or 100 while testing to build faster
 Config.IncomeTickSeconds = 1 -- how often income is added to the vault
@@ -70,6 +70,14 @@ Config.NightStartsAt = 18 -- ClockTime when stadium lights switch on
 Config.NightEndsAt = 6.5 -- ClockTime when stadium lights switch off
 Config.BuildAnimation = true
 Config.RespawnAtPlot = true -- owners respawn at their own stadium
+Config.ShowGuideBeam = true -- a glowing beam points to your next buy button
+
+-- Sounds (client only). Set Id = "" to turn one off, or paste your own "rbxassetid://123..." ids.
+Config.Sounds = {
+	Purchase = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.6, Speed = 1 },
+	Collect = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.35, Speed = 1.5 },
+	Error = { Id = "", Volume = 0.4, Speed = 0.8 },
+}
 
 -- Team colours: plot N uses palette N -------------------------------------------------------
 Config.TeamColors = {
@@ -762,6 +770,970 @@ return Builders
         </Properties>
         <Item class="ModuleScript" referent="11">
           <Properties>
+            <string name="Name">Features</string>
+            <string name="Source"><![CDATA[--[[
+	Features
+	The "big league" upgrades that sit around and above the seating bowl.
+
+	  scoreboard  east, behind the east end-zone stands; three LED panels face the field (-X)
+	  lights      four flood-light towers in the open corners of the bowl, aimed at the field
+	  jumbotron   west, behind the west end-zone stands; one giant screen faces the field (+X)
+	  pressbox    glass box on columns behind the back (home) upper deck, windows face the field
+	  suites      two glass-fronted luxury suite levels behind the front (visitor) upper deck
+	  canopy      cantilevered roofs over both sideline upper decks, masts on the outer side
+
+	Runtime contracts (the PlotManager finds these by name, do not rename them):
+	  scoreboard  TextLabels "ScoreboardTitle", "ScoreboardScore", "ScoreboardAttendance"
+	  lights      SpotLights named "FloodLight" (start disabled) and Parts named "FloodPanel"
+	              (SmoothPlastic by day, the server switches them to Neon at night)
+	  jumbotron   TextLabel "JumbotronText"
+]]
+
+local BuildUtil = require(script.Parent.Parent.BuildUtil)
+
+local Features = {}
+
+local SCREEN_BLACK = Color3.fromRGB(10, 10, 14)
+local STEEL = Color3.fromRGB(78, 84, 94)
+local SPEAKER_GREY = Color3.fromRGB(38, 38, 44)
+local CONE_GREY = Color3.fromRGB(70, 70, 78)
+local WARM_WHITE = Color3.fromRGB(255, 243, 214)
+local ROOF_WHITE = Color3.fromRGB(232, 235, 240)
+local LED_AMBER = Color3.fromRGB(255, 196, 40)
+local LED_GREEN = Color3.fromRGB(110, 255, 140)
+local BEACON_RED = Color3.fromRGB(255, 40, 40)
+local DOOR_DARK = Color3.fromRGB(32, 32, 38)
+
+local NO_COLLIDE = { CanCollide = false }
+
+---------------------------------------------------------------------------------------------
+-- Helpers
+---------------------------------------------------------------------------------------------
+
+local function luminance(color)
+	return 0.299 * color.R + 0.587 * color.G + 0.114 * color.B
+end
+
+-- Returns `preferred` when it reads well on `background`, otherwise near-white or near-black.
+local function readable(background, preferred)
+	if math.abs(luminance(background) - luminance(preferred)) >= 0.3 then
+		return preferred
+	end
+	if luminance(background) > 0.55 then
+		return Color3.fromRGB(20, 20, 26)
+	end
+	return Color3.fromRGB(250, 250, 250)
+end
+
+-- A square-section bar running from local point `a` to local point `b`.
+local function strut(ctx, name, a, b, width, color, material)
+	return BuildUtil.Part(ctx, {
+		Name = name,
+		Size = Vector3.new(width, width, (b - a).Magnitude),
+		CFrame = CFrame.lookAt((a + b) / 2, b),
+		Color = color,
+		Material = material or Enum.Material.Metal,
+	})
+end
+
+-- A thin, self-lit display panel with one TextLabel covering `face`.
+local function screen(ctx, name, size, position, face, text, opts)
+	local part = BuildUtil.Box(ctx, name, size, position, SCREEN_BLACK, Enum.Material.SmoothPlastic)
+	local _, label = BuildUtil.SurfaceText(part, face, text, {
+		LabelName = opts.LabelName,
+		TextColor3 = opts.TextColor3,
+		BackgroundColor3 = opts.BackgroundColor3 or SCREEN_BLACK,
+		BackgroundTransparency = 0,
+		LightInfluence = 0,
+		Font = opts.Font or Enum.Font.GothamBlack,
+		PixelsPerStud = opts.PixelsPerStud or 16,
+		TextStrokeTransparency = opts.TextStrokeTransparency,
+	})
+	return part, label
+end
+
+-- A sign board with team-coloured text on one face.
+local function sign(ctx, name, size, cframe, background, face, text, textColor, pixelsPerStud)
+	local part = BuildUtil.Part(ctx, {
+		Name = name,
+		Size = size,
+		CFrame = cframe,
+		Color = background,
+		Material = Enum.Material.SmoothPlastic,
+	})
+	BuildUtil.SurfaceText(part, face, text, {
+		LabelName = name .. "Text",
+		TextColor3 = readable(background, textColor),
+		PixelsPerStud = pixelsPerStud or 16,
+		Font = Enum.Font.GothamBlack,
+	})
+	return part
+end
+
+-- Concrete footing + pylon pair holding up a display board (scoreboard / jumbotron).
+-- `centre` is the footprint centre of the pylon, the pylon top is at `topY`.
+local function pylon(ctx, centre, topY, size, C)
+	BuildUtil.Block(ctx, "Footing", Vector3.new(size + 2.5, 1, size + 2.5), centre, C.ConcreteDark, Enum.Material.Concrete)
+	BuildUtil.Block(ctx, "Pylon", Vector3.new(size, topY - 1, size), centre, C.Concrete, Enum.Material.Concrete, nil, 1)
+end
+
+---------------------------------------------------------------------------------------------
+-- Scoreboard (east)
+---------------------------------------------------------------------------------------------
+
+function Features.scoreboard(ctx)
+	local L = ctx.config.Layout
+	local C = ctx.config.Colors
+	local team = ctx.colors
+
+	local centreZ = L.FieldCenterZ
+	local faceX = L.EndLowerOuterX + 9 -- 168: the field-facing (-X) face of the housing
+	local depth = 4
+	local midX = faceX + depth / 2
+	local width = 46 -- along Z
+	local bottom, top = 18, 44
+	local girderBottom = bottom - 1.5
+
+	-- Supports: two concrete pylons, a steel girder, a service catwalk and a ladder
+	for _, dz in ipairs({ -17, 17 }) do
+		pylon(ctx, Vector3.new(midX + 0.5, 0, centreZ + dz), girderBottom, 3.5, C)
+	end
+	BuildUtil.Box(
+		ctx,
+		"Girder",
+		Vector3.new(3, 1.5, width - 4),
+		Vector3.new(midX, girderBottom + 0.75, centreZ),
+		STEEL,
+		Enum.Material.Metal
+	)
+	BuildUtil.Box(
+		ctx,
+		"Catwalk",
+		Vector3.new(2.4, 0.3, width),
+		Vector3.new(faceX - 1.2, bottom - 0.15, centreZ),
+		STEEL,
+		Enum.Material.DiamondPlate
+	)
+	BuildUtil.Box(
+		ctx,
+		"Ladder",
+		Vector3.new(0.3, girderBottom - 1, 1.6),
+		Vector3.new(midX + 0.5 - 1.9, 1 + (girderBottom - 1) / 2, centreZ - 17),
+		STEEL,
+		Enum.Material.Metal,
+		NO_COLLIDE
+	)
+
+	-- Housing in team colours with a crown and side wings
+	local housing = BuildUtil.Box(
+		ctx,
+		"Housing",
+		Vector3.new(depth, top - bottom, width),
+		Vector3.new(midX, (bottom + top) / 2, centreZ),
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.SurfaceText(housing, Enum.NormalId.Right, ctx.teamName, {
+		LabelName = "ScoreboardBackText",
+		TextColor3 = readable(team.Primary, team.Trim),
+		PixelsPerStud = 6,
+	})
+	BuildUtil.Box(
+		ctx,
+		"Crown",
+		Vector3.new(depth + 1, 1.6, width + 2),
+		Vector3.new(midX, top + 0.8, centreZ),
+		team.Secondary,
+		Enum.Material.SmoothPlastic
+	)
+	for _, side in ipairs({ -1, 1 }) do
+		BuildUtil.Box(
+			ctx,
+			"Wing",
+			Vector3.new(depth + 0.6, top - bottom - 4, 1.2),
+			Vector3.new(midX, (bottom + top) / 2, centreZ + side * (width / 2 + 0.6)),
+			team.Secondary,
+			Enum.Material.SmoothPlastic
+		)
+	end
+
+	-- Three LED panels on the field-facing face (unrotated parts: -X is the Left face)
+	local screenX = faceX - 0.2
+	local panelWidth = width - 4
+	screen(
+		ctx,
+		"TitleScreen",
+		Vector3.new(0.4, 5.4, panelWidth),
+		Vector3.new(screenX, 39.9, centreZ),
+		Enum.NormalId.Left,
+		ctx.teamName .. " STADIUM",
+		{
+			LabelName = "ScoreboardTitle",
+			TextColor3 = team.Trim,
+			PixelsPerStud = 20,
+		}
+	)
+	screen(
+		ctx,
+		"ScoreScreen",
+		Vector3.new(0.4, 9.6, panelWidth),
+		Vector3.new(screenX, 31.2, centreZ),
+		Enum.NormalId.Left,
+		"HOME 0  -  AWAY 0",
+		{
+			LabelName = "ScoreboardScore",
+			TextColor3 = LED_AMBER,
+			Font = Enum.Font.Arcade,
+			PixelsPerStud = 20,
+		}
+	)
+	screen(
+		ctx,
+		"AttendanceScreen",
+		Vector3.new(0.4, 5, panelWidth),
+		Vector3.new(screenX, 22.7, centreZ),
+		Enum.NormalId.Left,
+		"ATTENDANCE 0",
+		{
+			LabelName = "ScoreboardAttendance",
+			TextColor3 = LED_GREEN,
+			Font = Enum.Font.GothamBold,
+			PixelsPerStud = 20,
+		}
+	)
+	BuildUtil.Box(
+		ctx,
+		"LedStrip",
+		Vector3.new(0.3, 0.6, panelWidth),
+		Vector3.new(faceX - 0.15, 19.1, centreZ),
+		team.Secondary,
+		Enum.Material.Neon,
+		NO_COLLIDE
+	)
+end
+
+---------------------------------------------------------------------------------------------
+-- Light towers (four corners)
+---------------------------------------------------------------------------------------------
+
+local MAST_TOP = 63 -- the main light bank is centred here
+local LEG_TOP = 40 -- the four lattice legs meet the mast here
+local LOW_BANK_Y = 33 -- a smaller second bank low enough for its lights to reach the field
+
+-- A grid of FloodPanels on a dark back plate. `cframe` faces the target (Front face = -Z).
+-- lit = list of { column, row, angle, brightness } panels that carry a FloodLight SpotLight.
+local function floodBank(ctx, cframe, columns, rows, panelSize, lit)
+	local gap = 0.4
+	local plateWidth = columns * (panelSize.X + gap) + gap
+	local plateHeight = rows * (panelSize.Y + gap) + gap
+	BuildUtil.Part(ctx, {
+		Name = "LightBankPlate",
+		Size = Vector3.new(plateWidth, plateHeight, 0.8),
+		CFrame = cframe * CFrame.new(0, 0, 0.4),
+		Color = STEEL,
+		Material = Enum.Material.Metal,
+	})
+	local panels = {}
+	for column = 1, columns do
+		for row = 1, rows do
+			local x = (column - (columns + 1) / 2) * (panelSize.X + gap)
+			local y = (row - (rows + 1) / 2) * (panelSize.Y + gap)
+			local panel = BuildUtil.Part(ctx, {
+				Name = "FloodPanel",
+				Size = panelSize,
+				CFrame = cframe * CFrame.new(x, y, -panelSize.Z / 2),
+				Color = WARM_WHITE,
+				Material = Enum.Material.SmoothPlastic,
+				CastShadow = false,
+			})
+			panels[column .. "," .. row] = panel
+		end
+	end
+	for _, spec in ipairs(lit) do
+		BuildUtil.Light(panels[spec[1] .. "," .. spec[2]], "SpotLight", {
+			Name = "FloodLight",
+			Enabled = false,
+			Face = Enum.NormalId.Front,
+			Range = 60,
+			Angle = spec[3],
+			Brightness = spec[4],
+			Color = WARM_WHITE,
+		})
+	end
+	return plateWidth, plateHeight
+end
+
+local function lightTower(ctx, name, base, target)
+	local C = ctx.config.Colors
+	local team = ctx.colors
+	local tower = BuildUtil.Child(ctx, name)
+	local toField = Vector3.new(target.X - base.X, 0, target.Z - base.Z).Unit
+
+	BuildUtil.Block(tower, "TowerFooting", Vector3.new(8, 1.2, 8), base, C.ConcreteDark, Enum.Material.Concrete)
+	BuildUtil.Cylinder(tower, {
+		Name = "TowerMast",
+		Position = Vector3.new(base.X, (1.2 + MAST_TOP) / 2, base.Z),
+		Height = MAST_TOP - 1.2,
+		Diameter = 2.2,
+		Axis = "Y",
+		Color = C.Metal,
+		Material = Enum.Material.Metal,
+	})
+	-- tapered lattice legs from a wide base up to the service platform
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			strut(
+				tower,
+				"TowerLeg",
+				Vector3.new(base.X + sx * 3.2, 1.2, base.Z + sz * 3.2),
+				Vector3.new(base.X + sx * 1, LEG_TOP, base.Z + sz * 1),
+				0.8,
+				C.Metal
+			)
+		end
+	end
+	BuildUtil.Box(
+		tower,
+		"TowerPlatform",
+		Vector3.new(5.5, 0.5, 5.5),
+		Vector3.new(base.X, LEG_TOP + 0.25, base.Z),
+		team.Secondary,
+		Enum.Material.DiamondPlate
+	)
+
+	-- main light bank on top, its back resting against the mast, aimed at the field centre
+	local headPosition = Vector3.new(base.X, MAST_TOP, base.Z) + toField * 1.9
+	local head = CFrame.lookAt(headPosition, target)
+	local plateWidth, plateHeight = floodBank(tower, head, 3, 2, Vector3.new(5.4, 4.6, 0.5), {
+		{ 2, 1, 60, 5 },
+		{ 2, 2, 60, 5 },
+	})
+	BuildUtil.Part(tower, {
+		Name = "LightBankVisor",
+		Size = Vector3.new(plateWidth + 0.6, 0.4, 2.8),
+		CFrame = head * CFrame.new(0, plateHeight / 2 + 0.2, -0.6),
+		Color = team.Primary,
+		Material = Enum.Material.SmoothPlastic,
+	})
+	BuildUtil.Ball(tower, {
+		Name = "AviationBeacon",
+		Position = (head * CFrame.new(0, plateHeight / 2 + 1, 0.4)).Position,
+		Diameter = 1.2,
+		Color = BEACON_RED,
+		Material = Enum.Material.Neon,
+	})
+
+	-- a smaller bank lower down (the main bank is too high for a 60 stud light to reach the turf)
+	local lowPosition = Vector3.new(base.X, LOW_BANK_Y, base.Z) + toField * 2
+	floodBank(tower, CFrame.lookAt(lowPosition, target), 2, 1, Vector3.new(3.8, 3.2, 0.5), {
+		{ 1, 1, 80, 3 },
+	})
+end
+
+function Features.lights(ctx)
+	local L = ctx.config.Layout
+	local target = Vector3.new(0, 0, L.FieldCenterZ)
+	local x = L.EndLowerOuterX - 17 -- 142: centre of the open corner between the stands
+	local frontZ = L.FrontLowerOuterZ + 7 -- -52
+	local backZ = L.BackLowerOuterZ - 7 -- 112
+	lightTower(ctx, "TowerFrontWest", Vector3.new(-x, 0, frontZ), target)
+	lightTower(ctx, "TowerFrontEast", Vector3.new(x, 0, frontZ), target)
+	lightTower(ctx, "TowerBackWest", Vector3.new(-x, 0, backZ), target)
+	lightTower(ctx, "TowerBackEast", Vector3.new(x, 0, backZ), target)
+end
+
+---------------------------------------------------------------------------------------------
+-- Jumbotron (west)
+---------------------------------------------------------------------------------------------
+
+function Features.jumbotron(ctx)
+	local L = ctx.config.Layout
+	local C = ctx.config.Colors
+	local team = ctx.colors
+
+	local centreZ = L.FieldCenterZ
+	local faceX = -(L.EndLowerOuterX + 12) -- -171: the field-facing (+X) face of the housing
+	local depth = 5
+	local midX = faceX - depth / 2
+	local width = 48 -- along Z
+	local bottom, top = 20, 52
+	local girderBottom = bottom - 2
+
+	-- Supports
+	for _, dz in ipairs({ -16, 16 }) do
+		pylon(ctx, Vector3.new(midX, 0, centreZ + dz), girderBottom, 4, C)
+	end
+	BuildUtil.Box(ctx, "Girder", Vector3.new(3.5, 2, width - 4), Vector3.new(midX, girderBottom + 1, centreZ), STEEL, Enum.Material.Metal)
+	BuildUtil.Box(
+		ctx,
+		"Catwalk",
+		Vector3.new(2.4, 0.3, width),
+		Vector3.new(faceX + 1.2, bottom - 0.15, centreZ),
+		STEEL,
+		Enum.Material.DiamondPlate
+	)
+
+	-- Housing, crown and a team-coloured bezel around the screen
+	local housing = BuildUtil.Box(
+		ctx,
+		"Housing",
+		Vector3.new(depth, top - bottom, width),
+		Vector3.new(midX, (bottom + top) / 2, centreZ),
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.SurfaceText(housing, Enum.NormalId.Left, ctx.teamName, {
+		LabelName = "JumbotronBackText",
+		TextColor3 = readable(team.Primary, team.Trim),
+		PixelsPerStud = 6,
+	})
+	BuildUtil.Box(
+		ctx,
+		"Crown",
+		Vector3.new(depth + 1, 2, width + 2),
+		Vector3.new(midX, top + 1, centreZ),
+		team.Secondary,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.Box(
+		ctx,
+		"Bezel",
+		Vector3.new(0.2, top - bottom - 2, width - 2),
+		Vector3.new(faceX + 0.1, (bottom + top) / 2, centreZ),
+		team.Secondary,
+		Enum.Material.SmoothPlastic
+	)
+
+	-- The screen (unrotated part: +X is the Right face)
+	screen(ctx, "Screen", Vector3.new(0.4, 27, width - 6), Vector3.new(faceX + 0.4, 36, centreZ), Enum.NormalId.Right, ctx.teamName, {
+		LabelName = "JumbotronText",
+		TextColor3 = team.Trim,
+		BackgroundColor3 = team.Primary,
+		TextStrokeTransparency = 0.3,
+		PixelsPerStud = 12,
+	})
+	BuildUtil.Box(
+		ctx,
+		"LedStrip",
+		Vector3.new(0.3, 0.6, width - 6),
+		Vector3.new(faceX + 0.35, bottom + 1.7, centreZ),
+		team.Trim,
+		Enum.Material.Neon,
+		NO_COLLIDE
+	)
+
+	-- Speaker stacks hanging off both sides
+	for _, side in ipairs({ -1, 1 }) do
+		local z = centreZ + side * (width / 2 + 2)
+		BuildUtil.Box(ctx, "Speaker", Vector3.new(4, 14, 4), Vector3.new(faceX - 2, 35, z), SPEAKER_GREY, Enum.Material.Fabric)
+		for _, y in ipairs({ 31.5, 38.5 }) do
+			BuildUtil.Cylinder(ctx, {
+				Name = "SpeakerCone",
+				Position = Vector3.new(faceX + 0.2, y, z),
+				Height = 0.4,
+				Diameter = 3,
+				Axis = "X",
+				Color = CONE_GREY,
+				Material = Enum.Material.SmoothPlastic,
+			})
+		end
+	end
+end
+
+---------------------------------------------------------------------------------------------
+-- Press box (behind the back upper deck)
+---------------------------------------------------------------------------------------------
+
+function Features.pressbox(ctx)
+	local L = ctx.config.Layout
+	local C = ctx.config.Colors
+	local team = ctx.colors
+
+	-- Footprint X[-40, 40], Z[143, 158]. The roof covers all of it; the walls sit inside so the
+	-- roof overhangs 2.5 studs on the field side (and 2 at each end).
+	local deckBack = L.BackUpperOuterZ -- 143: outside wall of the upper deck (its bands reach 143.7)
+	local slabFront = deckBack + 1 -- 144
+	local z0 = deckBack + 2.5 -- 145.5: window wall
+	local z1 = deckBack + 14 -- 157: inside of the back wall
+	local roofFront = deckBack + 0.4 -- the fascia sign hangs in front of this, inside the footprint
+	local halfX = 38
+	local roofHalfX = 40
+	local floorY = L.UpperTopHeight -- level with the top row of the upper deck
+	local ceilingY = floorY + 9
+	local zMid = (z0 + z1) / 2
+	local slabBottom = floorY - 1.6
+	local glassBottom, glassTop = floorY + 0.8, ceilingY - 1.2
+
+	-- Supports: two stair cores with doors and two round columns (clear of GATE F at x = 0)
+	for _, side in ipairs({ -1, 1 }) do
+		BuildUtil.Block(
+			ctx,
+			"StairCore",
+			Vector3.new(8, slabBottom, 10),
+			Vector3.new(side * 31, 0, zMid),
+			C.Concrete,
+			Enum.Material.Concrete
+		)
+		BuildUtil.Block(
+			ctx,
+			"CoreDoor",
+			Vector3.new(3.5, 7, 0.2),
+			Vector3.new(side * 31, 0, zMid + 5.1),
+			DOOR_DARK,
+			Enum.Material.SmoothPlastic
+		)
+		BuildUtil.Cylinder(ctx, {
+			Name = "Column",
+			Position = Vector3.new(side * 14, slabBottom / 2, zMid),
+			Height = slabBottom,
+			Diameter = 2.4,
+			Axis = "Y",
+			Color = C.Concrete,
+			Material = Enum.Material.Concrete,
+		})
+	end
+
+	-- Shell
+	BuildUtil.Box(
+		ctx,
+		"FloorSlab",
+		Vector3.new(halfX * 2, 1.6, z1 + 1 - slabFront),
+		Vector3.new(0, floorY - 0.8, (slabFront + z1 + 1) / 2),
+		C.ConcreteDark,
+		Enum.Material.Concrete
+	)
+	local backWall = BuildUtil.Box(
+		ctx,
+		"BackWall",
+		Vector3.new(halfX * 2, ceilingY - floorY, 1),
+		Vector3.new(0, (floorY + ceilingY) / 2, z1 + 0.5),
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.SurfaceText(backWall, Enum.NormalId.Back, ctx.teamName .. " MEDIA CENTER", {
+		LabelName = "MediaCenterText",
+		TextColor3 = readable(team.Primary, team.Trim),
+		PixelsPerStud = 8,
+	})
+	for _, side in ipairs({ -1, 1 }) do
+		BuildUtil.Box(
+			ctx,
+			"SideWall",
+			Vector3.new(1, ceilingY - floorY, z1 - z0),
+			Vector3.new(side * (halfX - 0.5), (floorY + ceilingY) / 2, zMid),
+			team.Primary,
+			Enum.Material.SmoothPlastic
+		)
+	end
+
+	-- Field-facing window wall
+	local frontZ = z0 + 0.4
+	BuildUtil.Box(
+		ctx,
+		"Sill",
+		Vector3.new(halfX * 2 - 2, glassBottom - floorY, 0.8),
+		Vector3.new(0, (floorY + glassBottom) / 2, frontZ),
+		team.Secondary,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.Box(
+		ctx,
+		"Windows",
+		Vector3.new(halfX * 2 - 2, glassTop - glassBottom, 0.3),
+		Vector3.new(0, (glassBottom + glassTop) / 2, frontZ),
+		C.Glass,
+		Enum.Material.Glass,
+		{ Transparency = 0.4 }
+	)
+	BuildUtil.Box(
+		ctx,
+		"Header",
+		Vector3.new(halfX * 2 - 2, ceilingY - glassTop, 0.8),
+		Vector3.new(0, (glassTop + ceilingY) / 2, frontZ),
+		team.Secondary,
+		Enum.Material.SmoothPlastic
+	)
+	for _, x in ipairs({ -26, -13, 0, 13, 26 }) do
+		BuildUtil.Box(
+			ctx,
+			"Mullion",
+			Vector3.new(0.5, glassTop - glassBottom, 0.5),
+			Vector3.new(x, (glassBottom + glassTop) / 2, frontZ),
+			STEEL,
+			Enum.Material.Metal
+		)
+	end
+
+	-- Roof with an overhang toward the field and the sign on its fascia
+	BuildUtil.Box(
+		ctx,
+		"Roof",
+		Vector3.new(roofHalfX * 2, 0.8, z1 + 1 - roofFront),
+		Vector3.new(0, ceilingY + 0.4, (roofFront + z1 + 1) / 2),
+		C.Concrete,
+		Enum.Material.Concrete
+	)
+	sign(
+		ctx,
+		"PressSign",
+		Vector3.new(roofHalfX * 2, 2.4, 0.4),
+		CFrame.new(0, ceilingY + 0.4, roofFront - 0.2),
+		team.Primary,
+		Enum.NormalId.Front,
+		"PRESS BOX  |  " .. ctx.teamName .. " MEDIA",
+		team.Trim,
+		16
+	)
+
+	-- Inside: a long desk with monitors (seen through the glass)
+	BuildUtil.Box(ctx, "Desk", Vector3.new(halfX * 2 - 4, 3, 2), Vector3.new(0, floorY + 1.5, z0 + 3), C.Wood, Enum.Material.WoodPlanks)
+	for _, x in ipairs({ -24, -8, 8, 24 }) do
+		BuildUtil.Box(
+			ctx,
+			"Monitor",
+			Vector3.new(3, 2, 0.3),
+			Vector3.new(x, floorY + 4, z0 + 3.4),
+			SCREEN_BLACK,
+			Enum.Material.SmoothPlastic
+		)
+	end
+
+	-- Roof gear (behind the canopy's rear edge): broadcast dish + antenna
+	local roofTop = ceilingY + 0.8
+	local dishBase = Vector3.new(28, roofTop, z1 - 1.5)
+	BuildUtil.Cylinder(ctx, {
+		Name = "DishStand",
+		Position = dishBase + Vector3.new(0, 0.8, 0),
+		Height = 1.6,
+		Diameter = 0.6,
+		Axis = "Y",
+		Color = STEEL,
+		Material = Enum.Material.Metal,
+	})
+	local dishCentre = dishBase + Vector3.new(0, 2.6, 0)
+	BuildUtil.Part(ctx, {
+		Name = "Dish",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.4, 4, 4),
+		-- cylinder axis (local X) aimed up toward the field
+		CFrame = CFrame.lookAt(dishCentre, dishCentre + Vector3.new(0, 1, -1)) * CFrame.Angles(0, math.rad(90), 0),
+		Color = C.Line,
+		Material = Enum.Material.SmoothPlastic,
+	})
+	BuildUtil.Cylinder(ctx, {
+		Name = "Antenna",
+		Position = Vector3.new(-28, roofTop + 3.5, z1 - 1.5),
+		Height = 7,
+		Diameter = 0.3,
+		Axis = "Y",
+		Color = C.Metal,
+		Material = Enum.Material.Metal,
+	})
+end
+
+---------------------------------------------------------------------------------------------
+-- Luxury suites (behind the front upper deck)
+---------------------------------------------------------------------------------------------
+
+-- distances from the centre line; clear of the plaza gates at |x| = 41 and 93
+local SUITE_COLUMNS = { 20, 55, 79, 117 }
+
+function Features.suites(ctx)
+	local L = ctx.config.Layout
+	local C = ctx.config.Colors
+	local team = ctx.colors
+
+	local zFront = L.FrontUpperOuterZ - 0.5 -- -83.5: just clear of the upper deck's outside wall
+	local zBack = L.FrontUpperOuterZ - 12.6 -- -95.6 (the plaza sign + roof edge stay inside z >= -96)
+	local inner = L.TunnelHalfWidth + 2 -- 16
+	local outer = L.SidelineStandsHalfLength -- 120
+	local floorY = L.UpperTopHeight - 1 -- 25: the glass looks out over the top row
+	local ceilingY = floorY + 9
+	local length = outer - inner
+	local depth = zFront - zBack
+	local zMid = (zFront + zBack) / 2
+	local slabBottom = floorY - 1.6
+	local glassBottom, glassTop = floorY + 0.8, ceilingY - 2
+
+	for _, side in ipairs({ -1, 1 }) do
+		local section = BuildUtil.Child(ctx, side < 0 and "WestSuites" or "EastSuites")
+		local cx = side * (inner + outer) / 2
+
+		for _, x in ipairs(SUITE_COLUMNS) do
+			BuildUtil.Cylinder(section, {
+				Name = "SuiteColumn",
+				Position = Vector3.new(side * x, slabBottom / 2, zBack + 3),
+				Height = slabBottom,
+				Diameter = 2.4,
+				Axis = "Y",
+				Color = C.Concrete,
+				Material = Enum.Material.Concrete,
+			})
+		end
+
+		-- Shell
+		BuildUtil.Box(
+			section,
+			"SuiteSlab",
+			Vector3.new(length, 1.6, depth),
+			Vector3.new(cx, floorY - 0.8, zMid),
+			team.Primary,
+			Enum.Material.SmoothPlastic
+		)
+		BuildUtil.Box(
+			section,
+			"SuiteBackWall",
+			Vector3.new(length, ceilingY - floorY, 0.8),
+			Vector3.new(cx, (floorY + ceilingY) / 2, zBack + 0.4),
+			C.Concrete,
+			Enum.Material.Concrete
+		)
+		sign(
+			section,
+			"SuiteBackSign",
+			Vector3.new(34, 3.2, 0.3),
+			-- centred between the canopy masts at |x| = 28 and 67 so they never hide it
+			CFrame.new(side * 47.5, floorY + 5, zBack - 0.15),
+			team.Primary,
+			Enum.NormalId.Front,
+			"LUXURY SUITES",
+			team.Trim,
+			16
+		)
+		for _, x in ipairs({ inner + 0.4, outer - 0.4 }) do
+			BuildUtil.Box(
+				section,
+				"SuiteEndWall",
+				-- 0.1 proud of the window wall so the sill/header ends don't z-fight with it
+				Vector3.new(0.8, ceilingY - floorY, depth + 0.1),
+				Vector3.new(side * x, (floorY + ceilingY) / 2, zMid + 0.05),
+				team.Primary,
+				Enum.Material.SmoothPlastic
+			)
+		end
+		BuildUtil.Box(
+			section,
+			"SuiteRoof",
+			Vector3.new(length, 0.8, depth + 0.5),
+			Vector3.new(cx, ceilingY + 0.4, zMid + 0.05),
+			C.Concrete,
+			Enum.Material.Concrete
+		)
+
+		-- Field-facing glass wall
+		local frontZ = zFront - 0.3
+		BuildUtil.Box(
+			section,
+			"SuiteSill",
+			Vector3.new(length, glassBottom - floorY, 0.6),
+			Vector3.new(cx, (floorY + glassBottom) / 2, frontZ),
+			team.Secondary,
+			Enum.Material.SmoothPlastic
+		)
+		BuildUtil.Box(
+			section,
+			"SuiteGlass",
+			Vector3.new(length - 1.6, glassTop - glassBottom, 0.3),
+			Vector3.new(cx, (glassBottom + glassTop) / 2, frontZ),
+			C.Glass,
+			Enum.Material.Glass,
+			{ Transparency = 0.35 }
+		)
+		sign(
+			section,
+			"SuiteHeader",
+			Vector3.new(length, ceilingY - glassTop, 0.6),
+			CFrame.new(cx, (glassTop + ceilingY) / 2, frontZ),
+			team.Secondary,
+			Enum.NormalId.Back,
+			ctx.teamName .. " CLUB SUITES",
+			team.Primary,
+			16
+		)
+
+		-- Interior: suite dividers, a drink rail, a row of padded seats and a ceiling light
+		local inside = depth - 2.4 -- small gaps to the back wall and the glass (no coplanar faces)
+		for k = 1, 7 do
+			BuildUtil.Box(
+				section,
+				"SuiteDivider",
+				Vector3.new(0.4, ceilingY - floorY - 0.1, inside),
+				Vector3.new(side * (inner + 13 * k), (floorY + ceilingY - 0.1) / 2, zBack + 0.9 + inside / 2),
+				team.Trim,
+				Enum.Material.SmoothPlastic
+			)
+		end
+		BuildUtil.Box(
+			section,
+			"DrinkRail",
+			Vector3.new(length - 2, 0.3, 1),
+			Vector3.new(cx, floorY + 3.2, zFront - 1.2),
+			C.Wood,
+			Enum.Material.WoodPlanks
+		)
+		BuildUtil.Box(
+			section,
+			"SuiteSeats",
+			Vector3.new(length - 2, 1.6, 1.4),
+			Vector3.new(cx, floorY + 0.8, zFront - 3.2),
+			team.Primary,
+			Enum.Material.Fabric
+		)
+		BuildUtil.Box(
+			section,
+			"CeilingLight",
+			Vector3.new(length - 2, 0.2, 1.2),
+			Vector3.new(cx, ceilingY - 0.1, zMid),
+			WARM_WHITE,
+			Enum.Material.Neon,
+			{ CanCollide = false, CastShadow = false }
+		)
+	end
+end
+
+---------------------------------------------------------------------------------------------
+-- Canopy roofs over the sideline upper decks
+---------------------------------------------------------------------------------------------
+
+local FIN_HEIGHT = 5
+local GLASS_DEPTH = 10
+
+--[[
+	One cantilevered roof. Built in "roof space": a frame at the rear edge (x = 0) looking at the
+	leading edge, so local -Z runs toward the field and the panel rises slightly toward it.
+	spec:
+	  rear, front   plot-local points (x = 0) on the panel's centre line at the rear / leading edge
+	  halfWidth     half the roof length along X
+	  masts         world X of the masts at the rear edge
+	  fins          roof-space X of the tapered fins on top of the panel (symmetric lists)
+	  braceY        optional: height on the masts where knee braces start (to the panel underside)
+	  text          sign on the leading-edge fascia (faces the field)
+]]
+local function canopyRoof(ctx, spec)
+	local C = ctx.config.Colors
+	local team = ctx.colors
+	local frame = CFrame.lookAt(spec.rear, spec.front)
+	local length = (spec.front - spec.rear).Magnitude
+	local width = spec.halfWidth * 2
+	local metalLength = length - GLASS_DEPTH
+	local function at(x, y, d)
+		return frame * CFrame.new(x, y, -d)
+	end
+
+	-- Panels: metal over the seats, translucent glass along the leading edge
+	BuildUtil.Part(ctx, {
+		Name = "RoofPanel",
+		Size = Vector3.new(width, 0.6, metalLength),
+		CFrame = at(0, 0, metalLength / 2),
+		Color = ROOF_WHITE,
+		Material = Enum.Material.Metal,
+	})
+	BuildUtil.Part(ctx, {
+		Name = "RoofGlass",
+		Size = Vector3.new(width, 0.4, GLASS_DEPTH),
+		CFrame = at(0, 0, metalLength + GLASS_DEPTH / 2),
+		Color = C.Glass,
+		Material = Enum.Material.Glass,
+		Transparency = 0.45,
+	})
+
+	-- Leading edge: team fascia, centre sign and a light strip underneath
+	BuildUtil.Part(ctx, {
+		Name = "Fascia",
+		Size = Vector3.new(width + 1, 2.6, 0.5),
+		CFrame = at(0, -0.7, length + 0.25),
+		Color = team.Primary,
+		Material = Enum.Material.SmoothPlastic,
+	})
+	sign(
+		ctx,
+		"CanopySign",
+		Vector3.new(80, 2.2, 0.2),
+		at(0, -0.7, length + 0.6),
+		team.Secondary,
+		Enum.NormalId.Front,
+		spec.text,
+		team.Primary,
+		16
+	)
+	BuildUtil.Part(ctx, {
+		Name = "CanopyLightStrip",
+		Size = Vector3.new(width - 4, 0.25, 0.8),
+		CFrame = at(0, -0.35, length - 1.5),
+		Color = WARM_WHITE,
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+		CastShadow = false,
+	})
+
+	-- Structure: rear spine beam, tapered fins on top, masts down to the ground
+	BuildUtil.Part(ctx, {
+		Name = "Spine",
+		Size = Vector3.new(width, 2.2, 2.2),
+		CFrame = at(0, -1.4, 1.1),
+		Color = STEEL,
+		Material = Enum.Material.Metal,
+	})
+	for _, x in ipairs(spec.fins) do
+		-- wedge: tall face at local +Z (the rear), slope runs down toward the field
+		BuildUtil.Wedge(ctx, {
+			Name = "Fin",
+			Size = Vector3.new(1.2, FIN_HEIGHT, metalLength),
+			CFrame = at(x, 0.3 + FIN_HEIGHT / 2, metalLength / 2),
+			Color = team.Primary,
+			Material = Enum.Material.SmoothPlastic,
+		})
+	end
+	local mastTop = at(0, -2.5, 1.1).Position
+	for _, x in ipairs(spec.masts) do
+		local foot = Vector3.new(x, 0, mastTop.Z)
+		BuildUtil.Block(ctx, "MastFooting", Vector3.new(3, 0.6, 3), foot, C.ConcreteDark, Enum.Material.Concrete)
+		BuildUtil.Block(ctx, "Mast", Vector3.new(2.2, mastTop.Y + 0.6, 2.2), foot, STEEL, Enum.Material.Metal)
+		if spec.braceY then
+			local reach = at(0, -0.3, spec.braceDistance).Position
+			strut(ctx, "KneeBrace", Vector3.new(x, spec.braceY, mastTop.Z), Vector3.new(x, reach.Y, reach.Z), 1.2, STEEL)
+		end
+	end
+end
+
+function Features.canopy(ctx)
+	local L = ctx.config.Layout
+	local name = ctx.teamName
+	local halfWidth = L.SidelineStandsHalfLength + 5
+
+	-- Back (home) roof: masts behind the upper deck, clear of the press box (|x| <= 40),
+	-- the concourse gates (x = +-80) and the flags on the deck (x = +-70, +-110)
+	local backCtx = BuildUtil.Child(ctx, "BackRoof")
+	canopyRoof(backCtx, {
+		rear = Vector3.new(0, 40, L.BackUpperOuterZ + 7),
+		front = Vector3.new(0, 44, L.BackLowerOuterZ - 14),
+		halfWidth = halfWidth,
+		masts = { -100, -55, 55, 100 },
+		fins = { -124, -100, -55, 0, 55, 100, 124 },
+		braceY = 24,
+		braceDistance = 22,
+		text = "HOME OF THE " .. name,
+	})
+
+	-- Front (visitor) roof: masts in the plaza just behind the suites, clear of the walkway,
+	-- the plaza gates (x = +-41, +-93) and the parking lot (x <= -100)
+	local frontCtx = BuildUtil.Child(ctx, "FrontRoof")
+	canopyRoof(frontCtx, {
+		rear = Vector3.new(0, 37.5, L.FrontUpperOuterZ - 16),
+		front = Vector3.new(0, 42, L.FrontLowerOuterZ + 1),
+		halfWidth = halfWidth,
+		masts = { -98.5, -67, -28, 28, 67, 98.5 },
+		fins = { -124, -98.5, -67, -28, 0, 28, 67, 98.5, 124 },
+		text = "GO " .. name .. "!",
+	})
+end
+
+return Features
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="12">
+          <Properties>
             <string name="Name">Field</string>
             <string name="Source"><![CDATA[--[[
 	Field
@@ -1285,7 +2257,7 @@ function Field.benches(ctx)
 			nil,
 			seatTop - 0.4
 		)
-		local back = BuildUtil.Block(
+		BuildUtil.Block(
 			bench,
 			"Backrest",
 			Vector3.new(24, 1.8, 0.4),
@@ -1305,28 +2277,38 @@ function Field.benches(ctx)
 			nil,
 			seatTop + 1.5
 		)
-		-- the name faces the home stands behind the bench
-		teamText(back, Enum.NormalId.Back, ctx.teamName, team.Primary, team, 40, 0.25, 0.12, "BenchName", 2)
 	end
+	local benchBackTop = seatTop + 1.9 -- top of the backrest stripe
 
 	-- drinks table with two orange coolers between the benches
 	local drinks = BuildUtil.Child(ctx, "DrinksTable")
-	local tableTop = matTop + 2.2
-	BuildUtil.Block(drinks, "Table", Vector3.new(5, 2.2, 2.2), Vector3.new(0, 0, seatZ), team.Primary, Enum.Material.Fabric, nil, matTop)
+	-- table at seat height so the cooler lids (top 4.16) stay below the HOME TEAM lettering on the board
+	local tableHeight = 2
+	local tableTop = matTop + tableHeight
+	BuildUtil.Block(
+		drinks,
+		"Table",
+		Vector3.new(5, tableHeight, 2.2),
+		Vector3.new(0, 0, seatZ),
+		team.Primary,
+		Enum.Material.Fabric,
+		nil,
+		matTop
+	)
 	for _, s in ipairs({ -1, 1 }) do
 		BuildUtil.Cylinder(drinks, {
 			Name = "Cooler",
-			Position = Vector3.new(s * 1.2, tableTop + 1, seatZ + 0.2),
-			Height = 2,
-			Diameter = 1.7,
+			Position = Vector3.new(s * 1.2, tableTop + 0.8, seatZ + 0.2),
+			Height = 1.6,
+			Diameter = 1.6,
 			Color = COOLER_ORANGE,
 			Material = Enum.Material.SmoothPlastic,
 		})
 		BuildUtil.Cylinder(drinks, {
 			Name = "CoolerLid",
-			Position = Vector3.new(s * 1.2, tableTop + 2.175, seatZ + 0.2),
-			Height = 0.35,
-			Diameter = 1.85,
+			Position = Vector3.new(s * 1.2, tableTop + 1.75, seatZ + 0.2),
+			Height = 0.3,
+			Diameter = 1.75,
 			Color = WHITE,
 			Material = Enum.Material.SmoothPlastic,
 		})
@@ -1340,38 +2322,57 @@ function Field.benches(ctx)
 		Material = Enum.Material.SmoothPlastic,
 	})
 
-	-- low sideline boards behind the benches (Secondary so they stand out behind the Primary benches)
+	-- medical tent footprint (built below); the east board's lettering stays clear of its roof
+	local tentX, tentZ = 36.5, areaFront + 3.6
+	local tentW, tentD, tentH, roofH = 6, 5.4, 4, 1.6
+	local tentEaveX = tentX - tentW / 2 - 0.3
+
+	-- sideline boards behind the benches (Secondary so they stand out behind the Primary benches).
+	-- The field-side lettering sits in a band ABOVE the bench backrests, otherwise the benches hide it
+	-- from the field and the front stands; the back carries full-height lettering for the home stands.
 	local boardZ = areaBack - 0.8
-	local boardHeight = 3.6
-	local panels = { { x = -26, text = ctx.teamName }, { x = 0, text = "HOME TEAM" }, { x = 26, text = ctx.teamName } }
+	local boardWidth = 24
+	local boardHeight = 6.3 -- cap top = 6.86, inside the 7-stud height limit
+	local boardTop = matTop + boardHeight
+	local bandBottom = benchBackTop + 0.2
+	local bandTopInset = 0.12
+	local panels = {
+		{ x = -26, text = ctx.teamName },
+		{ x = 0, text = "HOME TEAM" },
+		{ x = 26, text = ctx.teamName },
+	}
 	for _, info in ipairs(panels) do
 		local panel = BuildUtil.Block(
 			ctx,
 			"SidelineBoard",
-			Vector3.new(24, boardHeight, 0.5),
+			Vector3.new(boardWidth, boardHeight, 0.5),
 			Vector3.new(info.x, 0, boardZ),
 			team.Secondary,
 			Enum.Material.SmoothPlastic,
 			nil,
 			matTop
 		)
-		teamText(panel, Enum.NormalId.Front, info.text, team.Secondary, team, 30, 0.06, 0.14, "BoardText", 3)
+		-- Front face (-Z) GUI x runs toward world -X; work out the band from world x limits.
+		local x0 = info.x - boardWidth / 2 + 0.6
+		local x1 = math.min(info.x + boardWidth / 2 - 0.6, tentEaveX - 0.4)
+		local front = teamText(panel, Enum.NormalId.Front, info.text, team.Secondary, team, 30, 0, 0, "BoardText", 3)
+		front.Position = UDim2.new((info.x + boardWidth / 2 - x1) / boardWidth, 0, bandTopInset / boardHeight, 0)
+		front.Size = UDim2.new((x1 - x0) / boardWidth, 0, (boardTop - bandTopInset - bandBottom) / boardHeight, 0)
+		teamText(panel, Enum.NormalId.Back, info.text, team.Secondary, team, 20, 0.06, 0.16, "BoardBackText", 3)
 		BuildUtil.Block(
 			ctx,
 			"SidelineBoardCap",
-			Vector3.new(24.2, 0.3, 0.7),
+			Vector3.new(boardWidth + 0.2, 0.3, 0.7),
 			Vector3.new(info.x, 0, boardZ),
 			team.Primary,
 			Enum.Material.SmoothPlastic,
 			nil,
-			matTop + boardHeight
+			boardTop
 		)
 	end
 
 	-- blue medical tent at the east end
 	local tent = BuildUtil.Child(ctx, "MedicalTent")
-	local tentX, tentZ = 36.5, areaFront + 3.6
-	local tentW, tentD, tentH, roofH = 6, 5.4, 4, 1.6
 	BuildUtil.Block(
 		tent,
 		"TentBody",
@@ -1449,7 +2450,1384 @@ return Field
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="12">
+        <Item class="ModuleScript" referent="13">
+          <Properties>
+            <string name="Name">Plaza</string>
+            <string name="Source"><![CDATA[--[[
+	Plaza
+	The buildings in the entrance plaza, between the street (-Z) and the front stands.
+
+	  ticketbooth  box office beside the gate: ticket window + counter facing the walkway (+X),
+	               striped awning and a "TICKETS" sign box on the roof
+	  concessions  food stand: counter, awning and menu board facing the walkway (+X),
+	               "CONCESSIONS" sign and a giant hot dog + soda cup on the roof
+	  parking      fan parking lot: asphalt, painted stalls, parked cars, lamp posts, "P" sign
+	  teamstore    glass-fronted shop facing the walkway (-X) that players can walk into,
+	               big "TEAM STORE" sign and a giant football on the roof
+	  trophy       championship trophy monument: stepped stone plinth, gold cup with a
+	               football on top, "<TEAM> - CHAMPIONS" plaques and team flags
+
+	Every building stays inside its reserved footprint (the tables below). The walkway
+	(X in [-12, 12]) runs between the west half (booth, stand, parking) and the east half
+	(store, trophy) of the plaza, so the booth and stand face +X and the store faces -X.
+]]
+
+local BuildUtil = require(script.Parent.Parent.BuildUtil)
+
+local Plaza = {}
+
+-- Reserved footprints (plot-local studs; Config.Layout has no values for these)
+local BOOTH = { MinX = -42, MaxX = -30, MinZ = -188, MaxZ = -176 }
+local STAND = { MinX = -70, MaxX = -50, MinZ = -134, MaxZ = -122 }
+local LOT = { MinX = -200, MaxX = -100, MinZ = -192, MaxZ = -96 }
+local STORE = { MinX = 54, MaxX = 90, MinZ = -142, MaxZ = -118 }
+local MONUMENT = { CenterX = 150, CenterZ = -140, HalfSize = 15 }
+
+local PAINT = { CanCollide = false, CastShadow = false }
+local NO_COLLIDE = { CanCollide = false }
+
+local WHITE = Color3.fromRGB(248, 248, 248)
+local INK = Color3.fromRGB(22, 22, 26)
+local DARK_WINDOW = Color3.fromRGB(26, 30, 38)
+local CHALKBOARD = Color3.fromRGB(34, 40, 37)
+local MENU_TEXT = Color3.fromRGB(255, 226, 140)
+local WARM_LIGHT = Color3.fromRGB(255, 236, 200)
+local DARK_METAL = Color3.fromRGB(62, 64, 70)
+local STORE_WALL = Color3.fromRGB(228, 224, 216)
+local STORE_FLOOR = Color3.fromRGB(222, 219, 212)
+local STONE_DARK = Color3.fromRGB(96, 96, 102)
+local STONE_LIGHT = Color3.fromRGB(236, 233, 226)
+local TROPHY_BASE = Color3.fromRGB(30, 30, 34)
+local PALE_GOLD = Color3.fromRGB(255, 228, 150)
+local LEATHER = Color3.fromRGB(124, 66, 36)
+local BUN = Color3.fromRGB(226, 172, 102)
+local SAUSAGE = Color3.fromRGB(176, 72, 46)
+local MUSTARD = Color3.fromRGB(255, 205, 20)
+local BUSH = Color3.fromRGB(56, 122, 62)
+local TIRE = Color3.fromRGB(28, 28, 30)
+local CAR_GLASS = Color3.fromRGB(46, 58, 74)
+
+local CAR_COLORS = {
+	Red = Color3.fromRGB(196, 38, 40),
+	Blue = Color3.fromRGB(38, 88, 196),
+	White = Color3.fromRGB(236, 236, 238),
+	Silver = Color3.fromRGB(168, 172, 178),
+	Yellow = Color3.fromRGB(240, 188, 36),
+	Black = Color3.fromRGB(34, 34, 38),
+}
+
+---------------------------------------------------------------------------------------------
+-- Helpers
+---------------------------------------------------------------------------------------------
+
+-- Relative luminance / contrast ratio (WCAG) so text stays readable for every team palette.
+local function luminance(color)
+	local function channel(v)
+		if v <= 0.03928 then
+			return v / 12.92
+		end
+		return ((v + 0.055) / 1.055) ^ 2.4
+	end
+	return 0.2126 * channel(color.R) + 0.7152 * channel(color.G) + 0.0722 * channel(color.B)
+end
+
+local function contrastRatio(a, b)
+	local la, lb = luminance(a), luminance(b)
+	if la < lb then
+		la, lb = lb, la
+	end
+	return (la + 0.05) / (lb + 0.05)
+end
+
+-- First candidate that reads well on `background`, else whichever of white / ink reads best.
+local function textColorOn(background, candidates)
+	for _, candidate in ipairs(candidates) do
+		if contrastRatio(background, candidate) >= 3 then
+			return candidate
+		end
+	end
+	if contrastRatio(background, WHITE) >= contrastRatio(background, INK) then
+		return WHITE
+	end
+	return INK
+end
+
+--[[
+	Writes `text` on each face in `faces` of `part`, coloured to read well on `background`.
+	opts: TextColor3, Font, PixelsPerStud, Wrap (bool), InsetX / InsetY (fraction of the face
+	      left empty around the text, default 0.06 / 0.12), LabelName
+]]
+local function sign(part, faces, text, background, team, opts)
+	opts = opts or {}
+	local color = opts.TextColor3 or textColorOn(background, { team.Trim, team.Primary, team.Secondary })
+	local insetX = opts.InsetX or 0.06
+	local insetY = opts.InsetY or 0.12
+	for _, face in ipairs(faces) do
+		local _, label = BuildUtil.SurfaceText(part, face, text, {
+			LabelName = (opts.LabelName or part.Name) .. face.Name,
+			TextColor3 = color,
+			Font = opts.Font or Enum.Font.GothamBlack,
+			PixelsPerStud = opts.PixelsPerStud or 20,
+		})
+		label.Size = UDim2.new(1 - 2 * insetX, 0, 1 - 2 * insetY, 0)
+		label.Position = UDim2.new(insetX, 0, insetY, 0)
+		if opts.Wrap then
+			label.TextWrapped = true
+		end
+	end
+end
+
+-- Two colours for awning stripes that are clearly different from each other.
+local function stripeColors(team)
+	if contrastRatio(team.Secondary, team.Trim) >= 1.6 then
+		return { team.Secondary, team.Trim }
+	end
+	return { team.Primary, team.Trim }
+end
+
+-- Cylinder along the local X axis of `cframe` (local to the plot).
+local function cylinderAt(ctx, name, cframe, length, diameter, color, material, extra)
+	local props = extra and table.clone(extra) or {}
+	props.Name = name
+	props.Shape = Enum.PartType.Cylinder
+	props.Size = Vector3.new(length, diameter, diameter)
+	props.CFrame = cframe
+	props.Color = color
+	props.Material = material
+	return BuildUtil.Part(ctx, props)
+end
+
+--[[
+	Striped fabric awning hanging off a wall that faces +X (opts.Dir = 1) or -X (opts.Dir = -1).
+	opts: Name, WallX, Reach (horizontal depth), TopY (height at the wall), Drop (fall to the
+	      outer edge), MinZ, MaxZ, Strips, Colors { a, b }
+]]
+local function stripedAwning(ctx, opts)
+	local dir = opts.Dir or 1
+	local length = math.sqrt(opts.Reach ^ 2 + opts.Drop ^ 2)
+	local angle = math.atan2(opts.Drop, opts.Reach)
+	local stripWidth = (opts.MaxZ - opts.MinZ) / opts.Strips
+	local centerX = opts.WallX + dir * opts.Reach / 2
+	local centerY = opts.TopY - opts.Drop / 2
+	for i = 1, opts.Strips do
+		BuildUtil.Part(ctx, {
+			Name = opts.Name .. "Stripe" .. i,
+			Size = Vector3.new(length, 0.2, stripWidth),
+			CFrame = CFrame.new(centerX, centerY, opts.MinZ + (i - 0.5) * stripWidth) * CFrame.Angles(0, 0, -dir * angle),
+			Color = opts.Colors[(i - 1) % 2 + 1],
+			Material = Enum.Material.Fabric,
+		})
+	end
+	-- flat valance hanging from the outer edge
+	BuildUtil.Box(
+		ctx,
+		opts.Name .. "Valance",
+		Vector3.new(0.15, 0.7, opts.MaxZ - opts.MinZ),
+		Vector3.new(opts.WallX + dir * opts.Reach, opts.TopY - opts.Drop - 0.3, (opts.MinZ + opts.MaxZ) / 2),
+		opts.Colors[1],
+		Enum.Material.Fabric
+	)
+end
+
+--[[
+	An (American) football built from parts along the local X axis of `cframe`, laces on local +Y.
+	A Ball part is always round, so the body is a short cylinder plus three pairs of shrinking
+	balls toward the tips. At scale 1 it is 11 studs long and 6.4 studs thick.
+	colors: { Body, Stripe, Lace }   style: { Material, Reflectance }
+]]
+local FOOTBALL_TIPS = { { 1.5, 6.4 }, { 3.0, 4.6 }, { 4.2, 2.6 } } -- { offset along axis, diameter }
+
+local function football(ctx, name, cframe, scale, colors, style)
+	local s = scale
+	local extra = { Reflectance = style.Reflectance }
+	cylinderAt(ctx, name .. "Body", cframe, 3 * s, 6.4 * s, colors.Body, style.Material, extra)
+	for _, tip in ipairs(FOOTBALL_TIPS) do
+		for _, side in ipairs({ -1, 1 }) do
+			BuildUtil.Ball(ctx, {
+				Name = name .. "Tip",
+				CFrame = cframe * CFrame.new(side * tip[1] * s, 0, 0),
+				Diameter = tip[2] * s,
+				Color = colors.Body,
+				Material = style.Material,
+				Reflectance = style.Reflectance,
+			})
+		end
+	end
+	-- a painted band near each tip (slightly wider than the ball there)
+	for _, side in ipairs({ -1, 1 }) do
+		cylinderAt(
+			ctx,
+			name .. "Stripe",
+			cframe * CFrame.new(side * 3.2 * s, 0, 0),
+			0.45 * s,
+			5.56 * s,
+			colors.Stripe,
+			style.Material,
+			extra
+		)
+	end
+	-- laces: one long lace and four stitches across it
+	BuildUtil.Part(ctx, {
+		Name = name .. "Lace",
+		Size = Vector3.new(3 * s, 0.3 * s, 0.4 * s),
+		CFrame = cframe * CFrame.new(0, 3.25 * s, 0),
+		Color = colors.Lace,
+		Material = style.Material,
+		Reflectance = style.Reflectance,
+	})
+	for i = -1.5, 1.5 do
+		BuildUtil.Part(ctx, {
+			Name = name .. "Stitch",
+			Size = Vector3.new(0.28 * s, 0.3 * s, 1.3 * s),
+			CFrame = cframe * CFrame.new(i * 0.7 * s, 3.2 * s, 0),
+			Color = colors.Lace,
+			Material = style.Material,
+			Reflectance = style.Reflectance,
+		})
+	end
+end
+
+---------------------------------------------------------------------------------------------
+-- Ticket booth
+---------------------------------------------------------------------------------------------
+
+function Plaza.ticketbooth(ctx)
+	local C = ctx.config.Colors
+	local team = ctx.colors
+
+	local cx = (BOOTH.MinX + BOOTH.MaxX) / 2
+	local cz = (BOOTH.MinZ + BOOTH.MaxZ) / 2
+	local frontX = BOOTH.MaxX - 4 -- the ticket-window wall, facing +X (the walkway)
+	local backX = BOOTH.MinX + 0.5
+	local bodyX = (frontX + backX) / 2
+	local bodyW = frontX - backX
+	local bodyD = 10
+	local padTop = 0.25
+	local wallTop = 8
+	local bandTop = 9
+	local roofTop = 9.8
+
+	BuildUtil.Box(
+		ctx,
+		"Pad",
+		Vector3.new(BOOTH.MaxX - BOOTH.MinX, padTop, BOOTH.MaxZ - BOOTH.MinZ),
+		Vector3.new(cx, padTop / 2, cz),
+		C.ConcreteDark,
+		Enum.Material.Concrete
+	)
+
+	-- Booth body: concrete plinth, team-coloured walls, trim band, roof
+	local bodyPos = Vector3.new(bodyX, 0, cz)
+	BuildUtil.Block(ctx, "Plinth", Vector3.new(bodyW + 0.2, 0.8, bodyD + 0.2), bodyPos, C.Concrete, Enum.Material.Concrete, nil, padTop)
+	BuildUtil.Block(
+		ctx,
+		"Body",
+		Vector3.new(bodyW, wallTop - padTop, bodyD),
+		bodyPos,
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		nil,
+		padTop
+	)
+	local band = BuildUtil.Block(
+		ctx,
+		"Band",
+		Vector3.new(bodyW + 0.2, bandTop - wallTop, bodyD + 0.2),
+		bodyPos,
+		team.Trim,
+		Enum.Material.SmoothPlastic,
+		nil,
+		wallTop
+	)
+	sign(band, { Enum.NormalId.Right }, "BOX OFFICE", team.Trim, team, { InsetY = 0.08 })
+	BuildUtil.Block(
+		ctx,
+		"Roof",
+		Vector3.new(bodyW + 1, roofTop - bandTop, bodyD + 1.2),
+		bodyPos,
+		team.Secondary,
+		Enum.Material.SmoothPlastic,
+		nil,
+		bandTop
+	)
+
+	-- Ticket window (frame, dark booth interior, glass) above the counter
+	local windowY = 5.85
+	BuildUtil.Box(
+		ctx,
+		"WindowFrame",
+		Vector3.new(0.12, 4, 6.6),
+		Vector3.new(frontX + 0.06, windowY, cz),
+		team.Trim,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.Box(
+		ctx,
+		"WindowInside",
+		Vector3.new(0.1, 3.5, 6),
+		Vector3.new(frontX + 0.17, windowY, cz),
+		DARK_WINDOW,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.Box(
+		ctx,
+		"WindowGlass",
+		Vector3.new(0.1, 3.5, 6),
+		Vector3.new(frontX + 0.27, windowY, cz),
+		C.Glass,
+		Enum.Material.Glass,
+		{ Transparency = 0.55 }
+	)
+
+	-- Counter
+	BuildUtil.Block(
+		ctx,
+		"Counter",
+		Vector3.new(1.8, 3.55 - padTop, 7.2),
+		Vector3.new(frontX + 0.9, 0, cz),
+		team.Secondary,
+		Enum.Material.SmoothPlastic,
+		nil,
+		padTop
+	)
+	local counterTop = BuildUtil.Block(
+		ctx,
+		"CounterTop",
+		Vector3.new(2.3, 0.25, 7.6),
+		Vector3.new(frontX + 1.15, 0, cz),
+		C.Metal,
+		Enum.Material.Metal,
+		nil,
+		3.55
+	)
+	BuildUtil.Light(counterTop, "PointLight", { Name = "CounterLight", Range = 12, Brightness = 1, Color = WARM_LIGHT })
+
+	stripedAwning(ctx, {
+		Name = "Awning",
+		WallX = frontX,
+		Reach = 3.6,
+		TopY = 7.95,
+		Drop = 1.2,
+		MinZ = cz - 5.5,
+		MaxZ = cz + 5.5,
+		Strips = 5,
+		Colors = stripeColors(team),
+	})
+
+	-- Back door and an "ADMIT ONE" ticket poster facing the street
+	BuildUtil.Block(
+		ctx,
+		"Door",
+		Vector3.new(0.2, 6.2, 3),
+		Vector3.new(backX - 0.2, 0, cz + 2.5),
+		C.Wood,
+		Enum.Material.WoodPlanks,
+		nil,
+		1.05
+	)
+	local poster = BuildUtil.Box(
+		ctx,
+		"TicketPoster",
+		Vector3.new(5, 2.6, 0.15),
+		Vector3.new(bodyX, 5.2, cz - bodyD / 2 - 0.075),
+		team.Secondary,
+		Enum.Material.SmoothPlastic
+	)
+	sign(poster, { Enum.NormalId.Front }, "ADMIT ONE", team.Secondary, team)
+
+	-- Roof sign on two short posts: a box reading TICKETS on all four sides (walkway, street,
+	-- parking lot, stadium), with a neon cap
+	local postHeight = 0.8
+	local signHeight = 2.8
+	for _, side in ipairs({ -1, 1 }) do
+		BuildUtil.Block(
+			ctx,
+			"SignPost",
+			Vector3.new(0.6, postHeight, 0.6),
+			Vector3.new(bodyX, 0, cz + side * 3.2),
+			DARK_METAL,
+			Enum.Material.Metal,
+			nil,
+			roofTop
+		)
+	end
+	local signBox = BuildUtil.Block(
+		ctx,
+		"TicketsSign",
+		Vector3.new(6.4, signHeight, 9.2),
+		bodyPos,
+		team.Trim,
+		Enum.Material.SmoothPlastic,
+		nil,
+		roofTop + postHeight
+	)
+	sign(
+		signBox,
+		{ Enum.NormalId.Front, Enum.NormalId.Right, Enum.NormalId.Back, Enum.NormalId.Left },
+		"TICKETS",
+		team.Trim,
+		team,
+		{ InsetY = 0.1 }
+	)
+	BuildUtil.Block(
+		ctx,
+		"TicketsSignCap",
+		Vector3.new(6.7, 0.3, 9.5),
+		bodyPos,
+		team.Secondary,
+		Enum.Material.Neon,
+		nil,
+		roofTop + postHeight + signHeight
+	)
+end
+
+---------------------------------------------------------------------------------------------
+-- Concession stand
+---------------------------------------------------------------------------------------------
+
+function Plaza.concessions(ctx)
+	local C = ctx.config.Colors
+	local team = ctx.colors
+
+	local cx = (STAND.MinX + STAND.MaxX) / 2
+	local cz = (STAND.MinZ + STAND.MaxZ) / 2
+	local frontX = STAND.MaxX - 7 -- serving side, faces +X (the walkway)
+	local backX = STAND.MinX + 1
+	local bodyX = (frontX + backX) / 2
+	local bodyW = frontX - backX
+	local bodyD = 10.8
+	local padTop = 0.25
+	local wallTop = 9
+	local roofTop = wallTop + 0.8
+
+	BuildUtil.Box(
+		ctx,
+		"Patio",
+		Vector3.new(STAND.MaxX - STAND.MinX, padTop, STAND.MaxZ - STAND.MinZ),
+		Vector3.new(cx, padTop / 2, cz),
+		C.Walkway,
+		Enum.Material.Pavement
+	)
+
+	-- Stand body
+	local bodyPos = Vector3.new(bodyX, 0, cz)
+	BuildUtil.Block(
+		ctx,
+		"Body",
+		Vector3.new(bodyW, wallTop - padTop, bodyD),
+		bodyPos,
+		team.Secondary,
+		Enum.Material.SmoothPlastic,
+		nil,
+		padTop
+	)
+	BuildUtil.Block(
+		ctx,
+		"BaseBand",
+		Vector3.new(bodyW + 0.2, 1.2, bodyD + 0.2),
+		bodyPos,
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		nil,
+		padTop
+	)
+	BuildUtil.Block(
+		ctx,
+		"Roof",
+		Vector3.new(bodyW + 0.6, roofTop - wallTop, bodyD + 0.8),
+		Vector3.new(bodyX - 0.3, 0, cz),
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		nil,
+		wallTop
+	)
+	BuildUtil.Block(
+		ctx,
+		"BackDoor",
+		Vector3.new(0.2, 6.2, 3),
+		Vector3.new(backX - 0.2, 0, cz + 2),
+		C.Wood,
+		Enum.Material.WoodPlanks,
+		nil,
+		padTop
+	)
+
+	-- Street-facing side panel
+	local sidePanel = BuildUtil.Box(
+		ctx,
+		"SidePanel",
+		Vector3.new(8.5, 2.6, 0.15),
+		Vector3.new(bodyX, 5.4, cz - bodyD / 2 - 0.075),
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	sign(sidePanel, { Enum.NormalId.Front }, "GAME DAY EATS", team.Primary, team)
+
+	-- Serving window (south part of the +X wall) and menu board (north part)
+	local openingY = 5.7
+	local windowZ = cz - 2.2
+	local menuZ = cz + 3.1
+	BuildUtil.Box(
+		ctx,
+		"WindowFrame",
+		Vector3.new(0.12, 3.7, 6.3),
+		Vector3.new(frontX + 0.06, openingY, windowZ),
+		team.Trim,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.Box(
+		ctx,
+		"WindowInside",
+		Vector3.new(0.1, 3.3, 5.8),
+		Vector3.new(frontX + 0.17, openingY, windowZ),
+		DARK_WINDOW,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.Box(
+		ctx,
+		"MenuFrame",
+		Vector3.new(0.12, 3.7, 4),
+		Vector3.new(frontX + 0.06, openingY, menuZ),
+		team.Trim,
+		Enum.Material.SmoothPlastic
+	)
+	local menu = BuildUtil.Box(
+		ctx,
+		"MenuBoard",
+		Vector3.new(0.1, 3.3, 3.6),
+		Vector3.new(frontX + 0.17, openingY, menuZ),
+		CHALKBOARD,
+		Enum.Material.Slate
+	)
+	sign(menu, { Enum.NormalId.Right }, "HOT DOGS\nNACHOS\nSODA", CHALKBOARD, team, {
+		TextColor3 = MENU_TEXT,
+		Font = Enum.Font.Oswald,
+		InsetX = 0.08,
+		InsetY = 0.08,
+		PixelsPerStud = 30,
+	})
+
+	-- Counter with a couple of drinks and a napkin box
+	BuildUtil.Block(
+		ctx,
+		"Counter",
+		Vector3.new(2.4, 3.55 - padTop, 10.4),
+		Vector3.new(frontX + 1.2, 0, cz),
+		team.Trim,
+		Enum.Material.SmoothPlastic,
+		nil,
+		padTop
+	)
+	local counterTop = BuildUtil.Block(
+		ctx,
+		"CounterTop",
+		Vector3.new(2.8, 0.25, 10.8),
+		Vector3.new(frontX + 1.4, 0, cz),
+		C.Metal,
+		Enum.Material.Metal,
+		nil,
+		3.55
+	)
+	BuildUtil.Light(counterTop, "PointLight", { Name = "CounterLight", Range = 14, Brightness = 1.2, Color = WARM_LIGHT })
+	BuildUtil.Cylinder(ctx, {
+		Name = "CounterCup",
+		Position = Vector3.new(frontX + 1.6, 4.3, windowZ - 1.5),
+		Height = 1,
+		Diameter = 0.7,
+		Color = team.Primary,
+	})
+	BuildUtil.Cylinder(ctx, {
+		Name = "CounterCup",
+		Position = Vector3.new(frontX + 1.6, 4.3, windowZ - 0.6),
+		Height = 1,
+		Diameter = 0.7,
+		Color = team.Secondary,
+	})
+	BuildUtil.Block(
+		ctx,
+		"NapkinBox",
+		Vector3.new(0.6, 0.8, 0.9),
+		Vector3.new(frontX + 1.5, 0, windowZ + 1.8),
+		C.Metal,
+		Enum.Material.Metal,
+		nil,
+		3.8
+	)
+
+	stripedAwning(ctx, {
+		Name = "Awning",
+		WallX = frontX,
+		Reach = 5.4,
+		TopY = 7.85,
+		Drop = 1.5,
+		MinZ = STAND.MinZ + 0.3,
+		MaxZ = STAND.MaxZ - 0.3,
+		Strips = 5,
+		Colors = { team.Primary, team.Trim },
+	})
+
+	-- CONCESSIONS sign above the awning, with a neon strip on top
+	local title = BuildUtil.Box(
+		ctx,
+		"ConcessionsSign",
+		Vector3.new(0.3, 2.5, 11.4),
+		Vector3.new(frontX + 0.15, 9.2, cz),
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	sign(title, { Enum.NormalId.Right }, "CONCESSIONS", team.Primary, team, { InsetY = 0.1 })
+	BuildUtil.Box(
+		ctx,
+		"ConcessionsSignGlow",
+		Vector3.new(0.32, 0.2, 11.4),
+		Vector3.new(frontX + 0.15, 10.55, cz),
+		team.Secondary,
+		Enum.Material.Neon
+	)
+
+	-- Trash can on the patio
+	BuildUtil.Cylinder(ctx, {
+		Name = "TrashCan",
+		Position = Vector3.new(STAND.MaxX - 1.6, padTop + 1.3, STAND.MinZ + 1),
+		Height = 2.6,
+		Diameter = 1.6,
+		Color = DARK_METAL,
+		Material = Enum.Material.Metal,
+	})
+	BuildUtil.Cylinder(ctx, {
+		Name = "TrashCanLid",
+		Position = Vector3.new(STAND.MaxX - 1.6, padTop + 2.75, STAND.MinZ + 1),
+		Height = 0.3,
+		Diameter = 1.8,
+		Color = team.Primary,
+		Material = Enum.Material.Metal,
+	})
+
+	-- Giant hot dog on the roof (lying along Z so the walkway sees it side-on)
+	local props = BuildUtil.Child(ctx, "RoofProps")
+	local dogX = frontX - 3.6
+	local dogZ = cz - 1.9
+	BuildUtil.Block(
+		props,
+		"HotDogMount",
+		Vector3.new(2.8, 0.4, 6.4),
+		Vector3.new(dogX, 0, dogZ),
+		team.Trim,
+		Enum.Material.SmoothPlastic,
+		nil,
+		roofTop
+	)
+	local bunY = roofTop + 0.4 + 0.9
+	for _, side in ipairs({ -1, 1 }) do
+		BuildUtil.Cylinder(props, {
+			Name = "Bun",
+			Position = Vector3.new(dogX + side * 0.7, bunY, dogZ),
+			Axis = "Z",
+			Height = 6.2,
+			Diameter = 1.8,
+			Color = BUN,
+		})
+	end
+	local sausageY = bunY + 0.75
+	BuildUtil.Cylinder(props, {
+		Name = "Sausage",
+		Position = Vector3.new(dogX, sausageY, dogZ),
+		Axis = "Z",
+		Height = 6.8,
+		Diameter = 1.3,
+		Color = SAUSAGE,
+	})
+	for _, side in ipairs({ -1, 1 }) do
+		BuildUtil.Ball(props, {
+			Name = "SausageEnd",
+			Position = Vector3.new(dogX, sausageY, dogZ + side * 3.4),
+			Diameter = 1.3,
+			Color = SAUSAGE,
+		})
+	end
+	-- mustard zig-zag
+	for i = 1, 3 do
+		local yaw = (i % 2 == 1) and 20 or -20
+		BuildUtil.Part(props, {
+			Name = "Mustard",
+			Size = Vector3.new(0.28, 0.18, 2),
+			CFrame = CFrame.new(dogX, sausageY + 0.63, dogZ + (i - 2) * 1.88) * CFrame.Angles(0, math.rad(yaw), 0),
+			Color = MUSTARD,
+			CanCollide = false,
+		})
+	end
+
+	-- Giant soda cup next to it
+	local cupX, cupZ = frontX - 4, STAND.MaxZ - 2
+	local cupHeight = 2.9
+	BuildUtil.Cylinder(props, {
+		Name = "SodaCup",
+		Position = Vector3.new(cupX, roofTop + cupHeight / 2, cupZ),
+		Height = cupHeight,
+		Diameter = 3,
+		Color = team.Primary,
+	})
+	BuildUtil.Cylinder(props, {
+		Name = "SodaCupBand",
+		Position = Vector3.new(cupX, roofTop + 1.6, cupZ),
+		Height = 0.8,
+		Diameter = 3.08,
+		Color = team.Trim,
+	})
+	BuildUtil.Cylinder(props, {
+		Name = "SodaLid",
+		Position = Vector3.new(cupX, roofTop + cupHeight + 0.15, cupZ),
+		Height = 0.3,
+		Diameter = 3.2,
+		Color = WHITE,
+	})
+	cylinderAt(
+		props,
+		"Straw",
+		CFrame.new(cupX + 0.25, roofTop + cupHeight + 0.1, cupZ) * CFrame.Angles(0, 0, math.rad(75)),
+		2,
+		0.35,
+		team.Secondary,
+		Enum.Material.SmoothPlastic
+	)
+end
+
+---------------------------------------------------------------------------------------------
+-- Parking lot
+---------------------------------------------------------------------------------------------
+
+local LOT_TOP = 0.12
+local STALL_WIDTH = 7
+local STALL_DEPTH = 10
+local STALL_COUNT = 12
+
+-- Simple blocky car standing on the asphalt; it faces local -Z before `yaw` is applied.
+local function car(ctx, name, x, z, yaw, color)
+	local base = CFrame.new(x, LOT_TOP, z) * CFrame.Angles(0, yaw, 0)
+	BuildUtil.Part(ctx, {
+		Name = name .. "Body",
+		Size = Vector3.new(4.6, 1.7, 9.2),
+		CFrame = base * CFrame.new(0, 1.4, 0),
+		Color = color,
+		Material = Enum.Material.SmoothPlastic,
+	})
+	BuildUtil.Part(ctx, {
+		Name = name .. "Cabin",
+		Size = Vector3.new(4, 1.5, 4.8),
+		CFrame = base * CFrame.new(0, 3, 0.5),
+		Color = CAR_GLASS,
+		Material = Enum.Material.Glass,
+	})
+	for _, sx in ipairs({ -1, 1 }) do
+		for _, sz in ipairs({ -1, 1 }) do
+			cylinderAt(ctx, name .. "Wheel", base * CFrame.new(sx * 2.15, 1, sz * 3), 0.9, 2, TIRE, Enum.Material.Rubber)
+		end
+	end
+end
+
+function Plaza.parking(ctx)
+	local C = ctx.config.Colors
+	local team = ctx.colors
+
+	local lotX = (LOT.MinX + LOT.MaxX) / 2
+	local lotZ = (LOT.MinZ + LOT.MaxZ) / 2
+	BuildUtil.Box(
+		ctx,
+		"Asphalt",
+		Vector3.new(LOT.MaxX - LOT.MinX, LOT_TOP, LOT.MaxZ - LOT.MinZ),
+		Vector3.new(lotX, LOT_TOP / 2, lotZ),
+		C.Asphalt,
+		Enum.Material.Asphalt
+	)
+
+	-- Two double rows of stalls (12 stalls each side), divided by a centre line
+	local firstX = LOT.MinX + 6
+	local rowLength = STALL_WIDTH * STALL_COUNT
+	local rowCenters = { lotZ - 22, lotZ + 22 }
+	local stripes = BuildUtil.Child(ctx, "Stripes")
+	local function paint(name, sizeX, sizeZ, x, z)
+		BuildUtil.Box(
+			stripes,
+			name,
+			Vector3.new(sizeX, 0.04, sizeZ),
+			Vector3.new(x, LOT_TOP + 0.02, z),
+			C.Line,
+			Enum.Material.SmoothPlastic,
+			PAINT
+		)
+	end
+	for row, zc in ipairs(rowCenters) do
+		for i = 0, STALL_COUNT do
+			paint("StallLine" .. row .. "_" .. i, 0.4, STALL_DEPTH * 2, firstX + i * STALL_WIDTH, zc)
+		end
+		paint("CentreLine" .. row, rowLength + 0.4, 0.4, firstX + rowLength / 2, zc)
+	end
+
+	-- Team-coloured "FAN PARKING" panel painted in the middle aisle. Top-face text reads upright
+	-- from the part's +Z side, so the part is turned around to read from the street (-Z).
+	local aislePanel = BuildUtil.Part(ctx, {
+		Name = "AislePaint",
+		Size = Vector3.new(44, 0.04, 9),
+		CFrame = CFrame.new(firstX + rowLength / 2, LOT_TOP + 0.02, lotZ) * CFrame.Angles(0, math.pi, 0),
+		Color = team.Primary,
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		CastShadow = false,
+	})
+	sign(aislePanel, { Enum.NormalId.Top }, "FAN PARKING", team.Primary, team, { InsetX = 0.05, InsetY = 0.12, PixelsPerStud = 10 })
+
+	-- Lamp posts at both ends of each double row
+	local lamps = BuildUtil.Child(ctx, "Lamps")
+	for _, zc in ipairs(rowCenters) do
+		for _, x in ipairs({ firstX - 3, firstX + rowLength + 3 }) do
+			BuildUtil.Cylinder(lamps, {
+				Name = "LampPole",
+				Position = Vector3.new(x, LOT_TOP + 8.5, zc),
+				Height = 17,
+				Diameter = 0.7,
+				Color = DARK_METAL,
+				Material = Enum.Material.Metal,
+			})
+			BuildUtil.Box(
+				lamps,
+				"LampHead",
+				Vector3.new(1.2, 0.6, 5.2),
+				Vector3.new(x, LOT_TOP + 17.3, zc),
+				team.Primary,
+				Enum.Material.Metal
+			)
+			local lamp = BuildUtil.Box(
+				lamps,
+				"LampGlow",
+				Vector3.new(0.9, 0.15, 4.6),
+				Vector3.new(x, LOT_TOP + 16.925, zc),
+				WARM_LIGHT,
+				Enum.Material.Neon,
+				NO_COLLIDE
+			)
+			BuildUtil.Light(lamp, "SpotLight", {
+				Name = "LotLight",
+				Face = Enum.NormalId.Bottom,
+				Range = 40,
+				Angle = 110,
+				Brightness = 1.5,
+				Color = WARM_LIGHT,
+			})
+		end
+	end
+
+	-- Parked cars: { double row, stall, half (-1 = south, 1 = north), nose in?, colour }
+	local cars = BuildUtil.Child(ctx, "Cars")
+	local parked = {
+		{ 1, 3, -1, true, CAR_COLORS.Red },
+		{ 1, 11, -1, true, team.Primary },
+		{ 1, 6, 1, true, CAR_COLORS.White },
+		{ 1, 12, 1, false, CAR_COLORS.Silver },
+		{ 2, 2, -1, true, CAR_COLORS.Blue },
+		{ 2, 9, -1, false, CAR_COLORS.Yellow },
+		{ 2, 7, 1, true, CAR_COLORS.Black },
+	}
+	for index, spec in ipairs(parked) do
+		local row, stall, half, noseIn, color = spec[1], spec[2], spec[3], spec[4], spec[5]
+		local x = firstX + (stall - 0.5) * STALL_WIDTH
+		local z = rowCenters[row] + half * STALL_DEPTH / 2
+		-- a car faces -Z at yaw 0; nose-in cars point at the centre line
+		local facesPlusZ = (half == -1) == noseIn
+		car(cars, "Car" .. index, x, z, facesPlusZ and math.pi or 0, color)
+	end
+
+	-- "P" sign at the street corner nearest the plaza
+	local signX, signZ = LOT.MaxX - 3.5, LOT.MinZ + 3.5
+	BuildUtil.Cylinder(ctx, {
+		Name = "SignPole",
+		Position = Vector3.new(signX, LOT_TOP + 6.5, signZ),
+		Height = 13,
+		Diameter = 0.6,
+		Color = DARK_METAL,
+		Material = Enum.Material.Metal,
+	})
+	local cube = BuildUtil.Block(
+		ctx,
+		"ParkingSign",
+		Vector3.new(4.4, 4.4, 4.4),
+		Vector3.new(signX, 0, signZ),
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		nil,
+		13
+	)
+	sign(
+		cube,
+		{ Enum.NormalId.Front, Enum.NormalId.Right, Enum.NormalId.Back, Enum.NormalId.Left },
+		"P",
+		team.Primary,
+		team,
+		{ InsetY = 0.08 }
+	)
+	local board = BuildUtil.Box(
+		ctx,
+		"ParkingBoard",
+		Vector3.new(0.3, 1.6, 6.4),
+		Vector3.new(signX, 11.6, signZ),
+		team.Trim,
+		Enum.Material.SmoothPlastic
+	)
+	sign(board, { Enum.NormalId.Right, Enum.NormalId.Left }, "FAN PARKING", team.Trim, team, { InsetY = 0.1 })
+end
+
+---------------------------------------------------------------------------------------------
+-- Team store
+---------------------------------------------------------------------------------------------
+
+function Plaza.teamstore(ctx)
+	local C = ctx.config.Colors
+	local team = ctx.colors
+
+	local cz = (STORE.MinZ + STORE.MaxZ) / 2
+	local frontX = STORE.MinX + 4 -- storefront plane, facing -X (the walkway)
+	local backX = STORE.MaxX - 0.5
+	local southZ, northZ = STORE.MinZ + 0.5, STORE.MaxZ - 0.5
+	local length = backX - frontX
+	local depth = northZ - southZ
+	local midX = (frontX + backX) / 2
+	local wallH = 12
+	local floorTop = 0.25
+	local glassTop = 9
+	local doorTop = 7.75
+	local openMinZ, openMaxZ = southZ + 4, northZ - 4 -- storefront opening between the corner piers
+	local openWidth = openMaxZ - openMinZ
+	local glassX = frontX + 0.5
+
+	-- Shell: floor, three plaster walls, team-coloured corner piers + header, roof
+	BuildUtil.Box(
+		ctx,
+		"Floor",
+		Vector3.new(length, floorTop, depth),
+		Vector3.new(midX, floorTop / 2, cz),
+		STORE_FLOOR,
+		Enum.Material.Marble
+	)
+	BuildUtil.Block(ctx, "BackWall", Vector3.new(1, wallH, depth), Vector3.new(backX - 0.5, 0, cz), STORE_WALL, Enum.Material.Plaster)
+	BuildUtil.Block(ctx, "SouthWall", Vector3.new(length, wallH, 1), Vector3.new(midX, 0, southZ + 0.5), STORE_WALL, Enum.Material.Plaster)
+	BuildUtil.Block(ctx, "NorthWall", Vector3.new(length, wallH, 1), Vector3.new(midX, 0, northZ - 0.5), STORE_WALL, Enum.Material.Plaster)
+	for _, z in ipairs({ southZ + 2, northZ - 2 }) do
+		BuildUtil.Block(ctx, "Pier", Vector3.new(1, wallH, 4), Vector3.new(glassX, 0, z), team.Primary, Enum.Material.SmoothPlastic)
+	end
+	BuildUtil.Box(
+		ctx,
+		"Header",
+		Vector3.new(1, wallH - glassTop, openWidth),
+		Vector3.new(glassX, (glassTop + wallH) / 2, cz),
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	-- (no overhang at the front, so the TEAM STORE sign can rise above the roof line)
+	BuildUtil.Block(
+		ctx,
+		"Roof",
+		Vector3.new(length + 0.5, 0.8, depth + 1),
+		Vector3.new(midX + 0.25, 0, cz),
+		C.ConcreteDark,
+		Enum.Material.Concrete,
+		nil,
+		wallH
+	)
+
+	-- Glass storefront: two big panes, walk-through doors with a transom above, metal mullions
+	local storefront = BuildUtil.Child(ctx, "Storefront")
+	local doorMinZ, doorMaxZ = cz - 2, cz + 2
+	local paneHeight = glassTop - floorTop
+	local glassProps = { Transparency = 0.45 }
+	for _, range in ipairs({ { openMinZ, doorMinZ }, { doorMaxZ, openMaxZ } }) do
+		BuildUtil.Box(
+			storefront,
+			"Window",
+			Vector3.new(0.3, paneHeight, range[2] - range[1]),
+			Vector3.new(glassX, floorTop + paneHeight / 2, (range[1] + range[2]) / 2),
+			C.Glass,
+			Enum.Material.Glass,
+			glassProps
+		)
+	end
+	BuildUtil.Box(
+		storefront,
+		"Transom",
+		Vector3.new(0.3, glassTop - doorTop, doorMaxZ - doorMinZ),
+		Vector3.new(glassX, (doorTop + glassTop) / 2, cz),
+		C.Glass,
+		Enum.Material.Glass,
+		glassProps
+	)
+	for _, side in ipairs({ -1, 1 }) do
+		BuildUtil.Box(
+			storefront,
+			"Door",
+			Vector3.new(0.25, doorTop - floorTop, 1.95),
+			Vector3.new(glassX, (floorTop + doorTop) / 2, cz + side),
+			C.Glass,
+			Enum.Material.Glass,
+			{ Transparency = 0.5, CanCollide = false }
+		)
+		BuildUtil.Box(
+			storefront,
+			"DoorHandle",
+			Vector3.new(0.15, 2.4, 0.2),
+			Vector3.new(glassX - 0.2, 4.2, cz + side * 0.35),
+			C.Metal,
+			Enum.Material.Metal,
+			NO_COLLIDE
+		)
+	end
+	for _, z in ipairs({ (openMinZ + doorMinZ) / 2, doorMinZ, doorMaxZ, (doorMaxZ + openMaxZ) / 2 }) do
+		BuildUtil.Box(
+			storefront,
+			"Mullion",
+			Vector3.new(0.4, paneHeight, 0.35),
+			Vector3.new(glassX, floorTop + paneHeight / 2, z),
+			DARK_METAL,
+			Enum.Material.Metal
+		)
+	end
+	BuildUtil.Box(
+		storefront,
+		"TransomBar",
+		Vector3.new(0.4, 0.3, openWidth),
+		Vector3.new(glassX, doorTop + 0.15, cz),
+		DARK_METAL,
+		Enum.Material.Metal
+	)
+
+	-- Entrance canopy, welcome mat and planters
+	BuildUtil.Box(
+		ctx,
+		"Canopy",
+		Vector3.new(3.2, 0.4, 7.5),
+		Vector3.new(frontX - 1.6, 9.1, cz),
+		team.Secondary,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.Box(
+		ctx,
+		"WelcomeMat",
+		Vector3.new(2.6, 0.05, 4.6),
+		Vector3.new(frontX - 1.4, 0.025, cz),
+		team.Primary,
+		Enum.Material.Fabric,
+		PAINT
+	)
+	for _, z in ipairs({ southZ + 1.5, northZ - 1.5 }) do
+		BuildUtil.Block(ctx, "Planter", Vector3.new(2, 1.6, 2), Vector3.new(frontX - 1.6, 0, z), C.ConcreteDark, Enum.Material.Concrete)
+		BuildUtil.Ball(
+			ctx,
+			{ Name = "Shrub", Position = Vector3.new(frontX - 1.6, 2.6, z), Diameter = 2.4, Color = BUSH, Material = Enum.Material.Grass }
+		)
+	end
+
+	-- TEAM STORE sign over the entrance (sticks up above the roof line), team name on the plaza side
+	BuildUtil.Box(ctx, "SignFrame", Vector3.new(0.2, 4, 17.6), Vector3.new(frontX - 0.1, 11.5, cz), team.Trim, Enum.Material.SmoothPlastic)
+	local storeSign = BuildUtil.Box(
+		ctx,
+		"StoreSign",
+		Vector3.new(0.2, 3.4, 17),
+		Vector3.new(frontX - 0.3, 11.5, cz),
+		team.Secondary,
+		Enum.Material.SmoothPlastic
+	)
+	sign(storeSign, { Enum.NormalId.Left }, "TEAM STORE", team.Secondary, team, { InsetY = 0.1 })
+	BuildUtil.Box(
+		ctx,
+		"SideWindow",
+		Vector3.new(20, 4, 0.2),
+		Vector3.new(midX + 2, 5, southZ - 0.1),
+		C.Glass,
+		Enum.Material.Glass,
+		{ Transparency = 0.2 }
+	)
+	local nameSign = BuildUtil.Box(
+		ctx,
+		"NameSign",
+		Vector3.new(16, 3, 0.2),
+		Vector3.new(midX + 2, 9.4, southZ - 0.1),
+		team.Primary,
+		Enum.Material.SmoothPlastic
+	)
+	-- wraps onto two lines when the owner's name is long
+	sign(nameSign, { Enum.NormalId.Front }, ctx.teamName .. " FAN SHOP", team.Primary, team, { InsetY = 0.1, Wrap = true })
+
+	-- Interior: jerseys on the back wall, display tables, checkout counter, ceiling light
+	local interior = BuildUtil.Child(ctx, "Interior")
+	local jerseyX = backX - 1 - 0.15
+	local jerseys = {
+		{ cz - 6, team.Primary, "1" },
+		{ cz, WHITE, "12" },
+		{ cz + 6, team.Secondary, "99" },
+	}
+	for _, jersey in ipairs(jerseys) do
+		local z, color, number = jersey[1], jersey[2], jersey[3]
+		local torso =
+			BuildUtil.Box(interior, "Jersey", Vector3.new(0.3, 4.2, 3.4), Vector3.new(jerseyX, 6.2, z), color, Enum.Material.Fabric)
+		sign(torso, { Enum.NormalId.Left }, number, color, team, { InsetX = 0.2, InsetY = 0.22 })
+		for _, side in ipairs({ -1, 1 }) do
+			BuildUtil.Part(interior, {
+				Name = "JerseySleeve",
+				Size = Vector3.new(0.3, 1.4, 1.6),
+				CFrame = CFrame.new(jerseyX, 7.55, z + side * 2.2) * CFrame.Angles(side * math.rad(30), 0, 0),
+				Color = color,
+				Material = Enum.Material.Fabric,
+			})
+		end
+	end
+	local tableX = frontX + 12
+	local tableA, tableB = cz - 5.5, cz + 5.5
+	BuildUtil.Block(
+		interior,
+		"DisplayTable",
+		Vector3.new(5, 2.6, 3.2),
+		Vector3.new(tableX, 0, tableA),
+		C.Wood,
+		Enum.Material.WoodPlanks,
+		nil,
+		floorTop
+	)
+	BuildUtil.Block(
+		interior,
+		"DisplayTable",
+		Vector3.new(5, 2.6, 3.2),
+		Vector3.new(tableX, 0, tableB),
+		C.Wood,
+		Enum.Material.WoodPlanks,
+		nil,
+		floorTop
+	)
+	local shirtTop = floorTop + 2.6
+	BuildUtil.Block(
+		interior,
+		"FoldedShirts",
+		Vector3.new(1.6, 0.6, 1.4),
+		Vector3.new(tableX - 1.2, 0, tableA),
+		team.Primary,
+		Enum.Material.Fabric,
+		nil,
+		shirtTop
+	)
+	BuildUtil.Block(
+		interior,
+		"FoldedShirts",
+		Vector3.new(1.6, 0.6, 1.4),
+		Vector3.new(tableX + 1.2, 0, tableA),
+		team.Secondary,
+		Enum.Material.Fabric,
+		nil,
+		shirtTop
+	)
+	for _, offset in ipairs({ -1.2, 1.2 }) do
+		local helmetPos = Vector3.new(tableX + offset, shirtTop + 0.9, tableB)
+		BuildUtil.Ball(interior, { Name = "Helmet", Position = helmetPos, Diameter = 1.8, Color = team.Primary })
+		BuildUtil.Box(
+			interior,
+			"Facemask",
+			Vector3.new(0.25, 0.8, 1.3),
+			helmetPos + Vector3.new(-0.85, -0.25, 0),
+			team.Trim,
+			Enum.Material.Metal
+		)
+	end
+	BuildUtil.Block(
+		interior,
+		"Checkout",
+		Vector3.new(6, 3.4, 2.2),
+		Vector3.new(frontX + 8, 0, northZ - 2.6),
+		C.Wood,
+		Enum.Material.WoodPlanks,
+		nil,
+		floorTop
+	)
+	BuildUtil.Block(
+		interior,
+		"Register",
+		Vector3.new(1.2, 0.9, 1),
+		Vector3.new(frontX + 8, 0, northZ - 2.6),
+		DARK_METAL,
+		Enum.Material.Metal,
+		nil,
+		floorTop + 3.4
+	)
+	local ceiling = BuildUtil.Box(
+		interior,
+		"CeilingLight",
+		Vector3.new(18, 0.15, 3),
+		Vector3.new(midX, wallH - 0.1, cz),
+		WARM_LIGHT,
+		Enum.Material.Neon,
+		NO_COLLIDE
+	)
+	BuildUtil.Light(ceiling, "PointLight", { Name = "StoreLight", Range = 28, Brightness = 1.2, Color = WARM_LIGHT })
+
+	-- Giant football resting on a cradle on the roof, laces tipped toward the walkway
+	local roofTop = wallH + 0.8
+	local ballX = frontX + 10
+	local scale = 0.9 -- 9.9 long; with the cradle the top stays under the 20-stud height limit
+	local cradleHeight = 0.6
+	for _, side in ipairs({ -1, 1 }) do
+		BuildUtil.Block(
+			ctx,
+			"FootballCradle",
+			Vector3.new(2.4, cradleHeight, 1.6),
+			Vector3.new(ballX, 0, cz + side * 2.4),
+			team.Secondary,
+			Enum.Material.SmoothPlastic,
+			nil,
+			roofTop
+		)
+	end
+	-- the ball is 2.68 thick (radius) above each cradle; it sinks 0.15 into them
+	local ballY = roofTop + cradleHeight + 2.53
+	local ballCFrame = CFrame.new(ballX, ballY, cz) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(math.rad(-30), 0, 0)
+	football(
+		BuildUtil.Child(ctx, "RoofFootball"),
+		"Football",
+		ballCFrame,
+		scale,
+		{ Body = LEATHER, Stripe = WHITE, Lace = WHITE },
+		{ Material = Enum.Material.Leather }
+	)
+end
+
+---------------------------------------------------------------------------------------------
+-- Championship trophy
+---------------------------------------------------------------------------------------------
+
+function Plaza.trophy(ctx)
+	local C = ctx.config.Colors
+	local team = ctx.colors
+	local cx, cz = MONUMENT.CenterX, MONUMENT.CenterZ
+	local center = Vector3.new(cx, 0, cz)
+	local gold = { Reflectance = 0.2 }
+
+	-- Stepped stone plinth (the middle step in the team colour)
+	local tiers = {
+		{ MONUMENT.HalfSize * 2 - 2, STONE_DARK, Enum.Material.Granite },
+		{ 22, team.Primary, Enum.Material.Slate },
+		{ 16, STONE_DARK, Enum.Material.Granite },
+	}
+	local y = 0
+	for i, tier in ipairs(tiers) do
+		BuildUtil.Block(ctx, "Step" .. i, Vector3.new(tier[1], 1.2, tier[1]), center, tier[2], tier[3], nil, y)
+		y += 1.2
+	end
+	local pedestalTop = 13
+	local half = 4.5
+	BuildUtil.Block(ctx, "Pedestal", Vector3.new(half * 2, pedestalTop - y, half * 2), center, STONE_LIGHT, Enum.Material.Marble, nil, y)
+	BuildUtil.Block(ctx, "PedestalCap", Vector3.new(9.8, 0.6, 9.8), center, C.Gold, Enum.Material.Metal, gold, pedestalTop)
+
+	-- Plaques facing the walkway (-X) and the street (-Z)
+	local plaqueY = 8.4
+	local plaqueText = ctx.teamName .. " - CHAMPIONS"
+	local plaqueTextColor = textColorOn(team.Primary, { C.Gold, team.Trim })
+	local plaques = {
+		{ Enum.NormalId.Left, Vector3.new(-1, 0, 0), Vector3.new(0.15, 4, 7.4), Vector3.new(0.15, 3.4, 6.8) },
+		{ Enum.NormalId.Front, Vector3.new(0, 0, -1), Vector3.new(7.4, 4, 0.15), Vector3.new(6.8, 3.4, 0.15) },
+	}
+	for _, plaque in ipairs(plaques) do
+		local face, normal = plaque[1], plaque[2]
+		local surface = Vector3.new(cx, plaqueY, cz) + normal * half
+		BuildUtil.Box(ctx, "PlaqueFrame", plaque[3], surface + normal * 0.075, C.Gold, Enum.Material.Metal, gold)
+		local plate = BuildUtil.Box(ctx, "Plaque", plaque[4], surface + normal * 0.225, team.Primary, Enum.Material.Metal)
+		sign(plate, { face }, plaqueText, team.Primary, team, { TextColor3 = plaqueTextColor, Wrap = true, InsetX = 0.08, InsetY = 0.12 })
+	end
+
+	-- The trophy: black base, gold foot, stem with a knob, cup with handles, football on top
+	local trophy = BuildUtil.Child(ctx, "Trophy")
+	local base = pedestalTop + 0.6
+	local goldPart = { Color = C.Gold, Material = Enum.Material.Metal, Reflectance = 0.2 }
+	local function goldCylinder(name, posY, height, diameter)
+		local props = table.clone(goldPart)
+		props.Name = name
+		props.Position = Vector3.new(cx, posY, cz)
+		props.Height = height
+		props.Diameter = diameter
+		return BuildUtil.Cylinder(trophy, props)
+	end
+	local function goldBall(name, posY, diameter)
+		local props = table.clone(goldPart)
+		props.Name = name
+		props.Position = Vector3.new(cx, posY, cz)
+		props.Diameter = diameter
+		return BuildUtil.Ball(trophy, props)
+	end
+	BuildUtil.Block(trophy, "TrophyBase", Vector3.new(6.4, 1.6, 6.4), center, TROPHY_BASE, Enum.Material.Marble, nil, base)
+	goldCylinder("Foot", base + 2.1, 1, 5.2)
+	goldCylinder("Stem", base + 6.1, 7, 1.8)
+	goldBall("Knob", base + 5.8, 3)
+	goldBall("Bowl", base + 13.4, 9)
+	local cup = goldCylinder("Cup", base + 15.9, 5, 9)
+	goldCylinder("Rim", base + 18.7, 0.6, 9.8)
+	BuildUtil.Light(cup, "PointLight", { Name = "TrophyGlow", Range = 18, Brightness = 1.5, Color = Color3.fromRGB(255, 220, 140) })
+
+	-- Handles on the diagonal, so they show on both sides when seen from the walkway or the street
+	local handleFrame = CFrame.new(cx, 0, cz) * CFrame.Angles(0, math.rad(45), 0)
+	for _, side in ipairs({ -1, 1 }) do
+		for _, piece in ipairs({
+			{ "HandleTop", Vector3.new(2.4, 0.8, 0.8), Vector3.new(side * 5.4, base + 17, 0) },
+			{ "HandleSide", Vector3.new(0.8, 5.4, 0.8), Vector3.new(side * 6.4, base + 14.7, 0) },
+			{ "HandleBottom", Vector3.new(2.4, 0.8, 0.8), Vector3.new(side * 5.4, base + 12.4, 0) },
+		}) do
+			local props = table.clone(goldPart)
+			props.Name = piece[1]
+			props.Size = piece[2]
+			props.CFrame = handleFrame * CFrame.new(piece[3])
+			BuildUtil.Part(trophy, props)
+		end
+	end
+
+	-- the football rests on the rim, tipped up 20 degrees (top stays below 40 studs)
+	local ballCFrame = CFrame.new(cx, base + 21.2, cz) * CFrame.Angles(0, math.rad(45), 0) * CFrame.Angles(0, 0, math.rad(20))
+	football(
+		trophy,
+		"GoldFootball",
+		ballCFrame,
+		0.95,
+		{ Body = C.Gold, Stripe = PALE_GOLD, Lace = PALE_GOLD },
+		{ Material = Enum.Material.Metal, Reflectance = 0.2 }
+	)
+
+	-- Team flags on the corners of the bottom step
+	local flagYaw = CFrame.Angles(0, math.rad(45), 0)
+	local flagAxis = Vector3.new(1, 0, -1).Unit
+	local poleInset = 11.5
+	for i, corner in ipairs({ { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } }) do
+		local px, pz = cx + corner[1] * poleInset, cz + corner[2] * poleInset
+		BuildUtil.Cylinder(ctx, {
+			Name = "FlagPole",
+			Position = Vector3.new(px, 1.2 + 6, pz),
+			Height = 12,
+			Diameter = 0.4,
+			Color = C.Metal,
+			Material = Enum.Material.Metal,
+		})
+		BuildUtil.Ball(
+			ctx,
+			{ Name = "FlagFinial", Position = Vector3.new(px, 13.45, pz), Diameter = 0.9, Color = C.Gold, Material = Enum.Material.Metal }
+		)
+		-- flags fly along the diagonal, away from the trophy
+		local outward = (corner[1] - corner[2] >= 0) and 1 or -1
+		local flagCenter = Vector3.new(px, 11.6, pz) + flagAxis * outward * 2.3
+		BuildUtil.Part(ctx, {
+			Name = "Flag",
+			Size = Vector3.new(4.2, 2.8, 0.15),
+			CFrame = CFrame.new(flagCenter) * flagYaw,
+			Color = (i % 2 == 1) and team.Primary or team.Secondary,
+			Material = Enum.Material.Fabric,
+			CanCollide = false,
+		})
+	end
+end
+
+return Plaza
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="14">
           <Properties>
             <string name="Name">PlotBase</string>
             <string name="Source"><![CDATA[--[[
@@ -1614,7 +3992,7 @@ return PlotBase
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="13">
+        <Item class="ModuleScript" referent="15">
           <Properties>
             <string name="Name">Stands</string>
             <string name="Source"><![CDATA[--[[
@@ -1643,6 +4021,7 @@ local FIELD_WALL_HEIGHT = 3.5
 local FACADE_BOTTOM = 12.8 -- just above the seat strips on the lower bowl's top row
 local FACADE_TOP = 17 -- one stud above the upper deck's first row (acts as its front parapet)
 local GATE_DARK = Color3.fromRGB(28, 28, 34)
+local TUNNEL_WALL_OVERHANG = 0.2 -- lower tunnel walls stick out this far past the visitor bowl's back wall
 
 ---------------------------------------------------------------------------------------------
 -- Small helpers
@@ -1800,7 +4179,8 @@ local function endCaps(ctx, frame, length, sides, firstHeight, rows, color)
 	end
 end
 
--- Glass safety rail along the top back edge of a stand.
+-- Glass safety rail along the top back edge of a stand. It stands inside the top row's seat strip
+-- (which ends flush with the back wall) so none of its faces are coplanar with the strip's.
 local function backRail(ctx, frame, length, topHeight, depth)
 	standBox(
 		ctx,
@@ -1809,7 +4189,7 @@ local function backRail(ctx, frame, length, topHeight, depth)
 		Vector3.new(length, 1.6, 0.25),
 		0,
 		topHeight + 0.8,
-		depth - 0.125,
+		depth - 0.45,
 		ctx.config.Colors.Glass,
 		Enum.Material.Glass,
 		{ Transparency = 0.4 }
@@ -1881,28 +4261,22 @@ end
 local function flag(ctx, frame, x, d, baseY, height, side, color)
 	local C = ctx.config.Colors
 	local polePos = at(frame, x, baseY + height / 2, d).Position
-	BuildUtil.Cylinder(
-		ctx,
-		{
-			Name = "FlagPole",
-			Position = polePos,
-			Height = height,
-			Diameter = 0.4,
-			Axis = "Y",
-			Color = C.Metal,
-			Material = Enum.Material.Metal,
-		}
-	)
-	BuildUtil.Ball(
-		ctx,
-		{
-			Name = "FlagPoleTop",
-			Position = polePos + Vector3.new(0, height / 2 + 0.3, 0),
-			Diameter = 0.8,
-			Color = C.Gold,
-			Material = Enum.Material.Metal,
-		}
-	)
+	BuildUtil.Cylinder(ctx, {
+		Name = "FlagPole",
+		Position = polePos,
+		Height = height,
+		Diameter = 0.4,
+		Axis = "Y",
+		Color = C.Metal,
+		Material = Enum.Material.Metal,
+	})
+	BuildUtil.Ball(ctx, {
+		Name = "FlagPoleTop",
+		Position = polePos + Vector3.new(0, height / 2 + 0.3, 0),
+		Diameter = 0.8,
+		Color = C.Gold,
+		Material = Enum.Material.Metal,
+	})
 	standBox(
 		ctx,
 		frame,
@@ -1998,12 +4372,16 @@ function Stands.bleachers_visitor(ctx)
 	local wallInner = tunnel - 0.4 -- a little proud of the row ends so their faces don't z-fight
 	local wallOuter = tunnel + 0.8
 	local wallX = (wallInner + wallOuter) / 2
+	-- the walls run 0.2 past the stand's plaza-facing back wall so their back faces don't z-fight
+	-- with it (the upper deck's tunnel walls start where these end)
+	local wallDepth = depth + TUNNEL_WALL_OVERHANG
+	local wallZ = frontZ - wallDepth / 2
 	for _, side in ipairs({ -1, 1 }) do
 		BuildUtil.Box(
 			tunnelCtx,
 			"TunnelWall",
-			Vector3.new(wallOuter - wallInner, wallHeight, depth),
-			Vector3.new(side * wallX, wallHeight / 2, midZ),
+			Vector3.new(wallOuter - wallInner, wallHeight, wallDepth),
+			Vector3.new(side * wallX, wallHeight / 2, wallZ),
 			team.Primary,
 			Enum.Material.Brick
 		)
@@ -2020,8 +4398,8 @@ function Stands.bleachers_visitor(ctx)
 		BuildUtil.Box(
 			tunnelCtx,
 			"TunnelWallCap",
-			Vector3.new(wallOuter - wallInner + 0.4, 0.4, depth),
-			Vector3.new(side * wallX, wallHeight + 0.2, midZ),
+			Vector3.new(wallOuter - wallInner + 0.4, 0.4, wallDepth),
+			Vector3.new(side * wallX, wallHeight + 0.2, wallZ),
 			team.Trim,
 			Enum.Material.SmoothPlastic
 		)
@@ -2105,7 +4483,9 @@ end
 
 -- Team-coloured facade band on the front face of an upper deck, filling the gap between the
 -- lower bowl's top row (12) and the upper deck's first row (16), plus a parapet cap.
-local function facade(ctx, frame, length, text)
+-- labels = { { text = "...", from = 0..1, to = 0..1 }, ... }: from/to are fractions of the band's
+-- length, left to right as seen from the field.
+local function facade(ctx, frame, length, labels)
 	local team = ctx.colors
 	local height = FACADE_TOP - FACADE_BOTTOM
 	local band = standBox(
@@ -2119,15 +4499,25 @@ local function facade(ctx, frame, length, text)
 		team.Primary,
 		Enum.Material.SmoothPlastic
 	)
-	addText(band, TOWARD_FIELD, text, readable(team.Primary, team.Trim), 12)
+	for index, label in ipairs(labels) do
+		local _, textLabel = BuildUtil.SurfaceText(band, TOWARD_FIELD, label.text, {
+			LabelName = band.Name .. "Text" .. index,
+			TextColor3 = readable(team.Primary, team.Trim),
+			PixelsPerStud = 12,
+			Font = Enum.Font.GothamBlack,
+		})
+		textLabel.Position = UDim2.new(label.from, 0, 0, 0)
+		textLabel.Size = UDim2.new(label.to - label.from, 0, 1, 0)
+	end
 	standBox(ctx, frame, "FacadeCap", Vector3.new(length, 0.3, 0.7), 0, FACADE_TOP + 0.15, -0.2, team.Trim, Enum.Material.SmoothPlastic)
+	-- kept low, under the letters' baseline, so it never cuts through the text
 	standBox(
 		ctx,
 		frame,
 		"FacadeStripe",
 		Vector3.new(length, 0.35, 0.1),
 		0,
-		FACADE_BOTTOM + 0.6,
+		FACADE_BOTTOM + 0.3,
 		-0.45,
 		team.Secondary,
 		Enum.Material.SmoothPlastic,
@@ -2169,7 +4559,7 @@ function Stands.upper_home(ctx)
 		aisles = SIDELINE_AISLES,
 		caps = { -1, 1 },
 	})
-	facade(ctx, frame, length, name .. "      HOME OF THE " .. name .. "      " .. name)
+	facade(ctx, frame, length, { { text = name .. "      HOME OF THE " .. name .. "      " .. name, from = 0, to = 1 } })
 
 	-- Outside (back) wall: concrete cladding, team bands, stadium name and concourse gates
 	local cladding = 0.3
@@ -2290,13 +4680,15 @@ function Stands.upper_visitor(ctx)
 		Enum.Material.SmoothPlastic
 	)
 	addText(nameSign, Enum.NormalId.Front, name .. " STADIUM", readable(team.Primary, team.Trim))
-	-- tunnel walls under the bridge (a little proud of the row ends) + the runway continues
+	-- tunnel walls under the bridge (a little proud of the row ends) + the runway continues.
+	-- They start where the lower bowl's tunnel walls end (those overhang z = frontZ slightly).
+	local bridgeWallFront = frontZ - TUNNEL_WALL_OVERHANG
 	for _, side in ipairs({ -1, 1 }) do
 		BuildUtil.Box(
 			bridgeCtx,
 			"TunnelWall",
-			Vector3.new(0.4, bridgeBottom, depth),
-			Vector3.new(side * (tunnel - 0.2), bridgeBottom / 2, (frontZ + backZ) / 2),
+			Vector3.new(0.4, bridgeBottom, bridgeWallFront - backZ),
+			Vector3.new(side * (tunnel - 0.2), bridgeBottom / 2, (bridgeWallFront + backZ) / 2),
 			team.Primary,
 			Enum.Material.Brick
 		)
@@ -2311,8 +4703,12 @@ function Stands.upper_visitor(ctx)
 		{ CanCollide = false }
 	)
 
-	-- Facade across the whole front face (both sections and the bridge)
-	facade(ctx, CFrame.new(0, 0, frontZ), outer * 2, "WELCOME TO " .. name .. " STADIUM")
+	-- Facade across the whole front face (both sections and the bridge). Seen from the field the
+	-- middle of it is hidden behind the tunnel header, so the text sits over the two sections.
+	facade(ctx, CFrame.new(0, 0, frontZ), outer * 2, {
+		{ text = name .. " STADIUM", from = 0.04, to = 0.42 },
+		{ text = "GO " .. name .. "!", from = 0.58, to = 0.96 },
+	})
 end
 
 return Stands
@@ -2320,7 +4716,7 @@ return Stands
           </Properties>
         </Item>
       </Item>
-      <Item class="Script" referent="14">
+      <Item class="Script" referent="16">
         <Properties>
           <string name="Name">Main</string>
           <token name="RunContext">0</token>
@@ -2360,7 +4756,13 @@ World.StartDayNight(Config, PlotManager.SetNight)
 local function onPlayerAdded(player)
 	PlotManager.OnPlayerAdded(player)
 	local profile = PlayerData.Load(player)
-	if profile and not profile.CanSave and Config.SaveEnabled then
+	if profile and profile.LoadFailed then
+		notifyRemote:FireClient(
+			player,
+			"We couldn't load your saved stadium right now. Your save is safe - rejoin in a few minutes to get it back.",
+			"error"
+		)
+	elseif profile and not profile.CanSave and Config.SaveEnabled then
 		notifyRemote:FireClient(player, "Saving is off in this server, so progress won't be kept.", "info")
 	end
 end
@@ -2387,7 +4789,7 @@ print(("[%s] Ready with %d stadium plots."):format(Config.GameTitle, Config.Plot
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">PlayerData</string>
           <string name="Source"><![CDATA[--[[
@@ -2399,16 +4801,18 @@ print(("[%s] Ready with %d stadium plots."):format(Config.GameTitle, Config.Plot
 	  * in Studio: Game Settings > Security > "Enable Studio Access to API Services" is ON.
 	If saving is not available the game still works, progress just isn't kept.
 
-	A light "session lock" stops two servers from overwriting each other's saves when a player
-	quickly hops from one server to another.
+	A "session lock" (a unique id per load, stored with the save) stops two servers - or a
+	quick leave-and-rejoin on the same server - from overwriting each other's saves.
 
 	Player attributes set here (read by the HUD):
 	  Cash        current cash
-	  SaveStatus  "loading" | "on" | "off"
+	  SaveStatus  "loading" | "on" | "off" | "loadfailed"
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
+local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -2421,8 +4825,10 @@ local LOCK_TIMEOUT = 300 -- a session lock older than this (seconds) is consider
 local LOCK_WAIT_ATTEMPTS = 6 -- how many times to wait for another server to release the lock
 local LOCK_WAIT_SECONDS = 4
 local REQUEST_RETRIES = 3
+local MAX_UNKNOWN_IDS = 200
 
 local profiles = {} -- [Player] = profile
+local releasing = {} -- [userId] = true while that user's final save / unlock is running
 local store = nil
 
 if Config.SaveEnabled then
@@ -2449,9 +4855,13 @@ end
 local function newProfile(userId)
 	return {
 		Key = keyFor(userId),
+		UserId = userId,
+		SessionId = HttpService:GenerateGUID(false),
 		Cash = Config.StartingCash,
 		Owned = {},
+		UnknownOwned = {}, -- saved item ids this server doesn't know (e.g. from a newer version); kept as-is
 		CanSave = false,
+		LoadFailed = false,
 		Changes = 0, -- bumped on every change
 		SavedChanges = 0, -- value of Changes at the last successful save
 		Saving = false,
@@ -2473,62 +4883,101 @@ local function applySavedData(profile, data)
 	end
 	if type(data.Owned) == "table" then
 		for _, id in ipairs(data.Owned) do
-			if type(id) == "string" and Items.ById[id] then
-				profile.Owned[id] = true
+			if type(id) == "string" then
+				if Items.ById[id] then
+					profile.Owned[id] = true
+				elseif #profile.UnknownOwned < MAX_UNKNOWN_IDS then
+					table.insert(profile.UnknownOwned, id)
+				end
 			end
 		end
 	end
 end
 
-local function serialize(profile)
+-- Builds the table to save. Fields this version doesn't know about (from `old`) are kept.
+local function serialize(profile, old)
+	local data = {}
+	if type(old) == "table" then
+		for key, value in pairs(old) do
+			data[key] = value
+		end
+	end
 	local owned = {}
 	for id in pairs(profile.Owned) do
 		table.insert(owned, id)
 	end
+	for _, id in ipairs(profile.UnknownOwned) do
+		if not profile.Owned[id] then
+			table.insert(owned, id)
+		end
+	end
 	table.sort(owned)
-	return {
-		Version = DATA_VERSION,
-		Cash = math.floor(profile.Cash),
-		Owned = owned,
-		SavedAt = os.time(),
-	}
+	data.Version = DATA_VERSION
+	data.Cash = math.floor(profile.Cash)
+	data.Owned = owned
+	data.SavedAt = os.time()
+	return data
 end
 
-local function lockIsHeldByOtherServer(data)
+local function newSession(profile)
+	return { JobId = game.JobId, Id = profile.SessionId, Time = os.time() }
+end
+
+-- True if some other session (another server, or an earlier session on this server) still owns the data.
+local function lockedByOtherSession(data, sessionId)
 	if type(data) ~= "table" or type(data.Session) ~= "table" then
 		return false
 	end
 	local session = data.Session
-	if session.JobId == game.JobId then
+	if session.Id == sessionId then
 		return false
+	end
+	if RunService:IsStudio() and session.JobId == "" then
+		return false -- a lock left behind by an earlier Studio test session
 	end
 	return isNumber(session.Time) and os.time() - session.Time < LOCK_TIMEOUT
 end
 
--- Errors that will never go away by retrying (e.g. Studio API access is switched off).
+local function isNewerVersion(data)
+	return type(data) == "table" and isNumber(data.Version) and data.Version > DATA_VERSION
+end
+
+-- Errors that can never succeed by retrying. Only Studio produces these
+-- (API access switched off, or the place isn't published).
 local function isPermanentError(message)
 	message = tostring(message)
 	return message:find("StudioAccessToApisNotAllowed", 1, true) ~= nil
-		or message:find("API Services", 1, true) ~= nil
-		or message:find("403", 1, true) ~= nil
-		or message:find("publish", 1, true) ~= nil
+		or message:find("Studio access to APIs", 1, true) ~= nil
+		or message:find("must publish", 1, true) ~= nil
+end
+
+local function disableSaving(reason)
+	if not store then
+		return
+	end
+	warn("[PlayerData] Saving is turned off for this server: " .. reason)
+	store = nil
+	for player, profile in pairs(profiles) do
+		profile.CanSave = false
+		player:SetAttribute("SaveStatus", "off")
+	end
 end
 
 -- Runs a DataStore request with retries. Returns success, result.
 local function withRetries(description, callback)
 	local lastError
 	for attempt = 1, REQUEST_RETRIES do
+		if not store then
+			return false, "saving is disabled"
+		end
 		local ok, result = pcall(callback)
 		if ok then
 			return true, result
 		end
 		lastError = result
 		warn(("[PlayerData] %s failed (attempt %d/%d): %s"):format(description, attempt, REQUEST_RETRIES, tostring(result)))
-		if isPermanentError(result) then
-			warn(
-				"[PlayerData] Saving is turned off for this server. In Studio, enable Game Settings > Security > 'Enable Studio Access to API Services'."
-			)
-			store = nil
+		if RunService:IsStudio() and isPermanentError(result) then
+			disableSaving("in Studio, enable Game Settings > Security > 'Enable Studio Access to API Services'.")
 			break
 		end
 		if attempt < REQUEST_RETRIES then
@@ -2536,6 +4985,21 @@ local function withRetries(description, callback)
 		end
 	end
 	return false, lastError
+end
+
+-- Gives the session lock back without changing anything else (only if we still hold it).
+local function unlock(profile)
+	releasing[profile.UserId] = true
+	withRetries("Unlock " .. profile.Key, function()
+		return store:UpdateAsync(profile.Key, function(old)
+			if type(old) == "table" and type(old.Session) == "table" and old.Session.Id == profile.SessionId then
+				old.Session = nil
+				return old
+			end
+			return nil
+		end)
+	end)
+	releasing[profile.UserId] = nil
 end
 
 -- Loads (and session-locks) a player's data. Yields. Returns the profile, or nil if the player left.
@@ -2546,22 +5010,34 @@ function PlayerData.Load(player)
 	player:SetAttribute("SaveStatus", "loading")
 	local profile = newProfile(player.UserId)
 
+	-- If this player just left this server and their final save is still running, wait for it
+	-- so we read the newest data.
+	while releasing[player.UserId] and player.Parent ~= nil do
+		task.wait(0.1)
+	end
+
 	if store then
 		local loaded = false
 		local requestFailed = false
+		local tooNew = false
 		for lockAttempt = 1, LOCK_WAIT_ATTEMPTS + 1 do
 			local forceSteal = lockAttempt > LOCK_WAIT_ATTEMPTS
 			local lockedElsewhere = false
 			local savedData = nil
 			local ok = withRetries("Load " .. profile.Key, function()
 				return store:UpdateAsync(profile.Key, function(old)
-					if not forceSteal and lockIsHeldByOtherServer(old) then
-						lockedElsewhere = true
-						return nil -- don't write; another server still owns this data
+					lockedElsewhere, tooNew = false, false
+					if isNewerVersion(old) then
+						tooNew = true
+						savedData = old
+						return nil -- saved by a newer version of the game: read it, never write it
 					end
-					lockedElsewhere = false
+					if not forceSteal and lockedByOtherSession(old, profile.SessionId) then
+						lockedElsewhere = true
+						return nil -- don't write; another session still owns this data
+					end
 					local data = type(old) == "table" and old or {}
-					data.Session = { JobId = game.JobId, Time = os.time() }
+					data.Session = newSession(profile)
 					savedData = data
 					return data
 				end)
@@ -2580,31 +5056,29 @@ function PlayerData.Load(player)
 			end
 			task.wait(LOCK_WAIT_SECONDS)
 		end
-		profile.CanSave = loaded and not requestFailed
+		profile.CanSave = loaded and not requestFailed and not tooNew and store ~= nil
+		profile.LoadFailed = requestFailed and store ~= nil
+		if tooNew then
+			warn("[PlayerData] " .. profile.Key .. " was saved by a newer version of the game; this server won't save it.")
+		end
 	end
 
 	if player.Parent == nil then
 		-- The player left while we were loading: give the lock back without touching their data.
 		if profile.CanSave then
 			profile.Released = true
-			task.spawn(function()
-				withRetries("Unlock " .. profile.Key, function()
-					return store:UpdateAsync(profile.Key, function(old)
-						if type(old) == "table" and type(old.Session) == "table" and old.Session.JobId == game.JobId then
-							old.Session = nil
-							return old
-						end
-						return nil
-					end)
-				end)
-			end)
+			task.spawn(unlock, profile)
 		end
 		return nil
 	end
 
 	profiles[player] = profile
 	player:SetAttribute("Cash", profile.Cash)
-	player:SetAttribute("SaveStatus", profile.CanSave and "on" or "off")
+	if profile.LoadFailed then
+		player:SetAttribute("SaveStatus", "loadfailed")
+	else
+		player:SetAttribute("SaveStatus", profile.CanSave and "on" or "off")
+	end
 	return profile
 end
 
@@ -2616,28 +5090,31 @@ local function saveProfile(profile, release)
 	while profile.Saving do
 		task.wait(0.1)
 	end
+	if not store or not profile.CanSave then
+		return false
+	end
 	profile.Saving = true
 	local changesAtSave = profile.Changes
-	local data = serialize(profile)
-	local stolen = false
+	local lost = false
 	local ok = withRetries("Save " .. profile.Key, function()
 		return store:UpdateAsync(profile.Key, function(old)
-			if lockIsHeldByOtherServer(old) then
-				stolen = true
-				return nil -- another server took over this player's data; don't overwrite it
+			if type(old) ~= "table" or type(old.Session) ~= "table" or old.Session.Id ~= profile.SessionId then
+				lost = true
+				return nil -- another session owns this data now; never overwrite it
 			end
-			stolen = false
-			data.Session = (not release) and { JobId = game.JobId, Time = os.time() } or nil
+			lost = false
+			local data = serialize(profile, old)
+			data.Session = (not release) and newSession(profile) or nil
 			return data
 		end)
 	end)
 	profile.Saving = false
-	if ok and not stolen then
+	if ok and not lost then
 		profile.SavedChanges = math.max(profile.SavedChanges, changesAtSave)
 		return true
 	end
-	if stolen then
-		warn("[PlayerData] " .. profile.Key .. " is now owned by another server; this server will stop saving it.")
+	if lost then
+		warn("[PlayerData] " .. profile.Key .. " is owned by another session now; this server will stop saving it.")
 		profile.CanSave = false
 	end
 	return false
@@ -2712,7 +5189,9 @@ function PlayerData.Release(player)
 		return
 	end
 	profile.Released = true
+	releasing[profile.UserId] = true
 	saveProfile(profile, true)
+	releasing[profile.UserId] = nil
 	profiles[player] = nil
 end
 
@@ -2732,15 +5211,14 @@ end
 
 -- Periodically saves every profile (this also refreshes the session lock).
 function PlayerData.StartAutosave()
-	if not store then
-		return
-	end
 	task.spawn(function()
 		while true do
 			task.wait(Config.AutosaveSeconds)
-			for _, profile in pairs(profiles) do
-				if not profile.Released and profile.CanSave then
-					task.spawn(saveProfile, profile, false)
+			if store then
+				for _, profile in pairs(profiles) do
+					if not profile.Released and profile.CanSave then
+						task.spawn(saveProfile, profile, false)
+					end
 				end
 			end
 		end
@@ -2755,7 +5233,7 @@ return PlayerData
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="18">
         <Properties>
           <string name="Name">PlotManager</string>
           <string name="Source"><![CDATA[--[[
@@ -2767,8 +5245,12 @@ return PlayerData
 	  PlotIndex   number of the plot the player owns (nil = none yet)
 	  Income      cash per second the player's stadium earns
 	  Built       how many stadium pieces the player owns
+	  NextGoal    item id of the cheapest buy button showing (the client draws a guide beam to it)
+
+	The Tycoons folder gets a "FreePlots" attribute (how many plots nobody owns) for the HUD.
 ]]
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -2793,8 +5275,11 @@ local notifyRemote = nil
 local isNight = false
 local rng = Random.new()
 
-local LAST_ITEM_ID = Items.List[#Items.List].Id
+local tycoonsFolder = nil
 local UNCLAIMED_TRIGGER_TRANSPARENCY = 0.55
+local BUTTON_TAG = "TycoonBuyButton" -- Effects.client.lua makes these pulse
+local ANIMATION_TIME = 0.55
+local ANIMATION_MAX_DELAY = 0.5
 
 ---------------------------------------------------------------------------------------------
 -- Helpers
@@ -2947,13 +5432,35 @@ end
 -- Building pieces
 ---------------------------------------------------------------------------------------------
 
--- Parts start below their final spot and invisible, then rise into place.
+-- Parts start below their final spot and invisible, then rise into place. Text, lights and
+-- collisions are switched off while the piece rises and switched back on when it lands.
 local function animateIn(model)
 	local parts = {}
+	local hidden = {} -- { instance, property, originalValue }
 	for _, descendant in ipairs(model:GetDescendants()) do
 		if descendant:IsA("BasePart") then
 			table.insert(parts, descendant)
+			if descendant.CanCollide then
+				table.insert(hidden, { descendant, "CanCollide", true })
+				descendant.CanCollide = false
+			end
+		elseif descendant:IsA("LayerCollector") or (descendant:IsA("Light") and descendant.Name ~= "FloodLight") then
+			-- SurfaceGui / BillboardGui / lights (flood lights are handled by the night logic)
+			if descendant.Enabled then
+				table.insert(hidden, { descendant, "Enabled", true })
+				descendant.Enabled = false
+			end
 		end
+	end
+	if #hidden > 0 then
+		task.delay(ANIMATION_TIME + ANIMATION_MAX_DELAY + 0.05, function()
+			for _, entry in ipairs(hidden) do
+				local instance, property, value = entry[1], entry[2], entry[3]
+				if instance.Parent then
+					instance[property] = value
+				end
+			end
+		end)
 	end
 	if #parts == 0 then
 		return
@@ -2968,12 +5475,12 @@ local function animateIn(model)
 	for _, part in ipairs(parts) do
 		local targetCFrame = part.CFrame
 		local targetTransparency = part.Transparency
-		local delayTime = (targetCFrame.Position.Y - minY) / heightRange * 0.5
+		local delayTime = (targetCFrame.Position.Y - minY) / heightRange * ANIMATION_MAX_DELAY
 		part.CFrame = targetCFrame - Vector3.new(0, 6, 0)
 		part.Transparency = 1
 		local tween = TweenService:Create(
 			part,
-			TweenInfo.new(0.55, Enum.EasingStyle.Back, Enum.EasingDirection.Out, 0, false, delayTime),
+			TweenInfo.new(ANIMATION_TIME, Enum.EasingStyle.Back, Enum.EasingDirection.Out, 0, false, delayTime),
 			{ CFrame = targetCFrame, Transparency = targetTransparency }
 		)
 		tween:Play()
@@ -3064,6 +5571,8 @@ local function createButton(plot, item)
 	priceLabel.Text = ("%s   +%s/s"):format(price, Format.Short(item.Income * Config.IncomeMultiplier))
 	priceLabel.Parent = gui
 
+	pad:SetAttribute("ItemId", item.Id)
+	CollectionService:AddTag(pad, BUTTON_TAG)
 	pad.Touched:Connect(function(hit)
 		onButtonTouched(plot, item, hit)
 	end)
@@ -3072,18 +5581,33 @@ local function createButton(plot, item)
 end
 
 -- Shows exactly the buttons for pieces that are unlocked but not yet owned.
+-- Returns the list of items whose buttons just appeared.
 local function refreshButtons(plot)
+	local added = {}
 	for _, item in ipairs(Items.List) do
 		local shouldShow = plot.Owner ~= nil and not plot.Owned[item.Id] and Items.IsUnlocked(item, plot.Owned)
 		local existing = plot.Buttons[item.Id]
 		if shouldShow and not existing then
 			createButton(plot, item)
+			table.insert(added, item)
 		elseif not shouldShow and existing then
 			existing:Destroy()
 			plot.Buttons[item.Id] = nil
 		end
 	end
 	updateButtonColors(plot)
+
+	-- the cheapest button showing is the player's "next goal" (guide beam)
+	if plot.Owner then
+		local goal = nil
+		for itemId in pairs(plot.Buttons) do
+			if goal == nil or Items.ById[itemId].Cost < Items.ById[goal].Cost then
+				goal = itemId
+			end
+		end
+		plot.Owner:SetAttribute("NextGoal", goal)
+	end
+	return added
 end
 
 function PlotManager.Purchase(plot, item)
@@ -3093,20 +5617,70 @@ function PlotManager.Purchase(plot, item)
 	end
 	if not PlayerData.TrySpend(player, item.Cost) then
 		if cooldownReady(player, "cash_" .. item.Id, 2) then
-			local missing = item.Cost - PlayerData.GetCash(player)
-			notify(player, ("You need %s more for %s"):format(Format.MoneyExact(missing), item.Name), "error")
+			local cash = PlayerData.GetCash(player)
+			local missing = item.Cost - cash
+			local waiting = math.floor(plot.Vault)
+			if waiting > 0 and cash + waiting >= item.Cost then
+				notify(
+					player,
+					("You need %s more - your VAULT has %s! Step on the green pad to collect it."):format(
+						Format.MoneyExact(missing),
+						Format.MoneyExact(waiting)
+					),
+					"info"
+				)
+			else
+				notify(player, ("You need %s more for %s"):format(Format.MoneyExact(missing), item.Name), "error")
+			end
 		end
 		return false
 	end
 	PlayerData.SetOwned(player, item.Id) -- plot.Owned is the same table as the profile's Owned
 	buildItem(plot, item, true)
 	recalcIncome(plot)
-	refreshButtons(plot)
-	notify(player, ("Built %s!  +%s/s"):format(item.Name, Format.Short(item.Income * Config.IncomeMultiplier)), "success")
-	if item.Id == LAST_ITEM_ID then
+	local unlocked = refreshButtons(plot)
+	local message = ("Built %s!  +%s/s"):format(item.Name, Format.Short(item.Income * Config.IncomeMultiplier))
+	if #unlocked > 0 then
+		local names = {}
+		for _, newItem in ipairs(unlocked) do
+			table.insert(names, newItem.Name)
+		end
+		message ..= "  Unlocked: " .. table.concat(names, ", ")
+	end
+	notify(player, message, "success")
+	if countOwned(plot) >= #Items.List then
 		notify(player, "Your stadium is complete. You're a champion!", "success")
 	end
 	return true
+end
+
+local function countFreePlots()
+	local free = 0
+	for _, plot in ipairs(plots) do
+		if not plot.Owner then
+			free += 1
+		end
+	end
+	return free
+end
+
+local function updateFreePlots()
+	if tycoonsFolder then
+		tycoonsFolder:SetAttribute("FreePlots", countFreePlots())
+	end
+end
+
+-- Tells a player without a stadium why they can't use this one.
+local function explainTaken(plot, player)
+	if plotByPlayer[player] or not cooldownReady(player, "gate_taken", 4) then
+		return
+	end
+	if countFreePlots() > 0 then
+		local ownerName = plot.Owner and plot.Owner.DisplayName or "someone"
+		notify(player, ("This is %s's stadium. Find a gate that's still glowing gold!"):format(ownerName), "error")
+	else
+		notify(player, "All stadiums are taken right now. One opens up when a player leaves!", "error")
+	end
 end
 
 onButtonTouched = function(plot, item, hit)
@@ -3115,8 +5689,12 @@ onButtonTouched = function(plot, item, hit)
 		return
 	end
 	if player ~= plot.Owner then
-		if cooldownReady(player, "not_owner", 3) then
-			notify(player, "This isn't your stadium! Claim an empty one at a gold gate.", "error")
+		if plotByPlayer[player] then
+			if cooldownReady(player, "not_owner", 3) then
+				notify(player, "This isn't your stadium! Build at your own one.", "error")
+			end
+		else
+			explainTaken(plot, player)
 		end
 		return
 	end
@@ -3162,20 +5740,26 @@ function PlotManager.Claim(plot, player, profile)
 	updateVault(plot)
 	player:SetAttribute("PlotIndex", plot.Index)
 
+	updateFreePlots()
+
 	local built = countOwned(plot)
 	if built > 0 then
 		notify(player, ("Welcome back! Your stadium has %d of %d pieces."):format(built, #Items.List), "success")
 	else
 		notify(player, "Stadium claimed! Step on the glowing button to start building.", "success")
+		notify(player, "Your money piles up in the VAULT by the gate - step on the green pad to collect it.", "info")
 	end
 end
 
 local function onClaimTouched(plot, hit)
-	if plot.Owner then
-		return
-	end
 	local player = playerFromHit(hit)
 	if not player then
+		return
+	end
+	if plot.Owner then
+		if plot.Owner ~= player then
+			explainTaken(plot, player)
+		end
 		return
 	end
 	local ownedPlot = plotByPlayer[player]
@@ -3202,7 +5786,11 @@ local function onClaimTouched(plot, hit)
 		return
 	end
 	if plot.Owner or plotByPlayer[player] then
-		return -- someone else claimed it while we waited, or the player claimed another plot
+		-- someone else claimed it while we waited, or the player claimed another plot
+		if plot.Owner and not plotByPlayer[player] then
+			explainTaken(plot, player)
+		end
+		return
 	end
 	PlotManager.Claim(plot, player, profile)
 end
@@ -3233,6 +5821,12 @@ function PlotManager.Release(player)
 	plot.Buttons = {}
 	setGateClaimed(plot, nil)
 	updateVault(plot)
+	updateFreePlots()
+	for _, other in ipairs(Players:GetPlayers()) do
+		if other ~= player and not plotByPlayer[other] then
+			notify(other, "A stadium just opened up - walk through the glowing gold gate!", "info")
+		end
+	end
 end
 
 -- Pays every vault out to its owner (used right before the server shuts down).
@@ -3252,7 +5846,8 @@ end
 -- Vault + collect pad
 ---------------------------------------------------------------------------------------------
 
-local function collect(plot)
+-- `silent` = no pop-up (used for the every-second auto-collect while standing on the pad)
+local function collect(plot, silent)
 	local player = plot.Owner
 	local amount = math.floor(plot.Vault)
 	if not player or amount <= 0 then
@@ -3262,7 +5857,9 @@ local function collect(plot)
 		plot.Vault -= amount
 		updateVault(plot)
 		updateButtonColors(plot)
-		notify(player, "+" .. Format.MoneyExact(amount), "cash")
+		if not silent then
+			notify(player, "+" .. Format.MoneyExact(amount), "cash")
+		end
 	end
 end
 
@@ -3342,6 +5939,7 @@ end
 
 function PlotManager.Init(parentFolder, remote)
 	notifyRemote = remote
+	tycoonsFolder = parentFolder
 	for index, origin in ipairs(World.GetPlotOrigins(Config)) do
 		local palette = Config.TeamColors[(index - 1) % #Config.TeamColors + 1]
 
@@ -3391,6 +5989,7 @@ function PlotManager.Init(parentFolder, remote)
 			onCollectTouched(plot, hit)
 		end)
 	end
+	updateFreePlots()
 end
 
 -- Respawn owners at their own stadium.
@@ -3425,7 +6024,7 @@ function PlotManager.Start()
 				if plot.Owner then
 					plot.Vault += plot.Income * Config.IncomeMultiplier * Config.IncomeTickSeconds
 					if ownerIsOnPad(plot) then
-						collect(plot)
+						collect(plot, true)
 					else
 						updateVault(plot)
 					end
@@ -3467,7 +6066,7 @@ return PlotManager
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="17">
+      <Item class="ModuleScript" referent="19">
         <Properties>
           <string name="Name">World</string>
           <string name="Source"><![CDATA[--[[
@@ -3660,19 +6259,184 @@ return World
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="18">
+  <Item class="StarterPlayer" referent="20">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="19">
+    <Item class="StarterPlayerScripts" referent="21">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="20">
+      <Item class="Folder" referent="22">
         <Properties>
           <string name="Name">TycoonClient</string>
         </Properties>
-        <Item class="LocalScript" referent="21">
+        <Item class="LocalScript" referent="23">
+          <Properties>
+            <string name="Name">Effects</string>
+            <string name="Source"><![CDATA[--[[
+	Effects
+	Client-only polish (nothing here affects gameplay or is seen by other players):
+	  * buy buttons gently pulse so they are easy to spot
+	  * a guide beam points from your character to the button for your next goal
+	    (server sets the player attribute "NextGoal" to an item id)
+	  * small sounds for purchases and collecting cash (Config.Sounds)
+]]
+
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
+local Workspace = game:GetService("Workspace")
+
+local player = Players.LocalPlayer
+local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
+local Config = require(Shared:WaitForChild("Config"))
+local notifyRemote = ReplicatedStorage:WaitForChild("TycoonRemotes"):WaitForChild("Notify")
+
+local BUTTON_TAG = "TycoonBuyButton"
+local GUIDE_HIDE_DISTANCE = 18
+
+---------------------------------------------------------------------------------------------
+-- Pulsing buy buttons
+---------------------------------------------------------------------------------------------
+local buttons = {} -- [BasePart] = true
+
+local function trackButton(pad)
+	if pad:IsA("BasePart") then
+		buttons[pad] = true
+	end
+end
+
+for _, pad in ipairs(CollectionService:GetTagged(BUTTON_TAG)) do
+	trackButton(pad)
+end
+CollectionService:GetInstanceAddedSignal(BUTTON_TAG):Connect(trackButton)
+CollectionService:GetInstanceRemovedSignal(BUTTON_TAG):Connect(function(pad)
+	buttons[pad] = nil
+end)
+
+RunService.RenderStepped:Connect(function()
+	local wave = (math.sin(os.clock() * 4) + 1) / 2 -- 0..1
+	for pad in pairs(buttons) do
+		if pad.Parent then
+			pad.LocalTransparencyModifier = wave * 0.45
+			local info = pad:FindFirstChild("Info")
+			if info and info:IsA("BillboardGui") then
+				info.StudsOffset = Vector3.new(0, 4.5 + wave * 0.6, 0)
+			end
+		else
+			buttons[pad] = nil
+		end
+	end
+end)
+
+---------------------------------------------------------------------------------------------
+-- Guide beam to the next goal
+---------------------------------------------------------------------------------------------
+local beam = Instance.new("Beam")
+beam.Name = "TycoonGuide"
+beam.FaceCamera = true
+beam.Width0 = 0.6
+beam.Width1 = 0.6
+beam.Segments = 1
+beam.LightEmission = 1
+beam.LightInfluence = 0
+beam.Color = ColorSequence.new(Color3.fromRGB(255, 220, 60))
+beam.Transparency = NumberSequence.new({
+	NumberSequenceKeypoint.new(0, 0.2),
+	NumberSequenceKeypoint.new(1, 0.6),
+})
+beam.Enabled = false
+
+local characterAttachment = Instance.new("Attachment")
+characterAttachment.Name = "TycoonGuideStart"
+characterAttachment.Position = Vector3.new(0, -1.5, 0)
+
+local targetAttachment = Instance.new("Attachment")
+targetAttachment.Name = "TycoonGuideEnd"
+targetAttachment.Position = Vector3.new(0, 1, 0)
+
+beam.Attachment0 = characterAttachment
+beam.Attachment1 = targetAttachment
+
+local function findGoalButton()
+	local goal = player:GetAttribute("NextGoal")
+	local plotIndex = player:GetAttribute("PlotIndex")
+	if not goal or not plotIndex then
+		return nil
+	end
+	local tycoons = Workspace:FindFirstChild("Tycoons")
+	local plot = tycoons and tycoons:FindFirstChild("Plot" .. tostring(plotIndex))
+	local folder = plot and plot:FindFirstChild("Buttons")
+	return folder and folder:FindFirstChild("Buy_" .. tostring(goal))
+end
+
+local function updateGuide()
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local pad = Config.ShowGuideBeam and findGoalButton() or nil
+	if not root or not pad then
+		beam.Enabled = false
+		return
+	end
+	if characterAttachment.Parent ~= root then
+		characterAttachment.Parent = root
+	end
+	if targetAttachment.Parent ~= pad then
+		targetAttachment.Parent = pad
+	end
+	if beam.Parent ~= root then
+		beam.Parent = root
+	end
+	beam.Enabled = (root.CFrame.Position - pad.CFrame.Position).Magnitude > GUIDE_HIDE_DISTANCE
+end
+
+task.spawn(function()
+	while true do
+		updateGuide()
+		task.wait(0.25)
+	end
+end)
+
+---------------------------------------------------------------------------------------------
+-- Sounds
+---------------------------------------------------------------------------------------------
+local soundsFolder = Instance.new("Folder")
+soundsFolder.Name = "TycoonSounds"
+soundsFolder.Parent = SoundService
+
+local function makeSound(name, settings)
+	if type(settings) ~= "table" or type(settings.Id) ~= "string" or settings.Id == "" then
+		return nil
+	end
+	local sound = Instance.new("Sound")
+	sound.Name = name
+	sound.SoundId = settings.Id
+	sound.Volume = settings.Volume or 0.5
+	sound.PlaybackSpeed = settings.Speed or 1
+	sound.Parent = soundsFolder
+	return sound
+end
+
+local soundsConfig = Config.Sounds or {}
+local soundForKind = {
+	success = makeSound("Purchase", soundsConfig.Purchase),
+	cash = makeSound("Collect", soundsConfig.Collect),
+	error = makeSound("Error", soundsConfig.Error),
+}
+
+notifyRemote.OnClientEvent:Connect(function(_message, kind)
+	local sound = soundForKind[kind]
+	if sound then
+		SoundService:PlayLocalSound(sound)
+	end
+end)
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="LocalScript" referent="24">
           <Properties>
             <string name="Name">HUD</string>
             <string name="Source"><![CDATA[--[[
@@ -3685,6 +6449,7 @@ return World
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
 local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
@@ -3699,6 +6464,10 @@ local TOAST_COLORS = {
 	info = Color3.fromRGB(45, 100, 190),
 }
 local MAX_TOASTS = 5
+local TOAST_HEIGHT = 40
+local TOAST_GAP = 6
+local CLAIM_HINT = "Walk through a glowing GOLD GATE to claim your stadium!"
+local FULL_HINT = "All stadiums are taken right now - one opens when a player leaves."
 local TOAST_SECONDS = 3.5
 
 local function create(className, props, children)
@@ -3791,7 +6560,7 @@ local hintLabel = create("TextLabel", {
 	BackgroundColor3 = Color3.fromRGB(255, 196, 37),
 	BackgroundTransparency = 0.1,
 	Font = Enum.Font.GothamBlack,
-	Text = "Walk through a glowing GOLD GATE to claim your stadium!",
+	Text = CLAIM_HINT,
 	TextColor3 = Color3.fromRGB(25, 25, 30),
 	TextScaled = true,
 	Parent = screen,
@@ -3815,18 +6584,22 @@ local saveLabel = create("TextLabel", {
 	Parent = screen,
 }, { corner(6) })
 
+-- Pop-up messages stack upward from the bottom centre (clear of the player list, the chat,
+-- and the mobile thumbstick / jump button).
 local toastContainer = create("Frame", {
 	Name = "Toasts",
-	AnchorPoint = Vector2.new(1, 0),
-	Position = UDim2.new(1, -12, 0, 130),
-	Size = UDim2.new(0, 330, 0.6, 0),
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -40),
+	Size = UDim2.new(0.9, 0, 0, MAX_TOASTS * (TOAST_HEIGHT + TOAST_GAP)),
 	BackgroundTransparency = 1,
 	Parent = screen,
 }, {
+	create("UISizeConstraint", { MaxSize = Vector2.new(440, MAX_TOASTS * (TOAST_HEIGHT + TOAST_GAP)) }),
 	create("UIListLayout", {
-		Padding = UDim.new(0, 6),
+		Padding = UDim.new(0, TOAST_GAP),
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		HorizontalAlignment = Enum.HorizontalAlignment.Right,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		VerticalAlignment = Enum.VerticalAlignment.Bottom,
 	}),
 })
 
@@ -3860,10 +6633,14 @@ local function onIncomeChanged()
 	incomeLabel.Text = ("+%s/s"):format(Format.Money(income))
 end
 
+local tycoonsFolder = Workspace:WaitForChild("Tycoons", 10)
+
 local function onPlotChanged()
 	local hasPlot = player:GetAttribute("PlotIndex") ~= nil
 	hintLabel.Visible = not hasPlot
 	progressLabel.Visible = hasPlot
+	local freePlots = tycoonsFolder and tycoonsFolder:GetAttribute("FreePlots")
+	hintLabel.Text = (freePlots == 0) and FULL_HINT or CLAIM_HINT
 end
 
 local function onBuiltChanged()
@@ -3884,6 +6661,9 @@ local function onSaveStatusChanged()
 	elseif status == "off" then
 		saveLabel.Text = "Progress saving: OFF"
 		saveLabel.TextColor3 = Color3.fromRGB(255, 150, 150)
+	elseif status == "loadfailed" then
+		saveLabel.Text = "Save didn't load - rejoin later"
+		saveLabel.TextColor3 = Color3.fromRGB(255, 190, 120)
 	else
 		saveLabel.Text = "Loading save..."
 		saveLabel.TextColor3 = Color3.fromRGB(220, 220, 225)
@@ -3895,6 +6675,9 @@ player:GetAttributeChangedSignal("Income"):Connect(onIncomeChanged)
 player:GetAttributeChangedSignal("PlotIndex"):Connect(onPlotChanged)
 player:GetAttributeChangedSignal("Built"):Connect(onBuiltChanged)
 player:GetAttributeChangedSignal("SaveStatus"):Connect(onSaveStatusChanged)
+if tycoonsFolder then
+	tycoonsFolder:GetAttributeChangedSignal("FreePlots"):Connect(onPlotChanged)
+end
 onCashChanged()
 onIncomeChanged()
 onPlotChanged()
@@ -3905,6 +6688,7 @@ onSaveStatusChanged()
 -- Toast notifications
 ---------------------------------------------------------------------------------------------
 local toastOrder = 0
+local cashToast = nil -- the current "+$X" toast, reused so collecting doesn't stack up toasts
 
 local function fadeOut(toast)
 	local tweenInfo = TweenInfo.new(0.4)
@@ -3919,12 +6703,41 @@ local function fadeOut(toast)
 	toast:Destroy()
 end
 
+-- Fades the toast after TOAST_SECONDS unless it was refreshed in the meantime.
+local function scheduleFade(toast)
+	local token = (toast:GetAttribute("FadeToken") or 0) + 1
+	toast:SetAttribute("FadeToken", token)
+	task.delay(TOAST_SECONDS, function()
+		if toast.Parent and toast:GetAttribute("FadeToken") == token then
+			fadeOut(toast)
+		end
+	end)
+end
+
+-- How many toasts fit without covering the middle of small (phone) screens.
+local function maxToasts()
+	local ok, size = pcall(function()
+		return screen.AbsoluteSize
+	end)
+	if not ok or size.Y <= 0 then
+		return MAX_TOASTS -- not laid out yet
+	end
+	return math.clamp(math.floor(size.Y * 0.4 / (TOAST_HEIGHT + TOAST_GAP)), 2, MAX_TOASTS)
+end
+
 local function showToast(message, kind)
 	toastOrder += 1
+	if kind == "cash" and cashToast and cashToast.Parent then
+		cashToast.LayoutOrder = toastOrder
+		cashToast:FindFirstChildOfClass("TextLabel").Text = tostring(message)
+		scheduleFade(cashToast)
+		return
+	end
+
 	local toast = create("Frame", {
 		Name = "Toast",
 		LayoutOrder = toastOrder,
-		Size = UDim2.new(1, 0, 0, 40),
+		Size = UDim2.new(1, 0, 0, TOAST_HEIGHT),
 		BackgroundColor3 = TOAST_COLORS[kind] or TOAST_COLORS.info,
 		BackgroundTransparency = 0.1,
 		Parent = toastContainer,
@@ -3941,6 +6754,9 @@ local function showToast(message, kind)
 			TextWrapped = true,
 		}),
 	})
+	if kind == "cash" then
+		cashToast = toast
+	end
 
 	-- keep only the newest few
 	local toasts = {}
@@ -3952,15 +6768,11 @@ local function showToast(message, kind)
 	table.sort(toasts, function(a, b)
 		return a.LayoutOrder < b.LayoutOrder
 	end)
-	for index = 1, #toasts - MAX_TOASTS do
+	for index = 1, #toasts - maxToasts() do
 		toasts[index]:Destroy()
 	end
 
-	task.delay(TOAST_SECONDS, function()
-		if toast.Parent then
-			fadeOut(toast)
-		end
-	end)
+	scheduleFade(toast)
 end
 
 notifyRemote.OnClientEvent:Connect(showToast)
@@ -3970,13 +6782,13 @@ notifyRemote.OnClientEvent:Connect(showToast)
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="22">
+  <Item class="Workspace" referent="25">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="NeedsPivotMigration">false</bool>
       <bool name="StreamingEnabled">false</bool>
     </Properties>
-    <Item class="Part" referent="23">
+    <Item class="Part" referent="26">
       <Properties>
         <string name="Name">Ground</string>
         <bool name="Anchored">true</bool>
@@ -4006,7 +6818,7 @@ notifyRemote.OnClientEvent:Connect(showToast)
         <token name="TopSurface">0</token>
       </Properties>
     </Item>
-    <Item class="SpawnLocation" referent="24">
+    <Item class="SpawnLocation" referent="27">
       <Properties>
         <string name="Name">SpawnLocation</string>
         <bool name="Anchored">true</bool>

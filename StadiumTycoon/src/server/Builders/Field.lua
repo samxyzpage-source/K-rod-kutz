@@ -520,7 +520,7 @@ function Field.benches(ctx)
 			nil,
 			seatTop - 0.4
 		)
-		local back = BuildUtil.Block(
+		BuildUtil.Block(
 			bench,
 			"Backrest",
 			Vector3.new(24, 1.8, 0.4),
@@ -540,28 +540,38 @@ function Field.benches(ctx)
 			nil,
 			seatTop + 1.5
 		)
-		-- the name faces the home stands behind the bench
-		teamText(back, Enum.NormalId.Back, ctx.teamName, team.Primary, team, 40, 0.25, 0.12, "BenchName", 2)
 	end
+	local benchBackTop = seatTop + 1.9 -- top of the backrest stripe
 
 	-- drinks table with two orange coolers between the benches
 	local drinks = BuildUtil.Child(ctx, "DrinksTable")
-	local tableTop = matTop + 2.2
-	BuildUtil.Block(drinks, "Table", Vector3.new(5, 2.2, 2.2), Vector3.new(0, 0, seatZ), team.Primary, Enum.Material.Fabric, nil, matTop)
+	-- table at seat height so the cooler lids (top 4.16) stay below the HOME TEAM lettering on the board
+	local tableHeight = 2
+	local tableTop = matTop + tableHeight
+	BuildUtil.Block(
+		drinks,
+		"Table",
+		Vector3.new(5, tableHeight, 2.2),
+		Vector3.new(0, 0, seatZ),
+		team.Primary,
+		Enum.Material.Fabric,
+		nil,
+		matTop
+	)
 	for _, s in ipairs({ -1, 1 }) do
 		BuildUtil.Cylinder(drinks, {
 			Name = "Cooler",
-			Position = Vector3.new(s * 1.2, tableTop + 1, seatZ + 0.2),
-			Height = 2,
-			Diameter = 1.7,
+			Position = Vector3.new(s * 1.2, tableTop + 0.8, seatZ + 0.2),
+			Height = 1.6,
+			Diameter = 1.6,
 			Color = COOLER_ORANGE,
 			Material = Enum.Material.SmoothPlastic,
 		})
 		BuildUtil.Cylinder(drinks, {
 			Name = "CoolerLid",
-			Position = Vector3.new(s * 1.2, tableTop + 2.175, seatZ + 0.2),
-			Height = 0.35,
-			Diameter = 1.85,
+			Position = Vector3.new(s * 1.2, tableTop + 1.75, seatZ + 0.2),
+			Height = 0.3,
+			Diameter = 1.75,
 			Color = WHITE,
 			Material = Enum.Material.SmoothPlastic,
 		})
@@ -575,38 +585,57 @@ function Field.benches(ctx)
 		Material = Enum.Material.SmoothPlastic,
 	})
 
-	-- low sideline boards behind the benches (Secondary so they stand out behind the Primary benches)
+	-- medical tent footprint (built below); the east board's lettering stays clear of its roof
+	local tentX, tentZ = 36.5, areaFront + 3.6
+	local tentW, tentD, tentH, roofH = 6, 5.4, 4, 1.6
+	local tentEaveX = tentX - tentW / 2 - 0.3
+
+	-- sideline boards behind the benches (Secondary so they stand out behind the Primary benches).
+	-- The field-side lettering sits in a band ABOVE the bench backrests, otherwise the benches hide it
+	-- from the field and the front stands; the back carries full-height lettering for the home stands.
 	local boardZ = areaBack - 0.8
-	local boardHeight = 3.6
-	local panels = { { x = -26, text = ctx.teamName }, { x = 0, text = "HOME TEAM" }, { x = 26, text = ctx.teamName } }
+	local boardWidth = 24
+	local boardHeight = 6.3 -- cap top = 6.86, inside the 7-stud height limit
+	local boardTop = matTop + boardHeight
+	local bandBottom = benchBackTop + 0.2
+	local bandTopInset = 0.12
+	local panels = {
+		{ x = -26, text = ctx.teamName },
+		{ x = 0, text = "HOME TEAM" },
+		{ x = 26, text = ctx.teamName },
+	}
 	for _, info in ipairs(panels) do
 		local panel = BuildUtil.Block(
 			ctx,
 			"SidelineBoard",
-			Vector3.new(24, boardHeight, 0.5),
+			Vector3.new(boardWidth, boardHeight, 0.5),
 			Vector3.new(info.x, 0, boardZ),
 			team.Secondary,
 			Enum.Material.SmoothPlastic,
 			nil,
 			matTop
 		)
-		teamText(panel, Enum.NormalId.Front, info.text, team.Secondary, team, 30, 0.06, 0.14, "BoardText", 3)
+		-- Front face (-Z) GUI x runs toward world -X; work out the band from world x limits.
+		local x0 = info.x - boardWidth / 2 + 0.6
+		local x1 = math.min(info.x + boardWidth / 2 - 0.6, tentEaveX - 0.4)
+		local front = teamText(panel, Enum.NormalId.Front, info.text, team.Secondary, team, 30, 0, 0, "BoardText", 3)
+		front.Position = UDim2.new((info.x + boardWidth / 2 - x1) / boardWidth, 0, bandTopInset / boardHeight, 0)
+		front.Size = UDim2.new((x1 - x0) / boardWidth, 0, (boardTop - bandTopInset - bandBottom) / boardHeight, 0)
+		teamText(panel, Enum.NormalId.Back, info.text, team.Secondary, team, 20, 0.06, 0.16, "BoardBackText", 3)
 		BuildUtil.Block(
 			ctx,
 			"SidelineBoardCap",
-			Vector3.new(24.2, 0.3, 0.7),
+			Vector3.new(boardWidth + 0.2, 0.3, 0.7),
 			Vector3.new(info.x, 0, boardZ),
 			team.Primary,
 			Enum.Material.SmoothPlastic,
 			nil,
-			matTop + boardHeight
+			boardTop
 		)
 	end
 
 	-- blue medical tent at the east end
 	local tent = BuildUtil.Child(ctx, "MedicalTent")
-	local tentX, tentZ = 36.5, areaFront + 3.6
-	local tentW, tentD, tentH, roofH = 6, 5.4, 4, 1.6
 	BuildUtil.Block(
 		tent,
 		"TentBody",

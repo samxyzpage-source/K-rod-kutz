@@ -7,8 +7,12 @@
 	  PlotIndex   number of the plot the player owns (nil = none yet)
 	  Income      cash per second the player's stadium earns
 	  Built       how many stadium pieces the player owns
+	  NextGoal    item id of the cheapest buy button showing (the client draws a guide beam to it)
+
+	The Tycoons folder gets a "FreePlots" attribute (how many plots nobody owns) for the HUD.
 ]]
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
@@ -33,8 +37,11 @@ local notifyRemote = nil
 local isNight = false
 local rng = Random.new()
 
-local LAST_ITEM_ID = Items.List[#Items.List].Id
+local tycoonsFolder = nil
 local UNCLAIMED_TRIGGER_TRANSPARENCY = 0.55
+local BUTTON_TAG = "TycoonBuyButton" -- Effects.client.lua makes these pulse
+local ANIMATION_TIME = 0.55
+local ANIMATION_MAX_DELAY = 0.5
 
 ---------------------------------------------------------------------------------------------
 -- Helpers
@@ -187,13 +194,35 @@ end
 -- Building pieces
 ---------------------------------------------------------------------------------------------
 
--- Parts start below their final spot and invisible, then rise into place.
+-- Parts start below their final spot and invisible, then rise into place. Text, lights and
+-- collisions are switched off while the piece rises and switched back on when it lands.
 local function animateIn(model)
 	local parts = {}
+	local hidden = {} -- { instance, property, originalValue }
 	for _, descendant in ipairs(model:GetDescendants()) do
 		if descendant:IsA("BasePart") then
 			table.insert(parts, descendant)
+			if descendant.CanCollide then
+				table.insert(hidden, { descendant, "CanCollide", true })
+				descendant.CanCollide = false
+			end
+		elseif descendant:IsA("LayerCollector") or (descendant:IsA("Light") and descendant.Name ~= "FloodLight") then
+			-- SurfaceGui / BillboardGui / lights (flood lights are handled by the night logic)
+			if descendant.Enabled then
+				table.insert(hidden, { descendant, "Enabled", true })
+				descendant.Enabled = false
+			end
 		end
+	end
+	if #hidden > 0 then
+		task.delay(ANIMATION_TIME + ANIMATION_MAX_DELAY + 0.05, function()
+			for _, entry in ipairs(hidden) do
+				local instance, property, value = entry[1], entry[2], entry[3]
+				if instance.Parent then
+					instance[property] = value
+				end
+			end
+		end)
 	end
 	if #parts == 0 then
 		return
@@ -208,12 +237,12 @@ local function animateIn(model)
 	for _, part in ipairs(parts) do
 		local targetCFrame = part.CFrame
 		local targetTransparency = part.Transparency
-		local delayTime = (targetCFrame.Position.Y - minY) / heightRange * 0.5
+		local delayTime = (targetCFrame.Position.Y - minY) / heightRange * ANIMATION_MAX_DELAY
 		part.CFrame = targetCFrame - Vector3.new(0, 6, 0)
 		part.Transparency = 1
 		local tween = TweenService:Create(
 			part,
-			TweenInfo.new(0.55, Enum.EasingStyle.Back, Enum.EasingDirection.Out, 0, false, delayTime),
+			TweenInfo.new(ANIMATION_TIME, Enum.EasingStyle.Back, Enum.EasingDirection.Out, 0, false, delayTime),
 			{ CFrame = targetCFrame, Transparency = targetTransparency }
 		)
 		tween:Play()
@@ -304,6 +333,8 @@ local function createButton(plot, item)
 	priceLabel.Text = ("%s   +%s/s"):format(price, Format.Short(item.Income * Config.IncomeMultiplier))
 	priceLabel.Parent = gui
 
+	pad:SetAttribute("ItemId", item.Id)
+	CollectionService:AddTag(pad, BUTTON_TAG)
 	pad.Touched:Connect(function(hit)
 		onButtonTouched(plot, item, hit)
 	end)
@@ -312,18 +343,33 @@ local function createButton(plot, item)
 end
 
 -- Shows exactly the buttons for pieces that are unlocked but not yet owned.
+-- Returns the list of items whose buttons just appeared.
 local function refreshButtons(plot)
+	local added = {}
 	for _, item in ipairs(Items.List) do
 		local shouldShow = plot.Owner ~= nil and not plot.Owned[item.Id] and Items.IsUnlocked(item, plot.Owned)
 		local existing = plot.Buttons[item.Id]
 		if shouldShow and not existing then
 			createButton(plot, item)
+			table.insert(added, item)
 		elseif not shouldShow and existing then
 			existing:Destroy()
 			plot.Buttons[item.Id] = nil
 		end
 	end
 	updateButtonColors(plot)
+
+	-- the cheapest button showing is the player's "next goal" (guide beam)
+	if plot.Owner then
+		local goal = nil
+		for itemId in pairs(plot.Buttons) do
+			if goal == nil or Items.ById[itemId].Cost < Items.ById[goal].Cost then
+				goal = itemId
+			end
+		end
+		plot.Owner:SetAttribute("NextGoal", goal)
+	end
+	return added
 end
 
 function PlotManager.Purchase(plot, item)
@@ -333,20 +379,70 @@ function PlotManager.Purchase(plot, item)
 	end
 	if not PlayerData.TrySpend(player, item.Cost) then
 		if cooldownReady(player, "cash_" .. item.Id, 2) then
-			local missing = item.Cost - PlayerData.GetCash(player)
-			notify(player, ("You need %s more for %s"):format(Format.MoneyExact(missing), item.Name), "error")
+			local cash = PlayerData.GetCash(player)
+			local missing = item.Cost - cash
+			local waiting = math.floor(plot.Vault)
+			if waiting > 0 and cash + waiting >= item.Cost then
+				notify(
+					player,
+					("You need %s more - your VAULT has %s! Step on the green pad to collect it."):format(
+						Format.MoneyExact(missing),
+						Format.MoneyExact(waiting)
+					),
+					"info"
+				)
+			else
+				notify(player, ("You need %s more for %s"):format(Format.MoneyExact(missing), item.Name), "error")
+			end
 		end
 		return false
 	end
 	PlayerData.SetOwned(player, item.Id) -- plot.Owned is the same table as the profile's Owned
 	buildItem(plot, item, true)
 	recalcIncome(plot)
-	refreshButtons(plot)
-	notify(player, ("Built %s!  +%s/s"):format(item.Name, Format.Short(item.Income * Config.IncomeMultiplier)), "success")
-	if item.Id == LAST_ITEM_ID then
+	local unlocked = refreshButtons(plot)
+	local message = ("Built %s!  +%s/s"):format(item.Name, Format.Short(item.Income * Config.IncomeMultiplier))
+	if #unlocked > 0 then
+		local names = {}
+		for _, newItem in ipairs(unlocked) do
+			table.insert(names, newItem.Name)
+		end
+		message ..= "  Unlocked: " .. table.concat(names, ", ")
+	end
+	notify(player, message, "success")
+	if countOwned(plot) >= #Items.List then
 		notify(player, "Your stadium is complete. You're a champion!", "success")
 	end
 	return true
+end
+
+local function countFreePlots()
+	local free = 0
+	for _, plot in ipairs(plots) do
+		if not plot.Owner then
+			free += 1
+		end
+	end
+	return free
+end
+
+local function updateFreePlots()
+	if tycoonsFolder then
+		tycoonsFolder:SetAttribute("FreePlots", countFreePlots())
+	end
+end
+
+-- Tells a player without a stadium why they can't use this one.
+local function explainTaken(plot, player)
+	if plotByPlayer[player] or not cooldownReady(player, "gate_taken", 4) then
+		return
+	end
+	if countFreePlots() > 0 then
+		local ownerName = plot.Owner and plot.Owner.DisplayName or "someone"
+		notify(player, ("This is %s's stadium. Find a gate that's still glowing gold!"):format(ownerName), "error")
+	else
+		notify(player, "All stadiums are taken right now. One opens up when a player leaves!", "error")
+	end
 end
 
 onButtonTouched = function(plot, item, hit)
@@ -355,8 +451,12 @@ onButtonTouched = function(plot, item, hit)
 		return
 	end
 	if player ~= plot.Owner then
-		if cooldownReady(player, "not_owner", 3) then
-			notify(player, "This isn't your stadium! Claim an empty one at a gold gate.", "error")
+		if plotByPlayer[player] then
+			if cooldownReady(player, "not_owner", 3) then
+				notify(player, "This isn't your stadium! Build at your own one.", "error")
+			end
+		else
+			explainTaken(plot, player)
 		end
 		return
 	end
@@ -402,20 +502,26 @@ function PlotManager.Claim(plot, player, profile)
 	updateVault(plot)
 	player:SetAttribute("PlotIndex", plot.Index)
 
+	updateFreePlots()
+
 	local built = countOwned(plot)
 	if built > 0 then
 		notify(player, ("Welcome back! Your stadium has %d of %d pieces."):format(built, #Items.List), "success")
 	else
 		notify(player, "Stadium claimed! Step on the glowing button to start building.", "success")
+		notify(player, "Your money piles up in the VAULT by the gate - step on the green pad to collect it.", "info")
 	end
 end
 
 local function onClaimTouched(plot, hit)
-	if plot.Owner then
-		return
-	end
 	local player = playerFromHit(hit)
 	if not player then
+		return
+	end
+	if plot.Owner then
+		if plot.Owner ~= player then
+			explainTaken(plot, player)
+		end
 		return
 	end
 	local ownedPlot = plotByPlayer[player]
@@ -442,7 +548,11 @@ local function onClaimTouched(plot, hit)
 		return
 	end
 	if plot.Owner or plotByPlayer[player] then
-		return -- someone else claimed it while we waited, or the player claimed another plot
+		-- someone else claimed it while we waited, or the player claimed another plot
+		if plot.Owner and not plotByPlayer[player] then
+			explainTaken(plot, player)
+		end
+		return
 	end
 	PlotManager.Claim(plot, player, profile)
 end
@@ -473,6 +583,12 @@ function PlotManager.Release(player)
 	plot.Buttons = {}
 	setGateClaimed(plot, nil)
 	updateVault(plot)
+	updateFreePlots()
+	for _, other in ipairs(Players:GetPlayers()) do
+		if other ~= player and not plotByPlayer[other] then
+			notify(other, "A stadium just opened up - walk through the glowing gold gate!", "info")
+		end
+	end
 end
 
 -- Pays every vault out to its owner (used right before the server shuts down).
@@ -492,7 +608,8 @@ end
 -- Vault + collect pad
 ---------------------------------------------------------------------------------------------
 
-local function collect(plot)
+-- `silent` = no pop-up (used for the every-second auto-collect while standing on the pad)
+local function collect(plot, silent)
 	local player = plot.Owner
 	local amount = math.floor(plot.Vault)
 	if not player or amount <= 0 then
@@ -502,7 +619,9 @@ local function collect(plot)
 		plot.Vault -= amount
 		updateVault(plot)
 		updateButtonColors(plot)
-		notify(player, "+" .. Format.MoneyExact(amount), "cash")
+		if not silent then
+			notify(player, "+" .. Format.MoneyExact(amount), "cash")
+		end
 	end
 end
 
@@ -582,6 +701,7 @@ end
 
 function PlotManager.Init(parentFolder, remote)
 	notifyRemote = remote
+	tycoonsFolder = parentFolder
 	for index, origin in ipairs(World.GetPlotOrigins(Config)) do
 		local palette = Config.TeamColors[(index - 1) % #Config.TeamColors + 1]
 
@@ -631,6 +751,7 @@ function PlotManager.Init(parentFolder, remote)
 			onCollectTouched(plot, hit)
 		end)
 	end
+	updateFreePlots()
 end
 
 -- Respawn owners at their own stadium.
@@ -665,7 +786,7 @@ function PlotManager.Start()
 				if plot.Owner then
 					plot.Vault += plot.Income * Config.IncomeMultiplier * Config.IncomeTickSeconds
 					if ownerIsOnPad(plot) then
-						collect(plot)
+						collect(plot, true)
 					else
 						updateVault(plot)
 					end

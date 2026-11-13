@@ -198,9 +198,18 @@ local function football(ctx, name, cframe, scale, colors, style)
 			})
 		end
 	end
-	-- a white band near each tip (slightly wider than the ball there)
+	-- a painted band near each tip (slightly wider than the ball there)
 	for _, side in ipairs({ -1, 1 }) do
-		cylinderAt(ctx, name .. "Stripe", cframe * CFrame.new(side * 3.2 * s, 0, 0), 0.45 * s, 5.56 * s, colors.Stripe, style.Material, extra)
+		cylinderAt(
+			ctx,
+			name .. "Stripe",
+			cframe * CFrame.new(side * 3.2 * s, 0, 0),
+			0.45 * s,
+			5.56 * s,
+			colors.Stripe,
+			style.Material,
+			extra
+		)
 	end
 	-- laces: one long lace and four stitches across it
 	BuildUtil.Part(ctx, {
@@ -255,7 +264,16 @@ function Plaza.ticketbooth(ctx)
 	-- Booth body: concrete plinth, team-coloured walls, trim band, roof
 	local bodyPos = Vector3.new(bodyX, 0, cz)
 	BuildUtil.Block(ctx, "Plinth", Vector3.new(bodyW + 0.2, 0.8, bodyD + 0.2), bodyPos, C.Concrete, Enum.Material.Concrete, nil, padTop)
-	BuildUtil.Block(ctx, "Body", Vector3.new(bodyW, wallTop - padTop, bodyD), bodyPos, team.Primary, Enum.Material.SmoothPlastic, nil, padTop)
+	BuildUtil.Block(
+		ctx,
+		"Body",
+		Vector3.new(bodyW, wallTop - padTop, bodyD),
+		bodyPos,
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		nil,
+		padTop
+	)
 	local band = BuildUtil.Block(
 		ctx,
 		"Band",
@@ -288,7 +306,14 @@ function Plaza.ticketbooth(ctx)
 		team.Trim,
 		Enum.Material.SmoothPlastic
 	)
-	BuildUtil.Box(ctx, "WindowInside", Vector3.new(0.1, 3.5, 6), Vector3.new(frontX + 0.17, windowY, cz), DARK_WINDOW, Enum.Material.SmoothPlastic)
+	BuildUtil.Box(
+		ctx,
+		"WindowInside",
+		Vector3.new(0.1, 3.5, 6),
+		Vector3.new(frontX + 0.17, windowY, cz),
+		DARK_WINDOW,
+		Enum.Material.SmoothPlastic
+	)
 	BuildUtil.Box(
 		ctx,
 		"WindowGlass",
@@ -335,7 +360,16 @@ function Plaza.ticketbooth(ctx)
 	})
 
 	-- Back door and an "ADMIT ONE" ticket poster facing the street
-	BuildUtil.Block(ctx, "Door", Vector3.new(0.2, 6.2, 3), Vector3.new(backX - 0.2, 0, cz + 2.5), C.Wood, Enum.Material.WoodPlanks, nil, 1.05)
+	BuildUtil.Block(
+		ctx,
+		"Door",
+		Vector3.new(0.2, 6.2, 3),
+		Vector3.new(backX - 0.2, 0, cz + 2.5),
+		C.Wood,
+		Enum.Material.WoodPlanks,
+		nil,
+		1.05
+	)
 	local poster = BuildUtil.Box(
 		ctx,
 		"TicketPoster",
@@ -346,27 +380,50 @@ function Plaza.ticketbooth(ctx)
 	)
 	sign(poster, { Enum.NormalId.Front }, "ADMIT ONE", team.Secondary, team)
 
-	-- Roof sign: a box reading TICKETS on all four sides (walkway, street, parking, stadium)
-	BuildUtil.Block(ctx, "SignBase", Vector3.new(6, 0.5, 8.6), bodyPos, DARK_METAL, Enum.Material.Metal, nil, roofTop)
+	-- Roof sign on two short posts: a box reading TICKETS on all four sides (walkway, street,
+	-- parking lot, stadium), with a neon cap
+	local postHeight = 0.8
+	local signHeight = 2.8
+	for _, side in ipairs({ -1, 1 }) do
+		BuildUtil.Block(
+			ctx,
+			"SignPost",
+			Vector3.new(0.6, postHeight, 0.6),
+			Vector3.new(bodyX, 0, cz + side * 3.2),
+			DARK_METAL,
+			Enum.Material.Metal,
+			nil,
+			roofTop
+		)
+	end
 	local signBox = BuildUtil.Block(
 		ctx,
 		"TicketsSign",
-		Vector3.new(7, 3, 9.6),
+		Vector3.new(6.4, signHeight, 9.2),
 		bodyPos,
-		team.Primary,
+		team.Trim,
 		Enum.Material.SmoothPlastic,
 		nil,
-		roofTop + 0.5
+		roofTop + postHeight
 	)
 	sign(
 		signBox,
 		{ Enum.NormalId.Front, Enum.NormalId.Right, Enum.NormalId.Back, Enum.NormalId.Left },
 		"TICKETS",
-		team.Primary,
+		team.Trim,
 		team,
 		{ InsetY = 0.1 }
 	)
-	BuildUtil.Block(ctx, "TicketsSignCap", Vector3.new(7.3, 0.3, 9.9), bodyPos, team.Secondary, Enum.Material.Neon, nil, roofTop + 3.5)
+	BuildUtil.Block(
+		ctx,
+		"TicketsSignCap",
+		Vector3.new(6.7, 0.3, 9.5),
+		bodyPos,
+		team.Secondary,
+		Enum.Material.Neon,
+		nil,
+		roofTop + postHeight + signHeight
+	)
 end
 
 ---------------------------------------------------------------------------------------------
@@ -399,8 +456,26 @@ function Plaza.concessions(ctx)
 
 	-- Stand body
 	local bodyPos = Vector3.new(bodyX, 0, cz)
-	BuildUtil.Block(ctx, "Body", Vector3.new(bodyW, wallTop - padTop, bodyD), bodyPos, team.Secondary, Enum.Material.SmoothPlastic, nil, padTop)
-	BuildUtil.Block(ctx, "BaseBand", Vector3.new(bodyW + 0.2, 1.2, bodyD + 0.2), bodyPos, team.Primary, Enum.Material.SmoothPlastic, nil, padTop)
+	BuildUtil.Block(
+		ctx,
+		"Body",
+		Vector3.new(bodyW, wallTop - padTop, bodyD),
+		bodyPos,
+		team.Secondary,
+		Enum.Material.SmoothPlastic,
+		nil,
+		padTop
+	)
+	BuildUtil.Block(
+		ctx,
+		"BaseBand",
+		Vector3.new(bodyW + 0.2, 1.2, bodyD + 0.2),
+		bodyPos,
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		nil,
+		padTop
+	)
 	BuildUtil.Block(
 		ctx,
 		"Roof",
@@ -411,7 +486,16 @@ function Plaza.concessions(ctx)
 		nil,
 		wallTop
 	)
-	BuildUtil.Block(ctx, "BackDoor", Vector3.new(0.2, 6.2, 3), Vector3.new(backX - 0.2, 0, cz + 2), C.Wood, Enum.Material.WoodPlanks, nil, padTop)
+	BuildUtil.Block(
+		ctx,
+		"BackDoor",
+		Vector3.new(0.2, 6.2, 3),
+		Vector3.new(backX - 0.2, 0, cz + 2),
+		C.Wood,
+		Enum.Material.WoodPlanks,
+		nil,
+		padTop
+	)
 
 	-- Street-facing side panel
 	local sidePanel = BuildUtil.Box(
@@ -428,10 +512,38 @@ function Plaza.concessions(ctx)
 	local openingY = 5.7
 	local windowZ = cz - 2.2
 	local menuZ = cz + 3.1
-	BuildUtil.Box(ctx, "WindowFrame", Vector3.new(0.12, 3.7, 6.3), Vector3.new(frontX + 0.06, openingY, windowZ), team.Trim, Enum.Material.SmoothPlastic)
-	BuildUtil.Box(ctx, "WindowInside", Vector3.new(0.1, 3.3, 5.8), Vector3.new(frontX + 0.17, openingY, windowZ), DARK_WINDOW, Enum.Material.SmoothPlastic)
-	BuildUtil.Box(ctx, "MenuFrame", Vector3.new(0.12, 3.7, 4), Vector3.new(frontX + 0.06, openingY, menuZ), team.Trim, Enum.Material.SmoothPlastic)
-	local menu = BuildUtil.Box(ctx, "MenuBoard", Vector3.new(0.1, 3.3, 3.6), Vector3.new(frontX + 0.17, openingY, menuZ), CHALKBOARD, Enum.Material.Slate)
+	BuildUtil.Box(
+		ctx,
+		"WindowFrame",
+		Vector3.new(0.12, 3.7, 6.3),
+		Vector3.new(frontX + 0.06, openingY, windowZ),
+		team.Trim,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.Box(
+		ctx,
+		"WindowInside",
+		Vector3.new(0.1, 3.3, 5.8),
+		Vector3.new(frontX + 0.17, openingY, windowZ),
+		DARK_WINDOW,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.Box(
+		ctx,
+		"MenuFrame",
+		Vector3.new(0.12, 3.7, 4),
+		Vector3.new(frontX + 0.06, openingY, menuZ),
+		team.Trim,
+		Enum.Material.SmoothPlastic
+	)
+	local menu = BuildUtil.Box(
+		ctx,
+		"MenuBoard",
+		Vector3.new(0.1, 3.3, 3.6),
+		Vector3.new(frontX + 0.17, openingY, menuZ),
+		CHALKBOARD,
+		Enum.Material.Slate
+	)
 	sign(menu, { Enum.NormalId.Right }, "HOT DOGS\nNACHOS\nSODA", CHALKBOARD, team, {
 		TextColor3 = MENU_TEXT,
 		Font = Enum.Font.Oswald,
@@ -441,7 +553,16 @@ function Plaza.concessions(ctx)
 	})
 
 	-- Counter with a couple of drinks and a napkin box
-	BuildUtil.Block(ctx, "Counter", Vector3.new(2.4, 3.55 - padTop, 10.4), Vector3.new(frontX + 1.2, 0, cz), team.Trim, Enum.Material.SmoothPlastic, nil, padTop)
+	BuildUtil.Block(
+		ctx,
+		"Counter",
+		Vector3.new(2.4, 3.55 - padTop, 10.4),
+		Vector3.new(frontX + 1.2, 0, cz),
+		team.Trim,
+		Enum.Material.SmoothPlastic,
+		nil,
+		padTop
+	)
 	local counterTop = BuildUtil.Block(
 		ctx,
 		"CounterTop",
@@ -467,7 +588,16 @@ function Plaza.concessions(ctx)
 		Diameter = 0.7,
 		Color = team.Secondary,
 	})
-	BuildUtil.Block(ctx, "NapkinBox", Vector3.new(0.6, 0.8, 0.9), Vector3.new(frontX + 1.5, 0, windowZ + 1.8), C.Metal, Enum.Material.Metal, nil, 3.8)
+	BuildUtil.Block(
+		ctx,
+		"NapkinBox",
+		Vector3.new(0.6, 0.8, 0.9),
+		Vector3.new(frontX + 1.5, 0, windowZ + 1.8),
+		C.Metal,
+		Enum.Material.Metal,
+		nil,
+		3.8
+	)
 
 	stripedAwning(ctx, {
 		Name = "Awning",
@@ -491,7 +621,14 @@ function Plaza.concessions(ctx)
 		Enum.Material.SmoothPlastic
 	)
 	sign(title, { Enum.NormalId.Right }, "CONCESSIONS", team.Primary, team, { InsetY = 0.1 })
-	BuildUtil.Box(ctx, "ConcessionsSignGlow", Vector3.new(0.32, 0.2, 11.4), Vector3.new(frontX + 0.15, 10.55, cz), team.Secondary, Enum.Material.Neon)
+	BuildUtil.Box(
+		ctx,
+		"ConcessionsSignGlow",
+		Vector3.new(0.32, 0.2, 11.4),
+		Vector3.new(frontX + 0.15, 10.55, cz),
+		team.Secondary,
+		Enum.Material.Neon
+	)
 
 	-- Trash can on the patio
 	BuildUtil.Cylinder(ctx, {
@@ -515,7 +652,16 @@ function Plaza.concessions(ctx)
 	local props = BuildUtil.Child(ctx, "RoofProps")
 	local dogX = frontX - 3.6
 	local dogZ = cz - 1.9
-	BuildUtil.Block(props, "HotDogMount", Vector3.new(2.8, 0.4, 6.4), Vector3.new(dogX, 0, dogZ), team.Trim, Enum.Material.SmoothPlastic, nil, roofTop)
+	BuildUtil.Block(
+		props,
+		"HotDogMount",
+		Vector3.new(2.8, 0.4, 6.4),
+		Vector3.new(dogX, 0, dogZ),
+		team.Trim,
+		Enum.Material.SmoothPlastic,
+		nil,
+		roofTop
+	)
 	local bunY = roofTop + 0.4 + 0.9
 	for _, side in ipairs({ -1, 1 }) do
 		BuildUtil.Cylinder(props, {
@@ -645,7 +791,15 @@ function Plaza.parking(ctx)
 	local rowCenters = { lotZ - 22, lotZ + 22 }
 	local stripes = BuildUtil.Child(ctx, "Stripes")
 	local function paint(name, sizeX, sizeZ, x, z)
-		BuildUtil.Box(stripes, name, Vector3.new(sizeX, 0.04, sizeZ), Vector3.new(x, LOT_TOP + 0.02, z), C.Line, Enum.Material.SmoothPlastic, PAINT)
+		BuildUtil.Box(
+			stripes,
+			name,
+			Vector3.new(sizeX, 0.04, sizeZ),
+			Vector3.new(x, LOT_TOP + 0.02, z),
+			C.Line,
+			Enum.Material.SmoothPlastic,
+			PAINT
+		)
 	end
 	for row, zc in ipairs(rowCenters) do
 		for i = 0, STALL_COUNT do
@@ -653,6 +807,19 @@ function Plaza.parking(ctx)
 		end
 		paint("CentreLine" .. row, rowLength + 0.4, 0.4, firstX + rowLength / 2, zc)
 	end
+
+	-- Team-coloured "FAN PARKING" panel painted in the middle aisle. Top-face text reads upright
+	-- from the part's +Z side, so the part is turned around to read from the street (-Z).
+	local aislePanel = BuildUtil.Part(ctx, {
+		Name = "AislePaint",
+		Size = Vector3.new(44, 0.04, 9),
+		CFrame = CFrame.new(firstX + rowLength / 2, LOT_TOP + 0.02, lotZ) * CFrame.Angles(0, math.pi, 0),
+		Color = team.Primary,
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		CastShadow = false,
+	})
+	sign(aislePanel, { Enum.NormalId.Top }, "FAN PARKING", team.Primary, team, { InsetX = 0.05, InsetY = 0.12, PixelsPerStud = 10 })
 
 	-- Lamp posts at both ends of each double row
 	local lamps = BuildUtil.Child(ctx, "Lamps")
@@ -666,7 +833,14 @@ function Plaza.parking(ctx)
 				Color = DARK_METAL,
 				Material = Enum.Material.Metal,
 			})
-			BuildUtil.Box(lamps, "LampHead", Vector3.new(1.2, 0.6, 5.2), Vector3.new(x, LOT_TOP + 17.3, zc), team.Primary, Enum.Material.Metal)
+			BuildUtil.Box(
+				lamps,
+				"LampHead",
+				Vector3.new(1.2, 0.6, 5.2),
+				Vector3.new(x, LOT_TOP + 17.3, zc),
+				team.Primary,
+				Enum.Material.Metal
+			)
 			local lamp = BuildUtil.Box(
 				lamps,
 				"LampGlow",
@@ -717,8 +891,24 @@ function Plaza.parking(ctx)
 		Color = DARK_METAL,
 		Material = Enum.Material.Metal,
 	})
-	local cube = BuildUtil.Block(ctx, "ParkingSign", Vector3.new(4.4, 4.4, 4.4), Vector3.new(signX, 0, signZ), team.Primary, Enum.Material.SmoothPlastic, nil, 13)
-	sign(cube, { Enum.NormalId.Front, Enum.NormalId.Right, Enum.NormalId.Back, Enum.NormalId.Left }, "P", team.Primary, team, { InsetY = 0.08 })
+	local cube = BuildUtil.Block(
+		ctx,
+		"ParkingSign",
+		Vector3.new(4.4, 4.4, 4.4),
+		Vector3.new(signX, 0, signZ),
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		nil,
+		13
+	)
+	sign(
+		cube,
+		{ Enum.NormalId.Front, Enum.NormalId.Right, Enum.NormalId.Back, Enum.NormalId.Left },
+		"P",
+		team.Primary,
+		team,
+		{ InsetY = 0.08 }
+	)
 	local board = BuildUtil.Box(
 		ctx,
 		"ParkingBoard",
@@ -754,7 +944,14 @@ function Plaza.teamstore(ctx)
 	local glassX = frontX + 0.5
 
 	-- Shell: floor, three plaster walls, team-coloured corner piers + header, roof
-	BuildUtil.Box(ctx, "Floor", Vector3.new(length, floorTop, depth), Vector3.new(midX, floorTop / 2, cz), STORE_FLOOR, Enum.Material.Marble)
+	BuildUtil.Box(
+		ctx,
+		"Floor",
+		Vector3.new(length, floorTop, depth),
+		Vector3.new(midX, floorTop / 2, cz),
+		STORE_FLOOR,
+		Enum.Material.Marble
+	)
 	BuildUtil.Block(ctx, "BackWall", Vector3.new(1, wallH, depth), Vector3.new(backX - 0.5, 0, cz), STORE_WALL, Enum.Material.Plaster)
 	BuildUtil.Block(ctx, "SouthWall", Vector3.new(length, wallH, 1), Vector3.new(midX, 0, southZ + 0.5), STORE_WALL, Enum.Material.Plaster)
 	BuildUtil.Block(ctx, "NorthWall", Vector3.new(length, wallH, 1), Vector3.new(midX, 0, northZ - 0.5), STORE_WALL, Enum.Material.Plaster)
@@ -769,7 +966,17 @@ function Plaza.teamstore(ctx)
 		team.Primary,
 		Enum.Material.SmoothPlastic
 	)
-	BuildUtil.Block(ctx, "Roof", Vector3.new(length + 1, 0.8, depth + 1), Vector3.new(midX, 0, cz), C.ConcreteDark, Enum.Material.Concrete, nil, wallH)
+	-- (no overhang at the front, so the TEAM STORE sign can rise above the roof line)
+	BuildUtil.Block(
+		ctx,
+		"Roof",
+		Vector3.new(length + 0.5, 0.8, depth + 1),
+		Vector3.new(midX + 0.25, 0, cz),
+		C.ConcreteDark,
+		Enum.Material.Concrete,
+		nil,
+		wallH
+	)
 
 	-- Glass storefront: two big panes, walk-through doors with a transom above, metal mullions
 	local storefront = BuildUtil.Child(ctx, "Storefront")
@@ -826,27 +1033,52 @@ function Plaza.teamstore(ctx)
 			Enum.Material.Metal
 		)
 	end
-	BuildUtil.Box(storefront, "TransomBar", Vector3.new(0.4, 0.3, openWidth), Vector3.new(glassX, doorTop + 0.15, cz), DARK_METAL, Enum.Material.Metal)
+	BuildUtil.Box(
+		storefront,
+		"TransomBar",
+		Vector3.new(0.4, 0.3, openWidth),
+		Vector3.new(glassX, doorTop + 0.15, cz),
+		DARK_METAL,
+		Enum.Material.Metal
+	)
 
 	-- Entrance canopy, welcome mat and planters
-	BuildUtil.Box(ctx, "Canopy", Vector3.new(3.2, 0.4, 7.5), Vector3.new(frontX - 1.6, 9.1, cz), team.Secondary, Enum.Material.SmoothPlastic)
-	BuildUtil.Box(ctx, "WelcomeMat", Vector3.new(2.6, 0.05, 4.6), Vector3.new(frontX - 1.4, 0.025, cz), team.Primary, Enum.Material.Fabric, PAINT)
+	BuildUtil.Box(
+		ctx,
+		"Canopy",
+		Vector3.new(3.2, 0.4, 7.5),
+		Vector3.new(frontX - 1.6, 9.1, cz),
+		team.Secondary,
+		Enum.Material.SmoothPlastic
+	)
+	BuildUtil.Box(
+		ctx,
+		"WelcomeMat",
+		Vector3.new(2.6, 0.05, 4.6),
+		Vector3.new(frontX - 1.4, 0.025, cz),
+		team.Primary,
+		Enum.Material.Fabric,
+		PAINT
+	)
 	for _, z in ipairs({ southZ + 1.5, northZ - 1.5 }) do
 		BuildUtil.Block(ctx, "Planter", Vector3.new(2, 1.6, 2), Vector3.new(frontX - 1.6, 0, z), C.ConcreteDark, Enum.Material.Concrete)
-		BuildUtil.Ball(ctx, { Name = "Shrub", Position = Vector3.new(frontX - 1.6, 2.6, z), Diameter = 2.4, Color = BUSH, Material = Enum.Material.Grass })
+		BuildUtil.Ball(
+			ctx,
+			{ Name = "Shrub", Position = Vector3.new(frontX - 1.6, 2.6, z), Diameter = 2.4, Color = BUSH, Material = Enum.Material.Grass }
+		)
 	end
 
 	-- TEAM STORE sign over the entrance (sticks up above the roof line), team name on the plaza side
-	BuildUtil.Box(ctx, "SignFrame", Vector3.new(0.2, 4, 17.6), Vector3.new(frontX - 0.1, 11.5, cz), team.Secondary, Enum.Material.SmoothPlastic)
+	BuildUtil.Box(ctx, "SignFrame", Vector3.new(0.2, 4, 17.6), Vector3.new(frontX - 0.1, 11.5, cz), team.Trim, Enum.Material.SmoothPlastic)
 	local storeSign = BuildUtil.Box(
 		ctx,
 		"StoreSign",
 		Vector3.new(0.2, 3.4, 17),
 		Vector3.new(frontX - 0.3, 11.5, cz),
-		team.Primary,
+		team.Secondary,
 		Enum.Material.SmoothPlastic
 	)
-	sign(storeSign, { Enum.NormalId.Left }, "TEAM STORE", team.Primary, team, { InsetY = 0.1 })
+	sign(storeSign, { Enum.NormalId.Left }, "TEAM STORE", team.Secondary, team, { InsetY = 0.1 })
 	BuildUtil.Box(
 		ctx,
 		"SideWindow",
@@ -859,12 +1091,13 @@ function Plaza.teamstore(ctx)
 	local nameSign = BuildUtil.Box(
 		ctx,
 		"NameSign",
-		Vector3.new(16, 2.4, 0.2),
-		Vector3.new(midX + 2, 9.6, southZ - 0.1),
+		Vector3.new(16, 3, 0.2),
+		Vector3.new(midX + 2, 9.4, southZ - 0.1),
 		team.Primary,
 		Enum.Material.SmoothPlastic
 	)
-	sign(nameSign, { Enum.NormalId.Front }, ctx.teamName .. " FAN SHOP", team.Primary, team, { InsetY = 0.12 })
+	-- wraps onto two lines when the owner's name is long
+	sign(nameSign, { Enum.NormalId.Front }, ctx.teamName .. " FAN SHOP", team.Primary, team, { InsetY = 0.1, Wrap = true })
 
 	-- Interior: jerseys on the back wall, display tables, checkout counter, ceiling light
 	local interior = BuildUtil.Child(ctx, "Interior")
@@ -876,7 +1109,8 @@ function Plaza.teamstore(ctx)
 	}
 	for _, jersey in ipairs(jerseys) do
 		local z, color, number = jersey[1], jersey[2], jersey[3]
-		local torso = BuildUtil.Box(interior, "Jersey", Vector3.new(0.3, 4.2, 3.4), Vector3.new(jerseyX, 6.2, z), color, Enum.Material.Fabric)
+		local torso =
+			BuildUtil.Box(interior, "Jersey", Vector3.new(0.3, 4.2, 3.4), Vector3.new(jerseyX, 6.2, z), color, Enum.Material.Fabric)
 		sign(torso, { Enum.NormalId.Left }, number, color, team, { InsetX = 0.2, InsetY = 0.22 })
 		for _, side in ipairs({ -1, 1 }) do
 			BuildUtil.Part(interior, {
@@ -890,11 +1124,47 @@ function Plaza.teamstore(ctx)
 	end
 	local tableX = frontX + 12
 	local tableA, tableB = cz - 5.5, cz + 5.5
-	BuildUtil.Block(interior, "DisplayTable", Vector3.new(5, 2.6, 3.2), Vector3.new(tableX, 0, tableA), C.Wood, Enum.Material.WoodPlanks, nil, floorTop)
-	BuildUtil.Block(interior, "DisplayTable", Vector3.new(5, 2.6, 3.2), Vector3.new(tableX, 0, tableB), C.Wood, Enum.Material.WoodPlanks, nil, floorTop)
+	BuildUtil.Block(
+		interior,
+		"DisplayTable",
+		Vector3.new(5, 2.6, 3.2),
+		Vector3.new(tableX, 0, tableA),
+		C.Wood,
+		Enum.Material.WoodPlanks,
+		nil,
+		floorTop
+	)
+	BuildUtil.Block(
+		interior,
+		"DisplayTable",
+		Vector3.new(5, 2.6, 3.2),
+		Vector3.new(tableX, 0, tableB),
+		C.Wood,
+		Enum.Material.WoodPlanks,
+		nil,
+		floorTop
+	)
 	local shirtTop = floorTop + 2.6
-	BuildUtil.Block(interior, "FoldedShirts", Vector3.new(1.6, 0.6, 1.4), Vector3.new(tableX - 1.2, 0, tableA), team.Primary, Enum.Material.Fabric, nil, shirtTop)
-	BuildUtil.Block(interior, "FoldedShirts", Vector3.new(1.6, 0.6, 1.4), Vector3.new(tableX + 1.2, 0, tableA), team.Secondary, Enum.Material.Fabric, nil, shirtTop)
+	BuildUtil.Block(
+		interior,
+		"FoldedShirts",
+		Vector3.new(1.6, 0.6, 1.4),
+		Vector3.new(tableX - 1.2, 0, tableA),
+		team.Primary,
+		Enum.Material.Fabric,
+		nil,
+		shirtTop
+	)
+	BuildUtil.Block(
+		interior,
+		"FoldedShirts",
+		Vector3.new(1.6, 0.6, 1.4),
+		Vector3.new(tableX + 1.2, 0, tableA),
+		team.Secondary,
+		Enum.Material.Fabric,
+		nil,
+		shirtTop
+	)
 	for _, offset in ipairs({ -1.2, 1.2 }) do
 		local helmetPos = Vector3.new(tableX + offset, shirtTop + 0.9, tableB)
 		BuildUtil.Ball(interior, { Name = "Helmet", Position = helmetPos, Diameter = 1.8, Color = team.Primary })
@@ -907,8 +1177,26 @@ function Plaza.teamstore(ctx)
 			Enum.Material.Metal
 		)
 	end
-	BuildUtil.Block(interior, "Checkout", Vector3.new(6, 3.4, 2.2), Vector3.new(frontX + 8, 0, northZ - 2.6), C.Wood, Enum.Material.WoodPlanks, nil, floorTop)
-	BuildUtil.Block(interior, "Register", Vector3.new(1.2, 0.9, 1), Vector3.new(frontX + 8, 0, northZ - 2.6), DARK_METAL, Enum.Material.Metal, nil, floorTop + 3.4)
+	BuildUtil.Block(
+		interior,
+		"Checkout",
+		Vector3.new(6, 3.4, 2.2),
+		Vector3.new(frontX + 8, 0, northZ - 2.6),
+		C.Wood,
+		Enum.Material.WoodPlanks,
+		nil,
+		floorTop
+	)
+	BuildUtil.Block(
+		interior,
+		"Register",
+		Vector3.new(1.2, 0.9, 1),
+		Vector3.new(frontX + 8, 0, northZ - 2.6),
+		DARK_METAL,
+		Enum.Material.Metal,
+		nil,
+		floorTop + 3.4
+	)
 	local ceiling = BuildUtil.Box(
 		interior,
 		"CeilingLight",
@@ -923,11 +1211,23 @@ function Plaza.teamstore(ctx)
 	-- Giant football resting on a cradle on the roof, laces tipped toward the walkway
 	local roofTop = wallH + 0.8
 	local ballX = frontX + 10
-	local scale = 0.95
+	local scale = 0.9 -- 9.9 long; with the cradle the top stays under the 20-stud height limit
+	local cradleHeight = 0.6
 	for _, side in ipairs({ -1, 1 }) do
-		BuildUtil.Block(ctx, "FootballCradle", Vector3.new(2.4, 0.6, 1.6), Vector3.new(ballX, 0, cz + side * 2.4), team.Secondary, Enum.Material.SmoothPlastic, nil, roofTop)
+		BuildUtil.Block(
+			ctx,
+			"FootballCradle",
+			Vector3.new(2.4, cradleHeight, 1.6),
+			Vector3.new(ballX, 0, cz + side * 2.4),
+			team.Secondary,
+			Enum.Material.SmoothPlastic,
+			nil,
+			roofTop
+		)
 	end
-	local ballCFrame = CFrame.new(ballX, roofTop + 0.6 + 2.73, cz) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(math.rad(-30), 0, 0)
+	-- the ball is 2.68 thick (radius) above each cradle; it sinks 0.15 into them
+	local ballY = roofTop + cradleHeight + 2.53
+	local ballCFrame = CFrame.new(ballX, ballY, cz) * CFrame.Angles(0, math.rad(90), 0) * CFrame.Angles(math.rad(-30), 0, 0)
 	football(
 		BuildUtil.Child(ctx, "RoofFootball"),
 		"Football",
@@ -1025,12 +1325,13 @@ function Plaza.trophy(ctx)
 		end
 	end
 
-	local ballCFrame = CFrame.new(cx, base + 20.2, cz) * CFrame.Angles(0, math.rad(45), 0) * CFrame.Angles(0, 0, math.rad(20))
+	-- the football rests on the rim, tipped up 20 degrees (top stays below 40 studs)
+	local ballCFrame = CFrame.new(cx, base + 21.2, cz) * CFrame.Angles(0, math.rad(45), 0) * CFrame.Angles(0, 0, math.rad(20))
 	football(
 		trophy,
 		"GoldFootball",
 		ballCFrame,
-		0.85,
+		0.95,
 		{ Body = C.Gold, Stripe = PALE_GOLD, Lace = PALE_GOLD },
 		{ Material = Enum.Material.Metal, Reflectance = 0.2 }
 	)
@@ -1049,7 +1350,10 @@ function Plaza.trophy(ctx)
 			Color = C.Metal,
 			Material = Enum.Material.Metal,
 		})
-		BuildUtil.Ball(ctx, { Name = "FlagFinial", Position = Vector3.new(px, 13.45, pz), Diameter = 0.9, Color = C.Gold, Material = Enum.Material.Metal })
+		BuildUtil.Ball(
+			ctx,
+			{ Name = "FlagFinial", Position = Vector3.new(px, 13.45, pz), Diameter = 0.9, Color = C.Gold, Material = Enum.Material.Metal }
+		)
 		-- flags fly along the diagonal, away from the trophy
 		local outward = (corner[1] - corner[2] >= 0) and 1 or -1
 		local flagCenter = Vector3.new(px, 11.6, pz) + flagAxis * outward * 2.3

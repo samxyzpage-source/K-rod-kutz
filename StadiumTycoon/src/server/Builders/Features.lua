@@ -187,23 +187,47 @@ function Features.scoreboard(ctx)
 	-- Three LED panels on the field-facing face (unrotated parts: -X is the Left face)
 	local screenX = faceX - 0.2
 	local panelWidth = width - 4
-	screen(ctx, "TitleScreen", Vector3.new(0.4, 5.4, panelWidth), Vector3.new(screenX, 39.9, centreZ), Enum.NormalId.Left, ctx.teamName .. " STADIUM", {
-		LabelName = "ScoreboardTitle",
-		TextColor3 = team.Trim,
-		PixelsPerStud = 20,
-	})
-	screen(ctx, "ScoreScreen", Vector3.new(0.4, 9.6, panelWidth), Vector3.new(screenX, 31.2, centreZ), Enum.NormalId.Left, "HOME 0  -  AWAY 0", {
-		LabelName = "ScoreboardScore",
-		TextColor3 = LED_AMBER,
-		Font = Enum.Font.Arcade,
-		PixelsPerStud = 20,
-	})
-	screen(ctx, "AttendanceScreen", Vector3.new(0.4, 5, panelWidth), Vector3.new(screenX, 22.7, centreZ), Enum.NormalId.Left, "ATTENDANCE 0", {
-		LabelName = "ScoreboardAttendance",
-		TextColor3 = LED_GREEN,
-		Font = Enum.Font.GothamBold,
-		PixelsPerStud = 20,
-	})
+	screen(
+		ctx,
+		"TitleScreen",
+		Vector3.new(0.4, 5.4, panelWidth),
+		Vector3.new(screenX, 39.9, centreZ),
+		Enum.NormalId.Left,
+		ctx.teamName .. " STADIUM",
+		{
+			LabelName = "ScoreboardTitle",
+			TextColor3 = team.Trim,
+			PixelsPerStud = 20,
+		}
+	)
+	screen(
+		ctx,
+		"ScoreScreen",
+		Vector3.new(0.4, 9.6, panelWidth),
+		Vector3.new(screenX, 31.2, centreZ),
+		Enum.NormalId.Left,
+		"HOME 0  -  AWAY 0",
+		{
+			LabelName = "ScoreboardScore",
+			TextColor3 = LED_AMBER,
+			Font = Enum.Font.Arcade,
+			PixelsPerStud = 20,
+		}
+	)
+	screen(
+		ctx,
+		"AttendanceScreen",
+		Vector3.new(0.4, 5, panelWidth),
+		Vector3.new(screenX, 22.7, centreZ),
+		Enum.NormalId.Left,
+		"ATTENDANCE 0",
+		{
+			LabelName = "ScoreboardAttendance",
+			TextColor3 = LED_GREEN,
+			Font = Enum.Font.GothamBold,
+			PixelsPerStud = 20,
+		}
+	)
 	BuildUtil.Box(
 		ctx,
 		"LedStrip",
@@ -366,14 +390,7 @@ function Features.jumbotron(ctx)
 	for _, dz in ipairs({ -16, 16 }) do
 		pylon(ctx, Vector3.new(midX, 0, centreZ + dz), girderBottom, 4, C)
 	end
-	BuildUtil.Box(
-		ctx,
-		"Girder",
-		Vector3.new(3.5, 2, width - 4),
-		Vector3.new(midX, girderBottom + 1, centreZ),
-		STEEL,
-		Enum.Material.Metal
-	)
+	BuildUtil.Box(ctx, "Girder", Vector3.new(3.5, 2, width - 4), Vector3.new(midX, girderBottom + 1, centreZ), STEEL, Enum.Material.Metal)
 	BuildUtil.Box(
 		ctx,
 		"Catwalk",
@@ -476,8 +493,22 @@ function Features.pressbox(ctx)
 
 	-- Supports: two stair cores with doors and two round columns (clear of GATE F at x = 0)
 	for _, side in ipairs({ -1, 1 }) do
-		BuildUtil.Block(ctx, "StairCore", Vector3.new(8, slabBottom, 10), Vector3.new(side * 31, 0, zMid), C.Concrete, Enum.Material.Concrete)
-		BuildUtil.Block(ctx, "CoreDoor", Vector3.new(3.5, 7, 0.2), Vector3.new(side * 31, 0, zMid + 5.1), DOOR_DARK, Enum.Material.SmoothPlastic)
+		BuildUtil.Block(
+			ctx,
+			"StairCore",
+			Vector3.new(8, slabBottom, 10),
+			Vector3.new(side * 31, 0, zMid),
+			C.Concrete,
+			Enum.Material.Concrete
+		)
+		BuildUtil.Block(
+			ctx,
+			"CoreDoor",
+			Vector3.new(3.5, 7, 0.2),
+			Vector3.new(side * 31, 0, zMid + 5.1),
+			DOOR_DARK,
+			Enum.Material.SmoothPlastic
+		)
 		BuildUtil.Cylinder(ctx, {
 			Name = "Column",
 			Position = Vector3.new(side * 14, slabBottom / 2, zMid),
@@ -582,16 +613,16 @@ function Features.pressbox(ctx)
 	)
 
 	-- Inside: a long desk with monitors (seen through the glass)
-	BuildUtil.Box(
-		ctx,
-		"Desk",
-		Vector3.new(halfX * 2 - 4, 3, 2),
-		Vector3.new(0, floorY + 1.5, z0 + 3),
-		C.Wood,
-		Enum.Material.WoodPlanks
-	)
+	BuildUtil.Box(ctx, "Desk", Vector3.new(halfX * 2 - 4, 3, 2), Vector3.new(0, floorY + 1.5, z0 + 3), C.Wood, Enum.Material.WoodPlanks)
 	for _, x in ipairs({ -24, -8, 8, 24 }) do
-		BuildUtil.Box(ctx, "Monitor", Vector3.new(3, 2, 0.3), Vector3.new(x, floorY + 4, z0 + 3.4), SCREEN_BLACK, Enum.Material.SmoothPlastic)
+		BuildUtil.Box(
+			ctx,
+			"Monitor",
+			Vector3.new(3, 2, 0.3),
+			Vector3.new(x, floorY + 4, z0 + 3.4),
+			SCREEN_BLACK,
+			Enum.Material.SmoothPlastic
+		)
 	end
 
 	-- Roof gear (behind the canopy's rear edge): broadcast dish + antenna
@@ -841,7 +872,17 @@ local function canopyRoof(ctx, spec)
 		Color = team.Primary,
 		Material = Enum.Material.SmoothPlastic,
 	})
-	sign(ctx, "CanopySign", Vector3.new(80, 2.2, 0.2), at(0, -0.7, length + 0.6), team.Secondary, Enum.NormalId.Front, spec.text, team.Primary, 16)
+	sign(
+		ctx,
+		"CanopySign",
+		Vector3.new(80, 2.2, 0.2),
+		at(0, -0.7, length + 0.6),
+		team.Secondary,
+		Enum.NormalId.Front,
+		spec.text,
+		team.Primary,
+		16
+	)
 	BuildUtil.Part(ctx, {
 		Name = "CanopyLightStrip",
 		Size = Vector3.new(width - 4, 0.25, 0.8),
