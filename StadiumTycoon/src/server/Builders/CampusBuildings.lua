@@ -453,7 +453,7 @@ function CampusBuildings.frontoffice(ctx)
 	BuildUtil.Box(
 		shellModel,
 		"Forecourt",
-		Vector3.new(x0 - 0.2 - courtMinX, 0.12, depth + 1.2),
+		Vector3.new(x0 - 0.2 - courtMinX, 0.12, depth + 1), -- ends inside the corner columns
 		Vector3.new((courtMinX + x0 - 0.2) / 2, 0.06, cz),
 		PAVING,
 		Enum.Material.Pavement,
@@ -641,8 +641,8 @@ function CampusBuildings.frontoffice(ctx)
 	BuildUtil.Box(
 		entrance,
 		"Canopy",
-		Vector3.new(6, 0.5, 16),
-		Vector3.new(x0 - 3, canopyTop - 0.25, doorZ),
+		Vector3.new(6.1, 0.5, 16), -- its inner end sits inside the glass line (no face shared with the fins)
+		Vector3.new(x0 - 2.95, canopyTop - 0.25, doorZ),
 		team.Secondary,
 		Enum.Material.SmoothPlastic
 	)
