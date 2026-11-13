@@ -595,9 +595,9 @@ function Field.endzones(ctx)
 		-- Step 3: Pylons --------------------------------------------------------------------
 		-- where the goal line and the end line meet each sideline
 		BuildUtil.Stage(ctx, 3)
-		for _, px in ipairs({ s * L.GoalLineX, s * (outer + BOUNDARY_WIDTH / 2) }) do
-			for _, pz in ipairs({ front - 0.4, back + 0.4 }) do
-				BuildUtil.Block(
+		for pi, px in ipairs({ s * L.GoalLineX, s * (outer + BOUNDARY_WIDTH / 2) }) do
+			for zi, pz in ipairs({ front - 0.4, back + 0.4 }) do
+				local pylon = BuildUtil.Block(
 					ctx,
 					"Pylon",
 					Vector3.new(0.66, 1.5, 0.66),
@@ -607,6 +607,15 @@ function Field.endzones(ctx)
 					PAINT,
 					TURF_TOP
 				)
+				if pi == 1 and zi == 1 then
+					-- one per end zone: the goal-line pylon on the front sideline
+					BuildUtil.Look(
+						pylon,
+						"End Zone Pylon",
+						"Soft orange pylons mark the corners of the end zone. Reach the ball past one and it's a TOUCHDOWN!",
+						{ At = Vector3.new(0, 1.5, 0), Distance = 8 }
+					)
+				end
 				BuildUtil.Block(
 					ctx,
 					"PylonCap",

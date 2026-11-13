@@ -12,7 +12,7 @@
 	                      fingers (use), HQ directory (look) with a station clock on top (look)
 	                    2 giant team wall: live team name, record, season + game-day countdown, logo,
 	                      three team photos (look), Rumble the mascot statue (look)
-	                    3 sofas + armchairs (seats; one cushion is a camera seat on the big screen),
+	                    3 sofas + armchairs (seats; one cushion is a camera seat on the team wall),
 	                      plants, lamp
 	                    4 a lit glass trophy case (look: championships)
 	                    5 a big LED screen (live summary + game-day ticker) over the corridor opening
