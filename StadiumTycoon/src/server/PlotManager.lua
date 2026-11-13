@@ -289,7 +289,9 @@ local function buildItem(plot, item, animate)
 	end
 	local model = Instance.new("Model")
 	model.Name = item.Id
-	local ctx = BuildUtil.NewContext(plot.Origin, model, plot.Palette, plot.TeamName, Config, item.Stage)
+	-- pieces are built in their area's frame (e.g. the campus sits further back, see Items.lua)
+	local origin = plot.Origin * CFrame.new(item.AreaOffset or Vector3.new())
+	local ctx = BuildUtil.NewContext(origin, model, plot.Palette, plot.TeamName, Config, item.Stage)
 	local ok, err = pcall(builder, ctx)
 	if not ok then
 		warn(("[PlotManager] Builder '%s' (step %d) failed: %s"):format(item.PieceId, item.Stage, tostring(err)))

@@ -222,7 +222,8 @@ for _, item in ipairs(Items.List) do
 				addError("No builder for piece '" .. item.PieceId .. "'")
 			end
 		else
-			local stepCtx = BuildUtil.NewContext(origin, root, palette, "PREVIEW", Config, item.Stage)
+			local areaOrigin = origin * CFrame.new(item.AreaOffset or Vector3.new())
+			local stepCtx = BuildUtil.NewContext(areaOrigin, root, palette, "PREVIEW", Config, item.Stage)
 			local ctx, model = BuildUtil.Child(stepCtx, item.Id)
 			local ok, err = pcall(builder, ctx)
 			if not ok then
@@ -416,7 +417,7 @@ end
 -- Buttons must not be buried by parts that can exist while they are visible
 for _, item in ipairs(Items.List) do
 	local b = item.Button
-	local buttonBox = { minX = b.X - 3, maxX = b.X + 3, minY = 0, maxY = 5, minZ = b.Z - 3, maxZ = b.Z + 3 }
+	local buttonBox = { minX = b.X - 3, maxX = b.X + 3, minY = b.Y, maxY = b.Y + 5, minZ = b.Z - 3, maxZ = b.Z + 3 }
 	for otherId, list in pairs(partsByItem) do
 		if otherId ~= item.Id and not dependents[item.Id][otherId] then
 			for _, entry in ipairs(list) do
@@ -430,91 +431,58 @@ for _, item in ipairs(Items.List) do
 	for _, other in ipairs(Items.List) do
 		if other.Order > item.Order and other.PieceId ~= item.PieceId then
 			local o = other.Button
-			if math.abs(o.X - b.X) < 7 and math.abs(o.Z - b.Z) < 7 then
+			if math.abs(o.X - b.X) < 7 and math.abs(o.Z - b.Z) < 7 and math.abs(o.Y - b.Y) < 3 then
 				addWarning(("Buttons '%s' and '%s' overlap"):format(item.Id, other.Id))
 			end
 		end
 	end
 end
 
--- Walkway (gate -> tunnel) and tunnel must stay walkable at head height
-local corridors = {
-	{
-		name = "walkway",
-		box = {
-			minX = -L.WalkwayHalfWidth + 1,
-			maxX = L.WalkwayHalfWidth - 1,
-			minY = 0.8,
-			maxY = 9,
-			minZ = L.PlazaFrontZ + 6,
-			maxZ = L.PlazaBackZ,
-		},
-	},
-	{
-		name = "tunnel",
-		box = {
-			minX = -L.TunnelHalfWidth + 1,
-			maxX = L.TunnelHalfWidth - 1,
-			minY = 0.8,
-			maxY = 9,
-			minZ = L.FrontUpperOuterZ,
-			maxZ = L.SurfaceMinZ,
-		},
-	},
-}
-if L.BackWalk then
-	table.insert(corridors, {
-		name = "home tunnel + back walk",
-		box = {
-			minX = L.BackWalk.MinX + 1,
-			maxX = L.BackWalk.MaxX - 1,
-			minY = 0.8,
-			maxY = 9,
-			minZ = L.FieldBackZ + 1, -- from the sideline (benches must leave the lane open)
-			maxZ = L.BackWalk.MaxZ - 1,
-		},
-	})
-end
-local function corridorFrom(name, rect, inset, ignore)
+-- Walkways, roads and concourse lanes must stay walkable at head height (V5 layout).
+-- Each corridor is a box in PLOT coordinates (campus ones are shifted by the campus area offset).
+local corridors = {}
+local function corridor(name, rect, inset, floorY, area, ignore)
+	local offset = L.Areas[area or "stadium"]
+	floorY = floorY or 0
 	table.insert(corridors, {
 		name = name,
 		box = {
-			minX = rect.MinX + inset,
-			maxX = rect.MaxX - inset,
-			minY = 0.8,
-			maxY = 9,
-			minZ = rect.MinZ + inset,
-			maxZ = rect.MaxZ - inset,
+			minX = rect.MinX + inset + offset.X,
+			maxX = rect.MaxX - inset + offset.X,
+			minY = floorY + 0.8,
+			maxY = floorY + 9,
+			minZ = rect.MinZ + inset + offset.Z,
+			maxZ = rect.MaxZ - inset + offset.Z,
 		},
 		ignore = ignore,
 	})
 end
-if L.HQCorridor then
-	corridorFrom("HQ corridor", L.HQCorridor, 1)
+local B = L.Bowl
+-- plaza walkway: claim gate -> Gate A (through the gate opening into the stadium)
+corridor("front walkway", { MinX = -L.WalkwayHalfWidth, MaxX = L.WalkwayHalfWidth, MinZ = L.GateZ + 4, MaxZ = L.StadiumFrontZ + 12 }, 1)
+corridor("back walk (Gate D -> campus)", { MinX = L.BackWalk.MinX, MaxX = L.BackWalk.MaxX, MinZ = L.BackWalk.MinZ - 12, MaxZ = L.BackWalk.MaxZ }, 1)
+corridor("cart road", L.CartRoad, 1)
+-- players' tunnels from the field into the event level (under the lower bowl)
+local tunnel = B.TunnelHalfWidth
+corridor("home players' tunnel", { MinX = -tunnel, MaxX = tunnel, MinZ = L.FieldBackZ + 1, MaxZ = L.SurfaceMaxZ + 30 }, 1)
+corridor("visitor players' tunnel", { MinX = -tunnel, MaxX = tunnel, MinZ = L.SurfaceMinZ - 30, MaxZ = L.FieldFrontZ - 1 }, 1)
+-- concourse walking lanes (the straight sides; stands and shops line the outer walls)
+local function lanes(name, inner, outer, floorY)
+	local hx, minZ, maxZ = L.SurfaceHalfX, L.SurfaceMinZ, L.SurfaceMaxZ
+	corridor(name .. " (visitor side)", { MinX = -hx, MaxX = hx, MinZ = minZ - outer, MaxZ = minZ - inner }, 0, floorY)
+	corridor(name .. " (home side)", { MinX = -hx, MaxX = hx, MinZ = maxZ + inner, MaxZ = maxZ + outer }, 0, floorY)
+	corridor(name .. " (west end)", { MinX = -hx - outer, MaxX = -hx - inner, MinZ = minZ, MaxZ = maxZ }, 0, floorY)
+	corridor(name .. " (east end)", { MinX = hx + inner, MaxX = hx + outer, MinZ = minZ, MaxZ = maxZ }, 0, floorY)
 end
-if L.HQEntranceWalk then
-	corridorFrom("HQ entrance", L.HQEntranceWalk, 1)
-end
-if L.BackRoad then
-	corridorFrom("back road", L.BackRoad, 1)
-end
-if L.CartRoad then
-	corridorFrom("cart road", L.CartRoad, 1)
-end
-if L.CampusRoad then
-	table.insert(corridors, {
-		name = "campus road",
-		box = {
-			minX = L.CampusRoad.MinX + 2,
-			maxX = L.CampusRoad.MaxX - 2,
-			minY = 0.8,
-			maxY = 9,
-			minZ = L.CampusRoad.MinZ + 1,
-			maxZ = L.CampusRoad.MaxZ - 1,
-		},
-		ignore = { PlotBase = true }, -- bus stop shelters + team safe sit on the road on purpose
-	})
-end
+lanes("main concourse lane", B.MainConcourse.Inner + 10, B.MainConcourse.Inner + 20, B.MainConcourse.Floor)
+lanes("club ring lane", B.ClubRing.Outer - 12, B.ClubRing.Outer - 4, B.ClubRing.Floor)
+lanes("upper concourse lane", B.UpperConcourse.Inner + 12, B.UpperConcourse.Inner + 22, B.UpperConcourse.Floor)
+-- campus (campus-area rects)
+corridor("campus road", { MinX = L.CampusRoad.MinX + 1, MaxX = L.CampusRoad.MaxX - 1, MinZ = L.CampusRoad.MinZ, MaxZ = L.CampusRoad.MaxZ }, 1, 0, "campus", { PlotBase = true })
+corridor("HQ entrance", L.HQEntranceWalk, 1, 0, "campus")
+corridor("HQ corridor", L.HQCorridor, 1, 0, "campus")
+corridor("HQ upper corridor", L.HQCorridor, 1, L.HQ.UpperFloorY, "campus")
+corridor("back road", L.BackRoad, 1, 0, "campus")
 for _, corridor in ipairs(corridors) do
 	for id, list in pairs(partsByItem) do
 		for _, entry in ipairs(list) do
@@ -530,8 +498,16 @@ if L.Zones then
 	for _, entry in ipairs(built) do
 		local zone = entry.pieceId and L.Zones[entry.pieceId]
 		if zone then
+			local offset = Items.PieceById[entry.pieceId].AreaOffset or Vector3.new()
 			for _, part in ipairs(partsByItem[entry.id] or {}) do
-				local box = part.box
+				local plotBox = part.box
+				local box = {
+					minX = plotBox.minX - offset.X,
+					maxX = plotBox.maxX - offset.X,
+					minZ = plotBox.minZ - offset.Z,
+					maxZ = plotBox.maxZ - offset.Z,
+					maxY = plotBox.maxY,
+				}
 				local tolerance = 0.6
 				if
 					box.minX < zone.MinX - tolerance

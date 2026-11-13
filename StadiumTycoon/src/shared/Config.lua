@@ -14,7 +14,7 @@ local Config = {}
 
 -- General ----------------------------------------------------------------------------------
 Config.GameTitle = "Gridiron Stadium Tycoon"
-Config.PlotCount = 4 -- stadium plots per server (1 - 6). Set Max Players in Game Settings to the same number!
+Config.PlotCount = 2 -- franchise plots per server (they are huge). Set Max Players in Game Settings to the same number!
 Config.StartingCash = 0
 Config.IncomeMultiplier = 1 -- set to 10 or 100 while testing to build faster
 Config.IncomeTickSeconds = 1 -- how often income is added to the vault
@@ -22,8 +22,8 @@ Config.AttendancePerIncome = 25 -- scoreboard "attendance" = income/sec * this
 
 -- Saving -----------------------------------------------------------------------------------
 Config.SaveEnabled = true
--- (v4: every piece is now built in steps with new ids, so V1-V3 test saves are not carried over)
-Config.DataStoreName = "GridironStadiumTycoon_v4"
+-- (v5: the stadium was rebuilt with new pieces, so older test saves are not carried over)
+Config.DataStoreName = "GridironStadiumTycoon_v5"
 Config.AutosaveSeconds = 90
 
 -- World ------------------------------------------------------------------------------------
@@ -42,7 +42,7 @@ Config.GameDay = {
 	IntervalSeconds = 240,
 	DurationSeconds = 60,
 	IncomeMultiplier = 2,
-	SeatedFans = 150, -- max seated fans per stadium (spread over the stands you own)
+	SeatedFans = 260, -- max seated fans per stadium (spread over the stands you own)
 	WalkingFans = 8, -- fans that walk in through the gate at kick-off
 }
 
@@ -193,15 +193,31 @@ Config.Colors = {
 }
 
 -- Layout (plot-local studs) ----------------------------------------------------------------
+-- (V5) Each plot is a whole franchise campus: a 3-tier stadium in the middle, the entrance plaza in
+-- front (-Z), the Team HQ + practice campus behind (+Z) and the tailgate fan zone to the east (+X).
+-- See docs/V5-LAYOUT.md for the full plan.
+--
+-- AREAS: groups of pieces are built in their own frame, shifted from the plot origin. A piece's
+-- builder, its button and its zone (L.Zones) all use the coordinates of its area; the game adds the
+-- area's offset (Items.lua gives every piece an Area). So the HQ/campus builders still use the
+-- coordinates they always had.
 local L = {}
-L.PlotWidth = 560 -- X (the stadium area is X[-210,210]; the extra strips hold the fan zone and the cart road)
-L.PlotDepth = 400 -- Z depth of the original stadium area (front edge at -PlotDepth/2)
-L.PlotFrontZ = -200 -- front edge of the plot (faces the street)
-L.PlotBackZ = 600 -- back edge of the plot (the team HQ + practice campus sit behind the stadium)
-L.StreetWidth = 60 -- gap between the two rows of plots (spawn is in the middle)
+L.Areas = {
+	stadium = Vector3.new(0, 0, 0), -- the field + bowl (and everything without an Area)
+	campus = Vector3.new(0, 0, 120), -- Team HQ, practice fields, hall of fame, garage, dome
+	plaza = Vector3.new(0, 0, -230), -- ticket booth, concessions, parking, team store, trophy, vendors
+	fanzone = Vector3.new(220, 0, 0), -- tailgate & fan zone
+}
+
+L.PlotWidth = 1040 -- X[-520, 520]
+L.PlotDepth = 920 -- the front half: the plot's front edge is at -PlotDepth/2
+L.PlotFrontZ = -460 -- front edge of the plot (faces the street)
+L.PlotBackZ = 720 -- back edge of the plot (behind the campus)
+L.StreetWidth = 60 -- gap between the two plots (spawn is in the middle)
 L.PlotGap = 30 -- gap between neighbouring plots on the same side of the street
 L.Yard = 2
 
+-- The football field (stadium area) ---------------------------------------------------------
 L.FieldCenterZ = 30
 L.FieldLength = 240 -- back of end zone to back of end zone (120 yards)
 L.PlayLength = 200 -- goal line to goal line (100 yards)
@@ -209,17 +225,6 @@ L.EndZoneDepth = 20 -- 10 yards
 L.FieldWidth = 106 -- ~53 yards
 L.SidelineMargin = 12 -- turf between the sideline and the stands
 L.EndMargin = 15 -- turf between the end line and the end-zone stands
-
-L.RowDepth = 4
-L.RowRise = 2
-L.LowerRows = 6
-L.UpperRows = 6
-L.UpperStartHeight = 16 -- height of the first upper-deck row
-
-L.TunnelHalfWidth = 14 -- gap in the front (visitor) stands for the players' tunnel
-L.WalkwayHalfWidth = 12
-
--- Derived values (do not edit, they are computed from the values above)
 L.FieldFrontZ = L.FieldCenterZ - L.FieldWidth / 2 -- -23
 L.FieldBackZ = L.FieldCenterZ + L.FieldWidth / 2 -- 83
 L.FieldHalfLength = L.FieldLength / 2 -- 120
@@ -227,102 +232,190 @@ L.GoalLineX = L.PlayLength / 2 -- 100
 L.SurfaceMinZ = L.FieldFrontZ - L.SidelineMargin -- -35
 L.SurfaceMaxZ = L.FieldBackZ + L.SidelineMargin -- 95
 L.SurfaceHalfX = L.FieldHalfLength + L.EndMargin -- 135
-L.LowerDepth = L.LowerRows * L.RowDepth -- 24
-L.UpperDepth = L.UpperRows * L.RowDepth -- 24
-L.LowerTopHeight = L.LowerRows * L.RowRise -- 12
-L.UpperTopHeight = L.UpperStartHeight + (L.UpperRows - 1) * L.RowRise -- 26
-L.SidelineStandsHalfLength = L.FieldHalfLength -- 120: sideline stands span X in [-120, 120]
-L.FrontLowerOuterZ = L.SurfaceMinZ - L.LowerDepth -- -59
-L.FrontUpperOuterZ = L.FrontLowerOuterZ - L.UpperDepth -- -83
-L.BackLowerOuterZ = L.SurfaceMaxZ + L.LowerDepth -- 119
-L.BackUpperOuterZ = L.BackLowerOuterZ + L.UpperDepth -- 143
-L.EndLowerOuterX = L.SurfaceHalfX + L.LowerDepth -- 159
-L.PlazaFrontZ = -L.PlotDepth / 2 -- -200
-L.PlazaBackZ = L.FrontUpperOuterZ -- -83
-L.EndUpperOuterX = L.EndLowerOuterX + L.UpperDepth -- 183
-L.CornerStartX = L.SidelineStandsHalfLength -- 120: corner seats fill the bowl from here outward
-L.BackTunnelHalfWidth = 14 -- gap in the home stands (lower + upper) for the home team tunnel
 
--- Full bowl: every seating row r (1-6 lower, 7-12 upper) is a rectangular ring around the turf.
--- Row r covers the band between these two rectangles (half-widths in X, front/back edges in Z):
---   inner: X = SurfaceHalfX + (r-1)*RowDepth, Z from SurfaceMinZ - (r-1)*RowDepth to SurfaceMaxZ + (r-1)*RowDepth
---   outer: the same with r instead of r-1
--- Row heights: lower r -> r*RowRise; upper r -> UpperStartHeight + (r-7)*RowRise.
+--[[
+	THE BOWL (V5): an octagonal 3-tier bowl around the turf rectangle (X +-135, Z -35..95).
+	"Offset" = distance outward from the turf edge. At offset o the bowl outline is the turf
+	rectangle pushed out by o on every side, with 45-degree corners (the corner lines pass through
+	the turf corners at offset 0). Server/Bowl.lua turns this into row segments for builders + fans.
 
--- Outside the bowl
+	Tier rows: row k of a tier covers offsets StartOffset + (k-1)*Depth .. StartOffset + k*Depth and
+	its seating surface (top) is at height FirstHeight + (k-1)*Rise.
+	  lower  14 rows, offsets   0..56, heights  4..30   (open to the main concourse at the top)
+	  club    6 rows, offsets  56..80, heights 44..54   (above the main concourse)
+	  upper  18 rows, offsets  80..152, heights 70..104 (above the club ring)
+	Levels (floor heights) and the rings they occupy (offsets):
+	  event level      y = 0   under the lower bowl's back rows + everything outside it (locker
+	                           rooms, players' tunnels, entry halls, escalators)
+	  main concourse   y = 30  offsets  56..84 (food, restrooms, merch; portals onto the lower bowl)
+	  club ring        y = 54  offsets  80..108 (club lounge, suites, press box, broadcast booth)
+	  upper concourse  y = 74  offsets 116..152 (under the upper deck's back rows; vomitories
+	                           run inward under rows 9-18 and open onto a cross-aisle at upper row 3,
+	                           which is at y = 74 too)
+	  facade           offsets 152..160, up to y ~110 (gates through it at ground level)
+]]
+L.Bowl = {
+	Depth = 4, -- every row is 4 studs deep
+	Rise = 2, -- and 2 studs higher than the row in front
+	Tiers = {
+		lower = { Rows = 14, StartOffset = 0, FirstHeight = 4 },
+		club = { Rows = 6, StartOffset = 56, FirstHeight = 44 },
+		upper = { Rows = 18, StartOffset = 80, FirstHeight = 70 },
+	},
+	MainConcourse = { Inner = 56, Outer = 84, Floor = 30, Ceiling = 42 },
+	ClubRing = { Inner = 80, Outer = 108, Floor = 54, Ceiling = 66 },
+	UpperConcourse = { Inner = 116, Outer = 152, Floor = 74, Ceiling = 86 },
+	Facade = { Inner = 152, Outer = 160, Top = 112 },
+	-- players' tunnels: lower rows 1..TunnelRows are cut at |x| < TunnelHalfWidth on both
+	-- sidelines; the tunnel continues under the higher rows to the locker rooms (event level)
+	TunnelHalfWidth = 10,
+	TunnelRows = 5,
+	-- stair aisles: along each straight side, aisle centres sit at +-AisleFirst, +-(AisleFirst +
+	-- AisleSpacing), ... from the side's centre; every corner has one aisle along its centre line
+	AisleWidth = 3,
+	AisleFirst = 26,
+	AisleSpacing = 52,
+	Capacity = 72000, -- what the scoreboard brags about
+}
+L.StadiumOuterOffset = L.Bowl.Facade.Outer -- 160
+L.StadiumFrontZ = L.SurfaceMinZ - L.StadiumOuterOffset -- -195: front facade (Gate A)
+L.StadiumBackZ = L.SurfaceMaxZ + L.StadiumOuterOffset -- 255: back facade (Gate D)
+L.StadiumHalfX = L.SurfaceHalfX + L.StadiumOuterOffset -- 295: east / west facades (Gates C / B)
+
+-- V4 values still read by Field.lua (bench lane) and older stadium code. New code uses L.Bowl.
+L.RowDepth = 4
+L.RowRise = 2
+L.LowerRows = 6
+L.UpperRows = 6
+L.UpperStartHeight = 16
+L.TunnelHalfWidth = 14
+L.BackTunnelHalfWidth = 14 -- Field.lua keeps the bench area clear at |x| < 16 for the home tunnel
+L.LowerDepth = L.LowerRows * L.RowDepth
+L.UpperDepth = L.UpperRows * L.RowDepth
+L.LowerTopHeight = L.LowerRows * L.RowRise
+L.UpperTopHeight = L.UpperStartHeight + (L.UpperRows - 1) * L.RowRise
+L.SidelineStandsHalfLength = L.FieldHalfLength
+L.CornerStartX = L.SidelineStandsHalfLength
+L.FrontLowerOuterZ = L.SurfaceMinZ - L.LowerDepth
+L.FrontUpperOuterZ = L.FrontLowerOuterZ - L.UpperDepth
+L.BackLowerOuterZ = L.SurfaceMaxZ + L.LowerDepth
+L.BackUpperOuterZ = L.BackLowerOuterZ + L.UpperDepth
+L.EndLowerOuterX = L.SurfaceHalfX + L.LowerDepth
+L.EndUpperOuterX = L.EndLowerOuterX + L.UpperDepth
+
+-- Light towers stand in the four corners outside the facade
 L.LightTowerPositions = {
-	Vector3.new(194, 0, 156),
-	Vector3.new(-194, 0, 156),
-	Vector3.new(194, 0, -90),
-	Vector3.new(-194, 0, -90),
+	Vector3.new(305, 0, 265),
+	Vector3.new(-305, 0, 265),
+	Vector3.new(305, 0, -205),
+	Vector3.new(-305, 0, -205),
 }
 
--- Team campus (behind the stadium) -----------------------------------------------------------
-L.BackWalk = { MinX = -12, MaxX = 12, MinZ = 95, MaxZ = 172 } -- home tunnel -> campus road
-L.CampusRoad = { MinX = -276, MaxX = 276, MinZ = 172, MaxZ = 186 }
+-- Entrance plaza (stadium-area coordinates) --------------------------------------------------
+L.PlazaFrontZ = -L.PlotDepth / 2 -- -460
+L.GateZ = L.PlazaFrontZ + 3 -- -457: the gold claim gate
+L.GateHalfWidth = 13
+L.WalkwayHalfWidth = 12 -- the walkway from the claim gate to Gate A
+L.VaultPosition = Vector3.new(36, 0, -442)
+L.CollectPadPosition = Vector3.new(22, 0, -442)
+L.SpawnPosition = Vector3.new(0, 0, -448) -- where owners respawn (just inside the gate)
+L.BusStopPlaza = Vector3.new(-26, 0, -375)
+L.BackWalk = { MinX = -12, MaxX = 12, MinZ = L.StadiumBackZ, MaxZ = 292 } -- Gate D -> campus road
+L.CartRoad = { MinX = -516, MaxX = -496, MinZ = -456, MaxZ = 716 } -- along the west edge
+
+-- Team campus (CAMPUS-AREA coordinates: add L.Areas.campus for plot coordinates) ---------------
+L.CampusRoad = { MinX = -516, MaxX = 516, MinZ = 172, MaxZ = 186 }
 L.HQEntranceWalk = { MinX = -112, MaxX = -88, MinZ = 186, MaxZ = 200 } -- campus road -> HQ front doors
-L.BackRoad = { MinX = -276, MaxX = 276, MinZ = 372, MaxZ = 386 } -- behind the HQ, in front of the fields
-L.CartRoad = { MinX = -276, MaxX = -256, MinZ = -196, MaxZ = 596 } -- road along the west edge for golf carts
-L.BusStopPlaza = Vector3.new(-26, 0, -145)
+L.BackRoad = { MinX = -516, MaxX = 516, MinZ = 372, MaxZ = 386 } -- behind the HQ, in front of the fields
 L.BusStopCampus = Vector3.new(-150, 0, 179)
 
--- The Team HQ: a big building that starts EMPTY. Each room is a piece you build inside it.
--- The shell (outer walls, roof, floor, room outlines) is part of every plot from the start.
-L.HQ = { MinX = -250, MaxX = 100, MinZ = 200, MaxZ = 360, Height = 30 }
-L.HQCorridor = { MinX = -248, MaxX = 98, MinZ = 264, MaxZ = 278 } -- must stay walkable
+-- The Team HQ: a two-storey building that starts EMPTY. Each room is a piece you build inside it.
+-- The shell (outer walls, roofs, both floors, stairs + elevator, room outlines) is always there.
+L.HQ = { MinX = -250, MaxX = 100, MinZ = 200, MaxZ = 360, Height = 36, UpperFloorY = 17 }
+L.HQCorridor = { MinX = -248, MaxX = 98, MinZ = 264, MaxZ = 278 } -- both floors: must stay walkable
+L.HQAtrium = { MinX = -150, MaxX = -50, MinZ = 202, MaxZ = 264 } -- the lobby is open to the roof
 L.HQSpawn = Vector3.new(-100, 0, 210) -- owners appear here (facing into the building)
 L.HQSafePosition = Vector3.new(-75, 0, 212) -- collect pad in the lobby (the safe block sits 9 studs to +X)
 
--- Staff characters (one per hired step): plot-local feet positions
+-- Staff characters (one per hired step): feet positions in their piece's area
 L.StaffSpots = {
 	staff_coaches = { Vector3.new(-182, 0, 391), Vector3.new(-194, 0, 391), Vector3.new(-206, 0, 391) },
 	staff_trainers = { Vector3.new(-90, 0, 391), Vector3.new(-102, 0, 391), Vector3.new(-114, 0, 391) },
 	staff_vendors = { Vector3.new(-85, 0, -150), Vector3.new(-85, 0, -138), Vector3.new(-85, 0, -126) },
 }
 
--- Golf carts spawn here (in front of the garage, facing -X)
+-- Golf carts spawn here (campus area, in front of the garage, facing -X)
 L.CartPads = {
 	Vector3.new(138, 0, 336),
 	Vector3.new(138, 0, 348),
 	Vector3.new(138, 0, 360),
 }
 
--- Every piece outside the original stadium must stay inside its zone (the preview tool checks).
--- MinX/MaxX/MinZ/MaxZ are plot-local studs, MaxY is the height limit.
+-- Every piece must stay inside its zone (the preview tool checks). Zones are in the piece's
+-- AREA coordinates. MinX/MaxX/MinZ/MaxZ in studs, MaxY = height limit.
+local UPPER = L.HQ.UpperFloorY
 L.Zones = {
-	-- HQ rooms, front row (doors open onto the corridor at z = 264)
-	hq_frontoffice = { MinX = -248, MaxX = -200, MinZ = 202, MaxZ = 264, MaxY = 26 },
-	hq_coaches = { MinX = -200, MaxX = -150, MinZ = 202, MaxZ = 264, MaxY = 26 },
-	hq_lobby = { MinX = -150, MaxX = -50, MinZ = 202, MaxZ = 264, MaxY = 28 },
-	hq_interview = { MinX = -50, MaxX = 0, MinZ = 202, MaxZ = 264, MaxY = 26 },
-	hq_meeting = { MinX = 0, MaxX = 50, MinZ = 202, MaxZ = 264, MaxY = 26 },
-	hq_lounge = { MinX = 50, MaxX = 98, MinZ = 202, MaxZ = 264, MaxY = 26 },
-	-- HQ rooms, back row (doors open onto the corridor at z = 278)
-	hq_lockerroom = { MinX = -248, MaxX = -200, MinZ = 278, MaxZ = 358, MaxY = 26 },
-	hq_equipment = { MinX = -200, MaxX = -150, MinZ = 278, MaxZ = 358, MaxY = 26 },
-	hq_weightroom = { MinX = -150, MaxX = -100, MinZ = 278, MaxZ = 358, MaxY = 26 },
-	hq_trainingroom = { MinX = -100, MaxX = -50, MinZ = 278, MaxZ = 358, MaxY = 26 },
-	hq_filmroom = { MinX = -50, MaxX = 0, MinZ = 278, MaxZ = 358, MaxY = 26 },
-	hq_cafeteria = { MinX = 0, MaxX = 98, MinZ = 278, MaxZ = 358, MaxY = 26 },
-	-- stadium press level (walk-in, reached by elevators)
-	pressbox = { MinX = -44, MaxX = 44, MinZ = 143, MaxZ = 171, MaxY = 50 },
-	suites = { MinX = -120, MaxX = 120, MinZ = -104, MaxZ = -83, MaxY = 40 },
-	broadcast_booth = { MinX = -24, MaxX = 24, MinZ = -96, MaxZ = -66, MaxY = 40 },
-	-- outdoors
+	-- HQ ground floor, front row (doors open onto the corridor at z = 264)
+	hq_frontoffice = { MinX = -248, MaxX = -200, MinZ = 202, MaxZ = 264, MaxY = UPPER - 1 },
+	hq_coaches = { MinX = -200, MaxX = -150, MinZ = 202, MaxZ = 264, MaxY = UPPER - 1 },
+	hq_lobby = { MinX = -150, MaxX = -50, MinZ = 202, MaxZ = 264, MaxY = 34 },
+	hq_interview = { MinX = -50, MaxX = 0, MinZ = 202, MaxZ = 264, MaxY = UPPER - 1 },
+	hq_meeting = { MinX = 0, MaxX = 50, MinZ = 202, MaxZ = 264, MaxY = UPPER - 1 },
+	hq_lounge = { MinX = 50, MaxX = 98, MinZ = 202, MaxZ = 264, MaxY = UPPER - 1 },
+	-- HQ ground floor, back row (doors open onto the corridor at z = 278)
+	hq_lockerroom = { MinX = -248, MaxX = -200, MinZ = 278, MaxZ = 358, MaxY = UPPER - 1 },
+	hq_equipment = { MinX = -200, MaxX = -150, MinZ = 278, MaxZ = 358, MaxY = UPPER - 1 },
+	hq_weightroom = { MinX = -150, MaxX = -100, MinZ = 278, MaxZ = 358, MaxY = UPPER - 1 },
+	hq_trainingroom = { MinX = -100, MaxX = -50, MinZ = 278, MaxZ = 358, MaxY = UPPER - 1 },
+	hq_filmroom = { MinX = -50, MaxX = 0, MinZ = 278, MaxZ = 358, MaxY = UPPER - 1 },
+	hq_cafeteria = { MinX = 0, MaxX = 98, MinZ = 278, MaxZ = 358, MaxY = UPPER - 1 },
+	-- HQ upper floor (floor top at y = UpperFloorY; the atrium is the open lobby below)
+	hq_atrium = { MinX = -150, MaxX = -50, MinZ = 202, MaxZ = 264, MaxY = 34 },
+	hq_owner = { MinX = -248, MaxX = -150, MinZ = 202, MaxZ = 264, MaxY = 34 },
+	hq_media = { MinX = -50, MaxX = 0, MinZ = 202, MaxZ = 264, MaxY = 34 },
+	hq_scouting = { MinX = 0, MaxX = 50, MinZ = 202, MaxZ = 264, MaxY = 34 },
+	hq_analytics = { MinX = 50, MaxX = 98, MinZ = 202, MaxZ = 264, MaxY = 34 },
+	hq_kitchen = { MinX = -248, MaxX = -150, MinZ = 278, MaxZ = 358, MaxY = 34 },
+	hq_barber = { MinX = -150, MaxX = -100, MinZ = 278, MaxZ = 358, MaxY = 34 },
+	hq_spa = { MinX = -100, MaxX = 0, MinZ = 278, MaxZ = 358, MaxY = 34 },
+	hq_players = { MinX = 0, MaxX = 98, MinZ = 278, MaxZ = 358, MaxY = 34 },
+	-- campus outdoors
 	hall_of_fame = { MinX = 120, MaxX = 270, MinZ = 200, MaxZ = 320, MaxY = 40 },
 	golf_carts = { MinX = 128, MaxX = 270, MinZ = 328, MaxZ = 368, MaxY = 20 },
 	practice_field = { MinX = -250, MaxX = -10, MinZ = 396, MaxZ = 520, MaxY = 24 },
 	practice_gear = { MinX = -250, MaxX = -10, MinZ = 396, MaxZ = 530, MaxY = 24 },
 	indoor_dome = { MinX = 30, MaxX = 270, MinZ = 410, MaxZ = 540, MaxY = 50 },
+	campus_links = { MinX = -262, MaxX = 282, MinZ = 186, MaxZ = 560, MaxY = 45 },
+	-- fan zone (fan zone area)
 	fan_zone = { MinX = 212, MaxX = 276, MinZ = -190, MaxZ = 150, MaxY = 30 },
+	-- stadium (stadium area): bounding boxes of each piece
+	lower_home = { MinX = -200, MaxX = 200, MinZ = 90, MaxZ = 155, MaxY = 36 },
+	lower_visitor = { MinX = -200, MaxX = 200, MinZ = -95, MaxZ = -30, MaxY = 36 },
+	lower_ends = { MinX = -196, MaxX = 196, MinZ = -60, MaxZ = 120, MaxY = 36 },
+	lower_corners = { MinX = -196, MaxX = 196, MinZ = -96, MaxZ = 156, MaxY = 36 },
+	home_lockerroom = { MinX = -80, MaxX = 80, MinZ = 95, MaxZ = 186, MaxY = 29 },
+	visitor_lockerroom = { MinX = -80, MaxX = 80, MinZ = -126, MaxZ = -35, MaxY = 29 },
+	main_concourse = { MinX = -226, MaxX = 226, MinZ = -126, MaxZ = 186, MaxY = 46 },
+	concourse_food = { MinX = -226, MaxX = 226, MinZ = -126, MaxZ = 186, MaxY = 44 },
+	concourse_restrooms = { MinX = -226, MaxX = 226, MinZ = -126, MaxZ = 186, MaxY = 44 },
+	concourse_merch = { MinX = -226, MaxX = 226, MinZ = -126, MaxZ = 186, MaxY = 44 },
+	club_seats = { MinX = -246, MaxX = 246, MinZ = -146, MaxZ = 206, MaxY = 60 },
+	club_lounge = { MinX = -250, MaxX = 250, MinZ = -150, MaxZ = 210, MaxY = 70 },
+	suites = { MinX = -250, MaxX = 250, MinZ = -150, MaxZ = 210, MaxY = 70 },
+	pressbox = { MinX = -250, MaxX = 250, MinZ = -150, MaxZ = 210, MaxY = 72 },
+	broadcast_booth = { MinX = -250, MaxX = 250, MinZ = -150, MaxZ = 210, MaxY = 72 },
+	upper_home = { MinX = -292, MaxX = 292, MinZ = 100, MaxZ = 252, MaxY = 112 },
+	upper_visitor = { MinX = -292, MaxX = 292, MinZ = -192, MaxZ = -40, MaxY = 112 },
+	upper_ends = { MinX = -292, MaxX = 292, MinZ = -192, MaxZ = 252, MaxY = 112 },
+	upper_concourse = { MinX = -292, MaxX = 292, MinZ = -192, MaxZ = 252, MaxY = 100 },
+	gates = { MinX = -330, MaxX = 330, MinZ = -240, MaxZ = 292, MaxY = 60 },
+	escalators = { MinX = -340, MaxX = 340, MinZ = -240, MaxZ = 292, MaxY = 96 },
+	facade = { MinX = -320, MaxX = 320, MinZ = -225, MaxZ = 285, MaxY = 130 },
+	scoreboard = { MinX = -320, MaxX = 320, MinZ = -225, MaxZ = 285, MaxY = 150 },
+	jumbotron = { MinX = -320, MaxX = 320, MinZ = -225, MaxZ = 285, MaxY = 150 },
+	lights = { MinX = -330, MaxX = 330, MinZ = -235, MaxZ = 295, MaxY = 170 },
+	canopy = { MinX = -320, MaxX = 320, MinZ = -225, MaxZ = 285, MaxY = 140 },
 }
-
--- Fixed (always present) plot features
-L.GateZ = L.PlazaFrontZ + 3 -- -197
-L.GateHalfWidth = 13
-L.VaultPosition = Vector3.new(36, 0, -182)
-L.CollectPadPosition = Vector3.new(22, 0, -182)
-L.SpawnPosition = Vector3.new(0, 0, -188) -- where owners respawn (just inside the gate)
 
 Config.Layout = L
 

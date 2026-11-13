@@ -78,16 +78,31 @@ function World.Build(config)
 	local folder = Instance.new("Folder")
 	folder.Name = "World"
 
+	-- Ground: parts can be at most 2048 studs long, so the (big) world is covered in tiles
+	local groundWidth = math.min(2048, streetLength + 400)
+	local halfDepth = L.StreetWidth / 2 + (L.PlotBackZ - L.PlotFrontZ) + 200
 	if not Workspace:FindFirstChild("Ground") then
-		local groundWidth = math.min(2048, streetLength + 400)
 		makePart({
 			Name = "Ground",
-			Size = Vector3.new(groundWidth, 4, math.min(2048, L.StreetWidth + (L.PlotBackZ - L.PlotFrontZ) * 2 + 400)),
+			Size = Vector3.new(groundWidth, 4, math.min(2048, halfDepth * 2)),
 			CFrame = CFrame.new(0, -2, 0),
 			Color = Color3.fromRGB(76, 140, 66),
 			Material = Enum.Material.Grass,
 			Parent = Workspace,
 		})
+	end
+	if halfDepth > 1024 then
+		local extra = halfDepth - 1024 + 8
+		for _, side in ipairs({ -1, 1 }) do
+			makePart({
+				Name = "GroundExtra",
+				Size = Vector3.new(groundWidth, 4, extra),
+				CFrame = CFrame.new(0, -2, side * (1024 - 4 + extra / 2)),
+				Color = Color3.fromRGB(76, 140, 66),
+				Material = Enum.Material.Grass,
+				Parent = folder,
+			})
+		end
 	end
 
 	if not Workspace:FindFirstChildOfClass("SpawnLocation") then

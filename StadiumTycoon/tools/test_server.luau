@@ -941,6 +941,13 @@ local function runTests()
 		end
 	end
 	check(unanchored, "cart parts are unanchored (physics) and welded")
+	local colliders = 0
+	for _, d in ipairs(cart:GetDescendants()) do
+		if d.Name == "WheelCollider" and d.CanCollide and d.Shape == Enum.PartType.Ball then
+			colliders += 1
+		end
+	end
+	check(colliders == 4 and not chassis.CanCollide, "carts roll on 4 ball wheels (so they climb kerbs) instead of a flat box")
 	-- someone sits down: they get network ownership; getting up gives it back to the server
 	local sitter = alice.Character:FindFirstChildOfClass("Humanoid")
 	local okSit = pcall(function()
@@ -1566,10 +1573,10 @@ local function runTests()
 	PlotManager.OnPlayerAdded(alice2)
 	local profile2 = PlayerData.Load(alice2)
 	check(profile2.Cash == saved.Cash, "cash restored")
-	touch(claimTrigger(3), alice2)
-	check(alice2:GetAttribute("PlotIndex") == 3, "claimed plot 3")
-	check(countChildren(plotModel(3).Items) == #Items.List, "all pieces rebuilt on the new plot")
-	check(countChildren(plotModel(3).Buttons) == 0, "no buttons left when everything is owned")
+	touch(claimTrigger(2), alice2)
+	check(alice2:GetAttribute("PlotIndex") == 2, "claimed plot 2")
+	check(countChildren(plotModel(2).Items) == #Items.List, "all pieces rebuilt on the new plot")
+	check(countChildren(plotModel(2).Buttons) == 0, "no buttons left when everything is owned")
 	check(lastNotification(alice2).message:find("Welcome back") ~= nil, "welcome back message")
 
 	section("Session lock")
@@ -1682,8 +1689,8 @@ local function runTests()
 	check(hankProfile ~= nil and hankProfile.CanSave == false, "game still works without saving")
 	check(os.clock() - started < 1, "fails fast instead of retrying a permanent error")
 	check(hank:GetAttribute("SaveStatus") == "off", "HUD told saving is off")
-	touch(claimTrigger(2), hank)
-	check(hank:GetAttribute("PlotIndex") == 2, "can still claim and play")
+	touch(claimTrigger(1), hank)
+	check(hank:GetAttribute("PlotIndex") == 1, "can still claim and play")
 	local hankCash = PlayerData.GetCash(hank)
 	Franchise._onClaimBonus(hank)
 	local afterFirst = PlayerData.GetCash(hank) -- (+ quest rewards: the bonus quest completes too)
@@ -1957,7 +1964,7 @@ local function runTests()
 		if ui then
 			local clientFix = Instance.new("Model")
 			clientFix.Name = "ClientFixtures"
-			clientFix.Parent = plotModel(3)
+			clientFix.Parent = plotModel(2)
 			local cctx = BuildUtil.NewContext(CFrame.new(), clientFix, Config.TeamColors[1], "TEST", Config)
 			local viewerRoot = viewer.Character.HumanoidRootPart
 			viewerRoot.CFrame = CFrame.new(0, 3, 0)
@@ -2026,7 +2033,7 @@ local function runTests()
 			local tvOverlay = ui:FindFirstChild("TVOverlay")
 			check(seatedOk and tvOverlay.Visible, "sitting in a camera seat shows the TV overlay")
 			check(tvOverlay.LiveBadge.Text:find("PRESS BOX CAM", 1, true) ~= nil, "LIVE badge shows the camera name")
-			local plot3Team = plotModel(3):GetAttribute("TeamName") or "HOME"
+			local plot3Team = plotModel(2):GetAttribute("TeamName") or "HOME"
 			check(tvOverlay.ScoreBug.Text:find(plot3Team, 1, true) ~= nil, "score bug shows the team + score: " .. tvOverlay.ScoreBug.Text)
 			check(
 				camera.CameraType == Enum.CameraType.Scriptable and math.abs(camera.FieldOfView - 33) < 0.01,
@@ -2177,7 +2184,7 @@ local function runTests()
 	end)
 
 	section("Client effects")
-	viewer:SetAttribute("PlotIndex", 2)
+	viewer:SetAttribute("PlotIndex", 1)
 	viewer:SetAttribute("NextGoal", "hq_lobby:1")
 	local okFx, fxErr = pcall(runScript, "StarterPlayer/StarterPlayerScripts/TycoonClient/Effects")
 	check(okFx, "Effects script runs: " .. tostring(fxErr))
@@ -2198,7 +2205,7 @@ local function runTests()
 	end
 	check(pulsing, "buy buttons pulse")
 	-- the guide survives its target button being destroyed (e.g. after buying it)
-	local goalPad = plotModel(2).Buttons:FindFirstChild("Buy_hq_lobby:1")
+	local goalPad = plotModel(1).Buttons:FindFirstChild("Buy_hq_lobby:1")
 	if goalPad then
 		goalPad:Destroy()
 	end

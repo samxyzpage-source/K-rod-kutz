@@ -63,7 +63,7 @@ local function spawnWalkers(plot, folder, ctx)
 			local x = rng:NextNumber(-L.WalkwayHalfWidth + 2, L.WalkwayHalfWidth - 2)
 			local facingStadium = CFrame.Angles(0, math.pi, 0) -- local +Z
 			local start = CFrame.new(x, 0, L.GateZ + 3) * facingStadium
-			local finish = CFrame.new(x * 0.6, 0, L.SurfaceMinZ - 2) * facingStadium
+			local finish = CFrame.new(x * 0.6, 0, L.StadiumFrontZ - 2) * facingStadium -- Gate A
 			local jersey = (rng:NextNumber() < 0.6) and plot.Palette.Primary or plot.Palette.Secondary
 			local skin = Crowd.SkinTones[rng:NextInteger(1, #Crowd.SkinTones)]
 			-- build into an unparented holder so the attributes arrive together with the parts

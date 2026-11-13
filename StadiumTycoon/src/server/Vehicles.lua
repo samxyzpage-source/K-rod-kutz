@@ -73,13 +73,15 @@ function Vehicles.BuildCart(at, palette, number)
 	local model = Instance.new("Model")
 	model.Name = "GolfCart" .. tostring(number)
 
-	-- chassis: the only collidable, mass-carrying part; low friction so it glides over the slab
+	-- chassis: carries the mass and the drive constraints. It doesn't collide itself: four
+	-- invisible ball "wheels" do, so the cart rolls up kerbs, path edges and pads instead of
+	-- snagging on them like a flat box would.
 	local chassis = makePart(model, nil, {
 		Name = "Chassis",
 		Size = Vector3.new(5, 1, 9),
 		CFrame = at * CFrame.new(0, 1.2, 0),
 		Color = palette.Primary,
-		CanCollide = true,
+		CanCollide = false,
 		Massless = false,
 	})
 	chassis.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.05, 0, 1, 1)
@@ -128,7 +130,8 @@ function Vehicles.BuildCart(at, palette, number)
 		Material = Enum.Material.Glass,
 		Transparency = 0.55,
 	})
-	-- wheels (visual only)
+	-- wheels: a visible tyre + an invisible collision ball (low friction: the drive constraints
+	-- do the steering, the balls just roll/slide over the ground and climb small steps)
 	for _, x in ipairs({ -2.4, 2.4 }) do
 		for _, z in ipairs({ -3, 3 }) do
 			makePart(model, chassis, {
@@ -138,6 +141,17 @@ function Vehicles.BuildCart(at, palette, number)
 				Color = Color3.fromRGB(25, 25, 28),
 				Shape = Enum.PartType.Cylinder,
 			})
+			local collider = makePart(model, chassis, {
+				Name = "WheelCollider",
+				Size = Vector3.new(1.9, 1.9, 1.9),
+				CFrame = rel(x, -0.15, z),
+				Color = Color3.fromRGB(25, 25, 28),
+				Shape = Enum.PartType.Ball,
+				Transparency = 1,
+				CanCollide = true,
+				Massless = false,
+			})
+			collider.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.05, 0, 1, 1)
 		end
 	end
 
@@ -215,9 +229,9 @@ function Vehicles.BuildCart(at, palette, number)
 end
 
 local function padCFrame(plot, index)
-	local pad = Config.Layout.CartPads[index]
+	local pad = Config.Layout.CartPads[index] -- (campus area coordinates)
 	-- carts face -X (out of the garage, toward the HQ)
-	return plot.Origin * CFrame.new(pad) * CFrame.Angles(0, math.rad(90), 0)
+	return plot.Origin * CFrame.new(Config.Layout.Areas.campus + pad) * CFrame.Angles(0, math.rad(90), 0)
 end
 
 local function stopCart(info)

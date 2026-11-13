@@ -76,7 +76,11 @@ function PlotBase.PlotBase(ctx)
 	local C = ctx.config.Colors
 	local team = ctx.colors
 
-	-- Slab: top surface at y = 0, from the front edge (street) to the back of the campus
+	-- the campus (HQ, campus roads, team safe) is built in the campus area's frame
+	local campus = table.clone(ctx)
+	campus.origin = ctx.origin * CFrame.new(L.Areas.campus)
+
+	-- Slab: top surface at y = 0, covering the whole plot
 	local depth = L.PlotBackZ - L.PlotFrontZ
 	local centerZ = (L.PlotBackZ + L.PlotFrontZ) / 2
 	BuildUtil.Box(ctx, "PlotSlab", Vector3.new(L.PlotWidth, 1, depth), Vector3.new(0, -0.5, centerZ), C.Concrete, Enum.Material.Concrete)
@@ -121,17 +125,57 @@ function PlotBase.PlotBase(ctx)
 		borderProps
 	)
 
-	-- Walkway from the gate to the players' tunnel
-	local walkFront = L.PlazaFrontZ + 2
-	local walkBack = L.SurfaceMinZ
-	BuildUtil.Box(
-		ctx,
-		"Walkway",
-		Vector3.new(L.WalkwayHalfWidth * 2, 0.1, walkBack - walkFront),
-		Vector3.new(0, 0.05, (walkFront + walkBack) / 2),
-		C.Walkway,
-		Enum.Material.Pavement
-	)
+	-- Flat paths and roads (all flush with the slab: 0.1 high, so carts roll straight over them)
+	local function strip(buildCtx, name, rect, color, material)
+		return BuildUtil.Box(
+			buildCtx,
+			name,
+			Vector3.new(rect.MaxX - rect.MinX, 0.1, rect.MaxZ - rect.MinZ),
+			Vector3.new((rect.MinX + rect.MaxX) / 2, 0.05, (rect.MinZ + rect.MaxZ) / 2),
+			color,
+			material or Enum.Material.Pavement
+		)
+	end
+	local function centreLine(buildCtx, name, rect)
+		local alongX = (rect.MaxX - rect.MinX) > (rect.MaxZ - rect.MinZ)
+		local size = alongX and Vector3.new(rect.MaxX - rect.MinX - 8, 0.05, 0.6) or Vector3.new(0.6, 0.05, rect.MaxZ - rect.MinZ - 8)
+		BuildUtil.Box(
+			buildCtx,
+			name,
+			size,
+			Vector3.new((rect.MinX + rect.MaxX) / 2, 0.125, (rect.MinZ + rect.MaxZ) / 2),
+			Color3.fromRGB(255, 214, 10),
+			Enum.Material.SmoothPlastic,
+			{ CanCollide = false }
+		)
+	end
+	-- plaza walkway from the claim gate to the stadium's main gate (Gate A)
+	strip(ctx, "Walkway", {
+		MinX = -L.WalkwayHalfWidth,
+		MaxX = L.WalkwayHalfWidth,
+		MinZ = L.PlazaFrontZ + 2,
+		MaxZ = L.StadiumFrontZ,
+	}, C.Walkway)
+	-- service roads around the stadium (golf carts can drive all the way round)
+	local roadInner = L.StadiumHalfX + 31 -- 326: clear of the facade, ramps and light towers
+	local roads = {
+		Front = { MinX = -L.PlotWidth / 2 + 4, MaxX = L.PlotWidth / 2 - 4, MinZ = L.StadiumFrontZ - 49, MaxZ = L.StadiumFrontZ - 35 },
+		West = { MinX = -roadInner - 14, MaxX = -roadInner, MinZ = L.StadiumFrontZ - 49, MaxZ = L.Areas.campus.Z + L.CampusRoad.MinZ },
+		East = { MinX = roadInner, MaxX = roadInner + 14, MinZ = L.StadiumFrontZ - 49, MaxZ = L.Areas.campus.Z + L.CampusRoad.MinZ },
+	}
+	for name, rect in pairs(roads) do
+		strip(ctx, name .. "ServiceRoad", rect, C.Asphalt, Enum.Material.Asphalt)
+		centreLine(ctx, name .. "ServiceRoadLine", rect)
+	end
+	-- golf-cart road along the west edge of the plot
+	strip(ctx, "CartRoad", L.CartRoad, C.Asphalt, Enum.Material.Asphalt)
+	centreLine(ctx, "CartRoadLine", L.CartRoad)
+	-- Gate D -> campus road
+	strip(ctx, "BackWalk", L.BackWalk, C.Walkway)
+	-- campus roads (campus area)
+	strip(campus, "CampusRoad", L.CampusRoad, C.Walkway)
+	strip(campus, "HQEntranceWalk", L.HQEntranceWalk, C.Walkway)
+	strip(campus, "BackRoad", L.BackRoad, C.Walkway)
 
 	-- Entrance gate ------------------------------------------------------------------------
 	local gateZ = L.GateZ
@@ -207,83 +251,32 @@ function PlotBase.PlotBase(ctx)
 		MaxDistance = 80,
 	})
 
-	-- Practice campus paths ------------------------------------------------------------------
-	local path = L.BackWalk
-	BuildUtil.Box(
-		ctx,
-		"BackWalk",
-		Vector3.new(path.MaxX - path.MinX, 0.1, path.MaxZ - path.MinZ),
-		Vector3.new((path.MinX + path.MaxX) / 2, 0.05, (path.MinZ + path.MaxZ) / 2),
-		C.Walkway,
-		Enum.Material.Pavement
-	)
-	local road = L.CampusRoad
-	BuildUtil.Box(
-		ctx,
-		"CampusRoad",
-		Vector3.new(road.MaxX - road.MinX, 0.1, road.MaxZ - road.MinZ),
-		Vector3.new((road.MinX + road.MaxX) / 2, 0.05, (road.MinZ + road.MaxZ) / 2),
-		C.Walkway,
-		Enum.Material.Pavement
-	)
-	local function paintStrip(name, rect, color)
-		return BuildUtil.Box(
-			ctx,
-			name,
-			Vector3.new(rect.MaxX - rect.MinX, 0.1, rect.MaxZ - rect.MinZ),
-			Vector3.new((rect.MinX + rect.MaxX) / 2, 0.05, (rect.MinZ + rect.MaxZ) / 2),
-			color,
-			Enum.Material.Pavement
-		)
-	end
-	paintStrip("HQEntranceWalk", L.HQEntranceWalk, C.Walkway)
-	paintStrip("BackRoad", L.BackRoad, C.Walkway)
-	-- golf-cart road along the west edge, with a dashed centre line
-	local cartRoad = L.CartRoad
-	BuildUtil.Box(
-		ctx,
-		"CartRoad",
-		Vector3.new(cartRoad.MaxX - cartRoad.MinX, 0.1, cartRoad.MaxZ - cartRoad.MinZ),
-		Vector3.new((cartRoad.MinX + cartRoad.MaxX) / 2, 0.05, (cartRoad.MinZ + cartRoad.MaxZ) / 2),
-		C.Asphalt,
-		Enum.Material.Asphalt
-	)
-	local cartCentreX = (cartRoad.MinX + cartRoad.MaxX) / 2
-	BuildUtil.Box(
-		ctx,
-		"CartRoadLine",
-		Vector3.new(0.6, 0.05, cartRoad.MaxZ - cartRoad.MinZ - 8),
-		Vector3.new(cartCentreX, 0.125, (cartRoad.MinZ + cartRoad.MaxZ) / 2),
-		Color3.fromRGB(255, 214, 10),
-		Enum.Material.SmoothPlastic,
-		{ CanCollide = false }
-	)
-
 	-- The empty Team HQ building that every plot starts with (rooms are built inside it)
 	local shellModule = script.Parent:FindFirstChild("HQShell")
 	local hqRefs = {}
 	if shellModule then
-		hqRefs = require(shellModule).Build(ctx) or {}
+		hqRefs = require(shellModule).Build(campus) or {}
 	end
 
 	-- Team bus stops (plaza <-> campus) -------------------------------------------------------
 	local busPlaza = busStop(ctx, "BusStopPlaza", L.BusStopPlaza, "TEAM BUS > TEAM HQ")
-	local busCampus = busStop(ctx, "BusStopCampus", L.BusStopCampus, "TEAM BUS > STADIUM")
+	local busCampus = busStop(campus, "BusStopCampus", L.BusStopCampus, "TEAM BUS > STADIUM")
 	local facingBack = CFrame.Angles(0, math.pi, 0) -- local +Z, into the plot
 	local arrivePlaza = CFrame.new(L.BusStopPlaza + Vector3.new(0, 4, 11)) * facingBack
 	local arriveCampus = CFrame.new(L.BusStopCampus + Vector3.new(0, 4, 11)) * facingBack
 
-	-- Team safe: a second collect pad at the campus (same vault)
+	-- Team safe: a second collect pad in the HQ lobby (same vault)
 	local safePos = L.HQSafePosition
 	local campusPad = BuildUtil.Box(
-		ctx,
+		campus,
 		"CampusCollectPad",
 		Vector3.new(8, 0.4, 8),
 		Vector3.new(safePos.X, 0.2, safePos.Z),
 		C.CollectPad,
 		Enum.Material.Neon
 	)
-	local safe = BuildUtil.Block(ctx, "TeamSafe", Vector3.new(6, 7, 6), safePos + Vector3.new(9, 0, 0), C.Vault, Enum.Material.DiamondPlate)
+	local safe =
+		BuildUtil.Block(campus, "TeamSafe", Vector3.new(6, 7, 6), safePos + Vector3.new(9, 0, 0), C.Vault, Enum.Material.DiamondPlate)
 	BuildUtil.SurfaceText(safe, Enum.NormalId.Left, "TEAM SAFE", {
 		LabelName = "TeamSafeTitle",
 		TextColor3 = C.Gold,
@@ -314,13 +307,13 @@ function PlotBase.PlotBase(ctx)
 		GateBackLabel = gateBack,
 		VaultLabel = vaultLabel,
 		CollectPad = collectPad,
-		SpawnCFrame = ctx.origin * spawnLocal,
+		SpawnCFrame = campus.origin * spawnLocal,
 		GateCFrame = ctx.origin * gateLocal,
 		HQ = hqRefs,
 		BusStopPlaza = busPlaza,
 		BusStopCampus = busCampus,
 		BusArrivePlaza = ctx.origin * arrivePlaza,
-		BusArriveCampus = ctx.origin * arriveCampus,
+		BusArriveCampus = campus.origin * arriveCampus,
 		CampusCollectPad = campusPad,
 		CampusVaultLabel = campusVaultLabel,
 	}

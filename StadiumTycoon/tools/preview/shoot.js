@@ -33,6 +33,13 @@ const VIEWS = {
   aerial_far: { pos: [-620, 520, -560], target: [0, 0, 200], fov: 45 },
   top: { ortho: true, half: 225, center: [0, 0] },
   top_full: { ortho: true, half: 420, center: [0, 200] },
+  plot: { ortho: true, half: 640, center: [0, 130] }, // V5: the whole plot from above
+  v5_aerial: { pos: [-700, 520, -760], target: [0, 0, 60], fov: 50 }, // V5: whole stadium from the front-left
+  v5_back: { pos: [620, 420, 900], target: [-40, 0, 300], fov: 50 }, // V5: campus + stadium from behind
+  v5_bowl: { pos: [0, 140, -330], target: [0, 20, 60], fov: 70 }, // V5: into the bowl over Gate A
+  v5_field: { pos: [0, 8, -20], target: [0, 40, 180], fov: 90 }, // V5: from the field toward the home stands
+  v5_hq: { pos: [-100, 70, 200], target: [-100, 10, 400], fov: 70 }, // V5: the HQ from the campus road
+
   plaza: { pos: [0, 10, -232], target: [0, 14, -100], fov: 70 },
   field: { pos: [0, 7, -30], target: [0, 16, 110], fov: 85 },
   endzone: { pos: [-128, 9, 30], target: [180, 22, 30], fov: 80 },
