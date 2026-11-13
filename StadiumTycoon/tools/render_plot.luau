@@ -464,7 +464,11 @@ end
 local B = L.Bowl
 -- plaza walkway: claim gate -> Gate A (through the gate opening into the stadium)
 corridor("front walkway", { MinX = -L.WalkwayHalfWidth, MaxX = L.WalkwayHalfWidth, MinZ = L.GateZ + 4, MaxZ = L.StadiumFrontZ + 12 }, 1)
-corridor("back walk (Gate D -> campus)", { MinX = L.BackWalk.MinX, MaxX = L.BackWalk.MaxX, MinZ = L.BackWalk.MinZ - 12, MaxZ = L.BackWalk.MaxZ }, 1)
+corridor(
+	"back walk (Gate D -> campus)",
+	{ MinX = L.BackWalk.MinX, MaxX = L.BackWalk.MaxX, MinZ = L.BackWalk.MinZ - 12, MaxZ = L.BackWalk.MaxZ },
+	1
+)
 corridor("cart road", L.CartRoad, 1)
 -- players' tunnels from the field into the event level (under the lower bowl)
 local tunnel = B.TunnelHalfWidth
@@ -482,7 +486,14 @@ lanes("main concourse lane", B.MainConcourse.Inner + 10, B.MainConcourse.Inner +
 lanes("club ring lane", B.ClubRing.Outer - 12, B.ClubRing.Outer - 4, B.ClubRing.Floor)
 lanes("upper concourse lane", B.UpperConcourse.Inner + 12, B.UpperConcourse.Inner + 22, B.UpperConcourse.Floor)
 -- campus (campus-area rects)
-corridor("campus road", { MinX = L.CampusRoad.MinX + 1, MaxX = L.CampusRoad.MaxX - 1, MinZ = L.CampusRoad.MinZ, MaxZ = L.CampusRoad.MaxZ }, 1, 0, "campus", { PlotBase = true })
+corridor(
+	"campus road",
+	{ MinX = L.CampusRoad.MinX + 1, MaxX = L.CampusRoad.MaxX - 1, MinZ = L.CampusRoad.MinZ, MaxZ = L.CampusRoad.MaxZ },
+	1,
+	0,
+	"campus",
+	{ PlotBase = true }
+)
 corridor("HQ entrance", L.HQEntranceWalk, 1, 0, "campus")
 corridor("HQ corridor", L.HQCorridor, 1, 0, "campus")
 corridor("HQ upper corridor", L.HQCorridor, 1, L.HQ.UpperFloorY, "campus")

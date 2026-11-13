@@ -9,6 +9,9 @@ local Workspace = game:GetService("Workspace")
 
 local World = {}
 
+World.PlotY = 0.2 -- height of every plot's slab top (= the street's top)
+local PLOT_Y = World.PlotY
+
 -- Plot origins: plots sit in two rows facing a central street that runs along X.
 -- Odd plots are on the +Z side, even plots on the -Z side; every plot's front (-Z local) faces the street.
 function World.GetPlotOrigins(config)
@@ -25,10 +28,12 @@ function World.GetPlotOrigins(config)
 		local column = math.floor((index - 1) / 2)
 		local x = (column - (perSide - 1) / 2) * spacing
 		local origin
+		-- y = 0.2: the plot's slab top is level with the street (0.2) and only 0.2 above the grass,
+		-- so golf carts (and players) roll on and off the plot without a ledge
 		if onSouthSide then
-			origin = CFrame.new(x, 1, -zOffset) * CFrame.Angles(0, math.pi, 0)
+			origin = CFrame.new(x, PLOT_Y, -zOffset) * CFrame.Angles(0, math.pi, 0)
 		else
-			origin = CFrame.new(x, 1, zOffset)
+			origin = CFrame.new(x, PLOT_Y, zOffset)
 		end
 		origins[index] = origin
 	end

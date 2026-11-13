@@ -97,8 +97,16 @@ local LAST_NAMES = {
 	"Nakamura",
 }
 
+-- "Every HQ room" = every hq_* piece except the lobby (what the RoomsDone stat counts)
+local HQ_ROOMS = 0
+for _, p in ipairs(Items.Pieces) do
+	if p.Id:sub(1, 3) == "hq_" and p.Id ~= "hq_lobby" then
+		HQ_ROOMS += 1
+	end
+end
+
 -- Quest list: done in any order, the first few unfinished ones are shown in the HUD.
--- Stat keys: see Franchise.GetStat.
+-- Stat keys: see Franchise.GetStat ("Piece:<id>" must name a piece in Items.lua).
 local QUESTS = {
 	{ Id = "reception", Text = "Build the reception desk", Stat = "Built", Goal = 1, Reward = 100 },
 	{ Id = "team", Text = "Pick your team colours and name", Stat = "TeamChosen", Goal = 1, Reward = 250 },
@@ -118,15 +126,15 @@ local QUESTS = {
 	{ Id = "win1", Text = "Win a game day", Stat = "Wins", Goal = 1, Reward = 40000 },
 	{ Id = "presser", Text = "Hold a press conference", Stat = "PressConferences", Goal = 1, Reward = 50000 },
 	{ Id = "staff", Text = "Hire the whole coaching staff", Stat = "Piece:staff_coaches", Goal = 1, Reward = 60000 },
-	{ Id = "lowerbowl", Text = "Close the lower bowl (Corner Seats)", Stat = "Piece:corner_seats", Goal = 1, Reward = 150000 },
+	{ Id = "lowerbowl", Text = "Close the lower bowl (Corners)", Stat = "Piece:lower_corners", Goal = 1, Reward = 150000 },
 	{ Id = "arcade20", Text = "Catch 20 footballs in the lounge arcade", Stat = "ArcadeBest", Goal = 20, Reward = 120000 },
 	{ Id = "kick50", Text = "Kick a 55-yard field goal", Stat = "LongestFG", Goal = 55, Reward = 200000 },
-	{ Id = "rooms12", Text = "Finish every HQ room", Stat = "RoomsDone", Goal = 11, Reward = 300000 },
+	{ Id = "rooms12", Text = "Finish every HQ room", Stat = "RoomsDone", Goal = HQ_ROOMS, Reward = 300000 },
 	{ Id = "win5", Text = "Win 5 game days", Stat = "Wins", Goal = 5, Reward = 400000 },
 	{ Id = "playoffs", Text = "Make the playoffs", Stat = "Playoffs", Goal = 1, Reward = 500000 },
 	{ Id = "rating80", Text = "Reach a team rating of 80", Stat = "TeamRating", Goal = 80, Reward = 600000 },
 	{ Id = "hall", Text = "Open the Hall of Fame", Stat = "Piece:hall_of_fame", Goal = 1, Reward = 900000 },
-	{ Id = "upperring", Text = "Close the upper ring", Stat = "Piece:upper_bowl_ends", Goal = 1, Reward = 1500000 },
+	{ Id = "upperring", Text = "Close the upper ring", Stat = "Piece:upper_ends", Goal = 1, Reward = 1500000 },
 	{ Id = "win15", Text = "Win 15 game days", Stat = "Wins", Goal = 15, Reward = 2000000 },
 	{ Id = "title", Text = "Win a championship", Stat = "Championships", Goal = 1, Reward = 3000000 },
 	{ Id = "champion", Text = "Build the Championship Trophy", Stat = "Piece:trophy", Goal = 1, Reward = 5000000 },

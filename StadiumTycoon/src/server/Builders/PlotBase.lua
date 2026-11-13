@@ -149,13 +149,6 @@ function PlotBase.PlotBase(ctx)
 			{ CanCollide = false }
 		)
 	end
-	-- plaza walkway from the claim gate to the stadium's main gate (Gate A)
-	strip(ctx, "Walkway", {
-		MinX = -L.WalkwayHalfWidth,
-		MaxX = L.WalkwayHalfWidth,
-		MinZ = L.PlazaFrontZ + 2,
-		MaxZ = L.StadiumFrontZ,
-	}, C.Walkway)
 	-- service roads around the stadium (golf carts can drive all the way round)
 	local roadInner = L.StadiumHalfX + 31 -- 326: clear of the facade, ramps and light towers
 	local roads = {
@@ -163,6 +156,12 @@ function PlotBase.PlotBase(ctx)
 		West = { MinX = -roadInner - 14, MaxX = -roadInner, MinZ = L.StadiumFrontZ - 49, MaxZ = L.Areas.campus.Z + L.CampusRoad.MinZ },
 		East = { MinX = roadInner, MaxX = roadInner + 14, MinZ = L.StadiumFrontZ - 49, MaxZ = L.Areas.campus.Z + L.CampusRoad.MinZ },
 	}
+	-- (flush strips of different colours must not overlap: their equal top faces would flicker)
+	-- plaza walkway from the claim gate to the stadium's main gate (Gate A), on both sides of the
+	-- front road it crosses
+	local walkX = L.WalkwayHalfWidth
+	strip(ctx, "Walkway", { MinX = -walkX, MaxX = walkX, MinZ = L.PlazaFrontZ + 2, MaxZ = roads.Front.MinZ }, C.Walkway)
+	strip(ctx, "Walkway", { MinX = -walkX, MaxX = walkX, MinZ = roads.Front.MaxZ, MaxZ = L.StadiumFrontZ }, C.Walkway)
 	for name, rect in pairs(roads) do
 		strip(ctx, name .. "ServiceRoad", rect, C.Asphalt, Enum.Material.Asphalt)
 		centreLine(ctx, name .. "ServiceRoadLine", rect)
@@ -172,10 +171,15 @@ function PlotBase.PlotBase(ctx)
 	centreLine(ctx, "CartRoadLine", L.CartRoad)
 	-- Gate D -> campus road
 	strip(ctx, "BackWalk", L.BackWalk, C.Walkway)
-	-- campus roads (campus area)
-	strip(campus, "CampusRoad", L.CampusRoad, C.Walkway)
+	-- campus roads (campus area); the two cross roads start at the cart road's east edge
+	local function eastOfCartRoad(rect)
+		local cut = table.clone(rect)
+		cut.MinX = math.max(rect.MinX, L.CartRoad.MaxX - L.Areas.campus.X)
+		return cut
+	end
+	strip(campus, "CampusRoad", eastOfCartRoad(L.CampusRoad), C.Walkway)
 	strip(campus, "HQEntranceWalk", L.HQEntranceWalk, C.Walkway)
-	strip(campus, "BackRoad", L.BackRoad, C.Walkway)
+	strip(campus, "BackRoad", eastOfCartRoad(L.BackRoad), C.Walkway)
 
 	-- Entrance gate ------------------------------------------------------------------------
 	local gateZ = L.GateZ

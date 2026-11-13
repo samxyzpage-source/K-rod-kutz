@@ -42,7 +42,7 @@ Config.GameDay = {
 	IntervalSeconds = 240,
 	DurationSeconds = 60,
 	IncomeMultiplier = 2,
-	SeatedFans = 260, -- max seated fans per stadium (spread over the stands you own)
+	SeatedFans = 1200, -- max seated fans per stadium (sections about half full, best seats first: see Crowd.lua)
 	WalkingFans = 8, -- fans that walk in through the gate at kick-off
 }
 
@@ -318,7 +318,7 @@ L.GateHalfWidth = 13
 L.WalkwayHalfWidth = 12 -- the walkway from the claim gate to Gate A
 L.VaultPosition = Vector3.new(36, 0, -442)
 L.CollectPadPosition = Vector3.new(22, 0, -442)
-L.SpawnPosition = Vector3.new(0, 0, -448) -- where owners respawn (just inside the gate)
+L.SpawnPosition = Vector3.new(0, 0, -448) -- just inside the claim gate (refs.GateCFrame); owners respawn in the HQ lobby (L.HQSpawn)
 L.BusStopPlaza = Vector3.new(-26, 0, -375)
 L.BackWalk = { MinX = -12, MaxX = 12, MinZ = L.StadiumBackZ, MaxZ = 292 } -- Gate D -> campus road
 L.CartRoad = { MinX = -516, MaxX = -496, MinZ = -456, MaxZ = 716 } -- along the west edge
@@ -327,7 +327,7 @@ L.CartRoad = { MinX = -516, MaxX = -496, MinZ = -456, MaxZ = 716 } -- along the 
 L.CampusRoad = { MinX = -516, MaxX = 516, MinZ = 172, MaxZ = 186 }
 L.HQEntranceWalk = { MinX = -112, MaxX = -88, MinZ = 186, MaxZ = 200 } -- campus road -> HQ front doors
 L.BackRoad = { MinX = -516, MaxX = 516, MinZ = 372, MaxZ = 386 } -- behind the HQ, in front of the fields
-L.BusStopCampus = Vector3.new(-150, 0, 179)
+L.BusStopCampus = Vector3.new(-150, 0, 163) -- just south of the campus road: the shelter stays off the road
 
 -- The Team HQ: a two-storey building that starts EMPTY. Each room is a piece you build inside it.
 -- The shell (outer walls, roofs, both floors, stairs + elevator, room outlines) is always there.

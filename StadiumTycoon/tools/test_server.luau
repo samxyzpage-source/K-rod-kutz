@@ -679,6 +679,14 @@ local function runTests()
 		check(workspace:FindFirstChild("World") ~= nil, "World.Build creates the World folder")
 		check(workspace:FindFirstChild("Ground") ~= nil, "World.Build creates Ground when missing")
 		check(workspace:FindFirstChildOfClass("SpawnLocation") ~= nil, "World.Build creates a SpawnLocation when missing")
+		local street = workspace.World:FindFirstChild("Street")
+		local streetTop = street and street.CFrame.Position.Y + street.Size.Y / 2
+		local ground = workspace:FindFirstChild("Ground")
+		local groundTop = ground and ground.CFrame.Position.Y + ground.Size.Y / 2
+		check(
+			streetTop ~= nil and math.abs(origins[1].Position.Y - streetTop) < 0.01 and groundTop <= origins[1].Position.Y,
+			"plots sit level with the street, not on a ledge (golf carts roll on and off)"
+		)
 		check(World.IsNight(Config, 20) and World.IsNight(Config, 3) and not World.IsNight(Config, 12), "IsNight boundaries")
 	end
 
@@ -755,6 +763,34 @@ local function runTests()
 			"built rows follow the owned steps (upper corners come with step 2)"
 		)
 	end
+	do
+		-- Every stadium buy button stands on the field. Once the lower bowl is closed, the only ways
+		-- onto it from outside are the players' tunnels (each locker room's tunnel walls close one)
+		-- until the escalators reach the main concourse: one locker room must wait for them.
+		local function needs(pieceId, otherId, seen)
+			seen = seen or {}
+			for _, requiredId in ipairs(Items.PieceById[pieceId].Requires) do
+				if requiredId == otherId then
+					return true
+				end
+				if not seen[requiredId] then
+					seen[requiredId] = true
+					if needs(requiredId, otherId, seen) then
+						return true
+					end
+				end
+			end
+			return false
+		end
+		check(
+			needs("main_concourse", "lower_corners") and needs("escalators", "lower_corners"),
+			"the escalators come after the bowl closes"
+		)
+		check(
+			needs("visitor_lockerroom", "escalators") or needs("home_lockerroom", "escalators"),
+			"one players' tunnel stays open until the escalators are built (the field is never shut off)"
+		)
+	end
 
 	section("Plot setup")
 	PlotManager.Init(tycoons, notifyRemote)
@@ -789,6 +825,30 @@ local function runTests()
 	check(countChildren(tycoons) == Config.PlotCount, "one model per plot")
 	for i = 1, Config.PlotCount do
 		check(claimTrigger(i) ~= nil and countChildren(plotModel(i).Buttons) == 0, ("plot %d has a claim trigger and no buttons"):format(i))
+	end
+	do
+		-- the flush walkways and roads (0.1 tall) must not overlap where their colours differ: equal
+		-- top faces flicker (z-fighting)
+		local origin = PlotManager.GetPlots()[1].Origin
+		local strips = {}
+		for _, part in ipairs(plotModel(1).Base:GetDescendants()) do
+			if part:IsA("BasePart") and part.Size.Y <= 0.1001 and (part.Name:find("Road$") or part.Name:find("Walk")) then
+				local centre = origin:PointToObjectSpace(part.CFrame.Position)
+				table.insert(strips, { part = part, centre = centre })
+			end
+		end
+		local clash = nil
+		for i = 1, #strips do
+			for j = i + 1, #strips do
+				local a, b = strips[i], strips[j]
+				local dx = math.abs(a.centre.X - b.centre.X) - (a.part.Size.X + b.part.Size.X) / 2
+				local dz = math.abs(a.centre.Z - b.centre.Z) - (a.part.Size.Z + b.part.Size.Z) / 2
+				if dx < -0.01 and dz < -0.01 and a.part.Color ~= b.part.Color then
+					clash = a.part.Name .. " / " .. b.part.Name
+				end
+			end
+		end
+		check(#strips >= 9 and clash == nil, ("walkways and roads don't overlap (%d strips): %s"):format(#strips, tostring(clash)))
 	end
 
 	section("Join + load (new player)")
@@ -1047,6 +1107,23 @@ local function runTests()
 	Vehicles.Tidy(os.clock())
 	local respawned = Vehicles.GetCarts(PlotManager.GetPlot(alice))[1]
 	check(respawned ~= nil and respawned.model ~= cart and respawned.model.Parent ~= nil, "a destroyed cart is rebuilt")
+	do
+		-- the garage is a campus piece: its carts and its stadium TV camera must allow for the area offset
+		local L = Config.Layout
+		local origin = PlotManager.GetPlot(alice).Origin
+		local pad = origin:PointToObjectSpace(respawned.home.Position)
+		local expected = L.Areas.campus + L.CartPads[1]
+		check((pad - expected).Magnitude < 0.01, ("cart #1 parks on its pad in front of the garage (%s)"):format(tostring(pad)))
+		local bench = plotModel(1).Items["golf_carts:1"]:FindFirstChild("LoungeBench", true)
+		local camera = bench and bench:GetAttribute("CameraCFrame")
+		local miss = math.huge
+		if camera then
+			local eye = origin:ToObjectSpace(camera)
+			local toField = Vector3.new(0, 0, L.FieldCenterZ) - eye.Position
+			miss = (toField - eye.LookVector * toField:Dot(eye.LookVector)).Magnitude
+		end
+		check(miss < 1, ("the garage's stadium TV looks at the stadium field (misses by %.1f)"):format(miss))
+	end
 
 	section("Draft + roster")
 	do
@@ -1242,6 +1319,30 @@ local function runTests()
 			("most quests done by a finished franchise (%d)"):format(alice:GetAttribute("QuestsDone") or 0)
 		)
 		check(aliceProfile.Franchise.Quests.champion == true, "the trophy quest completes")
+		do
+			local unknownPiece, roomsGoal, hqRooms = nil, nil, 0
+			for _, quest in ipairs(Franchise.GetQuests()) do
+				local pieceId = quest.Stat:match("^Piece:(.+)$")
+				if pieceId and Items.PieceById[pieceId] == nil then
+					unknownPiece = pieceId
+				end
+				if quest.Id == "rooms12" then
+					roomsGoal = quest.Goal
+				end
+			end
+			for _, p in ipairs(Items.Pieces) do
+				if p.Id:sub(1, 3) == "hq_" and p.Id ~= "hq_lobby" then
+					hqRooms += 1
+				end
+			end
+			check(unknownPiece == nil, "every piece quest names a piece in Items.lua: " .. tostring(unknownPiece))
+			check(roomsGoal == hqRooms, ("'Finish every HQ room' counts every HQ room (%s of %d)"):format(tostring(roomsGoal), hqRooms))
+			local quests = aliceProfile.Franchise.Quests
+			check(
+				quests.lowerbowl == true and quests.upperring == true and quests.rooms12 == true,
+				"the lower bowl, upper ring and every-HQ-room quests complete"
+			)
+		end
 		local bobProfile = PlayerData.GetProfile(bob)
 		bobProfile.Franchise = { Season = { Number = 3, Week = 99, Wins = 4, Losses = -1, Stage = "bogus" } }
 		Franchise.GetStat(bob, "Wins")
@@ -1600,6 +1701,20 @@ local function runTests()
 	task.wait(2.1)
 	touch(refs1.BusStopCampus, alice)
 	check((aliceRoot.CFrame.Position - refs1.BusArrivePlaza.Position).Magnitude < 0.01, "the campus bus stop rides back to the plaza")
+	do
+		-- driving a golf cart over a bus pad doesn't take the bus (the cart would be dragged along)
+		local walker = alice.Character
+		local rider = makeCharacter("AliceInACart")
+		rider:FindFirstChildOfClass("Humanoid").SeatPart = Instance.new("VehicleSeat")
+		alice.Character = rider
+		local riderRoot = rider.HumanoidRootPart
+		riderRoot.CFrame = CFrame.new(0, 3, 0)
+		task.wait(2.1)
+		touch(refs1.BusStopPlaza, alice)
+		check((riderRoot.CFrame.Position - Vector3.new(0, 3, 0)).Magnitude < 0.01, "no bus ride while driving a golf cart")
+		alice.Character = walker
+		rider:Destroy()
+	end
 	plot1.Vault += 50
 	local cashBeforeSafe = PlayerData.GetCash(alice)
 	touch(refs1.CampusCollectPad, alice)
@@ -1799,6 +1914,35 @@ local function runTests()
 		end
 	end
 	check(seated > 0 and seated <= Config.GameDay.SeatedFans, ("fans fill the stands (%d seated)"):format(seated))
+	do
+		-- fans sit together in sections (not one here and one there), the lower bowl first
+		local bodies = {}
+		for _, child in ipairs(crowd and crowd:GetChildren() or {}) do
+			local body = child.Name:sub(1, 3) == "Fan" and child:FindFirstChild("Body")
+			if body then
+				table.insert(bodies, body.CFrame.Position)
+			end
+		end
+		local withNeighbour, lowerBowl = 0, 0
+		local floorY = fullPlot.Origin.Position.Y
+		for i, a in ipairs(bodies) do
+			for j, b in ipairs(bodies) do
+				if i ~= j and (a - b).Magnitude < 2.7 then
+					withNeighbour += 1
+					break
+				end
+			end
+			if a.Y - floorY < 32 then
+				lowerBowl += 1
+			end
+		end
+		local n = math.max(#bodies, 1)
+		check(
+			#bodies >= math.min(Config.GameDay.SeatedFans, 600) and withNeighbour / n > 0.5, -- (spread evenly, about 15% would be)
+			("fans sit together in sections (%d of %d next to another fan)"):format(withNeighbour, #bodies)
+		)
+		check(lowerBowl / n > 0.5, ("the lower bowl fills first (%d of %d fans)"):format(lowerBowl, #bodies))
+	end
 	task.wait(0.1)
 	local walkerTagged = CollectionServiceMock:GetTagged("TycoonWalker")[1]
 	local walkerRootPart = walkerTagged and walkerTagged:FindFirstChild("Root")

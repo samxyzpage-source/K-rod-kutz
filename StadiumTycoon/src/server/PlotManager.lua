@@ -737,9 +737,14 @@ local function onBusTouched(hit, destination)
 		return
 	end
 	local character = player.Character
-	if character then
-		character:PivotTo(destination)
+	if not character then
+		return
 	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid and humanoid.SeatPart then
+		return -- driving a golf cart (or sitting) over the pad: no bus ride
+	end
+	character:PivotTo(destination)
 end
 
 ---------------------------------------------------------------------------------------------

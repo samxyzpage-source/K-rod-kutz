@@ -182,12 +182,12 @@ Goal Posts -> Ticket Booth -> Midfield Logo -> Concession Stand -> Food Vendors 
 Player Lounge (HQ) -> Owner's Suite (HQ upstairs)
 
 **Lower bowl:** Home Side -> Home Locker Room -> Interview Room (HQ) -> Visitor Side ->
-Visitor Locker Room -> Media Studio (HQ) -> Parking Lot -> End Zones -> Nutrition Kitchen (HQ) ->
-Corners (the lower bowl closes)
+Media Studio (HQ) -> Parking Lot -> End Zones -> Nutrition Kitchen (HQ) -> Corners (the lower bowl
+closes; until the escalators are built the visitors' players' tunnel is the way onto the field)
 
 **Concourse and gates:** Main Concourse -> Stadium Gates -> Concourse Food Court -> Team Store ->
 Tailgate & Fan Zone -> Scouting War Room (HQ) -> Concourse Restrooms -> Escalators & Ramps ->
-End Zone Video Board -> Stadium Lights -> Barbershop (HQ)
+Visitor Locker Room -> End Zone Video Board -> Stadium Lights -> Barbershop (HQ)
 
 **Club level and upper deck:** Club Level Seats -> Club Lounge -> Pro Shop & Merch ->
 Indoor Practice Dome -> Analytics Lab (HQ) -> Luxury Suites -> Upper Deck: Home Side ->
@@ -292,7 +292,7 @@ These tools are optional. You only need them to edit the code outside Studio.
     every interaction, `--noroof` hides roofs and `--cam=x,y,z:tx,ty,tz` renders any close-up.
     The README pictures use the views `v5_aerial`, `v5_bowl`, `v5_concourse`, `v5_pressbox`,
     `v5_club`, `v5_lockers`, `v5_atrium`, `v5_back` and `v5_hq` (and `v5_field` with a crowd).
-  * `lune run tools/test_server.luau` runs about 370 checks of the server logic and the client
+  * `lune run tools/test_server.luau` runs about 390 checks of the server logic and the client
     scripts against a fake Roblox engine. It covers:
     * claiming, step-by-step buying, the vault and auto-collect
     * golf carts and the drive controller

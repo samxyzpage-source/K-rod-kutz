@@ -360,7 +360,10 @@ local PIECES = {
 		{ "Tunnel & Walls", "Lockers", "Bench & Signs" },
 		68000,
 		145,
-		{ "lower_visitor" },
+		-- (also waits for the escalators: its tunnel walls close the visitor players' tunnel, which
+		-- is the only way from the event level onto the field once the lower bowl is closed and
+		-- the home locker room closes the home tunnel - until the escalators reach the concourse)
+		{ "lower_visitor", "escalators" },
 		Vector3.new(-72, 0, SIDELINE_Z)
 	),
 	piece(

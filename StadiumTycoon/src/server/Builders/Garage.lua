@@ -52,8 +52,10 @@ local SIGN_X = 145.7 -- bay sign posts, just behind the carts
 local TRAY_X = 146.5 -- overhead charging cable tray
 local LIFT = { X = 170, Z = 339.4 } -- the cart lift in the workshop (4-stud aisles on every side)
 local LOUNGE_Z = 360 -- lounge bench + TV
--- the lounge TV camera: high over the bowl's back corner, clear of the end-zone canopy roof
-local STADIUM_CAM = { From = Vector3.new(150, 70, 110), To = Vector3.new(0, 0, 30) }
+-- the lounge TV camera: high over the bowl's back corner, looking at the field centre. The garage is
+-- built in CAMPUS-area coordinates (Config.Layout.Areas.campus = +120 z), so the stadium's field
+-- centre (plot 0, 0, 30) is at campus (0, 0, -90) and the eye (plot 150, 70, 110) at campus z -10.
+local STADIUM_CAM = { From = Vector3.new(150, 70, -10), To = Vector3.new(0, 0, -90) }
 
 local PAINT = { CanCollide = false, CastShadow = false }
 local UP = Vector3.new(0, 1, 0)

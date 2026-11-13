@@ -56,8 +56,27 @@ local function seatedFan(ctx, seatCFrame, jersey, skin, number)
 	return model
 end
 
+-- Which stands fill first: the lower bowl's sidelines (what the field, the press box and the TV
+-- cameras look at), then the rest of the lower bowl, the club seats and the upper deck. Sections
+-- nearer the 50-yard line fill before the ones near the corners.
+local TIER_WEIGHT = { lower = 3, club = 2, upper = 1.4 }
+local KIND_WEIGHT = { side = 1, ["end"] = 0.7, corner = 0.55 }
+local SECTION_FILL = 0.5 -- share of a chosen section's seats that get a fan
+local SPRINKLE = 0.1 -- share of the fans scattered over all the other seats
+
+-- Random order of a list, in place (Fisher-Yates).
+local function shuffle(list, rng)
+	for index = #list, 2, -1 do
+		local pick = rng:NextInteger(1, index)
+		list[index], list[pick] = list[pick], list[index]
+	end
+end
+
 --[[
 	Fills the owner's stands with up to `maxFans` seated fans.
+	Fans sit together in SECTIONS (a tier's rows between two aisles of one segment), like a real
+	crowd, instead of one here and one there: the best sections fill up first (see TIER_WEIGHT)
+	and a few fans are scattered over the rest of the seats.
 	ctx      BuildUtil context (ctx.parent = folder for the fans)
 	owned    set of owned item ids (a tier/segment has seats once its owning step is built, see
 	         Bowl.Pieces)
@@ -66,23 +85,67 @@ end
 ]]
 function Crowd.SeatedFans(ctx, owned, maxFans, rng)
 	local L = ctx.config.Layout
+	local B = L.Bowl
 	local fans = {}
 	if maxFans <= 0 then
 		return fans
 	end
-	-- every free seat of every built row, then a random selection of them
-	local seats = {}
+
+	-- every free seat of every built row, grouped into sections
+	local sections, byKey = {}, {}
+	local total = 0
 	for _, entry in ipairs(Bowl.BuiltRows(L, owned)) do
-		for _, spot in ipairs(Bowl.SeatSpots(L, entry.row, entry.segment, SEAT_SPACING)) do
-			table.insert(seats, { cframe = spot, visitor = entry.visitor })
+		local row = entry.row
+		local segment = Bowl.Segment(L, entry.segment, row.inner, row.outer)
+		for _, spot in ipairs(Bowl.SeatSpots(L, row, entry.segment, SEAT_SPACING)) do
+			local along = segment.cframe:PointToObjectSpace(spot.Position).X
+			local index -- 0 = the middle section of the segment
+			if segment.kind == "corner" then
+				index = along < 0 and -1 or 0 -- one aisle in the middle of a corner
+			else
+				index = math.floor((along + B.AisleFirst) / B.AisleSpacing)
+			end
+			local key = row.tier .. "/" .. entry.segment .. "/" .. index
+			local section = byKey[key]
+			if not section then
+				local distance = segment.kind == "corner" and 0 or math.abs(index)
+				local weight = TIER_WEIGHT[row.tier] * KIND_WEIGHT[segment.kind] / (1 + 0.35 * distance)
+				section = { seats = {}, priority = weight * (0.75 + 0.5 * rng:NextNumber()) }
+				byKey[key] = section
+				table.insert(sections, section)
+			end
+			table.insert(section.seats, { cframe = spot, visitor = entry.visitor })
+			total += 1
 		end
 	end
-	local count = math.min(maxFans, #seats)
-	for index = 1, count do
-		-- partial Fisher-Yates shuffle: pick a random remaining seat
-		local pick = rng:NextInteger(index, #seats)
-		seats[index], seats[pick] = seats[pick], seats[index]
-		local seat = seats[index]
+	if total == 0 then
+		return fans
+	end
+	table.sort(sections, function(a, b)
+		return a.priority > b.priority
+	end)
+
+	-- whole sections first (best first), then a sprinkle over every seat that is still free
+	local count = math.min(maxFans, total)
+	local inSections = math.min(count, math.floor(count * (1 - SPRINKLE) + 0.5))
+	local chosen, rest = {}, {}
+	for _, section in ipairs(sections) do
+		shuffle(section.seats, rng)
+		local take = math.min(math.ceil(#section.seats * SECTION_FILL), inSections - #chosen)
+		for index, seat in ipairs(section.seats) do
+			if index <= take then
+				table.insert(chosen, seat)
+			else
+				table.insert(rest, seat)
+			end
+		end
+	end
+	shuffle(rest, rng)
+	for index = 1, math.min(count - #chosen, #rest) do
+		table.insert(chosen, rest[index])
+	end
+
+	for index, seat in ipairs(chosen) do
 		local jersey
 		if seat.visitor and rng:NextNumber() < 0.5 then
 			jersey = VISITOR_COLOR
