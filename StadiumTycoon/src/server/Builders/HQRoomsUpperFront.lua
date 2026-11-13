@@ -4,8 +4,9 @@
 	the empty two-storey building is Builders/HQShell.lua). The upper floor's top is at y = 17
 	(Config.Layout.HQ.UpperFloorY); the upper corridor X[-248, 98] Z[264, 278] stays clear. Every
 	room fills its zone (Config.Layout.Zones) between the shell's front wall (inner face z = 201.45)
-	and the corridor, with walls from y 17 to 29, a ceiling with lights and a working door
-	(BuildUtil.Door, swinging INTO the room) right beside its buy button in the corridor.
+	and the corridor, with walls from y 17 to 29 (the corridor wall and the atrium-facing walls rise
+	to 31, the same line as the back rooms across the corridor), a ceiling with lights and a working
+	door (BuildUtil.Door, swinging INTO the room) right beside its buy button in the corridor.
 
 	  hq_atrium     the lobby's two-storey atrium X[-150, -50] (the lobby below is open to the roof)
 	                  1 GRAND STAIRCASE along the atrium's east side: 22 marble steps (0.76 high,
@@ -21,8 +22,8 @@
 	                    shell's glass railing guards the corridor edge between the west balcony and
 	                    the east mezzanine: X[-126.2, -74.4].)
 	                  3 RING OF HONOR: five tall team banners (retired numbers of fictional
-	                    legends + the team name) on a rigging beam across the atrium, a plaque on
-	                    the mezzanine (look)
+	                    legends + the team name) on a steel rigging beam spanning the atrium wall
+	                    to wall, a plaque on the mezzanine (look)
 	                  4 VIDEO WALL: a huge live "summary" LED wall on the atrium's west wall with a
 	                    live game-day ticker and speaker stacks (look), and a VIDEO WALL CAM bench on
 	                    the mezzanine
@@ -30,15 +31,16 @@
 	                  1 cream walls, walnut floor, a walnut partition between the office and the
 	                    lounge, a glass window wall onto the atrium's west balcony with a sliding
 	                    glass balcony door, grand double doors from the corridor with a live OWNER
-	                    plate
+	                    plate, a corridor window into the lounge
 	                  2 the owner's desk + chair (an OWNER CAM seat), live "owner" nameplate, guest
 	                    chairs, live record + season screens, bookcase (look), globe, game ball
 	                  3 the trophy wall: lit display cabinet + glass shelves full of trophies, game
 	                    balls and helmets, a live CHAMPIONSHIPS header (look: titles), two framed
 	                    jerseys
-	                  4 the lounge (sofa with a TV camera seat, armchairs, fireplace, live score TV),
-	                    the owner's mini-bar (fridge: use soda, stools) and the OWNER'S BOX deck at
-	                    the front window wall: recliners (STADIUM VIEW camera seat) + a telescope
+	                  4 the lounge (sofa with a TV camera seat, loveseat, armchair, fireplace, live
+	                    score TV), the owner's mini-bar (fridge: use soda, stools), a scale model of
+	                    the stadium under glass (look) and the OWNER'S BOX deck at the front window
+	                    wall: recliners (STADIUM VIEW camera seat) + a telescope
 	  hq_media      the Media Studio X[-50, 0]
 	                  1 black studio walls with acoustic panels, a window onto the atrium, a lighting
 	                    grid with spotlights, a studio door with an ON AIR light
@@ -52,8 +54,8 @@
 	                  2 the BIG BOARD of draft prospects (look: draft) with a live starters panel and
 	                    a live draft clock
 	                  3 the war-room table (chairs, laptops, draft phone: look) and two scout desks
-	                  4 the film wall (game-film screens + live score / rating / record) and a
-	                    director's chair (FILM WALL camera seat)
+	                  4 the film wall (game-film screens + live score / rating / record) and the GM's
+	                    director's chair at the head of the table (FILM WALL camera seat)
 	  hq_analytics  the Analytics Lab X[50, 98]
 	                  1 white lab with a tiled raised floor, an all-glass corridor wall with sliding
 	                    glass doors, LED light strips
@@ -84,6 +86,9 @@ local UP = 17 -- top of the upper floor slab (Config.Layout.HQ.UpperFloorY)
 local FT = 17.12 -- upper room floors lie on the slab
 local WT = 29 -- upper room walls; the ceilings rest on them
 local CT = 29.4
+-- the corridor walls and the atrium-facing walls rise to this (the same clean line as the back
+-- rooms across the corridor, Builders/HQRoomsUpperBack.lua LINTEL_TOP)
+local LINTEL = 31
 local DOOR_TOP = 26
 local FRONT_Z = 201.45 -- inner face of the shell's front wall
 local CW_IN, CW_OUT = 262.8, 263.8 -- corridor-side room wall (the corridor starts at z = 264)
@@ -621,7 +626,8 @@ end
 	o: MinX, MaxX, Walls = { { minX, maxX }, ... } (full side walls), Openings = { { From, To,
 	   Sill?, Head?, Mullions?, Frosted? } } sorted by x (no Sill = a doorway), WallColor,
 	   WallMaterial, FloorColor, FloorMaterial, CeilingColor, Door* (see doorway), Lights =
-	   { { x, z }, ... }, LightColor, NoCorridorWall (the caller builds it)
+	   { { x, z }, ... }, LightColor, NoCorridorWall (the caller builds it), CeilingX0 / CeilingX1
+	   (where the ceiling stops when the caller builds a taller side wall, default MinX / MaxX)
 ]]
 local function roomShell(ctx, o)
 	local team = ctx.colors
@@ -632,7 +638,7 @@ local function roomShell(ctx, o)
 		box(ctx, "SideWall", w[1], UP, FRONT_Z, w[2], WT, CW_IN, wallColor, wallMaterial)
 	end
 	if not o.NoCorridorWall then
-		box(ctx, "CorridorWallTop", x0, DOOR_TOP, CW_IN, x1, WT, CW_OUT, wallColor, wallMaterial)
+		box(ctx, "CorridorWallTop", x0, DOOR_TOP, CW_IN, x1, LINTEL, CW_OUT, wallColor, wallMaterial)
 		local x = x0
 		local function pier(a, b)
 			if b - a > 0.01 then
@@ -668,7 +674,7 @@ local function roomShell(ctx, o)
 		end
 		pier(x, x1)
 	end
-	box(ctx, "Ceiling", x0, WT, FRONT_Z, x1, CT, FACE_Z, o.CeilingColor or WHITE)
+	box(ctx, "Ceiling", o.CeilingX0 or x0, WT, FRONT_Z, o.CeilingX1 or x1, CT, CW_IN, o.CeilingColor or WHITE)
 	for _, l in ipairs(o.Lights or {}) do
 		ceilingLight(ctx, l[1], l[2], l[3] or 10, l[4] or 4, nil, o.LightColor)
 	end
@@ -891,7 +897,8 @@ function M.hq_atrium(ctx)
 	sign(medallion, Enum.NormalId.Top, name, team.Primary, team, { InsetX = 0.02, InsetY = 0.05, PixelsPerStud = 24 })
 	-- glass rails on the open edges (the stair comes up through the south edge)
 	flatRail(stair, "MezzanineRailS", MEZZ.X0, MEZZ.Z0 + 0.05, ST_W0, MEZZ.Z0 + 0.35, UP)
-	flatRail(stair, "MezzanineRailW", MEZZ.X0, MEZZ.Z0 + 0.35, MEZZ.X0 + 0.3, MEZZ.Z1, UP)
+	-- (stops just short of the shell's atrium railing at z 264, which it meets)
+	flatRail(stair, "MezzanineRailW", MEZZ.X0, MEZZ.Z0 + 0.35, MEZZ.X0 + 0.3, MEZZ.Z1 - 0.05, UP)
 
 	-- Step 2: the west balcony over the lobby ---------------------------------------------------------
 	BuildUtil.Stage(ctx, 2)
@@ -936,10 +943,12 @@ function M.hq_atrium(ctx)
 			BackHeight = 2.6,
 			Material = Enum.Material.Leather,
 			Object = i == 1 and "Atrium Cam Chair" or "Balcony Chair",
+			-- high over the lobby's front corner: the lobby, the grand staircase, the balconies and
+			-- the banners all in one shot (clear of the banners hanging at z 236)
 			Camera = i == 1 and {
-				From = Vector3.new(-128, 30, 252),
-				To = Vector3.new(-100, 4, 214),
-				Fov = 60,
+				From = Vector3.new(-140, 31, 212),
+				To = Vector3.new(-80, 4, 246),
+				Fov = 65,
 				Label = "ATRIUM CAM",
 			} or nil,
 		})
@@ -952,7 +961,8 @@ function M.hq_atrium(ctx)
 	-- Step 3: the Ring of Honor banners on a rigging beam ----------------------------------------
 	BuildUtil.Stage(ctx, 3)
 	local banners = BuildUtil.Child(ctx, "RingOfHonor")
-	local beam = box(banners, "RiggingBeam", -148.6, 33.3, 235.5, ST_W0 - 0.4, 34, 236.5, STEEL, Enum.Material.Metal)
+	-- the beam spans the atrium wall to wall, just under the wing roofs' edges (y 34.5)
+	local beam = box(banners, "RiggingBeam", -150, 33.3, 235.5, -50, 34.1, 236.5, STEEL, Enum.Material.Metal)
 	BuildUtil.Light(beam, "PointLight", { Name = "BannerLight", Range = 30, Brightness = 1.2, Color = WARM_LIGHT })
 	local legends = {
 		{ x = -136, big = "7", small = "'ROCKET' REYES\nQUARTERBACK" },
@@ -991,7 +1001,7 @@ function M.hq_atrium(ctx)
 		BackgroundColor3 = wallBack,
 		TextColor3 = WHITE,
 		Font = Enum.Font.GothamBlack,
-		PixelsPerStud = 10,
+		PixelsPerStud = 20,
 		Padding = 0.05,
 	})
 	BuildUtil.Light(
@@ -1015,7 +1025,8 @@ function M.hq_atrium(ctx)
 	lseat(video, benchFrame, Vector3.new(6, 0.5, 2), 0, 1.3, 0, WALNUT, Enum.Material.Wood, {
 		Name = "Bench",
 		Object = "Video Wall Bench",
-		Camera = { From = Vector3.new(-72, 26, 222), To = Vector3.new(-148.7, 25.7, 226), Fov = 50, Label = "VIDEO WALL" },
+		-- from over the stair foot, so the Ring of Honor banners don't hide the screen
+		Camera = { From = Vector3.new(-60, 26, 214), To = Vector3.new(-149, 25.5, 226), Fov = 50, Label = "VIDEO WALL" },
 	})
 	for _, lx in ipairs({ -2.4, 2.4 }) do
 		lblock(video, benchFrame, "BenchLeg", Vector3.new(0.5, 1.3, 1.8), lx, 0, 0, DARK_METAL, Enum.Material.Metal)
@@ -1101,7 +1112,9 @@ function M.hq_owner(ctx)
 		MinX = OWNER_X0,
 		MaxX = OWNER_X1,
 		Walls = { { OWNER_X0, -247.7 } },
-		Openings = { OWNER_DOOR },
+		-- the doors + a big window from the corridor into the lounge
+		Openings = { OWNER_DOOR, { From = -178, To = -156, Sill = 20.4, Mullions = 2 } },
+		CeilingX1 = -150.8, -- the atrium-side wall (below) rises past the ceiling
 		WallColor = CREAM,
 		FloorColor = Color3.fromRGB(128, 88, 56),
 		FloorMaterial = Enum.Material.WoodPlanks,
@@ -1124,8 +1137,8 @@ function M.hq_owner(ctx)
 	-- the east wall (atrium side): solid in front of the video wall, glass behind it with a
 	-- sliding glass door onto the atrium's west balcony
 	local ex0, ex1 = -150.8, OWNER_X1
-	box(shell, "EastWall", ex0, UP, FRONT_Z, ex1, WT, 245.5, CREAM, Enum.Material.Plaster)
-	box(shell, "EastWallHead", ex0, 27.4, 245.5, ex1, WT, CW_IN, CREAM, Enum.Material.Plaster)
+	box(shell, "EastWall", ex0, UP, FRONT_Z, ex1, LINTEL, 245.5, CREAM, Enum.Material.Plaster)
+	box(shell, "EastWallHead", ex0, 27.4, 245.5, ex1, LINTEL, CW_IN, CREAM, Enum.Material.Plaster)
 	box(shell, "EastWallSill", ex0, UP, 245.5, ex1, 18.4, BALCONY_DOOR_Z0 - 0.3, CREAM, Enum.Material.Plaster)
 	box(shell, "EastWallSill", ex0, UP, BALCONY_DOOR_Z1 + 0.3, ex1, 18.4, CW_IN, CREAM, Enum.Material.Plaster)
 	box(shell, "AtriumWindow", -150.6, 18.4, 245.5, -150.2, 27.4, BALCONY_DOOR_Z0 - 0.3, GLASS, Enum.Material.Glass, GLASS_PROPS)
@@ -1283,16 +1296,15 @@ function M.hq_owner(ctx)
 		Object = "Lounge Sofa",
 		Camera = { From = Vector3.new(-192, 23.4, 234), To = Vector3.new(-203.3, 23.4, 234), Fov = 50, Label = "OWNER'S LOUNGE TV" },
 	})
-	for _, a in ipairs({ { 224.5, "N" }, { 243.5, "S" } }) do
-		chair(lounge, frameAt(-197.5, a[1], a[2]), team.Secondary, {
-			Width = 3,
-			Depth = 2.8,
-			SeatHeight = 1.6,
-			BackHeight = 2.4,
-			Material = Enum.Material.Leather,
-			Object = "Armchair",
-		})
-	end
+	chair(lounge, frameAt(-197.5, 224.5, "N"), team.Secondary, {
+		Width = 3,
+		Depth = 2.8,
+		SeatHeight = 1.6,
+		BackHeight = 2.4,
+		Material = Enum.Material.Leather,
+		Object = "Armchair",
+	})
+	sofa(lounge, frameAt(-196, 243.8, "S"), 9, team.Secondary, shade(team.Primary, 0.85), { Object = "Loveseat" })
 	box(lounge, "CoffeeTableBase", -198, FT, 232, -194, FT + 1.4, 236, BLACK)
 	box(
 		lounge,
@@ -1359,10 +1371,12 @@ function M.hq_owner(ctx)
 		lseat(lounge, f, Vector3.new(3, 1.4, 3), 0, 0, 0, LEATHER_BROWN, Enum.Material.Leather, {
 			Name = "Recliner",
 			Object = i == 1 and "Owner's Box Recliner" or "Recliner",
+			-- just above the HQ's front roof edge (clear of the colonnade blades + flags) looking
+			-- at the stadium across the campus road
 			Camera = i == 1 and {
-				From = Vector3.new(-176, 25, 199),
-				To = Vector3.new(0, 34, -90),
-				Fov = 55,
+				From = Vector3.new(-167, 40, 186),
+				To = Vector3.new(0, 60, -90),
+				Fov = 50,
 				Label = "OWNER'S BOX - STADIUM VIEW",
 			} or nil,
 			NoPrompt = i ~= 1,
@@ -1387,6 +1401,56 @@ function M.hq_owner(ctx)
 		"Stadium Telescope",
 		"Zoom in on your stadium from the Owner's Box! On a clear day you can count the seats... all 72,000 of them.",
 		{ Distance = 8 }
+	)
+	-- the stadium model: a scale model of the bowl under glass on a walnut plinth
+	local mx, mz = -164, 231
+	local plinth = box(lounge, "ModelPlinth", mx - 6, FT, mz - 4.5, mx + 6, FT + 2.8, mz + 4.5, WALNUT, Enum.Material.Wood)
+	sign(plinth, Enum.NormalId.Left, name .. " STADIUM\nSCALE MODEL 1:200", WALNUT, team, {
+		TextColor3 = GOLD,
+		InsetX = 0.08,
+		InsetY = 0.2,
+		Wrap = true,
+	})
+	local baseTop = FT + 3
+	box(lounge, "ModelBase", mx - 5.5, FT + 2.8, mz - 4, mx + 5.5, baseTop, mz + 4, Color3.fromRGB(150, 150, 155), Enum.Material.Concrete)
+	box(
+		lounge,
+		"ModelField",
+		mx - 2.6,
+		baseTop,
+		mz - 1.3,
+		mx + 2.6,
+		baseTop + 0.06,
+		mz + 1.3,
+		Color3.fromRGB(58, 125, 52),
+		Enum.Material.Grass,
+		PAINT
+	)
+	-- raked stands: wedges sloping down to the field (sides along X, ends along Z)
+	local stands = {
+		{ x = mx, z = mz + 2.05, len = 8.4, depth = 1.5, facing = "S" },
+		{ x = mx, z = mz - 2.05, len = 8.4, depth = 1.5, facing = "N" },
+		{ x = mx + 3.4, z = mz, len = 2.6, depth = 1.6, facing = "W" },
+		{ x = mx - 3.4, z = mz, len = 2.6, depth = 1.6, facing = "E" },
+	}
+	for i, s in ipairs(stands) do
+		BuildUtil.Wedge(lounge, {
+			Name = "ModelStand",
+			Size = Vector3.new(s.len, 1, s.depth),
+			CFrame = CFrame.new(s.x, baseTop + 0.5, s.z) * CFrame.Angles(0, FACING[s.facing], 0),
+			Color = (i <= 2) and team.Primary or shade(team.Primary, 0.75),
+			Material = Enum.Material.SmoothPlastic,
+		})
+	end
+	box(lounge, "ModelGlass", mx - 5.5, baseTop + 0.01, mz - 4, mx + 5.5, baseTop + 2.4, mz + 4, GLASS, Enum.Material.Glass, {
+		Transparency = 0.75,
+		Reflectance = 0.1,
+	})
+	BuildUtil.Look(
+		plinth,
+		"Stadium Model",
+		"A perfect tiny copy of your stadium at 1:200 scale. Every time you build something new, the model makers have to glue on more seats!",
+		{ At = Vector3.new(-6.4, 0.6, 0), Distance = 9 }
 	)
 end
 
@@ -1422,6 +1486,7 @@ function M.hq_media(ctx)
 		MaxX = X1,
 		Walls = { { -0.8, X1 } },
 		Openings = { MEDIA_DOOR },
+		CeilingX0 = -49.2, -- the atrium-side wall (below) rises past the ceiling
 		WallColor = STUDIO_BLACK,
 		WallMaterial = Enum.Material.SmoothPlastic,
 		FloorColor = STUDIO_FLOOR,
@@ -1436,10 +1501,10 @@ function M.hq_media(ctx)
 	-- the west wall faces the atrium: a team-colour studio box with a window (watch the shows
 	-- from the grand staircase) and TEAM TV lettering
 	local skin = shade(team.Primary, 0.45)
-	box(studio, "SideWall", X0, UP, FRONT_Z, -49.2, WT, 214, skin)
-	box(studio, "SideWall", X0, UP, 246, -49.2, WT, CW_IN, skin)
+	box(studio, "SideWall", X0, UP, FRONT_Z, -49.2, LINTEL, 214, skin)
+	box(studio, "SideWall", X0, UP, 246, -49.2, LINTEL, CW_IN, skin)
 	box(studio, "WindowSill", X0, UP, 214, -49.2, 20.4, 246, skin)
-	local head = box(studio, "WindowHead", X0, 26.4, 214, -49.2, WT, 246, skin)
+	local head = box(studio, "WindowHead", X0, 26.4, 214, -49.2, LINTEL, 246, skin)
 	sign(head, Enum.NormalId.Left, name .. " TEAM TV", skin, team, { InsetX = 0.08, InsetY = 0.16 })
 	box(studio, "WindowGlow", X0 - 0.08, 20.15, 214, X0, 20.4, 246, team.Secondary, Enum.Material.Neon, PAINT)
 	local strip = box(studio, "StudioGlow", -0.85, 27.5, FRONT_Z + 0.5, -0.8, 27.7, CW_IN - 0.5, team.Secondary, Enum.Material.Neon, PAINT)
@@ -1449,7 +1514,7 @@ function M.hq_media(ctx)
 		box(studio, "Mullion", -49.95, 20.4, mz - 0.15, -49.25, 26.4, mz + 0.15, DARK_METAL, Enum.Material.Metal)
 	end
 	-- the ON AIR light beside the door (corridor side)
-	local onAir = box(studio, "OnAirSign", -10.8, 22.6, CW_OUT, -6.4, 24.4, CW_OUT + 0.35, ON_AIR_RED, Enum.Material.Neon)
+	local onAir = box(studio, "OnAirSign", -10.8, 22.6, CW_OUT, -6.4, 24.4, CW_OUT + 0.35, ON_AIR_RED, Enum.Material.Neon, NO_COLLIDE)
 	sign(onAir, Enum.NormalId.Back, "ON AIR", ON_AIR_RED, team, { TextColor3 = WHITE, InsetX = 0.1, InsetY = 0.16, LightInfluence = 0 })
 	BuildUtil.Light(onAir, "PointLight", { Name = "OnAirGlow", Range = 8, Brightness = 1, Color = ON_AIR_RED })
 	-- acoustic panels (team-tinted fabric)
@@ -1490,8 +1555,9 @@ function M.hq_media(ctx)
 		local f = CFrame.lookAt(Vector3.new(s.x, FT, s.z), Vector3.new(cx, FT, cz))
 		officeChair(podcast, f, s.host and team.Primary or LEATHER_BLACK, {
 			Object = s.host and "Podcast Host Chair" or "Podcast Guest Chair",
+			-- straight across the table from behind the guest chair, over the low tablet
 			Camera = s.host
-					and { From = Vector3.new(cx, 22.4, cz - 6.2), To = Vector3.new(cx, 20.8, cz + 5.6), Fov = 50, Label = "PODCAST CAM" }
+					and { From = Vector3.new(cx, 23.6, cz - 7.5), To = Vector3.new(cx, 21.8, cz + 5.6), Fov = 50, Label = "PODCAST CAM" }
 				or nil,
 		})
 		-- a microphone in front of every chair
@@ -1501,7 +1567,7 @@ function M.hq_media(ctx)
 		ball(podcast, "Microphone", Vector3.new(mp.X, FT + 3.95, mp.Z), 0.6, BLACK, Enum.Material.Fabric)
 	end
 	-- a live game-day tablet in the middle of the table (faces the host)
-	local tablet = box(podcast, "GameDayTablet", cx - 1.3, FT + 2.9, cz + 0.1, cx + 1.3, FT + 4.3, cz + 0.3, LED_DARK)
+	local tablet = box(podcast, "GameDayTablet", cx - 1.2, FT + 2.9, cz + 0.1, cx + 1.2, FT + 3.8, cz + 0.3, LED_DARK)
 	liveScreen(tablet, Enum.NormalId.Back, "gameday", "NEXT GAME SOON", { TextColor3 = LED_GREEN, PixelsPerStud = 40, Padding = 0.08 })
 	-- the neon show sign + an ON AIR light on the acoustic panel
 	local showSign = box(podcast, "ShowSign", -1.4, 21.4, 242, -1.25, 25.4, 256, BLACK)
@@ -1558,7 +1624,7 @@ function M.hq_media(ctx)
 		officeChair(set, frameAt(ax, 207.4, "N", riserTop), i == 1 and team.Secondary or LEATHER_BLACK, {
 			Object = i == 1 and "Anchor Chair" or "Co-Anchor Chair",
 			Camera = i == 1
-					and { From = Vector3.new(-28, 23.2, 228), To = Vector3.new(-28, 21.6, 207), Fov = 45, Label = "TEAM TV - LIVE" }
+					and { From = Vector3.new(-28, 22.8, 224.5), To = Vector3.new(-28, 22, 207), Fov = 45, Label = "TEAM TV - LIVE" }
 				or nil,
 		})
 	end
@@ -1807,11 +1873,13 @@ function M.hq_scouting(ctx)
 		"Scouts watch every snap a prospect ever played, frame by frame. The live screens keep an eye on your own team too.",
 		{ At = Vector3.new(-0.6, -4.5, 0), Distance = 10 }
 	)
-	local f = frameAt(42, 230, "E")
+	-- the GM's director's chair at the head of the war-room table, facing the film wall (the TV
+	-- view starts just in front of the sitter, so nobody blocks the screens)
+	local f = frameAt(12.2, 231, "E")
 	lseat(film, f, Vector3.new(2.4, 0.4, 2.2), 0, 2.4, 0, Color3.fromRGB(30, 30, 34), Enum.Material.Fabric, {
 		Name = "DirectorChair",
-		Object = "Director's Chair",
-		Camera = { From = Vector3.new(41, 24, 230), To = Vector3.new(48.3, 23.3, 230), Fov = 55, Label = "FILM WALL" },
+		Object = "GM's Director Chair",
+		Camera = { From = Vector3.new(13.2, 25.2, 231), To = Vector3.new(48.3, 23.3, 230), Fov = 50, Label = "FILM WALL" },
 	})
 	lblock(film, f, "DirectorChairBack", Vector3.new(2.4, 1.6, 0.2), 0, 3.4, 1.0, team.Primary, Enum.Material.Fabric)
 	lblock(film, f, "DirectorChairLegs", Vector3.new(2.2, 2.4, 2), 0, 0, 0, WALNUT, Enum.Material.Wood)
@@ -1850,16 +1918,19 @@ function M.hq_analytics(ctx)
 		guiFrame(tiles, 0, gz, LAB_X1 - X0, 0.1, Color3.fromRGB(180, 186, 194))
 	end
 	-- the all-glass corridor wall
-	box(lab, "GlassWallHead", X0, 27.4, CW_IN, LAB_X1, WT, CW_OUT, LAB_WHITE)
+	box(lab, "GlassWallHead", X0, 27.4, CW_IN, LAB_X1, LINTEL, CW_OUT, LAB_WHITE)
 	box(lab, "GlassWall", X0, UP, CW_IN + 0.25, LAB_DOOR.From - 0.4, 27.4, CW_OUT - 0.25, GLASS, Enum.Material.Glass, GLASS_PROPS)
 	box(lab, "GlassWall", LAB_DOOR.To + 0.4, UP, CW_IN + 0.25, LAB_X1, 27.4, CW_OUT - 0.25, GLASS, Enum.Material.Glass, GLASS_PROPS)
 	box(lab, "Transom", LAB_DOOR.From, DOOR_TOP, CW_IN + 0.25, LAB_DOOR.To, 27.4, CW_OUT - 0.25, GLASS, Enum.Material.Glass, GLASS_PROPS)
 	for _, mx in ipairs({ 56, 62, 68, LAB_DOOR.From - 0.2, LAB_DOOR.To + 0.2, 92.6 }) do
 		box(lab, "Mullion", mx - 0.2, UP, CW_IN, mx + 0.2, 27.4, CW_OUT, DARK_METAL, Enum.Material.Metal)
 	end
-	local stripe =
-		box(lab, "GlassStripe", X0 + 0.5, 21, CW_OUT - 0.26, LAB_X1 - 0.5, 21.4, CW_OUT - 0.2, team.Secondary, Enum.Material.Neon, PAINT)
-	stripe.Transparency = 0.3
+	-- a team-colour band across the glass (not across the doorway)
+	for _, seg in ipairs({ { X0 + 0.5, LAB_DOOR.From - 0.6 }, { LAB_DOOR.To + 0.6, LAB_X1 - 0.5 } }) do
+		local stripe =
+			box(lab, "GlassStripe", seg[1], 21, CW_OUT - 0.26, seg[2], 21.4, CW_OUT - 0.2, team.Secondary, Enum.Material.Neon, PAINT)
+		stripe.Transparency = 0.3
+	end
 	BuildUtil.Door(lab, {
 		Name = "LabDoor",
 		Size = Vector3.new(LAB_DOOR.To - LAB_DOOR.From, DOOR_H, 0.3),
@@ -1901,10 +1972,11 @@ function M.hq_analytics(ctx)
 				SeatHeight = 1.8,
 				BackHeight = 2.8,
 				Material = Enum.Material.Fabric,
-				Object = (r == 2 and w == 3) and "Data Wall Chair" or "Analyst's Chair",
+				Object = (r == 1 and w == 3) and "Data Wall Chair" or "Analyst's Chair",
 				NoPrompt = w % 2 == 0,
-				Camera = (r == 2 and w == 3)
-						and { From = Vector3.new(88, 24, 232), To = Vector3.new(96.4, 23.6, 232), Fov = 70, Label = "DATA WALL" }
+				-- from the back row, over the front desks: all three data screens in view
+				Camera = (r == 1 and w == 3)
+						and { From = Vector3.new(70.6, 25, 236), To = Vector3.new(96.4, 23.6, 232), Fov = 65, Label = "DATA WALL" }
 					or nil,
 			})
 		end

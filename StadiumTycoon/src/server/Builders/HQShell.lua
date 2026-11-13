@@ -1308,6 +1308,51 @@ local function buildInterior(ctx, S, team)
 		)
 	end
 	span(inside, "CorridorBulkhead", S.ix0, 12.6, cor.MaxZ, S.ix1, sb, cor.MaxZ + 0.2, PANEL_WHITE, Enum.Material.SmoothPlastic, PAINT)
+	-- upstairs: the upper rooms' walls stop at y 31; close the slot up to the wing roof
+	local UPPER_WALL_TOP = 31
+	for _, seg in ipairs({ { S.ix0, atriumEdge.MinX }, { atriumEdge.MaxX, S.ix1 } }) do
+		span(
+			inside,
+			"UpperBulkhead",
+			seg[1],
+			UPPER_WALL_TOP,
+			cor.MinZ - 0.2,
+			seg[2],
+			ROOF_BOTTOM,
+			cor.MinZ,
+			PANEL_WHITE,
+			Enum.Material.SmoothPlastic,
+			PAINT
+		)
+	end
+	span(
+		inside,
+		"UpperBulkhead",
+		S.ix0,
+		UPPER_WALL_TOP,
+		cor.MaxZ,
+		S.ix1,
+		ROOF_BOTTOM,
+		cor.MaxZ + 0.2,
+		PANEL_WHITE,
+		Enum.Material.SmoothPlastic,
+		PAINT
+	)
+	for _, x in ipairs({ atriumEdge.MinX - 0.2, atriumEdge.MaxX }) do
+		span(
+			inside,
+			"UpperBulkhead",
+			x,
+			UPPER_WALL_TOP,
+			atriumEdge.MinZ,
+			x + 0.2,
+			ROOF_BOTTOM,
+			atriumEdge.MaxZ,
+			PANEL_WHITE,
+			Enum.Material.SmoothPlastic,
+			PAINT
+		)
+	end
 
 	-- room-name signs over both corridors, facing them (front row -> +Z, back row -> -Z). Ground:
 	-- hung from the slab soffit; upstairs: hung from the wing roofs, or on rods from the atrium's
@@ -1753,10 +1798,18 @@ local function buildEastTower(ctx, S, team)
 	local portal = { doorZ - 5, doorZ + 5 }
 	local deckDoor = { doorZ - DOOR_HALF, doorZ + DOOR_HALF }
 	glass("TowerGlassSouth", T.MinX + 1, FLOOR_TOP, T.MinZ + 0.2, T.MaxX - 1, top, T.MinZ + 0.6)
-	glass("TowerGlassNorth", T.MinX + 1, FLOOR_TOP, T.MaxZ - 0.6, T.MaxX - 1, top, T.MaxZ - 0.2)
+	-- (the campus skybridges arrive on the upper floor through the east face (over the ground portal)
+	-- and the north face (X[103.4, 114.6]); those openings are 8.6 tall)
+	local bridgeTop = up + 8.6
+	local northGap = { 103.4, 114.6 }
+	glass("TowerGlassNorth", T.MinX + 1, FLOOR_TOP, T.MaxZ - 0.6, T.MaxX - 1, up, T.MaxZ - 0.2)
+	glass("TowerGlassNorth", T.MinX + 1, bridgeTop, T.MaxZ - 0.6, T.MaxX - 1, top, T.MaxZ - 0.2)
+	glass("TowerGlassNorth", T.MinX + 1, up, T.MaxZ - 0.6, northGap[1], bridgeTop, T.MaxZ - 0.2)
+	glass("TowerGlassNorth", northGap[2], up, T.MaxZ - 0.6, T.MaxX - 1, bridgeTop, T.MaxZ - 0.2)
 	glass("TowerGlassEast", ex0, FLOOR_TOP, T.MinZ + 1, ex1, top, portal[1])
 	glass("TowerGlassEast", ex0, FLOOR_TOP, portal[2], ex1, top, T.MaxZ - 1)
-	glass("TowerGlassEast", ex0, 11.6, portal[1], ex1, top, portal[2])
+	glass("TowerGlassEast", ex0, 11.6, portal[1], ex1, up, portal[2])
+	glass("TowerGlassEast", ex0, bridgeTop, portal[1], ex1, top, portal[2])
 	glass("TowerTopGlassWest", T.MinX + 0.2, DECK_TOP, T.MinZ + 1, T.MinX + 0.6, top, deckDoor[1])
 	glass("TowerTopGlassWest", T.MinX + 0.2, DECK_TOP, deckDoor[2], T.MinX + 0.6, top, T.MaxZ - 1)
 	span(
@@ -1779,7 +1832,7 @@ local function buildEastTower(ctx, S, team)
 		strut(
 			tower,
 			"TowerBrace",
-			Vector3.new(T.MaxX - 0.3, 12.5, doorZ - s * 11.5),
+			Vector3.new(T.MaxX - 0.3, bridgeTop + 0.4, doorZ - s * 11.5),
 			Vector3.new(T.MaxX - 0.3, up + 15.5, doorZ + s * 11.5),
 			0.5,
 			STEEL,

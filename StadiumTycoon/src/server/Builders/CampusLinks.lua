@@ -76,7 +76,7 @@ local LINK = { MinX = 118, MaxX = 126, MinZ = 265, MaxZ = 277 }
 local LOUNGE = { MinX = 126, MaxX = 142, MinZ = 261, MaxZ = 281 }
 local HOF_BRIDGE = { MinX = 127, MaxX = 141, MinZ = 232, MaxZ = 261 }
 local HOF_TOWER = { MinX = 126, MaxX = 142, MinZ = 212, MaxZ = 232 }
-local FORECOURT = { MinX = 126, MaxX = 142, MinZ = 202, MaxZ = 212 }
+local FORECOURT = { MinX = 126, MaxX = 142, MinZ = 200, MaxZ = 212 } -- meets the Hall of Fame walk (z 200)
 local DOME_BRIDGE = { MinX = 103, MaxX = 115, MinZ = 284, MaxZ = 399.5 }
 local DOME_TOWER = { MinX = 100, MaxX = 120, MinZ = 399.5, MaxZ = 409.5 }
 local PIER_Z = { 329, 370.5, PROM_S } -- portal piers under the dome bridge (beside the road)
@@ -86,9 +86,12 @@ local HQ_LANDING_EAST = Vector3.new(112, DECK, 271)
 local HQ_LANDING_NORTH = Vector3.new(109, DECK, 278.5)
 
 -- step 4
-local HOF_WALK = { MinX = 100.5, MaxX = 167, MinZ = 194, MaxZ = 202 } -- HQ front arcade -> Hall of Fame steps
-local SPINE = { MinX = 8, MaxX = 16, MinZ = 399, MaxZ = 449 } -- promenade -> the dome's west door
-local SPINE_BRANCH = { MinX = 16, MaxX = 31, MinZ = 439, MaxZ = 449 }
+-- the Hall of Fame walk continues the HQ's front arcade paving (X[-50, 100] Z[193, 200], same height)
+-- east past the tower to the Hall of Fame's red carpet (x 191 .. 199 from z 200) and front steps
+local HOF_WALK = { MinX = 100, MaxX = 199, MinZ = 193, MaxZ = 200 }
+-- promenade -> the dome's west door (indoor_dome: a double door in its end wall, x 34, z 439 .. 451)
+local SPINE = { MinX = 8, MaxX = 16, MinZ = 399, MaxZ = 450 }
+local SPINE_BRANCH = { MinX = 16, MaxX = 34, MinZ = 440, MaxZ = 450 }
 
 -- cameras (campus coordinates; the stadium's field centre is at campus (0, 0, -90))
 local STADIUM_CAM = { From = Vector3.new(90, 170, 180), To = Vector3.new(0, 0, -90), Fov = 50, Label = "STADIUM CAM" }
@@ -466,18 +469,19 @@ local function buildWalkway(ctx, team)
 	for _, r in ipairs({ PORCH, HQ_WALK, PROMENADE, FIELD_PLAZA }) do
 		span(walk, "WalkwayPaving", r.MinX, 0, r.MinZ, r.MaxX, PAVE, r.MaxZ, PAVER, Enum.Material.Slate)
 	end
-	-- the zebra crossing painted on the back road (team colour: the road itself is light)
+	-- the zebra crossing painted on the back road (team colour: the road itself is light). Like a real
+	-- crossing, the bars run along the road (piano keys to a driver) and you step over them in turn.
 	for i = 0, 4 do
-		local x = CROSSING.MinX + 1.6 + i * 3.2
+		local z = CROSSING.MinZ + 0.7 + i * 2.8
 		span(
 			walk,
 			"ZebraStripe",
-			x - 0.9,
+			CROSSING.MinX + 1,
 			STRIPE0,
-			CROSSING.MinZ + 0.6,
-			x + 0.9,
+			z,
+			CROSSING.MaxX - 1,
 			STRIPE1,
-			CROSSING.MaxZ - 0.6,
+			z + 1.4,
 			team.Primary,
 			Enum.Material.SmoothPlastic,
 			PAINT
@@ -646,21 +650,24 @@ local function buildHallBridge(ctx, team)
 	glass(m, "LoungeGlassWest", g.MinX + 0.2, DECK, g.MinZ + 1, g.MinX + 0.6, TALL_ROOF, l.MinZ)
 	glass(m, "LoungeGlassWest", g.MinX + 0.2, DECK, l.MaxZ, g.MinX + 0.6, TALL_ROOF, g.MaxZ - 1)
 	span(m, "LoungeHeader", g.MinX, GLASS_TOP, l.MinZ, g.MinX + 1, TALL_ROOF, l.MaxZ, team.Primary, Enum.Material.SmoothPlastic)
-	local southHeader =
-		span(m, "LoungeHeader", g.MinX + 1, GLASS_TOP, g.MinZ, g.MaxX - 1, TALL_ROOF, g.MinZ + 1, team.Primary, Enum.Material.SmoothPlastic)
-	faceText(southHeader, Enum.NormalId.Front, { { Text = "SKY LOUNGE", Color = accent } })
-	span(
+	span(m, "LoungeHeader", g.MinX + 1, GLASS_TOP, g.MinZ, g.MaxX - 1, TALL_ROOF, g.MinZ + 1, team.Primary, Enum.Material.SmoothPlastic)
+	-- a deep roof band (the pavilion's crown) carries the name: seen from the Hall of Fame side over
+	-- the bridge roof, from the garage side and from the HQ porch
+	local loungeRoof = span(
 		m,
 		"LoungeRoof",
 		g.MinX - 0.4,
 		TALL_ROOF,
 		g.MinZ - 0.4,
 		g.MaxX + 0.4,
-		TALL_ROOF + 1,
+		TALL_ROOF + 2.2,
 		g.MaxZ + 0.4,
 		team.Primary,
 		Enum.Material.SmoothPlastic
 	)
+	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back, Enum.NormalId.Left }) do
+		faceText(loungeRoof, face, { { Text = "SKY LOUNGE", Color = accent, X0 = 0.08, X1 = 0.92, Y0 = 0.16, Y1 = 0.84 } })
+	end
 	span(
 		m,
 		"LoungeCeiling",
@@ -1003,7 +1010,7 @@ local function buildDomeBridge(ctx, team)
 	})
 
 	-- the garage overlook: a TV camera bench and a sign looking across at the golf cart garage
-	bench(m, "GarageOverlookBench", 104.8, 348, DECK, Vector3.new(1, 0, 0), 5, team, { Camera = CART_CAM, Object = "Cart Cam" })
+	bench(m, "GarageOverlookBench", 105.2, 348, DECK, Vector3.new(1, 0, 0), 5, team, { Camera = CART_CAM, Object = "Cart Cam" })
 	local garageSign =
 		span(m, "GarageOverlookSign", b.MaxX - 1, DECK + 4, 345, b.MaxX - 0.7, DECK + 6.2, 351, SIGN_DARK, Enum.Material.SmoothPlastic)
 	faceText(garageSign, Enum.NormalId.Left, { { Text = "GOLF CART GARAGE", Color = dark } }, { LightInfluence = 0 })
@@ -1028,7 +1035,8 @@ local function buildDomeBridge(ctx, team)
 	-- THE DOME & GARAGE TOWER at the end, beside the promenade
 	local t = DOME_TOWER
 	local doorX0, doorX1 = 105, 113
-	span(m, "DomeTowerFloor", t.MinX, 0, t.MinZ, t.MaxX, 0.2, t.MaxZ, MARBLE, Enum.Material.Marble)
+	-- (a marble threshold reaches the promenade's paving at z 399, so there is no gap at the doors)
+	span(m, "DomeTowerFloor", t.MinX, 0, PROMENADE.MaxZ, t.MaxX, 0.2, t.MaxZ, MARBLE, Enum.Material.Marble)
 	span(m, "DomeTowerUpperFloor", t.MinX, DECK_BOTTOM, t.MinZ, t.MaxX, DECK, t.MaxZ, BRIDGE_FLOOR, Enum.Material.Marble)
 	for _, x in ipairs({ t.MinX, t.MaxX - 1 }) do
 		for _, z in ipairs({ t.MinZ, t.MaxZ - 1 }) do
@@ -1039,7 +1047,8 @@ local function buildDomeBridge(ctx, team)
 	span(m, "DomeTowerStone", t.MinX + 1, 0.2, sz0, doorX0, DECK_BOTTOM, sz1, LIMESTONE, Enum.Material.Limestone)
 	span(m, "DomeTowerStone", doorX1, 0.2, sz0, t.MaxX - 1, DECK_BOTTOM, sz1, LIMESTONE, Enum.Material.Limestone)
 	local doorHead = span(m, "DomeTowerStone", doorX0, 9.2, sz0, doorX1, DECK_BOTTOM, sz1, LIMESTONE, Enum.Material.Limestone)
-	faceText(doorHead, Enum.NormalId.Front, { { Text = "DOME & GARAGE TOWER", Color = INK, Y0 = 0.25, Y1 = 0.6 } })
+	-- (low on the stone, under the promenade canopy's edge at y 12.3, so walkers can read it)
+	faceText(doorHead, Enum.NormalId.Front, { { Text = "DOME & GARAGE TOWER", Color = INK, Y0 = 0.52, Y1 = 0.84 } })
 	span(m, "DomeTowerStone", t.MinX + 1, 0.2, t.MaxZ - 1, t.MaxX - 1, DECK_BOTTOM, t.MaxZ, LIMESTONE, Enum.Material.Limestone)
 	glass(m, "DomeTowerGlassSouth", t.MinX + 1, DECK, sz0 + 0.2, b.MinX, TALL_ROOF, sz0 + 0.6)
 	glass(m, "DomeTowerGlassSouth", b.MaxX, DECK, sz0 + 0.2, t.MaxX - 1, TALL_ROOF, sz0 + 0.6)
@@ -1174,7 +1183,7 @@ local function buildLandscaping(ctx, team)
 	end
 
 	-- lamp posts along the open paths
-	for _, p in ipairs({ { 114, 191.5 }, { 154, 191.5 }, { 19.5, 410 }, { 4.5, 424 }, { 19.5, 435 }, { -5, 413 } }) do
+	for _, p in ipairs({ { 114, 191.5 }, { 150, 191.5 }, { 186, 191.5 }, { 19.5, 410 }, { 4.5, 424 }, { 19.5, 435 }, { -5, 413 } }) do
 		lampPost(m, p[1], p[2], team)
 	end
 
