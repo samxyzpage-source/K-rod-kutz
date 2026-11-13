@@ -24,6 +24,7 @@ local Format = require(Shared:WaitForChild("Format"))
 
 local BuildUtil = require(script.Parent.BuildUtil)
 local Builders = require(script.Parent.Builders)
+local GameDay = require(script.Parent.GameDay)
 local PlayerData = require(script.Parent.PlayerData)
 local World = require(script.Parent.World)
 
@@ -35,6 +36,8 @@ local claiming = {} -- [Player] = true while waiting for their data
 local cooldowns = {} -- [Player] = { [key] = os.clock() }
 local notifyRemote = nil
 local isNight = false
+local incomeBoost = 1 -- multiplier while a game day is on
+local gameDayActive = false
 local rng = Random.new()
 
 local tycoonsFolder = nil
@@ -179,7 +182,7 @@ end
 local function updateOwnerAttributes(plot)
 	local owner = plot.Owner
 	if owner then
-		owner:SetAttribute("Income", plot.Income * Config.IncomeMultiplier)
+		owner:SetAttribute("Income", plot.Income * Config.IncomeMultiplier * incomeBoost)
 		owner:SetAttribute("Built", countOwned(plot))
 	end
 end
@@ -511,6 +514,7 @@ function PlotManager.Claim(plot, player, profile)
 		notify(player, "Stadium claimed! Step on the glowing button to start building.", "success")
 		notify(player, "Your money piles up in the VAULT by the gate - step on the green pad to collect it.", "info")
 	end
+	GameDay.OnPlotClaimed(plot)
 end
 
 local function onClaimTouched(plot, hit)
@@ -582,6 +586,7 @@ function PlotManager.Release(player)
 	end
 	plot.Buttons = {}
 	setGateClaimed(plot, nil)
+	GameDay.ClearCrowd(plot)
 	updateVault(plot)
 	updateFreePlots()
 	for _, other in ipairs(Players:GetPlayers()) do
@@ -655,6 +660,15 @@ function PlotManager.SetNight(night)
 end
 
 local function jumbotronMessages(plot)
+	if gameDayActive then
+		return {
+			{ "GAME DAY!", Color3.fromRGB(255, 196, 37) },
+			{ plot.TeamName, plot.Palette.Primary },
+			{ "MAKE SOME NOISE!", plot.Palette.Secondary },
+			{ ("%dX CASH!"):format(incomeBoost), Color3.fromRGB(34, 150, 80) },
+			{ ("HOME %d - AWAY %d"):format(plot.HomeScore, plot.AwayScore), Color3.fromRGB(15, 15, 20) },
+		}
+	end
 	return {
 		{ plot.TeamName, plot.Palette.Primary },
 		{ "MAKE SOME NOISE!", plot.Palette.Secondary },
@@ -784,7 +798,7 @@ function PlotManager.Start()
 			task.wait(Config.IncomeTickSeconds)
 			for _, plot in ipairs(plots) do
 				if plot.Owner then
-					plot.Vault += plot.Income * Config.IncomeMultiplier * Config.IncomeTickSeconds
+					plot.Vault += plot.Income * Config.IncomeMultiplier * incomeBoost * Config.IncomeTickSeconds
 					if ownerIsOnPad(plot) then
 						collect(plot, true)
 					else
@@ -811,17 +825,46 @@ function PlotManager.Start()
 		end
 	end)
 
-	-- pretend football game
+	-- pretend football game (scores much more often on game days)
 	task.spawn(function()
+		local elapsed = 0
 		while true do
-			task.wait(25)
-			for _, plot in ipairs(plots) do
-				if plot.Owner then
-					simulateGame(plot)
+			task.wait(1)
+			elapsed += 1
+			if elapsed >= (gameDayActive and 8 or 25) then
+				elapsed = 0
+				for _, plot in ipairs(plots) do
+					if plot.Owner then
+						simulateGame(plot)
+					end
 				end
 			end
 		end
 	end)
+end
+
+function PlotManager.GetPlots()
+	return plots
+end
+
+-- Called by GameDay when a game day starts (active = true) or ends.
+function PlotManager.SetGameDay(active, multiplier)
+	gameDayActive = active
+	incomeBoost = active and multiplier or 1
+	for _, plot in ipairs(plots) do
+		if plot.Owner then
+			updateOwnerAttributes(plot)
+			if active then
+				notify(plot.Owner, ("GAME DAY! Fans are pouring in - %dX CASH!"):format(incomeBoost), "success")
+				if plot.ItemModels.jumbotron then
+					plot.JumbotronHoldUntil = os.clock() + 4
+					showOnJumbotron(plot, "GAME DAY!", Color3.fromRGB(255, 196, 37))
+				end
+			else
+				notify(plot.Owner, "That's the final whistle! The next game day starts soon.", "info")
+			end
+		end
+	end
 end
 
 return PlotManager

@@ -5,6 +5,8 @@
 	  * a guide beam points from your character to the button for your next goal
 	    (server sets the player attribute "NextGoal" to an item id)
 	  * small sounds for purchases and collecting cash (Config.Sounds)
+	  * game-day fans (tagged "TycoonFan" by the server) bounce and cheer - only on this
+	    screen, so it costs no network traffic
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -20,7 +22,9 @@ local Config = require(Shared:WaitForChild("Config"))
 local notifyRemote = ReplicatedStorage:WaitForChild("TycoonRemotes"):WaitForChild("Notify")
 
 local BUTTON_TAG = "TycoonBuyButton"
+local FAN_TAG = "TycoonFan"
 local GUIDE_HIDE_DISTANCE = 18
+local FAN_ANIMATE_DISTANCE = 260
 
 ---------------------------------------------------------------------------------------------
 -- Pulsing buy buttons
@@ -41,7 +45,60 @@ CollectionService:GetInstanceRemovedSignal(BUTTON_TAG):Connect(function(pad)
 	buttons[pad] = nil
 end)
 
+---------------------------------------------------------------------------------------------
+-- Cheering fans
+---------------------------------------------------------------------------------------------
+local fans = {} -- [Model] = { parts = { {part, restingCFrame} }, phase, speed }
+
+local function scanFan(model, entry)
+	entry.parts = {}
+	for _, descendant in ipairs(model:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			table.insert(entry.parts, { descendant, descendant.CFrame })
+		end
+	end
+end
+
+local function trackFan(model)
+	if not model:IsA("Model") then
+		return
+	end
+	local entry = { parts = {}, phase = math.random() * math.pi * 2, speed = 5 + math.random() * 3 }
+	scanFan(model, entry)
+	fans[model] = entry
+end
+
+for _, model in ipairs(CollectionService:GetTagged(FAN_TAG)) do
+	trackFan(model)
+end
+CollectionService:GetInstanceAddedSignal(FAN_TAG):Connect(trackFan)
+CollectionService:GetInstanceRemovedSignal(FAN_TAG):Connect(function(model)
+	fans[model] = nil
+end)
+
+local function animateFans(now)
+	local camera = Workspace.CurrentCamera
+	local cameraPosition = camera and camera.CFrame.Position or Vector3.new()
+	for model, entry in pairs(fans) do
+		if model.Parent == nil then
+			fans[model] = nil
+		else
+			if #entry.parts < 2 then
+				scanFan(model, entry) -- children may replicate a moment after the tag
+			end
+			local first = entry.parts[1]
+			if first and (first[2].Position - cameraPosition).Magnitude < FAN_ANIMATE_DISTANCE then
+				local lift = math.max(0, math.sin(now * entry.speed + entry.phase)) * 0.9
+				for _, pair in ipairs(entry.parts) do
+					pair[1].CFrame = pair[2] + Vector3.new(0, lift, 0)
+				end
+			end
+		end
+	end
+end
+
 RunService.RenderStepped:Connect(function()
+	animateFans(os.clock())
 	local wave = (math.sin(os.clock() * 4) + 1) / 2 -- 0..1
 	for pad in pairs(buttons) do
 		if pad.Parent then

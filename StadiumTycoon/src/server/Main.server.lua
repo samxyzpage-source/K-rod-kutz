@@ -13,6 +13,7 @@ local Config = require(ReplicatedStorage:WaitForChild("TycoonShared"):WaitForChi
 local World = require(script.Parent.World)
 local PlayerData = require(script.Parent.PlayerData)
 local PlotManager = require(script.Parent.PlotManager)
+local GameDay = require(script.Parent.GameDay)
 
 -- Remote used to show messages on players' screens
 local remotes = Instance.new("Folder")
@@ -28,6 +29,7 @@ local tycoonsFolder = Instance.new("Folder")
 tycoonsFolder.Name = "Tycoons"
 tycoonsFolder.Parent = Workspace
 PlotManager.Init(tycoonsFolder, notifyRemote)
+GameDay.Init(tycoonsFolder, PlotManager)
 World.StartDayNight(Config, PlotManager.SetNight)
 
 -- Players
@@ -62,5 +64,6 @@ end)
 
 PlayerData.StartAutosave()
 PlotManager.Start()
+GameDay.Start()
 
 print(("[%s] Ready with %d stadium plots."):format(Config.GameTitle, Config.PlotCount))

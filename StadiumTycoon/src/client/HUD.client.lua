@@ -13,6 +13,7 @@ local Workspace = game:GetService("Workspace")
 local player = Players.LocalPlayer
 local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
 local Format = require(Shared:WaitForChild("Format"))
+local Config = require(Shared:WaitForChild("Config"))
 local Items = require(Shared:WaitForChild("Items"))
 local notifyRemote = ReplicatedStorage:WaitForChild("TycoonRemotes"):WaitForChild("Notify")
 
@@ -129,6 +130,21 @@ local hintLabel = create("TextLabel", {
 	create("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }),
 })
 
+local gameDayLabel = create("TextLabel", {
+	Name = "GameDay",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 132),
+	Size = UDim2.new(0, 270, 0, 26),
+	BackgroundColor3 = Color3.fromRGB(18, 22, 30),
+	BackgroundTransparency = 0.35,
+	Font = Enum.Font.GothamBold,
+	Text = "",
+	TextColor3 = Color3.fromRGB(220, 220, 225),
+	TextScaled = true,
+	Visible = false,
+	Parent = screen,
+}, { corner(8), create("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }) })
+
 local saveLabel = create("TextLabel", {
 	Name = "SaveStatus",
 	AnchorPoint = Vector2.new(0, 1),
@@ -242,6 +258,46 @@ onIncomeChanged()
 onPlotChanged()
 onBuiltChanged()
 onSaveStatusChanged()
+
+---------------------------------------------------------------------------------------------
+-- Game day banner (countdown to the next game day, or time left in the current one)
+---------------------------------------------------------------------------------------------
+local function clock(seconds)
+	seconds = math.max(0, math.floor(seconds))
+	return ("%d:%02d"):format(math.floor(seconds / 60), seconds % 60)
+end
+
+local function updateGameDay()
+	if not tycoonsFolder or player:GetAttribute("PlotIndex") == nil then
+		gameDayLabel.Visible = false
+		return
+	end
+	local now = Workspace:GetServerTimeNow()
+	if tycoonsFolder:GetAttribute("GameDayActive") then
+		local multiplier = Config.GameDay and Config.GameDay.IncomeMultiplier or 2
+		local endsAt = tycoonsFolder:GetAttribute("GameDayEndsAt") or now
+		gameDayLabel.Text = ("GAME DAY!  %dX CASH  %s"):format(multiplier, clock(endsAt - now))
+		gameDayLabel.BackgroundColor3 = Color3.fromRGB(255, 196, 37)
+		gameDayLabel.BackgroundTransparency = 0.05 + (math.sin(os.clock() * 6) + 1) * 0.1
+		gameDayLabel.TextColor3 = Color3.fromRGB(25, 25, 30)
+		gameDayLabel.Visible = true
+	elseif tycoonsFolder:GetAttribute("NextGameDayAt") then
+		gameDayLabel.Text = "Next game day in " .. clock(tycoonsFolder:GetAttribute("NextGameDayAt") - now)
+		gameDayLabel.BackgroundColor3 = Color3.fromRGB(18, 22, 30)
+		gameDayLabel.BackgroundTransparency = 0.35
+		gameDayLabel.TextColor3 = Color3.fromRGB(220, 220, 225)
+		gameDayLabel.Visible = true
+	else
+		gameDayLabel.Visible = false
+	end
+end
+
+task.spawn(function()
+	while true do
+		updateGameDay()
+		task.wait(0.2)
+	end
+end)
 
 ---------------------------------------------------------------------------------------------
 -- Toast notifications

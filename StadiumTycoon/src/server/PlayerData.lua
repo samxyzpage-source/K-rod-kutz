@@ -296,8 +296,8 @@ local function saveProfile(profile, release)
 	while profile.Saving do
 		task.wait(0.1)
 	end
-	if not store or not profile.CanSave then
-		return false
+	if not store or not profile.CanSave or (profile.Released and not release) then
+		return false -- (an autosave that was queued behind the final save has nothing left to do)
 	end
 	profile.Saving = true
 	local changesAtSave = profile.Changes

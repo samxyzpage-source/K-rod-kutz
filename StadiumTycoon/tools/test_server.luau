@@ -421,6 +421,9 @@ soundService.Name = "SoundService"
 roblox.implementMethod("Folder", "PlayLocalSound", function(_, sound)
 	table.insert(playedSounds, sound.Name)
 end)
+roblox.implementMethod("Workspace", "GetServerTimeNow", function()
+	return os.clock()
+end)
 roblox.implementMethod("Instance", "GetAttributeChangedSignal", function(inst, name)
 	return instanceSignal(inst, "Attr" .. name)
 end)
@@ -892,6 +895,47 @@ local function runTests()
 	touch(claimTrigger(2), hank)
 	check(hank:GetAttribute("PlotIndex") == 2, "can still claim and play")
 
+	section("Game day")
+	local GameDay = requireNode("ServerScriptService/TycoonServer/GameDay")
+	Config.GameDay.IntervalSeconds = 0.3
+	Config.GameDay.DurationSeconds = 1.2
+	local fullPlot = PlotManager.GetPlot(alice2)
+	local incomeBefore = alice2:GetAttribute("Income")
+	GameDay.Init(tycoons, PlotManager)
+	GameDay.Start()
+	check(type(tycoons:GetAttribute("NextGameDayAt")) == "number", "next game day time is published for the HUD")
+	task.wait(0.6)
+	check(tycoons:GetAttribute("GameDayActive") == true and GameDay.IsActive(), "a game day starts on schedule")
+	Config.GameDay.IntervalSeconds = 1000 -- no more game days during the rest of the tests
+	check(alice2:GetAttribute("Income") == incomeBefore * Config.GameDay.IncomeMultiplier, "income is boosted during the game day")
+	local crowd = fullPlot.Model:FindFirstChild("GameDayFans")
+	local seated, walkers = 0, 0
+	for _, child in ipairs(crowd and crowd:GetChildren() or {}) do
+		if child.Name:sub(1, 3) == "Fan" then
+			seated += 1
+		elseif child.Name:sub(1, 6) == "Walker" then
+			walkers += 1
+		end
+	end
+	check(seated > 0 and seated <= Config.GameDay.SeatedFans, ("fans fill the stands (%d seated)"):format(seated))
+	check(#CollectionServiceMock:GetTagged("TycoonFan") >= seated, "fans are tagged for the cheering animation")
+	local hankPlot = PlotManager.GetPlot(hank)
+	local hankCrowd = hankPlot.Model:FindFirstChild("GameDayFans")
+	local hankSeated = 0
+	for _, child in ipairs(hankCrowd and hankCrowd:GetChildren() or {}) do
+		if child.Name:sub(1, 3) == "Fan" then
+			hankSeated += 1
+		end
+	end
+	check(hankSeated == 0, "no seated fans in a stadium without stands")
+	local gameDayNote = lastNotification(alice2)
+	check(gameDayNote and gameDayNote.message:find("GAME DAY") ~= nil, "owners are told the game day started")
+	task.wait(1.3)
+	check(tycoons:GetAttribute("GameDayActive") == false and not GameDay.IsActive(), "the game day ends")
+	check(fullPlot.Model:FindFirstChild("GameDayFans") == nil, "the crowd leaves afterwards")
+	check(alice2:GetAttribute("Income") == incomeBefore, "income goes back to normal")
+	Config.GameDay.IntervalSeconds = 1000 -- no more game days during the rest of the tests
+
 	---------------------------------------------------------------------------------------------
 	-- Client HUD (runs the LocalScript against fake player/attributes; Lune validates GUI property names)
 	---------------------------------------------------------------------------------------------
@@ -930,6 +974,19 @@ local function runTests()
 		)
 		check(hud:FindFirstChild("Income", true).Text == "+$45/s", "income label: " .. hud:FindFirstChild("Income", true).Text)
 		check(hud:FindFirstChild("SaveStatus", true).Text:find("ON") ~= nil, "save status label")
+		tycoons:SetAttribute("GameDayActive", false)
+		tycoons:SetAttribute("NextGameDayAt", os.clock() + 125)
+		task.wait(0.3)
+		local banner = hud:FindFirstChild("GameDay", true)
+		check(
+			banner and banner.Visible and banner.Text:find("Next game day in 2:0") ~= nil,
+			"game day countdown: " .. tostring(banner and banner.Text)
+		)
+		tycoons:SetAttribute("GameDayActive", true)
+		tycoons:SetAttribute("GameDayEndsAt", os.clock() + 42)
+		task.wait(0.3)
+		check(banner.Text:find("GAME DAY") ~= nil and banner.Text:find("0:4") ~= nil, "game day banner: " .. banner.Text)
+		tycoons:SetAttribute("GameDayActive", false)
 		for i = 1, 7 do
 			notifyRemote.OnClientEvent:Fire("Message " .. i, i % 2 == 0 and "error" or "success")
 		end
@@ -983,6 +1040,30 @@ local function runTests()
 		end
 	end
 	check(pulsing, "buy buttons pulse")
+	-- a fan in front of the camera bounces
+	local fanFolder = Instance.new("Folder")
+	fanFolder.Parent = workspace
+	local fanModel = Instance.new("Model")
+	fanModel.Name = "TestFan"
+	local fanBody = Instance.new("Part")
+	fanBody.CFrame = CFrame.new(0, 10, 0)
+	fanBody.Parent = fanModel
+	local fanHead = Instance.new("Part")
+	fanHead.CFrame = CFrame.new(0, 12, 0)
+	fanHead.Parent = fanModel
+	fanModel.Parent = fanFolder
+	CollectionServiceMock:AddTag(fanModel, "TycoonFan")
+	task.wait(0.05)
+	local moved = false
+	for step = 1, 20 do
+		RunServiceMock.RenderStepped:Fire(0.016)
+		task.wait(0.03)
+		if math.abs(fanBody.CFrame.Position.Y - 10) > 0.01 then
+			moved = true
+			break
+		end
+	end
+	check(moved, "fans bounce and cheer")
 	notifyRemote.OnClientEvent:Fire("Built X", "success")
 	task.wait(0.05)
 	check(table.find(playedSounds, "Purchase") ~= nil, "purchase sound plays")

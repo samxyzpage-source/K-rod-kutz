@@ -34,6 +34,17 @@ Config.BuildAnimation = true
 Config.RespawnAtPlot = true -- owners respawn at their own stadium
 Config.ShowGuideBeam = true -- a glowing beam points to your next buy button
 
+-- Game days: every IntervalSeconds a game day starts for everyone. Fans walk in, fill the
+-- stands you've built, and income is multiplied for DurationSeconds.
+Config.GameDay = {
+	Enabled = true,
+	IntervalSeconds = 240,
+	DurationSeconds = 60,
+	IncomeMultiplier = 2,
+	SeatedFans = 72, -- max seated fans per stadium (spread over the stands you own)
+	WalkingFans = 8, -- fans that walk in through the gate at kick-off
+}
+
 -- Sounds (client only). Set Id = "" to turn one off, or paste your own "rbxassetid://123..." ids.
 Config.Sounds = {
 	Purchase = { Id = "rbxasset://sounds/electronicpingshort.wav", Volume = 0.6, Speed = 1 },
