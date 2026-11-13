@@ -368,6 +368,10 @@ for _, entry in ipairs(built) do
 			end
 			local comps = { inst.CFrame:GetComponents() }
 			for i, v in ipairs(comps) do
+				if v ~= v or math.abs(v) > 1e7 then
+					addError(("%s/%s has an invalid (NaN or huge) CFrame"):format(entry.id, inst.Name))
+					v = 0
+				end
 				comps[i] = round(v)
 			end
 			local color = inst.Color
