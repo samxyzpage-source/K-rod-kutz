@@ -730,54 +730,90 @@ local function advanceSeason(player, f, won)
 	return "Lost the championship game. So close! New season!", 0
 end
 
-function Franchise.PlayGameDay()
+--[[
+	Decides the plot's game at kick-off (GameDay.lua plays it out): the team rating, plus the
+	press-conference hype, against an opponent that gets stronger as the franchise grows (and in
+	the playoffs). Returns { Owner, Home, Away, Won, Hype } or nil when the owner's team data
+	isn't loaded.
+]]
+function Franchise.DecideGame(plot)
+	local player = plot.Owner
+	local f = player and franchiseOf(player)
+	if not f then
+		return nil
+	end
+	local built = 0
+	for _ in pairs(plot.Owned) do
+		built += 1
+	end
+	local progress = built / #Items.List
+	local hype = f.Hype
+	local rating = Franchise.TeamRating(player) + hype -- press conferences fire the team up
+	local playoff = f.Season.Stage ~= "regular"
+	local opponent = 46 + progress * 40 + rng:NextInteger(-6, 6) + (playoff and Config.Season.PlayoffBoost or 0)
+	local winChance = 1 / (1 + math.exp(-(rating - opponent) / 6))
+	local won = rng:NextNumber() < winChance
+	local winnerScore = footballScore(14)
+	local loserScore = math.min(footballScore(0), winnerScore - 1)
+	return {
+		Owner = player,
+		Home = won and winnerScore or loserScore,
+		Away = won and loserScore or winnerScore,
+		Won = won,
+		Hype = hype,
+	}
+end
+
+-- Records a game decided by DecideGame at its final whistle: the final score, the prize, the
+-- record, a week of the season and the quests. Ignored when the plot changed hands meanwhile.
+function Franchise.FinishGame(plot, game)
+	local player = plot.Owner
+	local f = player and franchiseOf(player)
+	if not f or type(game) ~= "table" or game.Owner ~= player then
+		return
+	end
+	-- the hype the game used is spent (press conferences held during the game count for the next one)
+	f.Hype = math.max(0, f.Hype - (tonumber(game.Hype) or 0))
+	local home, away, won = game.Home, game.Away, game.Won == true
+	plotManager.SetScore(plot, home, away)
+	local income = plotManager.GetBaseIncome(player)
+	local prize
+	if won then
+		f.Stats.Wins = (f.Stats.Wins or 0) + 1
+		prize = math.max(1000, math.floor(income * 150))
+	else
+		f.Stats.Losses = (f.Stats.Losses or 0) + 1
+		prize = math.max(200, math.floor(income * 30))
+	end
+	local seasonNote, titlePrize = advanceSeason(player, f, won)
+	prize += titlePrize
+	PlayerData.AddCash(player, prize)
+	PlayerData.MarkChanged(player)
+	notify(
+		player,
+		("FINAL: %s %d - %d VISITORS. %s  +%s"):format(
+			plot.TeamName ~= "" and plot.TeamName or "HOME",
+			home,
+			away,
+			won and "WIN!" or "Tough loss.",
+			Format.Money(prize)
+		),
+		won and "success" or "info"
+	)
+	notify(player, seasonNote, titlePrize > 0 and "success" or "info")
+	Franchise.CheckQuests(player)
+	for _, hook in ipairs(seasonHooks) do
+		task.spawn(hook, player, plot, f.Stats.Championships or 0)
+	end
+end
+
+-- Plays a whole game at once (decided and finished) for every owned plot, or only for onlyPlot.
+function Franchise.PlayGameDay(onlyPlot)
 	for _, plot in ipairs(plotManager.GetPlots()) do
-		local player = plot.Owner
-		local f = player and franchiseOf(player)
-		if f then
-			local built = 0
-			for _ in pairs(plot.Owned) do
-				built += 1
-			end
-			local progress = built / #Items.List
-			local rating = Franchise.TeamRating(player) + f.Hype -- press conferences fire the team up
-			f.Hype = 0
-			local playoff = f.Season.Stage ~= "regular"
-			local opponent = 46 + progress * 40 + rng:NextInteger(-6, 6) + (playoff and Config.Season.PlayoffBoost or 0)
-			local winChance = 1 / (1 + math.exp(-(rating - opponent) / 6))
-			local won = rng:NextNumber() < winChance
-			local winnerScore = footballScore(14)
-			local loserScore = math.min(footballScore(0), winnerScore - 1)
-			local home, away = won and winnerScore or loserScore, won and loserScore or winnerScore
-			plotManager.SetScore(plot, home, away)
-			local income = plotManager.GetBaseIncome(player)
-			local prize
-			if won then
-				f.Stats.Wins = (f.Stats.Wins or 0) + 1
-				prize = math.max(1000, math.floor(income * 150))
-			else
-				f.Stats.Losses = (f.Stats.Losses or 0) + 1
-				prize = math.max(200, math.floor(income * 30))
-			end
-			local seasonNote, titlePrize = advanceSeason(player, f, won)
-			prize += titlePrize
-			PlayerData.AddCash(player, prize)
-			PlayerData.MarkChanged(player)
-			notify(
-				player,
-				("FINAL: %s %d - %d VISITORS. %s  +%s"):format(
-					plot.TeamName ~= "" and plot.TeamName or "HOME",
-					home,
-					away,
-					won and "WIN!" or "Tough loss.",
-					Format.Money(prize)
-				),
-				won and "success" or "info"
-			)
-			notify(player, seasonNote, titlePrize > 0 and "success" or "info")
-			Franchise.CheckQuests(player)
-			for _, hook in ipairs(seasonHooks) do
-				task.spawn(hook, player, plot, f.Stats.Championships or 0)
+		if onlyPlot == nil or plot == onlyPlot then
+			local game = Franchise.DecideGame(plot)
+			if game then
+				Franchise.FinishGame(plot, game)
 			end
 		end
 	end

@@ -48,9 +48,6 @@ local claiming = {} -- [Player] = true while waiting for their data
 local cooldowns = {} -- [Player] = { [key] = os.clock() }
 local notifyRemote = nil
 local isNight = false
-local incomeBoost = 1 -- multiplier while a game day is on
-local gameDayActive = false
-local rng = Random.new()
 
 local tycoonsFolder = nil
 local UNCLAIMED_TRIGGER_TRANSPARENCY = 0.55
@@ -245,7 +242,7 @@ end
 local function updateOwnerAttributes(plot)
 	local owner = plot.Owner
 	if owner then
-		owner:SetAttribute("Income", plot.Income * Config.IncomeMultiplier * incomeBoost)
+		owner:SetAttribute("Income", plot.Income * Config.IncomeMultiplier * plot.IncomeBoost)
 		owner:SetAttribute("Built", countOwned(plot))
 	end
 end
@@ -643,7 +640,7 @@ function PlotManager.Purchase(plot, item)
 	if not PlayerData.TrySpend(player, item.Cost) then
 		if cooldownReady(player, "cash_" .. item.Id, 2) then
 			local missing = item.Cost - PlayerData.GetCash(player)
-			local income = plot.Income * Config.IncomeMultiplier * incomeBoost
+			local income = plot.Income * Config.IncomeMultiplier * plot.IncomeBoost
 			local soon = ""
 			if income > 0 then
 				local seconds = math.ceil(missing / income)
@@ -770,6 +767,7 @@ function PlotManager.Claim(plot, player, profile)
 	paintBase(plot) -- (a returning owner's saved team colours)
 	updateVault(plot)
 	player:SetAttribute("PlotIndex", plot.Index)
+	GameDay.OnPlotClaimed(plot) -- (a returning owner's game-day cooldown carries on)
 
 	updateFreePlots()
 
@@ -812,8 +810,7 @@ function PlotManager.Claim(plot, player, profile)
 	recalcIncome(plot)
 	refreshButtons(plot)
 	updateVault(plot)
-	GameDay.OnPlotClaimed(plot)
-	finishBuild(plot)
+	finishBuild(plot) -- (GameDay's rebuilt hook: the first game may be ready now)
 end
 
 local function onClaimTouched(plot, hit)
@@ -877,6 +874,8 @@ function PlotManager.Release(player)
 	plot.Owned = {}
 	plot.Income = 0
 	plot.Vault = 0
+	plot.IncomeBoost = 1
+	plot.GameDayActive = false
 	plot.TeamName = ""
 	plot.Palette = plot.BasePalette
 	paintBase(plot)
@@ -893,7 +892,7 @@ function PlotManager.Release(player)
 	setGateClaimed(plot, nil)
 	plot.HomeScore, plot.AwayScore = 0, 0
 	publishPlot(plot)
-	GameDay.ClearCrowd(plot)
+	GameDay.OnPlotReleased(plot) -- a game day that is on stops (no result) and its crowd goes
 	for _, hook in ipairs(releaseHooks) do
 		task.spawn(hook, plot)
 	end
@@ -985,7 +984,7 @@ local function onBusTouched(hit, destination)
 end
 
 ---------------------------------------------------------------------------------------------
--- Night lights, game simulation and jumbotron
+-- Night lights, game-day scoring and jumbotron
 ---------------------------------------------------------------------------------------------
 
 function PlotManager.SetNight(night)
@@ -995,13 +994,15 @@ function PlotManager.SetNight(night)
 	end
 end
 
+local GAME_DAY_GOLD = Color3.fromRGB(255, 196, 37)
+
 local function jumbotronMessages(plot)
-	if gameDayActive then
+	if plot.GameDayActive then
 		return {
-			{ "GAME DAY!", Color3.fromRGB(255, 196, 37) },
+			{ "GAME DAY!", GAME_DAY_GOLD },
 			{ plot.TeamName, plot.Palette.Primary },
 			{ "MAKE SOME NOISE!", plot.Palette.Secondary },
-			{ ("%dX CASH!"):format(incomeBoost), Color3.fromRGB(34, 150, 80) },
+			{ ("%dX CASH!"):format(plot.IncomeBoost), Color3.fromRGB(34, 150, 80) },
 			{ ("HOME %d - AWAY %d"):format(plot.HomeScore, plot.AwayScore), Color3.fromRGB(15, 15, 20) },
 		}
 	end
@@ -1023,25 +1024,16 @@ local function showOnJumbotron(plot, text, color)
 	end
 end
 
--- Every so often one of the teams scores, so the scoreboard and jumbotron feel alive.
-local function simulateGame(plot)
-	if not findLabel(plot, "ScoreboardScore") then
-		return
-	end
-	local homeScores = rng:NextNumber() < 0.6
-	local points = rng:NextNumber() < 0.7 and 7 or 3
-	if homeScores then
-		plot.HomeScore += points
-	else
-		plot.AwayScore += points
-	end
-	if plot.HomeScore >= 49 or plot.AwayScore >= 49 then
-		plot.HomeScore, plot.AwayScore = 0, 0
-	end
+-- A scoring play in the plot's game day (GameDay.lua plays the game): the new score goes up on
+-- the scoreboard and the jumbotron cheers the home team's points (homePoints = 0: the visitors
+-- scored).
+function PlotManager.ScorePlay(plot, home, away, homePoints)
+	plot.HomeScore, plot.AwayScore = home, away
 	updateScoreboard(plot)
-	if homeScores and findLabel(plot, "JumbotronText") then
+	if homePoints > 0 and findLabel(plot, "JumbotronText") then
 		plot.JumbotronHoldUntil = os.clock() + 4
-		showOnJumbotron(plot, points == 7 and "TOUCHDOWN!" or "FIELD GOAL!", Color3.fromRGB(255, 196, 37))
+		local text = homePoints == 7 and "TOUCHDOWN!" or homePoints == 3 and "FIELD GOAL!" or "SCORE!"
+		showOnJumbotron(plot, text, GAME_DAY_GOLD)
 	end
 end
 
@@ -1092,6 +1084,8 @@ function PlotManager.Init(parentFolder, remote)
 			AwayScore = 0,
 			JumbotronStep = 0,
 			JumbotronHoldUntil = 0,
+			IncomeBoost = 1, -- income multiplier while the plot's game day is on (GameDay.lua)
+			GameDayActive = false,
 			GoalChallenger = nil, -- a button that beat the guide beam's one once (see updateGoal)
 			Building = false, -- true while the owned steps are being (re)built over several frames
 			BuildToken = 0, -- changes when a new build starts or the plot is released
@@ -1154,7 +1148,7 @@ function PlotManager.Start()
 			task.wait(Config.IncomeTickSeconds)
 			for _, plot in ipairs(plots) do
 				if plot.Owner then
-					plot.Vault += plot.Income * Config.IncomeMultiplier * incomeBoost * Config.IncomeTickSeconds
+					plot.Vault += plot.Income * Config.IncomeMultiplier * plot.IncomeBoost * Config.IncomeTickSeconds
 					if ownerIsOnPad(plot) then
 						collect(plot, true)
 					else
@@ -1193,23 +1187,6 @@ function PlotManager.Start()
 			end
 		end
 	end)
-
-	-- pretend football game (scores much more often on game days)
-	task.spawn(function()
-		local elapsed = 0
-		while true do
-			task.wait(1)
-			elapsed += 1
-			if elapsed >= (gameDayActive and 8 or 25) then
-				elapsed = 0
-				for _, plot in ipairs(plots) do
-					if plot.Owner then
-						simulateGame(plot)
-					end
-				end
-			end
-		end
-	end)
 end
 
 function PlotManager.GetPlots()
@@ -1223,7 +1200,7 @@ function PlotManager.OnPieceBuilt(pieceId, fn)
 	table.insert(pieceHooks[pieceId], fn)
 end
 
--- Puts a final score on the plot's scoreboard / jumbotron.
+-- Puts a score on the plot's scoreboard / jumbotron (0 - 0 at kick-off, the final score).
 function PlotManager.SetScore(plot, home, away)
 	plot.HomeScore, plot.AwayScore = home, away
 	updateScoreboard(plot)
@@ -1247,7 +1224,7 @@ end
 -- The player's income per second right now (including multipliers).
 function PlotManager.GetIncome(player)
 	local plot = plotByPlayer[player]
-	return plot and plot.Income * Config.IncomeMultiplier * incomeBoost or 0
+	return plot and plot.Income * Config.IncomeMultiplier * plot.IncomeBoost or 0
 end
 
 -- The player's income per second WITHOUT the game-day boost (for prices and rewards, so they
@@ -1316,23 +1293,18 @@ function PlotManager.OnPlotReleased(fn)
 	table.insert(releaseHooks, fn)
 end
 
--- Called by GameDay when a game day starts (active = true) or ends.
-function PlotManager.SetGameDay(active, multiplier)
-	gameDayActive = active
-	incomeBoost = active and multiplier or 1
-	for _, plot in ipairs(plots) do
-		if plot.Owner then
-			updateOwnerAttributes(plot)
-			if active then
-				notify(plot.Owner, ("GAME DAY! Fans are pouring in - %dX CASH!"):format(incomeBoost), "success")
-				if findLabel(plot, "JumbotronText") then
-					plot.JumbotronHoldUntil = os.clock() + 4
-					showOnJumbotron(plot, "GAME DAY!", Color3.fromRGB(255, 196, 37))
-				end
-			else
-				notify(plot.Owner, "That's the final whistle! The next game day starts soon.", "info")
-			end
-		end
+-- Called by GameDay when the plot's game day starts (active = true: its income is multiplied) or
+-- ends. (GameDay tells the owner.)
+function PlotManager.SetGameDay(plot, active, multiplier)
+	plot.GameDayActive = active
+	plot.IncomeBoost = active and multiplier or 1
+	if not plot.Owner then
+		return
+	end
+	updateOwnerAttributes(plot)
+	if active and findLabel(plot, "JumbotronText") then
+		plot.JumbotronHoldUntil = os.clock() + 4
+		showOnJumbotron(plot, "GAME DAY!", GAME_DAY_GOLD)
 	end
 end
 

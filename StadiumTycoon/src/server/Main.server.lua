@@ -34,13 +34,14 @@ local tycoonsFolder = Instance.new("Folder")
 tycoonsFolder.Name = "Tycoons"
 tycoonsFolder.Parent = Workspace
 PlotManager.Init(tycoonsFolder, notifyRemote)
-GameDay.Init(tycoonsFolder, PlotManager)
+GameDay.Init(PlotManager, remotes, notifyRemote) -- owners start their own game days (StartGameDay remote)
 Vehicles.Init(PlotManager)
 Franchise.Init(PlotManager, remotes, notifyRemote)
 KickGame.Init(PlotManager, remotes, notifyRemote, Franchise)
 Interactions.Init(PlotManager, remotes, notifyRemote, Franchise)
-LiveScreens.Init(PlotManager, tycoonsFolder)
-GameDay.OnEnded(Franchise.PlayGameDay)
+LiveScreens.Init(PlotManager)
+GameDay.SetMatchMaker(Franchise.DecideGame) -- the result is decided at kick-off...
+GameDay.OnEnded(Franchise.FinishGame) -- ...and counts (prize, record, season week) at the final whistle
 Vehicles.OnDrive(Franchise.RecordDrive)
 World.StartDayNight(Config, PlotManager.SetNight)
 
