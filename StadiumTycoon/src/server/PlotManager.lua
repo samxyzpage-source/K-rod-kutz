@@ -385,6 +385,7 @@ local function buildItem(plot, item, animate)
 		warn(("[PlotManager] Builder '%s' (step %d) failed: %s"):format(item.PieceId, item.Stage, tostring(err)))
 	end
 	BuildUtil.PruneEmpty(model)
+	BuildUtil.TuneLighting(model, item.PieceId, Config) -- (softer room lamps and light panels)
 	if not FAR_TEXT_PIECES[item.PieceId] then
 		limitGuiDistance(model) -- (before the model is parented, so it replicates with the limits)
 	end
@@ -1070,6 +1071,7 @@ function PlotManager.Init(parentFolder, remote)
 
 		local ctx = BuildUtil.NewContext(origin, baseFolder, palette, "", Config)
 		local refs = Builders.PlotBase(ctx)
+		BuildUtil.TuneLighting(baseFolder, "PlotBase", Config)
 		limitGuiDistance(baseFolder)
 
 		local plot = {

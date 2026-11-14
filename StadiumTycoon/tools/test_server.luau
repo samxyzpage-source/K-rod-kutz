@@ -1383,6 +1383,86 @@ local function runTests()
 	end
 	check(lastNotification(alice).message:find("complete") ~= nil, "completion message on the last item")
 
+	section("Lighting (rooms aren't washed out)")
+	do
+		local BuildUtil = requireNode("ServerScriptService/TycoonServer/BuildUtil")
+		local lit = Config.Lighting
+		-- the pass on its own: a room lamp and light panel, an outdoor lamp, a flood light
+		local function sample(pieceId)
+			local holder = Instance.new("Model")
+			local panel = Instance.new("Part")
+			panel.Material = Enum.Material.Neon
+			panel.Color = roblox.Color3.fromRGB(255, 244, 214)
+			panel.Parent = holder
+			local lamp = Instance.new("PointLight")
+			lamp.Brightness = 2
+			lamp.Range = 30
+			lamp.Color = roblox.Color3.fromRGB(255, 238, 205)
+			lamp.Parent = panel
+			local flood = Instance.new("SpotLight")
+			flood.Name = "FloodLight"
+			flood.Brightness = 3
+			flood.Range = 60
+			flood.Parent = panel
+			BuildUtil.TuneLighting(holder, pieceId, Config)
+			return panel, lamp, flood
+		end
+		local panel, lamp, flood = sample("hq_media")
+		check(
+			math.abs(lamp.Brightness - 2 * lit.Room.Brightness) < 1e-6 and lamp.Range == lit.Room.MaxRange,
+			("a room lamp is dimmer and reaches less far (%.2f, range %d)"):format(lamp.Brightness, lamp.Range)
+		)
+		check(lamp.Color.R - lamp.Color.B < (255 - 205) / 255 * 0.5, "a room lamp is less yellow")
+		check(
+			math.max(panel.Color.R, panel.Color.G, panel.Color.B) <= lit.NeonWhiteLimit + 1e-6,
+			"a white Neon light panel in a room glows softly"
+		)
+		check(flood.Brightness == 3 and flood.Range == 60, "flood lights are left alone")
+		local before = lamp.Brightness
+		BuildUtil.TuneLighting(panel.Parent, "hq_media", Config)
+		check(lamp.Brightness == before, "tuning twice doesn't dim twice")
+		local _, outdoorLamp = sample("parking")
+		check(outdoorLamp.Brightness == 2 and outdoorLamp.Range == 30, "outdoor lamps are left alone")
+		local _, hallLamp = sample("main_concourse")
+		check(math.abs(hallLamp.Brightness - 2 * lit.Hall.Brightness) < 1e-6, "hall lamps are dimmed a little")
+
+		-- the real, fully built plot
+		local roomLamps, tooFar, yellow, blazing, glowingBoards = 0, 0, 0, 0, 0
+		for _, stepModel in ipairs(plotModel(1).Items:GetChildren()) do
+			local kind = BuildUtil.LightingKind(string.match(stepModel.Name, "^(.-):") or stepModel.Name)
+			for _, d in ipairs(stepModel:GetDescendants()) do
+				if kind == "Room" and d:IsA("Light") and d.Name ~= "FloodLight" then
+					roomLamps += 1
+					if d.Range > lit.Room.MaxRange + 1e-6 then
+						tooFar += 1
+					end
+					-- (coloured accent glows - fire, ON AIR signs, heaters - are named "...Glow")
+					if d.Color.R - d.Color.B > 0.12 and not string.find(d.Name, "Glow$") then
+						yellow += 1
+					end
+				elseif kind and d:IsA("BasePart") and d.Material == Enum.Material.Neon then
+					local c = d.Color
+					local top = math.max(c.R, c.G, c.B)
+					if math.min(c.R, c.G, c.B) >= 0.75 * top and top > lit.NeonWhiteLimit + 1e-6 then
+						blazing += 1
+					end
+				elseif d:IsA("SurfaceGui") and d.Parent and d.Parent.Name == "Whiteboard" and d.LightInfluence < 0.5 then
+					for _, panel in ipairs(d:GetDescendants()) do
+						local c = panel:IsA("GuiObject") and panel.BackgroundTransparency < 0.5 and panel.BackgroundColor3
+						if c and 0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B >= 0.75 and panel.Size.X.Scale * panel.Size.Y.Scale >= 0.3 then
+							glowingBoards += 1 -- (a big bright board that glows; dark marker lines may glow)
+							break
+						end
+					end
+				end
+			end
+		end
+		check(roomLamps > 100 and tooFar == 0, ("room lamps stay in their room (%d lamps, %d too far)"):format(roomLamps, tooFar))
+		check(yellow == 0, ("room lamps are close to white, except coloured accent glows (%d yellow)"):format(yellow))
+		check(blazing == 0, ("no blazing white light panels in rooms and halls (%d)"):format(blazing))
+		check(glowingBoards == 0, ("whiteboards don't glow (%d)"):format(glowingBoards))
+	end
+
 	section("Golf carts")
 	task.wait(0.2)
 	local cartsFolder = plotModel(1):FindFirstChild("Carts")

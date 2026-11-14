@@ -199,6 +199,7 @@ local built = {} -- { id, model }
 
 local baseCtx, baseModel = BuildUtil.Child(BuildUtil.NewContext(origin, root, palette, "PREVIEW", Config), "PlotBase")
 local okBase, baseRefs = pcall(Builders.PlotBase, baseCtx)
+BuildUtil.TuneLighting(baseModel, "PlotBase", Config) -- (as PlotManager does)
 if not okBase then
 	addError("PlotBase builder failed: " .. tostring(baseRefs))
 else
@@ -234,6 +235,7 @@ for _, item in ipairs(Items.List) do
 				addError(("Builder '%s' failed on step %d: %s"):format(item.PieceId, item.Stage, tostring(err)))
 			end
 			BuildUtil.PruneEmpty(model)
+			BuildUtil.TuneLighting(model, item.PieceId, Config) -- (as PlotManager.buildItem does)
 			stepsPerPiece[item.PieceId] = stepCtx.stageState.highest
 			local partCount = 0
 			for _, d in ipairs(model:GetDescendants()) do

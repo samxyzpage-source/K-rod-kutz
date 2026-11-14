@@ -31,6 +31,19 @@ Config.DayNightCycle = true
 Config.DayLengthSeconds = 600 -- seconds for a full 24 hour day
 Config.NightStartsAt = 18 -- ClockTime when stadium lights switch on
 Config.NightEndsAt = 6.5 -- ClockTime when stadium lights switch off
+-- Lamps: every built step goes through BuildUtil.TuneLighting, which tones down the lamps in
+-- rooms and indoor halls and the glow of white Neon light panels, so rooms don't look washed out
+-- (too white, too yellow, hazy). Outdoor lights and the stadium's flood lights are left alone.
+-- Rooms too dark? Raise Brightness / MaxRange; too bright? lower them.
+Config.Lighting = {
+	-- HQ rooms, locker rooms, suites, press box, booths, shops, the Hall of Fame, the garage...
+	Room = { Brightness = 0.55, MaxRange = 20, Neutral = 0.65 },
+	-- concourses, gate halls, escalators, walkways, the HQ's halls, the event level, the dome
+	Hall = { Brightness = 0.75, MaxRange = 40, Neutral = 0.5 },
+	NeutralColor = Color3.fromRGB(255, 251, 245), -- lamp colours are blended toward this (less yellow)
+	NeonWhiteLimit = 0.72, -- white/cream Neon panels in rooms and halls glow at most this bright (0..1)
+	NeonYellowLimit = 0.85, -- strong yellow Neon in rooms glows at most this bright (0..1)
+}
 Config.BuildAnimation = true
 -- A returning owner's franchise (and every team change) is rebuilt a few steps per frame: the
 -- server spends at most this many seconds per frame on it, so nobody's game stalls.

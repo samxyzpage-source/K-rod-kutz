@@ -132,6 +132,137 @@ function BuildUtil.PruneEmpty(root)
 	end
 end
 
+---------------------------------------------------------------------------------------------
+-- LIGHTING
+-- One pass over every built step (PlotManager.buildItem, the plot base and the preview tool)
+-- instead of hand-tuning each builder: lamps in rooms and indoor halls are dimmed, kept from
+-- reaching through walls into the next room (smaller Range) and made less yellow; white/cream
+-- Neon light panels glow softly; big bright glowing boards (whiteboards) are lit like normal
+-- surfaces. Outdoor lights and FloodLights are left alone. Strengths: Config.Lighting.
+---------------------------------------------------------------------------------------------
+
+-- Which kind of space a piece is ("Room", "Hall" or nil = outdoors).
+local ROOM_PIECES = {
+	home_lockerroom = true,
+	visitor_lockerroom = true,
+	coach_lockerroom = true,
+	suites = true,
+	club_lounge = true,
+	pressbox = true,
+	broadcast_booth = true,
+	hall_of_fame = true,
+	golf_carts = true,
+	teamstore = true,
+	ticketbooth = true,
+	concessions = true,
+	concourse_food = true,
+	concourse_restrooms = true,
+	concourse_merch = true,
+}
+local HALL_PIECES = {
+	PlotBase = true, -- (the HQ shell's lobby, corridors and stair towers)
+	main_concourse = true,
+	upper_concourse = true,
+	gates = true,
+	escalators = true,
+	campus_links = true,
+	indoor_dome = true,
+	-- the event level under the stands and the players' tunnels
+	lower_home = true,
+	lower_visitor = true,
+	lower_ends = true,
+	lower_corners = true,
+}
+function BuildUtil.LightingKind(pieceId)
+	if type(pieceId) ~= "string" then
+		return nil
+	end
+	if pieceId:sub(1, 3) == "hq_" or ROOM_PIECES[pieceId] then
+		return "Room"
+	elseif HALL_PIECES[pieceId] then
+		return "Hall"
+	end
+	return nil
+end
+
+local function luminance(c)
+	return 0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B
+end
+
+-- `color` scaled down so its brightest channel is at most `limit`.
+local function capBrightness(color, limit)
+	local top = math.max(color.R, color.G, color.B)
+	if top <= limit or top <= 0 then
+		return color
+	end
+	local k = limit / top
+	return Color3.new(color.R * k, color.G * k, color.B * k)
+end
+
+--[[
+	Tones down the lighting of a freshly built step (or the plot base) - see the section header.
+	root: the step model; pieceId: its piece id ("PlotBase" for the base); config: Config.
+	Safe to call more than once (everything it changes is marked "Tuned").
+]]
+function BuildUtil.TuneLighting(root, pieceId, config)
+	local settings = config and config.Lighting
+	if not settings then
+		return
+	end
+	local kindName = BuildUtil.LightingKind(pieceId)
+	local kind = kindName and settings[kindName]
+	local neutral = settings.NeutralColor or Color3.new(1, 0.985, 0.96)
+	for _, inst in ipairs(root:GetDescendants()) do
+		if inst:GetAttribute("Tuned") then
+			continue
+		end
+		if kind and inst:IsA("Light") and inst.Name ~= "FloodLight" then
+			inst.Brightness *= kind.Brightness or 1
+			if kind.MaxRange and inst.Range > kind.MaxRange then
+				inst.Range = kind.MaxRange
+			end
+			local color = inst.Color:Lerp(neutral, kind.Neutral or 0)
+			-- every lamp ends up close to white, except coloured accent glows (fire, ON AIR signs,
+			-- heaters, candles: lamps named "...Glow")
+			if not string.find(inst.Name, "Glow$") then
+				for _ = 1, 4 do
+					if color.R - color.B <= 0.1 then
+						break
+					end
+					color = color:Lerp(neutral, 0.5)
+				end
+			end
+			inst.Color = color
+			inst:SetAttribute("Tuned", true)
+		elseif kind and inst:IsA("BasePart") and inst.Material == Enum.Material.Neon and inst.Transparency < 1 then
+			local c = inst.Color
+			if math.min(c.R, c.G, c.B) >= 0.75 then
+				-- white / cream light panels: a soft glow, not a blinding one
+				inst.Color = capBrightness(c:Lerp(neutral, kind.Neutral or 0), settings.NeonWhiteLimit or 1)
+				inst:SetAttribute("Tuned", true)
+			elseif kindName == "Room" and c.R >= 0.8 and c.G >= 0.6 and c.B <= 0.5 then
+				-- strong yellow / amber glow in a room
+				inst.Color = capBrightness(c, settings.NeonYellowLimit or 1)
+				inst:SetAttribute("Tuned", true)
+			end
+		elseif inst:IsA("SurfaceGui") and inst.LightInfluence < 0.5 then
+			-- a big bright panel that glows (e.g. a whiteboard) is lit like a normal surface
+			for _, gui in ipairs(inst:GetDescendants()) do
+				if
+					gui:IsA("GuiObject")
+					and gui.BackgroundTransparency < 0.5
+					and luminance(gui.BackgroundColor3) >= 0.75
+					and gui.Size.X.Scale * gui.Size.Y.Scale >= 0.3
+				then
+					inst.LightInfluence = 1
+					inst:SetAttribute("Tuned", true)
+					break
+				end
+			end
+		end
+	end
+end
+
 --[[
 	Creates a block (or Ball/Cylinder if props.Shape is set) Part.
 	props: Name, Size, CFrame (local) or Position (local Vector3), Color, Material, Shape,
