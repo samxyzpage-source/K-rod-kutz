@@ -5,8 +5,9 @@
 	  2. POWER - a bar fills up and down, press to lock it (past the gold line)
 	then sends KickAttempt(spotIndex, aim, power). The server judges the kick (KickGame.lua).
 	Press = Space or E, left click / tap the KICK button, or gamepad A. Walking away cancels.
-	While the meter is open Space and A only kick (they don't also jump: landing back on the
-	kick spot would count as stepping on it again).
+	While the meter is open (also while "Here it goes..." shows after a kick) Space and A only
+	kick: they don't also jump, on foot or on the hoverboard (landing back on the kick spot would
+	count as stepping on it again).
 ]]
 
 local ContextActionService = game:GetService("ContextActionService")
@@ -169,6 +170,7 @@ local kickButton = create("TextButton", {
 
 ---------------------------------------------------------------------------------------------
 local current = nil -- { spot, yards, phase = "aim"|"power", started, aim, origin, lastPress }
+local closing = nil -- after a kick: the token of its delayed close (a newer meter clears it)
 local renderConnection = nil
 
 local function rootPosition()
@@ -179,6 +181,7 @@ end
 
 local function finish()
 	current = nil
+	closing = nil
 	screen.Enabled = false
 	ContextActionService:UnbindAction(KICK_ACTION)
 	if renderConnection then
@@ -231,11 +234,14 @@ local function press()
 		local power = powerAt(t)
 		powerFill.Size = UDim2.new(power, 0, 1, 0)
 		kickAttempt:FireServer(current.spot, current.aim, power)
-		local done = current
 		current = nil
 		instruction.Text = "Here it goes..."
+		-- the panel stays up (and the keys sunk) while the ball flies; this kick's close never
+		-- closes a newer meter (stepping back onto the spot opens one at once)
+		local token = {}
+		closing = token
 		task.delay(1.2, function()
-			if current == nil and done then
+			if closing == token then
 				finish()
 			end
 		end)
@@ -267,11 +273,13 @@ kickStart.OnClientEvent:Connect(function(spotIndex, yards, name)
 		lastPress = now,
 		origin = origin,
 	}
+	closing = nil
 	screen.Enabled = true
 	if not renderConnection then
 		renderConnection = RunService.RenderStepped:Connect(step)
 	end
-	-- the keys are sunk while the meter is open (finish() unbinds them), so they don't jump too
+	-- the keys are sunk while the meter is open (finish() unbinds them), so they don't jump too:
+	-- High is above the character's jump (Medium) and the hoverboard's charged jump (Medium + 500)
 	ContextActionService:BindActionAtPriority(KICK_ACTION, function(_, state)
 		if state == Enum.UserInputState.Begin then
 			press()

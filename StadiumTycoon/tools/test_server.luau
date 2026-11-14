@@ -511,15 +511,36 @@ end)
 local UserInputServiceMock = { InputBegan = Signal.new(), InputChanged = Signal.new(), TouchEnabled = false, KeyboardEnabled = true }
 local ProximityPromptServiceMock = { PromptTriggered = Signal.new() }
 local boundActions = {} -- [name] = handler
+-- [name] = { priority = number (nil: BindAction's default), inputs = { KeyCode... }, touchButton }
+local boundSpecs = {} -- (while bound)
+local lastBoundSpecs = {} -- (the last binding, kept after it is unbound)
 local ContextActionServiceMock = {}
-function ContextActionServiceMock:BindActionAtPriority(name, handler)
+function ContextActionServiceMock:BindActionAtPriority(name, handler, touchButton, priority, ...)
 	boundActions[name] = handler
+	boundSpecs[name] = { priority = priority, inputs = { ... }, touchButton = touchButton }
+	lastBoundSpecs[name] = boundSpecs[name]
 end
-function ContextActionServiceMock:BindAction(name, handler)
+function ContextActionServiceMock:BindAction(name, handler, touchButton, ...)
 	boundActions[name] = handler
+	boundSpecs[name] = { priority = nil, inputs = { ... }, touchButton = touchButton }
+	lastBoundSpecs[name] = boundSpecs[name]
 end
 function ContextActionServiceMock:UnbindAction(name)
 	boundActions[name] = nil
+	boundSpecs[name] = nil
+end
+-- is the action bound (right now) to every one of these inputs?
+local function bindsInputs(name, ...)
+	local spec = boundSpecs[name]
+	if not spec then
+		return false
+	end
+	for _, wanted in ipairs({ ... }) do
+		if not table.find(spec.inputs, wanted) then
+			return false
+		end
+	end
+	return true
 end
 local seatSits = {} -- [seat key] = humanoid
 roblox.implementMethod("Seat", "Sit", function(seat, humanoid)
@@ -5535,20 +5556,62 @@ local function runTests()
 			task.wait(0.03)
 		end
 		task.wait(0.1)
+		-- the keys while the meter is open: Space, E and gamepad A, above the character's jump and
+		-- the hoverboard's charged jump (Medium + 500, Hoverboard.client.lua), which would take them
+		-- first otherwise
+		local kickSpec = boundSpecs.TycoonKickMeter
+		local riderJump = lastBoundSpecs.TycoonHoverboardJump
+		local jumpPriority = riderJump and riderJump.priority or Enum.ContextActionPriority.Medium.Value + 500
+		check(
+			bindsInputs("TycoonKickMeter", Enum.KeyCode.Space, Enum.KeyCode.E, Enum.KeyCode.ButtonA)
+				and kickSpec.priority > Enum.ContextActionPriority.Medium.Value
+				and kickSpec.priority > jumpPriority,
+			("the open meter binds Space / E / A above the normal and the hoverboard's jump (%s > %s)"):format(
+				tostring(kickSpec and kickSpec.priority),
+				tostring(jumpPriority)
+			)
+		)
 		local kickAction = boundActions.TycoonKickMeter
 		local spaceResult = kickAction and kickAction("TycoonKickMeter", Enum.UserInputState.Begin, { KeyCode = Enum.KeyCode.Space })
 		task.wait(0.2)
-		check(meter:FindFirstChild("Instruction", true).Text:find("POWER") ~= nil, "space locks the aim, then power")
+		local instruction = meter:FindFirstChild("Instruction", true)
+		check(instruction.Text:find("POWER") ~= nil, "space locks the aim, then power")
 		check(spaceResult == Enum.ContextActionResult.Sink, "the open meter sinks Space / E / A (no jump back onto the kick spot)")
 		instanceSignal(meter:FindFirstChild("Kick", true), "Activated"):Fire()
+		local kickedAt = os.clock()
 		task.wait(0.05)
 		check(
 			attempt and attempt[1] == viewer and attempt[2] == 2 and math.abs(attempt[3]) <= 1 and attempt[4] >= 0 and attempt[4] <= 1,
 			"the kick is sent to the server (aim + power)"
 		)
+		local sunk = boundActions.TycoonKickMeter
+			and boundActions.TycoonKickMeter("TycoonKickMeter", Enum.UserInputState.Begin, { KeyCode = Enum.KeyCode.Space })
+		check(
+			meter.Enabled
+				and instruction.Text:find("Here it goes") ~= nil
+				and bindsInputs("TycoonKickMeter", Enum.KeyCode.Space, Enum.KeyCode.ButtonA)
+				and sunk == Enum.ContextActionResult.Sink,
+			"while the ball flies ('Here it goes...') the keys stay sunk: a jump can't land back on the kick spot"
+		)
+		-- stepping back onto the spot offers a new kick: its meter opens at once, and the first kick's
+		-- delayed close (1.2 s) must not cut the second kick's 'Here it goes...' short
 		instanceSignal(remotesFolder.KickStart, "OnClientEvent"):Fire(1, 25, "SHORT")
 		task.wait(0.05)
-		check(meter.Enabled, "a new kick opens the meter again")
+		check(meter.Enabled and instruction.Text:find("AIM") ~= nil, "a new kick opens the meter again")
+		task.wait(0.2)
+		instanceSignal(meter:FindFirstChild("Kick", true), "Activated"):Fire() -- lock the aim
+		task.wait(0.2)
+		instanceSignal(meter:FindFirstChild("Kick", true), "Activated"):Fire() -- kick
+		local secondAt = os.clock()
+		task.wait(math.max(0, kickedAt + 1.35 - os.clock()))
+		local stillOpen = meter.Enabled and boundActions.TycoonKickMeter ~= nil and instruction.Text:find("Here it goes") ~= nil
+		task.wait(math.max(0, secondAt + 1.35 - os.clock()))
+		check(
+			stillOpen and attempt[2] == 1 and not meter.Enabled and boundActions.TycoonKickMeter == nil,
+			"each kick's 'Here it goes...' lasts its own 1.2 s, then the meter closes and gives the keys back"
+		)
+		instanceSignal(remotesFolder.KickStart, "OnClientEvent"):Fire(1, 25, "SHORT")
+		task.wait(0.05)
 		viewer.Character.HumanoidRootPart.CFrame = CFrame.new(500, 3, 500)
 		RunServiceMock.RenderStepped:Fire(0.016)
 		task.wait(0.05)
