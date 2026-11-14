@@ -1812,6 +1812,46 @@ local function runTests()
 		Config.BuildFrameBudget = math.huge
 	end
 
+	section("Server core: sign draw distances")
+	do
+		local limited, unlimited, odd = 0, 0, 0
+		for _, gui in ipairs(plotModel(1).Items:GetDescendants()) do
+			if gui:IsA("SurfaceGui") then
+				if gui.MaxDistance == 0 then
+					unlimited += 1
+				elseif gui.MaxDistance >= 150 and gui.MaxDistance <= 1000 then
+					limited += 1
+				else
+					odd += 1
+				end
+			end
+		end
+		check(
+			limited > 2 * unlimited and odd == 0,
+			("signs and screens get a draw distance that suits their size (%d limited, %d unlimited)"):format(limited, unlimited)
+		)
+		local function guiOf(root, labelName)
+			local label = root and root:FindFirstChild(labelName, true)
+			return label and label.Parent
+		end
+		local lobbyScreen = guiOf(plotModel(1).Items:FindFirstChild("hq_lobby:2"), "Live_gameday")
+		check(
+			lobbyScreen and lobbyScreen.MaxDistance >= 150 and lobbyScreen.MaxDistance < 1000,
+			"a room's screen is drawn only within " .. tostring(lobbyScreen and lobbyScreen.MaxDistance) .. " studs"
+		)
+		local fieldPaint = true
+		for _, id in ipairs({ "yardlines:3", "midfield:2", "scoreboard:3", "jumbotron:3" }) do
+			for _, gui in ipairs(plotModel(1).Items[id]:GetDescendants()) do
+				if gui:IsA("SurfaceGui") and gui.MaxDistance ~= 0 then
+					fieldPaint = false
+				end
+			end
+		end
+		check(fieldPaint, "field numbers, the midfield logo and the video boards stay visible from anywhere in the bowl")
+		local gate = guiOf(plotModel(1).Base, "GateSign")
+		check(gate and gate.MaxDistance >= 150, "the plot base's signs get a draw distance too")
+	end
+
 	section("Respawn at plot")
 	local newCharacter = makeCharacter("AliceCharacter2")
 	alice.Character = newCharacter

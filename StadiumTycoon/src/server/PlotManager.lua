@@ -278,6 +278,51 @@ local function animateIn(model)
 	end
 end
 
+-- Pieces whose surface text is read from across the bowl (field paint, ribbon boards, video
+-- boards, fascias) keep their SurfaceGuis visible from any distance.
+local FAR_TEXT_PIECES = {
+	turf = true,
+	yardlines = true,
+	endzones = true,
+	midfield = true,
+	scoreboard = true,
+	jumbotron = true,
+	canopy = true,
+	facade = true,
+	gates = true,
+	lower_home = true,
+	lower_visitor = true,
+	lower_ends = true,
+	lower_corners = true,
+	club_seats = true,
+	upper_home = true,
+	upper_visitor = true,
+	upper_ends = true,
+}
+
+-- Gives every SurfaceGui on a part a draw distance that suits the size of its face, so clients
+-- skip the thousands of signs and screens that are too far away to read: 60 studs per stud of
+-- the face's shorter side plus half its longer side, between 150 and 1000 studs.
+local function limitGuiDistance(root)
+	for _, gui in ipairs(root:GetDescendants()) do
+		if gui:IsA("SurfaceGui") and gui.MaxDistance == 0 then
+			local part = gui.Adornee or gui.Parent
+			if part and part:IsA("BasePart") then
+				local size, face = part.Size, gui.Face
+				local a, b
+				if face == Enum.NormalId.Front or face == Enum.NormalId.Back then
+					a, b = size.X, size.Y
+				elseif face == Enum.NormalId.Left or face == Enum.NormalId.Right then
+					a, b = size.Z, size.Y
+				else
+					a, b = size.X, size.Z
+				end
+				gui.MaxDistance = math.clamp(60 * math.min(a, b) + 0.5 * math.max(a, b), 150, 1000)
+			end
+		end
+	end
+end
+
 -- Builds one STEP of a piece (the piece's builder runs with ctx.onlyStage = step).
 local function buildItem(plot, item, animate)
 	local builder = Builders[item.PieceId]
@@ -298,6 +343,9 @@ local function buildItem(plot, item, animate)
 		warn(("[PlotManager] Builder '%s' (step %d) failed: %s"):format(item.PieceId, item.Stage, tostring(err)))
 	end
 	BuildUtil.PruneEmpty(model)
+	if not FAR_TEXT_PIECES[item.PieceId] then
+		limitGuiDistance(model) -- (before the model is parented, so it replicates with the limits)
+	end
 	model.Parent = plot.ItemsFolder
 	plot.ItemModels[item.Id] = model
 	if animate and Config.BuildAnimation then
@@ -892,6 +940,7 @@ function PlotManager.Init(parentFolder, remote)
 
 		local ctx = BuildUtil.NewContext(origin, baseFolder, palette, "", Config)
 		local refs = Builders.PlotBase(ctx)
+		limitGuiDistance(baseFolder)
 
 		local plot = {
 			Index = index,
