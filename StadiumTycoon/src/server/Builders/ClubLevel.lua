@@ -55,8 +55,9 @@
 	                   2 Glass Fronts          glass fronts (team header with the name), end walls,
 	                                           dividers and a door per suite
 	                   3 Suite Interiors       carpet, stadium chairs at the glass (one SUITE CAM seat),
-	                     & Signs               sofa on a team rug, live score TV on a walnut media wall,
-	                                           mini-bar (soda / popcorn) + glass-door mini fridge, a
+	                     & Signs               sofa on a team rug, live score TV on a walnut media wall
+	                                           (the suite's name over it), mini-bar (soda / popcorn,
+	                                           its sign on the front) + glass-door mini fridge, a
 	                                           framed jersey in the suite's theme, a cove light per
 	                                           block (a PointLight over every suite), number sign
 	                                           (look); the Owner's Suite + Legends Suite get extras
@@ -68,10 +69,10 @@
 	                   2 Press Row             desk with 6 PRESS BOX CAM seats + live monitors +
 	                                           nameplates + keyboards, radio headsets, cups, PA
 	                                           microphone, a second row on two risers either side of a
-	                                           centre aisle from the door (laptops, stat sheets), TVs
-	                                           hung over the window, stat boards, game clock, coffee &
-	                                           soda bar with a chalkboard menu, cooler, copier,
-	                                           credentials
+	                                           centre aisle from the door (laptops, keyboards, stat
+	                                           sheets), TVs hung over the window, stat boards, game
+	                                           clock, coffee & soda bar with a chalkboard menu, cooler,
+	                                           copier, credentials
 	                   3 Coaches' Booths       home + visiting coaches' booths (|x| 29.3..44): glass,
 	                                           doors, a framed photo outside, desks with camera seats,
 	                                           headsets, binoculars, sideline phone (look), playbook
@@ -87,8 +88,8 @@
 	                                           BROADCAST seats, desk monitors, microphones, headsets,
 	                                           coffee, spotting boards (look), field + studio cameras on
 	                                           tripods, ON AIR light, softbox studio lights, a lighting
-	                                           pipe with stage lights, telestrator (look), stats desk,
-	                                           guest couch
+	                                           pipe with stage lights aimed at the desk, telestrator
+	                                           (look), stats desk, guest couch
 	                   3 Satellite Dish        an uplink deck over the club seats with the dish (look),
 	                                           uplink box and an antenna with a beacon
 
@@ -1749,8 +1750,17 @@ function M.suites(ctx)
 				Object = "Sofa",
 				Material = suite.owner and Enum.Material.Leather or Enum.Material.Fabric,
 			})
-			-- (the TV hangs on a walnut media wall; a team rug under the sofa)
-			span(c, seg, "MediaWall", xa, xa + 0.12, 83.2, 91.2, fy, fy + 8.6, WALNUT, Enum.Material.Wood, PAINT)
+			-- (the TV hangs on a walnut media wall with the suite's name in brass letters over it; a team
+			-- rug under the sofa)
+			local media = span(c, seg, "MediaWall", xa, xa + 0.12, 83.2, 91.2, fy, fy + 8.6, WALNUT, Enum.Material.Wood, PAINT)
+			write(media, Enum.NormalId.Right, string.upper(info[1]), GOLD, {
+				Name = "SuiteName",
+				Font = Enum.Font.GothamBold,
+				Left = 0.08,
+				Width = 0.84,
+				Top = 0.07,
+				Height = 0.11,
+			})
 			local tv = span(c, seg, "SuiteTV", xa + 0.12, xa + 0.42, 84.6, 89.8, fy + 3.6, fy + 6.6, SCREEN)
 			liveScreen(ctx, tv, Enum.NormalId.Right, "score", { PPS = 30 })
 			span(c, seg, "SuiteRug", xa + 0.8, xa + 9.2, 85.8, 91.6, fy + 0.05, fy + 0.08, team.Primary, Enum.Material.Carpet, PAINT)
