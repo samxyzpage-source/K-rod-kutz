@@ -6232,15 +6232,27 @@ local function runTests()
 		-- upstairs buttons: the grand staircase (atrium built), or the west stair tower
 		expect(Vector3.new(-90, 0.3, 215), "hq_media:1", Vector3.new(-69, 0.2, 207), "lobby -> upstairs: to the grand staircase")
 		expect(Vector3.new(-69, 0.3, 207), "hq_media:1", Vector3.new(-54.5, 0.2, 209), "in front of it: past the Team Safe to its foot")
+		-- (walked past that point toward the doors - the beam is only worked out 4 times a second - you
+		-- are still in front of the stairs: on to the foot, not back)
+		expect(Vector3.new(-67, 0.3, 204.5), "hq_media:1", Vector3.new(-54.5, 0.2, 209), "past it toward the doors: still on to the foot")
+		-- leaving the doorway north of its plants for the stairs: no turn back to the doorway's point
+		expect(Vector3.new(-95, 0.3, 207.2), "hq_media:1", Vector3.new(-69, 0.2, 207), "just past the doorway's plants: on to the stairs")
 		expect(Vector3.new(-140, 0.3, 220), "hq_media:1", Vector3.new(-106, 0.2, 223), "reception -> the stairs: by the lane")
 		expect(Vector3.new(-100, 0.3, 203), "hq_media:1", Vector3.new(-100, 0.2, 209.5), "in through the doors -> past their plants first")
 		expect(Vector3.new(-54.5, 5, 225), "hq_media:1", Vector3.new(-54.5, 17, 256), "on the staircase: up to the top")
 		expect(Vector3.new(-200, 0.3, 271), "hq_owner:1", Vector3.new(-252, 0.2, 271), "west corridor -> upstairs: into the stair tower")
 		-- GUIDE-STAIR-FOOT: down the grand staircase and off it, no flip-flop at its foot (every Down
-		-- point lies outside its own leg), past the Team Safe instead of back over the stairs
+		-- point lies outside its own leg), past the Team Safe instead of back over the stairs; the beam
+		-- still shows at the foot's front edge (its point is more than 2 studs away)
 		expect(Vector3.new(-55, 1.1, 211.8), "hq_weightroom:1", Vector3.new(-54.5, 0.2, 209), "first step -> down to its foot")
-		expect(Vector3.new(-54.5, 0.3, 209), "hq_weightroom:1", Vector3.new(-56, 0.2, 207), "at the foot: step back off the stairs")
-		expect(Vector3.new(-56, 0.3, 207), "hq_weightroom:1", Vector3.new(-76, 0.2, 208), "in front of them: west, past the Team Safe")
+		expect(Vector3.new(-54.5, 0.3, 209), "hq_weightroom:1", Vector3.new(-56, 0.2, 206), "at the foot: step back off the stairs")
+		expect(
+			Vector3.new(-55, 0.3, 208.6),
+			"hq_weightroom:1",
+			Vector3.new(-56, 0.2, 206),
+			"standing at the foot's front edge: still shown"
+		)
+		expect(Vector3.new(-56, 0.3, 206), "hq_weightroom:1", Vector3.new(-76, 0.2, 208), "in front of them: west, past the Team Safe")
 		-- ... and at the foot of the west stair tower: to the doors (not through the tower's wall)
 		expect(Vector3.new(-258.3, 0.3, 279), "hq_weightroom:1", Vector3.new(-256, 0.2, 271), "foot of the stair tower -> to its doors")
 		-- CLIENT-POLISH (b): from the west of the upper corridor the way down the grand staircase runs

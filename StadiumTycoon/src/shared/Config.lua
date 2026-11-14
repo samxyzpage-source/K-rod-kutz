@@ -431,7 +431,8 @@ L.HQGuide = {
 	--     (the turn into it from the corridor starts that far out), so the way in never crosses them
 	--     (that would turn the beam back onto the corridor)
 	--   Doorway: just inside the main entrance, between the plants either side of it: from there, a
-	--     spot beyond the plants (east or west) is reached through its Point
+	--     spot beyond the plants (east or west) is reached through its Point. It ends below the
+	--     grand staircase's Bottom (z 207), so the way there from its Point never dips back into it
 	Lobby = {
 		MinX = -150,
 		MaxX = -50,
@@ -453,22 +454,24 @@ L.HQGuide = {
 			{ MinX = -150, MaxX = -110.5, MinZ = 249.5, MaxZ = 264 }, -- behind the Team Wall
 			{ MinX = -89.5, MaxX = -50, MinZ = 256.3, MaxZ = 264 }, -- behind the trophy case
 		},
-		Doorway = { MinX = -117, MaxX = -83, MinZ = 200, MaxZ = 207.5, Point = Vector3.new(-100, 0.2, 209.5) },
+		Doorway = { MinX = -117, MaxX = -83, MinZ = 200, MaxZ = 206.9, Point = Vector3.new(-100, 0.2, 209.5) },
 	},
 	-- stairs, in legs from the bottom up: standing in a leg's box, walk to its Up point (going up)
 	-- or Down point (going down), each inside the next leg or off the stairs (never inside its own
 	-- box, so nobody ends up standing on a hidden waypoint; nil = already there). Bottom / Top: where
 	-- to step on, going up / down (inside a leg). A stair with a Room of its own is entered through
-	-- its Door.
+	-- its Door. (The beam hides within 2 studs of the point it shows and is worked out again 4 times
+	-- a second, so at the grand staircase's foot the box in front of the stairs reaches well past the
+	-- Bottom (overshooting it still counts) and the way down off the foot points 2.4 studs into it.)
 	Stairs = {
 		{ -- the grand staircase in the atrium (the Grand Atrium's first step)
 			Piece = "hq_atrium:1",
 			Bottom = Vector3.new(-69, 0.2, 207), -- in front of the stairs, past the Team Safe (x -69..-63, z 209..215)
 			Top = Vector3.new(-62, 17, 267), -- on the upper corridor in front of the east mezzanine (clear of the atrium railing)
 			Legs = {
-				guideLeg(-71, -50.3, 205.6, 208.4, -1, 4, Vector3.new(-54.5, 0.2, 209), Vector3.new(-76, 0.2, 208)), -- in front of the foot, along the Team Safe
-				guideLeg(-63, -58.8, 208.4, 211.6, -1, 4, Vector3.new(-57, 0.2, 208.6), Vector3.new(-56, 0.2, 207)), -- the foot beside the west newel post
-				guideLeg(-58.8, -50.3, 208.4, 211.6, -1, 4, Vector3.new(-54.5, 1.5, 212.5), Vector3.new(-56, 0.2, 207)), -- the foot, between the newel posts
+				guideLeg(-71, -50.3, 203.5, 208.4, -1, 4, Vector3.new(-54.5, 0.2, 209), Vector3.new(-76, 0.2, 208)), -- in front of the foot, along the Team Safe
+				guideLeg(-63, -58.8, 208.4, 211.6, -1, 4, Vector3.new(-57, 0.2, 208.6), Vector3.new(-56, 0.2, 206)), -- the foot beside the west newel post
+				guideLeg(-58.8, -50.3, 208.4, 211.6, -1, 4, Vector3.new(-54.5, 1.5, 212.5), Vector3.new(-56, 0.2, 206)), -- the foot, between the newel posts
 				guideLeg(-58.7, -50.3, 211.6, 253, 0.9, 18, Vector3.new(-54.5, 17, 256), Vector3.new(-54.5, 0.2, 209)), -- flights
 				guideLeg(-74.4, -50.3, 253, 264, 14, 19, Vector3.new(-62, 17, 267), Vector3.new(-54.5, 15, 251)), -- mezzanine
 				guideLeg(-74.4, -50.3, 264, 269, 14, 19, nil, Vector3.new(-62, 17, 262)), -- the corridor in front of it
