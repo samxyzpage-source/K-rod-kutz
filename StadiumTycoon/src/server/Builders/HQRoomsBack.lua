@@ -729,7 +729,7 @@ function HQRoomsBack.hq_lockerroom(ctx)
 		water,
 		"Team Showers",
 		"Hot showers after a muddy practice. Team rule: the last one in has to sing the fight song!",
-		{ Distance = 8 }
+		{ Distance = 8, LineOfSight = true } -- (the stall is open at the front: no need to show through walls)
 	)
 	-- vanity on the east wall: a counter with two sinks under a long mirror
 	box(showers, "VanityCounter", IX1 - 3, FLOOR_TOP, 334, IX1, 3.4, 348, WHITE, Enum.Material.Marble)
@@ -811,6 +811,7 @@ function HQRoomsBack.hq_lockerroom(ctx)
 		{
 			LookKey = "record",
 			Distance = 8,
+			LineOfSight = true, -- (the prompt sits in the glass case above the ball: hidden from the corridor)
 		}
 	)
 end
@@ -1247,7 +1248,7 @@ function HQRoomsBack.hq_weightroom(ctx)
 		plates[3],
 		"Plate Stack",
 		"Spare bumper plates in team colours, heaviest at the bottom. Load up the bar!",
-		{ Distance = 7 }
+		{ Distance = 7, At = Vector3.new(0, 1.1, 0) } -- on the rim toward the room (the post runs through the middle)
 	)
 
 	-- Step 3: bench presses, dumbbell rack, kettlebells, plyo boxes ----------------------------

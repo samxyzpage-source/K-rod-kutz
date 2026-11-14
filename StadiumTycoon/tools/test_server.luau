@@ -1540,6 +1540,106 @@ local function runTests()
 			check(reached >= cells * 0.85, ("night flood lights reach %d of %d spots on the turf"):format(reached, cells))
 		end
 
+		do
+			-- prompts hide behind walls and floors (line of sight), except where that would lose them
+			local los = Instance.new("Model")
+			los.Name = "LineOfSightFixtures"
+			los.Parent = fixtures
+			local losCtx = BuildUtil.NewContext(alicePlot.Origin, los, alicePlot.Palette, alicePlot.TeamName, Config)
+			local plaque = BuildUtil.Box(losCtx, "Plaque", Vector3.new(4, 3, 0.3), Vector3.new(-180, 5, 260))
+			local glass = BuildUtil.Box(losCtx, "Glass", Vector3.new(4, 4, 4), Vector3.new(-190, 2, 260), nil, nil, { Transparency = 0.6 })
+			local wheel = BuildUtil.Box(losCtx, "Wheel", Vector3.new(2, 5, 5), Vector3.new(-200, 2.5, 260))
+			BuildUtil.Box(losCtx, "WheelStripe", Vector3.new(2.2, 1, 5.2), Vector3.new(-200, 2.5, 260)) -- round its middle
+			local plaqueLook = BuildUtil.Look(plaque, "Plaque", "A plaque.")
+			local glassLook = BuildUtil.Look(glass, "Case", "A glass case.")
+			local wheelLook = BuildUtil.Look(wheel, "Wheel", "A tackle wheel.")
+			local wheelTop = BuildUtil.Look(wheel, "Wheel Top", "Its top.", { At = Vector3.new(0, 2.4, 0) })
+			local plaqueUse = BuildUtil.Use(losCtx, plaque, "soda")
+			local forced = BuildUtil.Look(plaque, "Plaque", "A plaque.", { LineOfSight = false })
+			check(
+				plaqueLook.RequiresLineOfSight and plaqueUse.RequiresLineOfSight and not glassLook.RequiresLineOfSight,
+				"look / use prompts on solid parts need line of sight (not on see-through glass)"
+			)
+			check(
+				not doorPrompt.RequiresLineOfSight
+					and not camSeat:FindFirstChild("Interact").RequiresLineOfSight
+					and not elevatorPrompt.RequiresLineOfSight
+					and not forced.RequiresLineOfSight,
+				"doors, seats and elevators keep showing without line of sight (and builders can opt out)"
+			)
+			Interactions.Decorate(los)
+			check(
+				not wheelLook.RequiresLineOfSight and wheelTop.RequiresLineOfSight and plaqueLook.RequiresLineOfSight,
+				"a prompt buried inside another part of its piece drops line of sight (it could never show)"
+			)
+
+			-- a seat's Sit prompt hides while someone sits in it
+			local taken = BuildUtil.Seat(losCtx, { CFrame = CFrame.new(-180, 0.7, 270) })
+			local free = BuildUtil.Seat(losCtx, { CFrame = CFrame.new(-184, 0.7, 270) })
+			Interactions.Decorate(los)
+			local takenPrompt, freePrompt = taken:FindFirstChild("Interact"), free:FindFirstChild("Interact")
+			check(takenPrompt.Enabled and freePrompt.Enabled, "seat prompts start enabled")
+			local seated = pcall(function()
+				taken.Occupant = alice.Character:FindFirstChildOfClass("Humanoid")
+			end)
+			instanceSignal(taken, "PropOccupant"):Fire()
+			freePrompt.Enabled = false -- (as if someone had just stood up)
+			instanceSignal(free, "PropOccupant"):Fire()
+			task.wait(0.03)
+			check(seated and not takenPrompt.Enabled, "an occupied seat hides its Sit prompt")
+			check(freePrompt.Enabled, "the Sit prompt comes back when the seat is free")
+
+			-- the finished franchise
+			local kinds, buriedLeft, midfieldLos = {}, 0, nil
+			for _, model in ipairs(plotModel(1).Items:GetChildren()) do
+				local parts = {}
+				for _, part in ipairs(model:GetDescendants()) do
+					if part:IsA("BasePart") then
+						table.insert(parts, part)
+					end
+				end
+				for _, prompt in ipairs(model:GetDescendants()) do
+					if prompt:IsA("ProximityPrompt") then
+						local key = tostring(prompt:GetAttribute("Kind")) .. (prompt.RequiresLineOfSight and "+los" or "")
+						kinds[key] = (kinds[key] or 0) + 1
+						local host = prompt.Parent:IsA("Attachment") and prompt.Parent.Parent or prompt.Parent
+						if host.Name == "LogoDisk" then
+							midfieldLos = prompt.RequiresLineOfSight
+						end
+						if prompt.RequiresLineOfSight then
+							local point = prompt.Parent:IsA("Attachment") and host.CFrame:PointToWorldSpace(prompt.Parent.Position)
+								or host.CFrame.Position
+							for _, part in ipairs(parts) do
+								local offset = part.CFrame:PointToObjectSpace(point)
+								if
+									part ~= host
+									and part.CanQuery
+									and math.abs(offset.X) < part.Size.X / 2
+									and math.abs(offset.Y) < part.Size.Y / 2
+									and math.abs(offset.Z) < part.Size.Z / 2
+								then
+									buriedLeft += 1
+									break
+								end
+							end
+						end
+					end
+				end
+			end
+			check(
+				(kinds["look+los"] or 0) > 400
+					and (kinds["use+los"] or 0) > 80
+					and kinds["door+los"] == nil
+					and kinds["seat+los"] == nil
+					and kinds["elevator+los"] == nil,
+				("line of sight on %d look and %d use prompts, never on doors, seats or elevators"):format(
+					kinds["look+los"] or 0,
+					kinds["use+los"] or 0
+				)
+			)
+			check(buriedLeft == 0 and midfieldLos == false, ("no line-of-sight prompt is buried in a part (%d)"):format(buriedLeft))
+		end
+
 		section("Items, mini-games, live screens")
 		local counter = BuildUtil.Box(fixCtx, "Counter", Vector3.new(4, 3, 2), Vector3.new(-150, 1.5, 220))
 		local hotdogPrompt = BuildUtil.Use(fixCtx, counter, "hotdog")
@@ -2471,6 +2571,31 @@ local function runTests()
 			check(not fadeFrame.Visible, "and fade back in")
 			clientFix:Destroy()
 		end
+	end
+	do
+		-- the TV view hides every prompt (the seat's own Sit bubble would float in the middle of the shot)
+		local tvFix = Instance.new("Model")
+		tvFix.Name = "TVPromptFixtures"
+		tvFix.Parent = plotModel(2)
+		local tctx = BuildUtil.NewContext(CFrame.new(), tvFix, Config.TeamColors[1], "TEST", Config)
+		local cam = BuildUtil.Seat(tctx, {
+			CFrame = CFrame.new(10, 0.5, 4),
+			Camera = { From = Vector3.new(0, 30, -40), To = Vector3.new(0, 0, 30), Fov = 40, Label = "MIRROR CAM" },
+		})
+		local humanoid = viewer.Character:FindFirstChildOfClass("Humanoid")
+		local sat = pcall(function()
+			humanoid.SeatPart = cam
+		end)
+		instanceSignal(humanoid, "PropSeatPart"):Fire()
+		task.wait(0.03)
+		check(sat and ProximityPromptServiceMock.Enabled == false, "prompts are hidden in the TV camera view")
+		pcall(function()
+			humanoid.SeatPart = Instance.new("Part") -- standing up (see above)
+		end)
+		instanceSignal(humanoid, "PropSeatPart"):Fire()
+		task.wait(0.03)
+		check(ProximityPromptServiceMock.Enabled == true, "and come back when you stand up")
+		tvFix:Destroy()
 	end
 
 	section("Drive controller")

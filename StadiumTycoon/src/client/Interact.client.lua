@@ -382,17 +382,20 @@ local function scoreBugText(seat)
 	return ("%s  %d   -   %d  VISITORS      %s"):format(team, home, away, status)
 end
 
+-- (prompts are hidden in the TV view: their bubbles would float in the middle of the shot)
 local function enterTV(seat)
 	tvSeat = seat
 	liveBadge.Text = "LIVE  |  " .. tostring(seat:GetAttribute("CameraLabel") or "TV")
 	scoreBug.Text = scoreBugText(seat)
 	tv.Visible = true
+	ProximityPromptService.Enabled = false
 	setCamera(seat:GetAttribute("CameraCFrame"), seat:GetAttribute("CameraFov") or 40)
 end
 
 local function exitTV()
 	tvSeat = nil
 	tv.Visible = false
+	ProximityPromptService.Enabled = true
 	clearCamera()
 end
 

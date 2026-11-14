@@ -1195,7 +1195,8 @@ function M.jumbotron(ctx)
 		switcher,
 		"Video Switcher",
 		"Push a button and the jumbotron cuts to another camera: replay, crowd cam or the dance cam!",
-		{ At = atPoint(ctx, switcher, Vector3.new((deskX0 + deskX1) / 2, 3.5, midZ + 2.4)), Distance = 7 }
+		-- (just above the buttons, so the prompt is in plain sight and hides behind the tower walls)
+		{ At = atPoint(ctx, switcher, Vector3.new((deskX0 + deskX1) / 2, 3.9, midZ + 2.4)), Distance = 7 }
 	)
 	local chairX = deskX0 - 2.2
 	BuildUtil.Seat(ctx, {

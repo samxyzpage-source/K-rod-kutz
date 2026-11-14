@@ -323,8 +323,35 @@ end
 -- Setup
 ---------------------------------------------------------------------------------------------
 
--- Fills in default prompt texts from the registry (builders may leave them empty).
+-- True if the prompt's spot lies inside one of `parts` (other than its own part): a stripe round
+-- a bus, the popcorn in its machine, the post through a plate... Roblox's line-of-sight test only
+-- leaves out the prompt's own part, so such a prompt would never show.
+local function buried(prompt, parts)
+	local host = hostPart(prompt)
+	if not host then
+		return false
+	end
+	local point = host.CFrame.Position
+	if prompt.Parent:IsA("Attachment") then
+		point = host.CFrame:PointToWorldSpace(prompt.Parent.Position)
+	end
+	for _, part in ipairs(parts) do
+		if part ~= host and part.CanQuery then
+			local offset = part.CFrame:PointToObjectSpace(point)
+			local size = part.Size
+			if math.abs(offset.X) < size.X / 2 and math.abs(offset.Y) < size.Y / 2 and math.abs(offset.Z) < size.Z / 2 then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- Gets a built piece's prompts ready: fills in default texts from the registry (builders may leave
+-- them empty), drops line of sight where the prompt's spot is buried in another part of the piece,
+-- and hides a seat's "Sit" prompt while someone sits in it.
 function Interactions.Decorate(model)
+	local parts = nil
 	for _, prompt in ipairs(model:GetDescendants()) do
 		if prompt:IsA("ProximityPrompt") and prompt.Name == Interact.PromptName then
 			local spec = Interact.Uses[prompt:GetAttribute("Use")]
@@ -338,6 +365,26 @@ function Interactions.Decorate(model)
 			end
 			if prompt.ActionText == "" then
 				prompt.ActionText = "Interact"
+			end
+			if prompt.RequiresLineOfSight then
+				if not parts then
+					parts = {}
+					for _, part in ipairs(model:GetDescendants()) do
+						if part:IsA("BasePart") then
+							table.insert(parts, part)
+						end
+					end
+				end
+				if buried(prompt, parts) then
+					prompt.RequiresLineOfSight = false
+				end
+			end
+			-- (only on a change: PlotManager hides prompts while a new piece rises into place)
+			local seat = prompt:GetAttribute("Kind") == "seat" and hostPart(prompt)
+			if seat and seat:IsA("Seat") then
+				seat:GetPropertyChangedSignal("Occupant"):Connect(function()
+					prompt.Enabled = seat.Occupant == nil
+				end)
 			end
 		end
 	end
@@ -377,6 +424,12 @@ function Interactions.Init(manager, remoteFolder, notify, franchiseModule)
 	plotManager.OnAnyBuilt(function(_plot, _item, model)
 		Interactions.Decorate(model)
 	end)
+	for _, plot in ipairs(plotManager.GetPlots()) do
+		local base = plot.Model:FindFirstChild("Base") -- the plot's own buildings (HQ shell, bus stops...)
+		if base then
+			Interactions.Decorate(base)
+		end
+	end
 	ProximityPromptService.PromptTriggered:Connect(Interactions.OnPromptTriggered)
 	Players.PlayerRemoving:Connect(function(player)
 		cooldowns[player] = nil
