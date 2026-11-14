@@ -4351,7 +4351,8 @@ local function runTests()
 			task.wait()
 		end
 		check(
-			countChildren(plotModel(2).Items) == 0 and items2.Name ~= "Items" and plot2.Owner == nil and not plot2.Building,
+			-- (items2 itself may be gone already: a destroyed instance's name can't be read)
+			countChildren(plotModel(2).Items) == 0 and plot2.ItemsFolder ~= items2 and plot2.Owner == nil and not plot2.Building,
 			"an owner who leaves mid-rebuild stops it (the freed plot stays empty)"
 		)
 		local takedownFrames = 0
@@ -5261,14 +5262,15 @@ local function runTests()
 				fan:SetAttribute("AtRelease", true)
 				atRelease += 1
 			end
+			local oldSteps = oldItems.Parent ~= nil and countChildren(oldItems) or 0 -- (a destroyed folder can't be read)
 			check(
 				hankPlot.ItemsFolder ~= oldItems
 					and plotModel(1).Items == hankPlot.ItemsFolder
 					and countChildren(hankPlot.ItemsFolder) == 0
 					and oldItems.Parent == model1
-					and countChildren(oldItems) == tessSteps,
+					and oldSteps == tessSteps,
 				("a released franchise steps aside at once into its own folder (%d of %d steps there, a fresh Items folder)"):format(
-					countChildren(oldItems),
+					oldSteps,
 					tessSteps
 				)
 			)
