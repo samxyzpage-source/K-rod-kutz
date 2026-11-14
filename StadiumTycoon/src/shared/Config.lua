@@ -337,6 +337,64 @@ L.HQCorridor = { MinX = -248, MaxX = 98, MinZ = 264, MaxZ = 278 } -- both floors
 L.HQAtrium = { MinX = -150, MaxX = -50, MinZ = 202, MaxZ = 264 } -- the lobby is open to the roof
 L.HQSpawn = Vector3.new(-100, 0, 210) -- owners appear here (facing into the building)
 L.HQSafePosition = Vector3.new(-75, 0, 212) -- collect pad in the lobby (the safe block sits 9 studs to +X)
+-- (a guide-beam stair leg: a box of FEET positions and the points to walk to from it, up / down)
+local function guideLeg(minX, maxX, minZ, maxZ, minY, maxY, up, down)
+	return { MinX = minX, MaxX = maxX, MinZ = minZ, MaxZ = maxZ, MinY = minY, MaxY = maxY, Up = up, Down = down }
+end
+-- Guide-beam waypoints in and around the Team HQ (Effects.client.lua). A straight beam can't be
+-- followed through the HQ's walls and floors, so it first points at a door, a corner of the
+-- building, the lobby's opening onto the corridor or the stairs. Points stand on the floor; the
+-- MinY/MaxY of a box are FEET heights. (Real positions from Builders/HQShell.lua + HQRoomsUpperFront.lua.)
+L.HQGuide = {
+	-- inside the HQ: the main block (L.HQ) and its two towers
+	Building = {
+		{ MinX = -250, MaxX = 100, MinZ = 200, MaxZ = 360 },
+		{ MinX = -262, MaxX = -250, MinZ = 249, MaxZ = 301 }, -- west stair tower
+		{ MinX = 100, MaxX = 118, MinZ = 258, MaxZ = 284 }, -- east glass elevator tower
+	},
+	UpstairsY = 11, -- feet this high or higher: on the upper floor (its top is L.HQ.UpperFloorY)
+	RoofY = 30, -- ... higher than this: on the roofs (no waypoints)
+	-- outside, the beam goes round the whole block, by its corners (CornerMargin studs out)
+	Block = { MinX = -262, MaxX = 118, MinZ = 198, MaxZ = 366 },
+	CornerMargin = 4,
+	-- the doors to the outside, a spot just inside and just outside each (the back wall has none)
+	Doors = {
+		{ Inside = Vector3.new(-100, 0.2, 205), Outside = Vector3.new(-100, 0.2, 194) }, -- main entrance
+		{ Inside = Vector3.new(-256, 0.2, 271), Outside = Vector3.new(-266, 0.2, 271) }, -- west doors (stair tower)
+		{ Inside = Vector3.new(108, 0.2, 271), Outside = Vector3.new(122, 0.2, 271) }, -- east tower's open portal
+	},
+	-- the lobby (with the main entrance) opens onto the corridor between OpenMinX and OpenMaxX
+	-- (clear of the grand staircase); OpenZ is the corridor in front of that opening
+	Lobby = { MinX = -150, MaxX = -50, MinZ = 190, MaxZ = 264, OpenMinX = -145, OpenMaxX = -64, OpenZ = 268 },
+	-- stairs, in legs from the bottom up: standing in a leg's box, walk to its Up point (going up)
+	-- or Down point (going down), each inside the next leg (or off the stairs). Bottom / Top: where
+	-- to step on, going up / down. A stair with a Room of its own is entered through its Door.
+	Stairs = {
+		{ -- the grand staircase in the atrium (the Grand Atrium's first step)
+			Piece = "hq_atrium:1",
+			Bottom = Vector3.new(-61, 0.2, 208.5), -- beside the newel posts (between the safe and the stairs)
+			Top = Vector3.new(-62, 17, 262), -- on the east mezzanine, by the upper corridor
+			Legs = {
+				guideLeg(-63, -50.3, 206, 211.6, -1, 4, Vector3.new(-54.5, 1.5, 212.5), nil), -- the foot
+				guideLeg(-58.7, -50.3, 211.6, 253, 0.9, 18, Vector3.new(-54.5, 17, 256), Vector3.new(-54.5, 0.2, 209)), -- flights
+				guideLeg(-74.4, -50.3, 253, 264, 14, 19, Vector3.new(-62, 17, 267), Vector3.new(-54.5, 15, 251)), -- mezzanine
+			},
+		},
+		{ -- the west stair tower's switchback stairs (always there)
+			Room = { MinX = -262, MaxX = -250, MinZ = 249, MaxZ = 301 },
+			Door = Vector3.new(-252, 0.2, 271), -- the ground doorway from the corridor
+			Bottom = Vector3.new(-258.3, 1.2, 281.4), -- the first step
+			Top = Vector3.new(-252, 17, 272), -- the upper landing, by the doorway onto the corridor
+			Legs = {
+				guideLeg(-261.5, -255.5, 280.6, 295, 0.9, 9.5, Vector3.new(-258.3, 8.6, 297.5), Vector3.new(-258.3, 0.2, 278.5)), -- first flight
+				guideLeg(-261.5, -255.5, 295, 300.5, 7, 10.5, Vector3.new(-252.7, 8.6, 297.5), Vector3.new(-258.3, 7, 293)), -- half landing W
+				guideLeg(-255.5, -250, 295, 300.5, 7, 10.5, Vector3.new(-252.7, 10, 292), Vector3.new(-258.3, 8.6, 297.5)), -- half landing E
+				guideLeg(-255.5, -250, 280.6, 295, 7, 18, Vector3.new(-252.7, 17, 278.5), Vector3.new(-252.7, 8.6, 297.5)), -- second flight
+				guideLeg(-261.5, -250, 262, 280.6, 14, 18, Vector3.new(-247, 17, 271), Vector3.new(-252.7, 15.5, 283)), -- upper landing
+			},
+		},
+	},
+}
 
 -- Staff characters (one per hired step): feet positions in their piece's area
 L.StaffSpots = {

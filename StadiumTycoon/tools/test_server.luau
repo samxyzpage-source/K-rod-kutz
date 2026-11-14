@@ -2740,6 +2740,92 @@ local function runTests()
 		camera.CFrame = cameraBefore
 		check(wasUp and stayedDown, "a fan the camera leaves behind sits back down and stays down")
 	end
+	do
+		-- PJ-2: in and around the Team HQ the guide beam first points where it can be followed
+		-- (a door, the stairs, a corner of the building, the lobby's opening onto the corridor),
+		-- and it stays on when the button is on another floor right above or below
+		local CAMPUS = Config.Layout.Areas.campus
+		local guideOrigin = CFrame.new(400, 0.2, -1500) * CFrame.Angles(0, math.pi, 0) -- (turned like plot 2)
+		local guidePlot = Instance.new("Model")
+		guidePlot.Name = "Plot9"
+		local guideButtons = Instance.new("Folder")
+		guideButtons.Name = "Buttons"
+		guideButtons.Parent = guidePlot
+		local guideItems = Instance.new("Folder")
+		guideItems.Name = "Items"
+		guideItems.Parent = guidePlot
+		guidePlot.Parent = tycoons
+		for _, id in ipairs({ "practice_field:1", "hq_owner:1", "hq_media:1", "hq_weightroom:1", "turf:1" }) do
+			local button = Items.ById[id].Button
+			local pad = Instance.new("Part")
+			pad.Name = "Buy_" .. id
+			pad.CFrame = guideOrigin * CFrame.new(button.X, button.Y + 0.3, button.Z)
+			pad.Parent = guideButtons
+		end
+		local atrium = Instance.new("Model")
+		atrium.Name = "hq_atrium:1"
+		atrium.Parent = guideItems
+		local guideChar = makeCharacter("GuideTester")
+		viewer.Character = guideChar
+		viewer:SetAttribute("PlotIndex", 9)
+		local guideBeam = workspace:FindFirstChild("TycoonGuide", true)
+		local beamEnd = workspace:FindFirstChild("TycoonGuideEnd", true)
+		-- where the beam points (campus coordinates, on the floor) with the player's feet at `feet`
+		local function aim(feet, goal)
+			viewer:SetAttribute("NextGoal", goal)
+			guideChar.HumanoidRootPart.CFrame = guideOrigin * CFrame.new(feet + CAMPUS + Vector3.new(0, 3, 0))
+			task.wait(0.3)
+			RunServiceMock.RenderStepped:Fire(0.016)
+			task.wait(0.02)
+			return guideOrigin:PointToObjectSpace(beamEnd.Position) - CAMPUS - Vector3.new(0, 1, 0), guideBeam.Enabled
+		end
+		local function expect(feet, goal, wanted, message)
+			local point, enabled = aim(feet, goal)
+			check(
+				enabled and (point - wanted).Magnitude < 0.6,
+				("%s (beam at %.1f, %.1f, %.1f)"):format(message, point.X, point.Y, point.Z)
+			)
+		end
+		-- leaving the HQ for the practice fields behind it (the ground floor's back wall has no door)
+		expect(
+			Vector3.new(-100, 0.3, 230),
+			"practice_field:1",
+			Vector3.new(-100, 0.2, 267),
+			"lobby -> practice field: first to the corridor"
+		)
+		expect(Vector3.new(-200, 0.3, 271), "practice_field:1", Vector3.new(-266, 0.2, 271), "then out through the west doors")
+		expect(Vector3.new(-268, 0.3, 271), "practice_field:1", Vector3.new(-266, 0.2, 370), "outside: round the HQ's corner")
+		-- coming back in for a ground-floor room: round the corner, to the door, through it
+		expect(
+			Vector3.new(-130, 0.3, 420),
+			"hq_weightroom:1",
+			Vector3.new(-266, 0.2, 370),
+			"practice field -> weight room: round the corner"
+		)
+		expect(Vector3.new(-265, 0.3, 273), "hq_weightroom:1", Vector3.new(-256, 0.2, 271), "and in through the west doors")
+		-- upstairs buttons: the grand staircase (atrium built), or the west stair tower
+		expect(Vector3.new(-90, 0.3, 215), "hq_media:1", Vector3.new(-61, 0.2, 208.5), "lobby -> upstairs: to the grand staircase")
+		expect(Vector3.new(-54.5, 5, 225), "hq_media:1", Vector3.new(-54.5, 17, 256), "on the staircase: up to the top")
+		expect(Vector3.new(-200, 0.3, 271), "hq_owner:1", Vector3.new(-252, 0.2, 271), "west corridor -> upstairs: into the stair tower")
+		atrium.Parent = nil -- (no grand staircase yet)
+		expect(Vector3.new(-90, 0.3, 215), "hq_media:1", Vector3.new(-90, 0.2, 267), "no grand staircase: lobby -> the corridor first")
+		expect(Vector3.new(-255, 0.3, 270), "hq_media:1", Vector3.new(-258.3, 1.2, 281.4), "in the stair tower: to the first flight")
+		expect(Vector3.new(-258.3, 4.5, 288), "hq_media:1", Vector3.new(-258.3, 8.6, 297.5), "first flight: up to the half landing")
+		expect(Vector3.new(-252.7, 12, 288), "hq_media:1", Vector3.new(-252.7, 17, 278.5), "second flight: up to the top")
+		-- upstairs, for a button outside: down the stairs first
+		expect(Vector3.new(-150, 17.1, 271), "practice_field:1", Vector3.new(-252, 17, 272), "upstairs -> outside: to the stairs down")
+		expect(Vector3.new(-252.7, 12, 288), "practice_field:1", Vector3.new(-252.7, 8.6, 297.5), "second flight: down to the half landing")
+		-- from the corridor to the main entrance: along the corridor to the lobby's opening, through it
+		expect(Vector3.new(30, 0.3, 271), "turf:1", Vector3.new(-64, 0.2, 268), "east corridor -> main entrance: to the lobby's opening")
+		expect(Vector3.new(-80, 0.3, 270), "turf:1", Vector3.new(-80, 0.2, 261), "at the opening: into the lobby")
+		-- straight at buttons away from the HQ; hidden right next to one on the same floor only
+		local _, sameFloor = aim(Vector3.new(5, 0.3, -80), "turf:1")
+		local _, below = aim(Vector3.new(5, -16.7, -80), "turf:1")
+		local _, farAway = aim(Vector3.new(40, 0.3, -80), "turf:1")
+		check(not sameFloor and below and farAway, "the beam hides next to its button, not when it's a floor above or below you")
+		atrium.Parent = guideItems
+		guidePlot:Destroy()
+	end
 end
 
 local ranOk, runError = xpcall(runTests, function(err)
