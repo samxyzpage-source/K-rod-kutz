@@ -51,10 +51,11 @@
 	offsets 170..178.6, u 24 -> 69; a turning landing u 69..77; R2 15 -> 30 in the inner lane,
 	162.4..170, u 69 -> 24) and a bridge at y 30 (u 18..24) through the facade to a balcony (u 18..40,
 	offsets 84..100) at the main concourse's outer wall. That corner wall has no opening (food stands
-	stand behind it), so a lit "MAIN CONCOURSE" panel on the wall + a "CORNER RAMP - EXIT" panel inside
-	(u 28..32, where no stand is) take fans through (elevator-type prompts, both ways).
+	stand behind it), so a lit "MAIN CONCOURSE" panel on the wall + an "EXIT / CORNER RAMP" panel inside
+	(around u 30, where no stand is) take fans through (elevator-type prompts, both ways).
 
-	FACADE (offsets 152..160, y 0..112): a stone base (158..160, 0..14) with a cap (14..15), glass
+	FACADE (offsets 152..160, y 0..112): a stone base (158..160, 0..14) with a cap (14..15) and a
+	service exit (double door under a lit EXIT lintel, x -66..-60) on each straight side, glass
 	curtain walls (159..159.6) up to 86 with spandrel bands at the concourse levels, a team-colour
 	upper band (158.4..160.2, 86..110) behind vertical fins (160.2..162.2), a cornice roof (110..112)
 	that closes the gap to the upper deck's rear fascia (152.05), piers on the 8 joints, the gate
@@ -108,6 +109,9 @@ local TENT_WHITE = Color3.fromRGB(244, 244, 246)
 local RED_CARPET = Color3.fromRGB(170, 22, 32)
 local LIGHT_WARM = Color3.fromRGB(255, 240, 214)
 local LIGHT_COOL = Color3.fromRGB(226, 238, 255)
+-- pixels per stud of the small lit signs read up close (wayfinding, exits, elevator doors): sharp
+-- glyphs (TextScaled keeps the letters the same size in studs)
+local SIGN_PPS = 32
 
 ---------------------------------------------------------------------------------------------
 -- Layout numbers (segment space; o = offset)
@@ -189,6 +193,13 @@ local F = {
 	rampOpen = { 17.4, 24.6 },
 	rampOpenY = { 29, 40 },
 }
+-- a service exit through the stone base on every straight side (segment x, door top): the event
+-- level between the bowl and the facade is closed in by the base, so it gets its doors out to the
+-- plaza in the same step (the ground in front of them is clear on all four sides)
+local SERVICE = { x0 = -66, x1 = -60, top = 10 }
+-- glass guard rails where a fall would land on the event level (corner-ramp bridges, the club-level
+-- path to F3): too tall to hop by accident
+local HIGH_RAIL = 7.5
 
 ---------------------------------------------------------------------------------------------
 -- Colour + text helpers
@@ -1023,9 +1034,9 @@ local function escalatorBank(ctx, seg, a, b, w0, w1, lanes, trussFrom)
 	return steps
 end
 
--- A glass guard rail (3.5 tall) on a landing.
-local function rail(ctx, seg, x0, x1, y, o0, o1)
-	return box(ctx, seg, "GlassRail", x0, x1, y, y + 3.5, o0, o1, GLASS, Enum.Material.Glass, GLASSY)
+-- A glass guard rail (3.5 tall, or `height`) on a landing.
+local function rail(ctx, seg, x0, x1, y, o0, o1, height)
+	return box(ctx, seg, "GlassRail", x0, x1, y, y + (height or 3.5), o0, o1, GLASS, Enum.Material.Glass, GLASSY)
 end
 
 -- How far up a bank (0..1) its truss must start so the truss stays above the landing slab under
@@ -1066,16 +1077,17 @@ local function hallEscalators(ctx, seg)
 	escalatorBank(esc, seg, { F2.x, F2.y0, F2.bottom }, { F2.x, F2.y1, F2.top }, -6, 6, 2, trussStart(24, f2run))
 	box(esc, seg, "LandingD", -6, 6, 53, 54, CLUB_EDGE, F2.top, slab, Enum.Material.Concrete)
 	rail(esc, seg, -6, -5.6, 54, CLUB_EDGE, F2.top)
-	-- bridge E (on top of the +x hall wall) to the elevator + the path to F3
+	-- bridge E (on top of the +x hall wall) to the elevator + the path to F3 (the rails between it
+	-- and the event level outside the hall are HIGH_RAIL)
 	box(esc, seg, "BridgeE", 6, HALL_HALF, 53, 54, CLUB_EDGE, SHAFT.o0, slab, Enum.Material.Concrete)
 	rail(esc, seg, 6, 6.4, 54, F2.top, SHAFT.o0)
-	rail(esc, seg, HALL_HALF - 0.4, HALL_HALF, 54, CLUB_EDGE, PATH.o0)
+	rail(esc, seg, HALL_HALF - 0.4, HALL_HALF, 54, CLUB_EDGE, PATH.o0, HIGH_RAIL)
 	box(esc, seg, "UpperPath", HALL_HALF, PATH.x1, 53, 54, PATH.o0, PATH.o1, slab, Enum.Material.Concrete)
-	rail(esc, seg, HALL_HALF, PATH.leg1, 54, PATH.o0, PATH.o0 + 0.4)
-	rail(esc, seg, HALL_HALF, PATH.x1, 54, PATH.o1 - 0.4, PATH.o1)
+	rail(esc, seg, HALL_HALF, PATH.leg1, 54, PATH.o0, PATH.o0 + 0.4, HIGH_RAIL)
+	rail(esc, seg, HALL_HALF, PATH.x1, 54, PATH.o1 - 0.4, PATH.o1, HIGH_RAIL)
 	box(esc, seg, "UpperPathLeg", PATH.x1, PATH.leg1, 53, 54, PATH.o0, PATH.band, slab, Enum.Material.Concrete)
-	rail(esc, seg, PATH.leg1 - 0.4, PATH.leg1, 54, PATH.o0 + 0.4, PATH.band)
-	rail(esc, seg, PATH.x1, PATH.x1 + 0.4, 54, PATH.o1, TOP.o0 + 0.2)
+	rail(esc, seg, PATH.leg1 - 0.4, PATH.leg1, 54, PATH.o0 + 0.4, PATH.band, HIGH_RAIL)
+	rail(esc, seg, PATH.x1, PATH.x1 + 0.4, 54, PATH.o1, TOP.o0 + 0.2, HIGH_RAIL)
 	rail(esc, seg, PATH.x1 + 0.4, PATH.leg1 - 0.4, 54, PATH.band - 0.4, PATH.band)
 	local mid = (PATH.x1 + PATH.leg1) / 2
 	box(esc, seg, "PathColumn", mid - 2, mid + 2, 0, 53, PATH.o0 + 1, PATH.o1 - 1, CONCRETE, Enum.Material.Concrete)
@@ -1153,15 +1165,16 @@ local function cornerRamp(ctx, seg, s)
 	BuildUtil.Light(balcony, "PointLight", light)
 	local bridge = box(ramp, seg, "RampBridge", x(b0), x(b1), 29, 30, pOut, R.inner[2], ramps, Enum.Material.Concrete)
 	lightsAlongZ(bridge, 3, light, 0, 4)
-	-- (short rail pieces round the balcony keep its middle clear for arrivals)
-	rail(ramp, seg, x(p0), x(p0 + 0.4), 30, HALL_IN - 0.1, pOut)
-	rail(ramp, seg, x(p1 - 0.4), x(p1), 30, HALL_IN - 0.1, pOut)
+	-- (short rail pieces round the balcony keep its middle clear for arrivals; the balcony and the
+	-- bridge are over the event level, so their rails are HIGH_RAIL)
+	rail(ramp, seg, x(p0), x(p0 + 0.4), 30, HALL_IN - 0.1, pOut, HIGH_RAIL)
+	rail(ramp, seg, x(p1 - 0.4), x(p1), 30, HALL_IN - 0.1, pOut, HIGH_RAIL)
 	local midRail = (b1 + p1 - 0.4) / 2 -- (two pieces: the harness tests arrival spots against AABBs)
-	rail(ramp, seg, x(b1), x(midRail), 30, pOut - 0.4, pOut)
-	rail(ramp, seg, x(midRail), x(p1 - 0.4), 30, pOut - 0.4, pOut)
-	rail(ramp, seg, x(b0), x(b0 + 0.4), 30, pOut, R.inner[2])
-	rail(ramp, seg, x(b1 - 0.4), x(b1), 30, pOut, R.inner[1])
-	rail(ramp, seg, x(b0 + 0.4), x(b1 - 0.4), 30, R.inner[2] - 0.4, R.inner[2])
+	rail(ramp, seg, x(b1), x(midRail), 30, pOut - 0.4, pOut, HIGH_RAIL)
+	rail(ramp, seg, x(midRail), x(p1 - 0.4), 30, pOut - 0.4, pOut, HIGH_RAIL)
+	rail(ramp, seg, x(b0), x(b0 + 0.4), 30, pOut, R.inner[2], HIGH_RAIL)
+	rail(ramp, seg, x(b1 - 0.4), x(b1), 30, pOut, R.inner[1], HIGH_RAIL)
+	rail(ramp, seg, x(b0 + 0.4), x(b1 - 0.4), 30, R.inner[2] - 0.4, R.inner[2], HIGH_RAIL)
 	box(ramp, seg, "RampColumn", x(b0 + 1), x(b1 - 1), 0, 29, 128, 132, CONCRETE, Enum.Material.Concrete)
 
 	-- through the concourse wall: a dark glass "doorway" under a lit header outside and an exit sign
@@ -1172,8 +1185,9 @@ local function cornerRamp(ctx, seg, s)
 	local doorTop = 38.6
 	local door =
 		box(ramp, seg, "ConcourseEntryDoor", x(c - 3), x(c + 3), 30.05, doorTop, 84.2, 84.5, SIGN_DARK, Enum.Material.Glass, NO_COLLIDE)
-	local label = write(door, OUTWARD, "MAIN CONCOURSE", ink(SIGN_DARK, ctx.colors), { Glow = true, Top = 0.05, Height = 0.15 })
-	local hint = addLine(label, "PRESS E TO WALK IN  >>>", 0.23, 0.08, Enum.Font.GothamBold)
+	local label =
+		write(door, OUTWARD, "MAIN CONCOURSE", ink(SIGN_DARK, ctx.colors), { Glow = true, Top = 0.05, Height = 0.15, PPS = SIGN_PPS })
+	local hint = addLine(label, "WALK IN  >>>", 0.22, 0.1, Enum.Font.GothamBold)
 	hint.TextColor3 = WHITE
 	BuildUtil.Light(door, "PointLight", { Name = "PanelLight", Range = 12, Brightness = 1, Color = LIGHT_WARM, Shadows = false })
 	BuildUtil.Elevator(ctx, door, inside, {
@@ -1182,8 +1196,11 @@ local function cornerRamp(ctx, seg, s)
 		Label = "MAIN CONCOURSE",
 		At = Vector3.new(0, 32.8 - (30.05 + doorTop) / 2, -0.8),
 	})
-	local exit = box(ramp, seg, "CornerRampExitPanel", x(c - 2), x(c + 2), 35.4, 38.4, 82.6, 82.9, SIGN_DARK, nil, NO_COLLIDE)
-	write(exit, INWARD, "CORNER RAMP  -  EXIT", WHITE, { Glow = true, Top = 0.2, Height = 0.6 })
+	-- (as wide as the wall allows: a food stand starts 3.5 to one side, the next segment 4.1 to the other)
+	local exit = box(ramp, seg, "CornerRampExitPanel", x(c - 3.2), x(c + 3.2), 35.4, 38.4, 82.6, 82.9, SIGN_DARK, nil, NO_COLLIDE)
+	local exitLabel = write(exit, INWARD, "EXIT", SCANNER_GREEN, { Glow = true, Top = 0.08, Height = 0.46, PPS = SIGN_PPS })
+	local exitLine = addLine(exitLabel, "CORNER RAMP", 0.58, 0.32, Enum.Font.GothamBold)
+	exitLine.TextColor3 = WHITE
 	BuildUtil.Elevator(ctx, exit, outside, {
 		Action = "Go out",
 		Object = "Corner Ramp",
@@ -1261,7 +1278,13 @@ local function elevator(ctx, seg)
 		end
 		local door =
 			box(lift, seg, "ElevatorDoor", x0, x1, level.y, level.y + 8, level.o[1], level.o[2], STEEL, Enum.Material.Metal, NO_COLLIDE)
-		write(door, level.side > 0 and OUTWARD or INWARD, level.label, SIGN_DARK, { Top = 0.02, Height = 0.08, PPS = 20 })
+		write(
+			door,
+			level.side > 0 and OUTWARD or INWARD,
+			level.label,
+			SIGN_DARK,
+			{ Top = 0.02, Height = 0.16, Left = 0.03, Width = 0.94, PPS = SIGN_PPS }
+		)
 		local buttons = 0
 		for target, other in ipairs(levels) do
 			if target ~= index then
@@ -1288,7 +1311,7 @@ local function hallSigns(ctx, seg, gate, L)
 
 	-- ground: over the lobby, facing the gate
 	local s1 = box(signs, seg, "WayfindingSign", -10, 10, 19.5, 25.5, 150.6, 151, SIGN_DARK, nil, NO_COLLIDE)
-	local l1 = write(s1, OUTWARD, "ESCALATORS  ^  MAIN CONCOURSE", color, { Glow = true, Top = 0.1, Height = 0.42 })
+	local l1 = write(s1, OUTWARD, "ESCALATORS  ^  MAIN CONCOURSE", color, { Glow = true, Top = 0.1, Height = 0.42, PPS = SIGN_PPS })
 	addLine(l1, "SECTIONS " .. lower .. "   |   CLUB LEVEL   |   UPPER DECK", 0.6, 0.28, Enum.Font.GothamBold)
 	BuildUtil.Light(s1, "PointLight", glow)
 	BuildUtil.Look(
@@ -1304,7 +1327,8 @@ local function hallSigns(ctx, seg, gate, L)
 
 	-- main concourse level: on the -x wall over bridge A (the bridge leads outward = to the right)
 	local s2 = box(signs, seg, "WayfindingSign", -HALL_HALF, -HALL_HALF + 0.2, 33.5, 37.5, 96, 112, SIGN_DARK, nil, NO_COLLIDE)
-	local l2 = write(s2, Enum.NormalId.Right, "CLUB LEVEL & UPPER DECK  >>>", color, { Glow = true, Top = 0.1, Height = 0.45 })
+	local l2 =
+		write(s2, Enum.NormalId.Right, "CLUB LEVEL & UPPER DECK  >>>", color, { Glow = true, Top = 0.1, Height = 0.45, PPS = SIGN_PPS })
 	addLine(l2, "WALK THE BRIDGE TO THE NEXT ESCALATOR", 0.62, 0.26, Enum.Font.GothamBold)
 	BuildUtil.Light(s2, "PointLight", glow)
 	BuildUtil.Look(
@@ -1320,7 +1344,7 @@ local function hallSigns(ctx, seg, gate, L)
 
 	-- club level: over F2's top, facing the riders
 	local s3 = box(signs, seg, "WayfindingSign", -6, 6, 62, 66, F2.top + 0.4, F2.top + 0.8, SIGN_DARK, nil, NO_COLLIDE)
-	local l3 = write(s3, OUTWARD, "CLUB LEVEL", color, { Glow = true, Top = 0.08, Height = 0.5 })
+	local l3 = write(s3, OUTWARD, "CLUB LEVEL", color, { Glow = true, Top = 0.08, Height = 0.5, PPS = SIGN_PPS })
 	addLine(l3, "SECTIONS " .. club, 0.62, 0.3, Enum.Font.GothamBold)
 	BuildUtil.Light(s3, "PointLight", glow)
 	BuildUtil.Look(s3, "Club Level", "Fancy! Padded club seats " .. club .. ", the club lounge and the luxury suites are through here.", {
@@ -1341,7 +1365,7 @@ local function hallSigns(ctx, seg, gate, L)
 		nil,
 		NO_COLLIDE
 	)
-	local l4 = write(s4, INWARD, "UPPER CONCOURSE  >>", color, { Glow = true, Top = 0.1, Height = 0.45 })
+	local l4 = write(s4, INWARD, "UPPER CONCOURSE  >>", color, { Glow = true, Top = 0.1, Height = 0.45, PPS = SIGN_PPS })
 	addLine(l4, "SECTIONS " .. upper, 0.62, 0.28, Enum.Font.GothamBold)
 	BuildUtil.Look(
 		s4,
@@ -1354,7 +1378,7 @@ local function hallSigns(ctx, seg, gate, L)
 
 	-- upper concourse: over its gate opening
 	local s5 = box(signs, seg, "WayfindingSign", -7.5, 7.5, 80.6, 84.2, TOP.o0 + 0.05, TOP.o0 + 0.35, SIGN_DARK, nil, NO_COLLIDE)
-	local l5 = write(s5, OUTWARD, "UPPER CONCOURSE", color, { Glow = true, Top = 0.08, Height = 0.5 })
+	local l5 = write(s5, OUTWARD, "UPPER CONCOURSE", color, { Glow = true, Top = 0.08, Height = 0.5, PPS = SIGN_PPS })
 	addLine(l5, "SECTIONS " .. upper, 0.62, 0.3, Enum.Font.GothamBold)
 	BuildUtil.Light(s5, "PointLight", glow)
 	BuildUtil.Look(
@@ -1373,7 +1397,7 @@ local function rampSign(ctx, seg, s)
 	local sign =
 		box(ctx, seg, "RampSign", s * (R.high - 0.25), s * R.high, 5, 14, R.inner[1] + 0.6, R.inner[2] - 0.6, SIGN_DARK, nil, NO_COLLIDE)
 	local face = s > 0 and Enum.NormalId.Left or Enum.NormalId.Right
-	local label = write(sign, face, "RAMP", WHITE, { Glow = true, Top = 0.08, Height = 0.38 })
+	local label = write(sign, face, "RAMP", WHITE, { Glow = true, Top = 0.08, Height = 0.38, PPS = SIGN_PPS })
 	addLine(label, "TO THE MAIN CONCOURSE", 0.52, 0.3, Enum.Font.GothamBold)
 	BuildUtil.Light(sign, "PointLight", { Name = "SignLight", Range = 14, Brightness = 1, Color = LIGHT_WARM, Shadows = false })
 	BuildUtil.Look(
@@ -1478,16 +1502,44 @@ function M.facade(ctx)
 		table.insert(segs, segment(L, name))
 	end
 
-	-- 1 LOWER FACADE: stone base + cap, the cornerstone ---------------------
+	-- 1 LOWER FACADE: stone base + cap with the service exits, the cornerstone ---------------------
 	BuildUtil.Stage(ctx, 1)
 	local base = BuildUtil.Child(ctx, "LowerFacade")
 	for _, seg in ipairs(segs) do
 		local k = sink(seg)
-		for _, r in ipairs(facadeRuns(seg, F.out, gateCut(seg))) do
+		local baseCuts = gateCut(seg)
+		if seg.kind ~= "corner" then
+			table.insert(baseCuts, { SERVICE.x0, SERVICE.x1 })
+		end
+		for _, r in ipairs(facadeRuns(seg, F.out, baseCuts)) do
 			box(base, seg, "FacadeBase", r[1], r[2], 0, F.baseTop - k, F.baseIn, F.out, STONE, Enum.Material.Limestone)
 		end
 		for _, r in ipairs(facadeRuns(seg, F.capOut, gateCut(seg))) do
 			box(base, seg, "FacadeCap", r[1], r[2], F.baseTop - k, F.capTop - k, F.capIn, F.capOut, STONE_DARK, Enum.Material.Limestone)
+		end
+		if seg.kind ~= "corner" then
+			-- the service exit: a double door (its leaves swing out onto the plaza) under a lintel
+			-- with a lit EXIT sign facing the event level
+			local s = SERVICE
+			local lintel = box(base, seg, "ServiceLintel", s.x0, s.x1, s.top, F.baseTop, F.baseIn, F.out, STONE, Enum.Material.Limestone)
+			write(lintel, INWARD, "EXIT", SCANNER_GREEN, { Glow = true, PPS = SIGN_PPS, Name = "ExitSign" })
+			BuildUtil.Light(
+				lintel,
+				"PointLight",
+				{ Name = "ExitLight", Range = 18, Brightness = 1, Color = SCANNER_GREEN, Shadows = false }
+			)
+			local doorH = s.top - 0.2
+			BuildUtil.Door(base, {
+				Name = "ServiceExit",
+				Size = Vector3.new(s.x1 - s.x0, doorH, 0.6),
+				CFrame = at(seg, (s.x0 + s.x1) / 2, 0.1 + doorH / 2, (F.baseIn + F.out) / 2),
+				Double = true,
+				Color = DARK_STEEL,
+				Material = Enum.Material.Metal,
+				Object = "Service Exit",
+				Title = "Service Exit",
+				Info = "A staff door between the event level under the stands and the plaza outside.",
+			})
 		end
 	end
 	local front = segment(L, "visitor")

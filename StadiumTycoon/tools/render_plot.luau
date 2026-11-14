@@ -14,6 +14,9 @@
 	  * parts stay inside the plot bounds
 	  * buy buttons are not buried inside parts that can exist while the button is visible
 	  * the walkway and players' tunnel stay walkable
+	  * nothing collidable taller than 0.4 stands on a road or path golf carts use
+	  * the event level (the ground between the bowl and the facade) has no sealed areas
+	  * the HQ shell's team colours carry their palette roles (a team change repaints them)
 	and writes parts.json for tools/preview/shoot.js to render.
 ]]
 
@@ -491,8 +494,7 @@ corridor(
 	{ MinX = L.CampusRoad.MinX + 1, MaxX = L.CampusRoad.MaxX - 1, MinZ = L.CampusRoad.MinZ, MaxZ = L.CampusRoad.MaxZ },
 	1,
 	0,
-	"campus",
-	{ PlotBase = true }
+	"campus"
 )
 corridor("HQ entrance", L.HQEntranceWalk, 1, 0, "campus")
 corridor("HQ corridor", L.HQCorridor, 1, 0, "campus")
@@ -503,6 +505,167 @@ for _, corridor in ipairs(corridors) do
 		for _, entry in ipairs(list) do
 			if not (corridor.ignore and corridor.ignore[id]) and isSolid(entry) and overlaps(corridor.box, entry.box) then
 				addWarning(("%s is blocked by %s/%s"):format(corridor.name, id, entry.part.Name))
+			end
+		end
+	end
+end
+
+-- Golf carts roll over anything up to 0.4 tall (docs/V5-LAYOUT.md), so no collidable part may stand
+-- on a road or path between 0.4 and a cart's height (7): the rectangles are PlotBase's own flush
+-- strips (the service roads round the stadium, the cart road, the campus + back roads, the plaza
+-- walkway and the back walk). Gate turnstiles, the claim gate and signs over the roads don't collide.
+do
+	local roadNames = {
+		FrontServiceRoad = "front service road",
+		WestServiceRoad = "west service road",
+		EastServiceRoad = "east service road",
+		CartRoad = "cart road",
+		CampusRoad = "campus road",
+		BackRoad = "back road",
+		Walkway = "plaza walkway",
+		BackWalk = "back walk (Gate D -> campus road)",
+	}
+	local roads, found = {}, {}
+	for _, entry in ipairs(partsByItem.PlotBase or {}) do
+		local name = roadNames[entry.part.Name]
+		if name then
+			found[entry.part.Name] = true
+			table.insert(roads, { name = name, box = entry.box })
+		end
+	end
+	if okBase then
+		for partName in pairs(roadNames) do
+			if not found[partName] then
+				addError("cart road check: PlotBase has no road strip named " .. partName)
+			end
+		end
+	end
+	for _, road in ipairs(roads) do
+		local r = road.box
+		for id, list in pairs(partsByItem) do
+			for _, entry in ipairs(list) do
+				local b = entry.box
+				if
+					entry.part.CanCollide
+					and b.maxY > 0.41
+					and b.minY < 7
+					and b.minX < r.maxX - 0.05
+					and b.maxX > r.minX + 0.05
+					and b.minZ < r.maxZ - 0.05
+					and b.maxZ > r.minZ + 0.05
+				then
+					addWarning(
+						("%s: %s/%s stands in the way of golf carts (top %.2f; carts roll over 0.4)"):format(
+							road.name,
+							id,
+							entry.part.Name,
+							b.maxY
+						)
+					)
+				end
+			end
+		end
+	end
+end
+
+-- No sealed rooms on the event level: every walkable ground spot between the lower bowl and the
+-- facade (offsets 60..156) must lead back to the plaza on foot, since players can drop in from the
+-- bridges and ramps above. A flood fill over 1-stud ground cells from the plaza in front of Gate A.
+-- A collidable part (door leaves open) blocks a cell where it fills some of the body's height
+-- (0.3..5.2) above it, unless it is a low thing on the ground to step or jump onto (bottom <= 2, top
+-- <= 6.5). Parts grow by 0.5 so a 2-wide player needs a 2-stud gap.
+do
+	local GX0, GZ0, NX, NZ = -330, -250, 660, 560 -- plot x -330..330, z -250..310
+	local free = table.create(NX * NZ, true)
+	for _, list in pairs(partsByItem) do
+		for _, entry in ipairs(list) do
+			local part, b = entry.part, entry.box
+			if
+				part.CanCollide
+				and part:GetAttribute("Leaf") == nil
+				and b.minY < 5.7
+				and b.maxY > -0.2
+				and b.maxX > GX0
+				and b.minX < GX0 + NX
+				and b.maxZ > GZ0
+				and b.minZ < GZ0 + NZ
+			then
+				local px, py, pz, r00, r01, r02, r10, r11, r12, r20, r21, r22 = part.CFrame:GetComponents()
+				local half = { part.Size.X / 2 + 0.5, part.Size.Y / 2 + 0.5, part.Size.Z / 2 + 0.5 }
+				local rise = { r10, r11, r12 } -- (how fast each local axis climbs along a vertical line)
+				for ix = math.max(0, math.ceil(b.minX - GX0 - 1)), math.min(NX - 1, math.floor(b.maxX - GX0)) do
+					for iz = math.max(0, math.ceil(b.minZ - GZ0 - 1)), math.min(NZ - 1, math.floor(b.maxZ - GZ0)) do
+						-- the stretch [lo, hi] of the vertical line through the cell's centre inside the part
+						local dx, dz = GX0 + ix + 0.5 - px, GZ0 + iz + 0.5 - pz
+						local along = { r00 * dx + r20 * dz, r01 * dx + r21 * dz, r02 * dx + r22 * dz }
+						local lo, hi = -math.huge, math.huge
+						for k = 1, 3 do
+							if math.abs(rise[k]) < 1e-9 then
+								if math.abs(along[k]) > half[k] then
+									lo, hi = 1, 0
+								end
+							else
+								local a, c = (-half[k] - along[k]) / rise[k], (half[k] - along[k]) / rise[k]
+								lo, hi = math.max(lo, math.min(a, c)), math.min(hi, math.max(a, c))
+							end
+						end
+						lo, hi = lo + py, hi + py
+						if lo <= hi and hi > 0.3 and lo < 5.2 and not (lo <= 2 and hi <= 6.5) then
+							free[iz * NX + ix + 1] = false
+						end
+					end
+				end
+			end
+		end
+	end
+	local function flood(start, mark, value)
+		local queue, head, count = { start }, 1, 0
+		mark[start] = value
+		while head <= #queue do
+			local cell = queue[head]
+			head += 1
+			count += 1
+			local ix = (cell - 1) % NX
+			for _, n in ipairs({ ix > 0 and cell - 1, ix < NX - 1 and cell + 1, cell - NX, cell + NX }) do
+				if n and n >= 1 and n <= NX * NZ and free[n] and mark[n] == nil then
+					mark[n] = value
+					table.insert(queue, n)
+				end
+			end
+		end
+		return count
+	end
+	-- (the field counts as a way out too: its stands and players' tunnels lead back to the plaza,
+	-- which the Items order keeps true - see the bowl tests in tools/test_server.luau)
+	local reached = {}
+	for _, start in ipairs({ Vector3.new(0, 0, L.StadiumFrontZ - 20), Vector3.new(0, 0, L.FieldCenterZ) }) do
+		local cell = math.floor(start.Z - GZ0) * NX + math.floor(start.X - GX0) + 1
+		if not free[cell] then
+			addError(("event level check: the start cell at (%g, %g) is blocked"):format(start.X, start.Z))
+		elseif reached[cell] == nil then
+			flood(cell, reached, 0)
+		end
+	end
+	local hx, minZ, maxZ = L.SurfaceHalfX, L.SurfaceMinZ, L.SurfaceMaxZ
+	local function offset(x, z)
+		local dx = math.abs(x) - hx
+		local dz = math.max(minZ - z, z - maxZ)
+		return math.max(dx, dz, (dx + dz) / math.sqrt(2))
+	end
+	local component = 0
+	for iz = 0, NZ - 1 do
+		for ix = 0, NX - 1 do
+			local cell = iz * NX + ix + 1
+			local x, z = GX0 + ix + 0.5, GZ0 + iz + 0.5
+			local o = offset(x, z)
+			if free[cell] and reached[cell] == nil and o >= 60 and o <= L.Bowl.Facade.Inner + 4 then
+				component += 1
+				local size = flood(cell, reached, component)
+				if size >= 400 then
+					addWarning(
+						("event level: %d stud2 of ground around (%.0f, %.0f) has no walkable way back to the plaza"):format(size, x, z)
+					)
+				end
 			end
 		end
 	end
@@ -677,6 +840,124 @@ for _, e in ipairs(elevatorTargets) do
 	end
 	if not floorFound then
 		addWarning(("%s: no floor under the elevator target (%.1f, %.1f, %.1f)"):format(e.where, p.X, p.Y, p.Z))
+	end
+end
+
+---------------------------------------------------------------------------------------------
+-- Team colours: a team change repaints the always-present HQ shell in place by palette role
+-- (PlotManager.ApplyTeam: TeamRole on parts, TeamTextRole / TeamBackRole on text and panels).
+-- Build it in every palette: whatever changes with the palette must carry the role whose colour it
+-- has in every build, and text on or in team colours must stay readable (contrast 3) in all of them.
+---------------------------------------------------------------------------------------------
+do
+	local builds = {}
+	for index, colors in ipairs(Config.TeamColors) do
+		local holder = Instance.new("Model")
+		local ctx = BuildUtil.Child(BuildUtil.NewContext(origin, holder, colors, "", Config), "PlotBase")
+		local ok, err = pcall(Builders.PlotBase, ctx)
+		if not ok then
+			addError(("PlotBase failed with palette %d: %s"):format(index, tostring(err)))
+		end
+		local hq = holder:FindFirstChild("HQShell", true)
+		builds[index] = hq and hq:GetDescendants() or {}
+	end
+	local function same(a, b)
+		return math.abs(a.R - b.R) < 0.002 and math.abs(a.G - b.G) < 0.002 and math.abs(a.B - b.B) < 0.002
+	end
+	local function luminance(c)
+		local function channel(v)
+			return v <= 0.03928 and v / 12.92 or ((v + 0.055) / 1.055) ^ 2.4
+		end
+		return 0.2126 * channel(c.R) + 0.7152 * channel(c.G) + 0.0722 * channel(c.B)
+	end
+	local function contrast(a, b)
+		local la, lb = luminance(a), luminance(b)
+		return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05)
+	end
+	-- what a label is drawn on: the nearest visible panel behind it, else the part's face
+	local function backgroundOf(label)
+		local node = label
+		while node do
+			if node:IsA("GuiObject") and node.BackgroundTransparency < 1 then
+				return node.BackgroundColor3
+			elseif node:IsA("BasePart") then
+				return node.Color
+			end
+			node = node.Parent
+		end
+		return nil
+	end
+	local base = builds[1]
+	local sameTree = #base > 0
+	for index = 2, #builds do
+		if #builds[index] ~= #base then
+			sameTree = false
+		else
+			for k, inst in ipairs(base) do
+				if builds[index][k].ClassName ~= inst.ClassName or builds[index][k].Name ~= inst.Name then
+					sameTree = false
+					break
+				end
+			end
+		end
+	end
+	if not sameTree then
+		addError("the HQ shell must build the same instances in every team palette (the team colour check compares them)")
+	else
+		local channels = {
+			{ "BasePart", "Color", "TeamRole" },
+			{ "GuiObject", "BackgroundColor3", "TeamBackRole" },
+			{ "TextLabel", "TextColor3", "TeamTextRole" },
+		}
+		local problems = {}
+		for k, inst in ipairs(base) do
+			for _, channel in ipairs(channels) do
+				local class, prop, attr = channel[1], channel[2], channel[3]
+				if inst:IsA(class) and not (class == "GuiObject" and inst.BackgroundTransparency >= 1) then
+					local role = inst:GetAttribute(attr)
+					local varies, wrong = false, false
+					for index, list in ipairs(builds) do
+						local value = list[k][prop]
+						varies = varies or not same(value, inst[prop])
+						local palette = Config.TeamColors[index]
+						if list[k]:GetAttribute(attr) ~= role or (role ~= nil and not same(value, palette[role])) then
+							wrong = true
+						end
+					end
+					if wrong or (varies and role == nil) then
+						table.insert(
+							problems,
+							("%s.%s %s"):format(inst:GetFullName(), prop, role and "has the wrong " .. attr or "has no " .. attr)
+						)
+					end
+				end
+			end
+			if inst:IsA("TextLabel") and inst.Text ~= "" then
+				local worst, varies = math.huge, false
+				for _, list in ipairs(builds) do
+					local label = list[k]
+					local back = backgroundOf(label)
+					if back then
+						worst = math.min(worst, contrast(label.TextColor3, back))
+						varies = varies or not same(label.TextColor3, inst.TextColor3) or not same(back, backgroundOf(inst))
+					end
+				end
+				if varies and worst < 3 then
+					table.insert(
+						problems,
+						("%s ('%s') is hard to read in some team palette (contrast %.2f)"):format(inst:GetFullName(), inst.Text, worst)
+					)
+				end
+			end
+		end
+		for index, problem in ipairs(problems) do
+			if index <= 12 then
+				addWarning("team colours: " .. problem)
+			end
+		end
+		if #problems > 12 then
+			addWarning(("team colours: ... and %d more"):format(#problems - 12))
+		end
 	end
 end
 
