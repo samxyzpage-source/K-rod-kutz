@@ -37,12 +37,13 @@
 	    1 Restrooms          4 blocks (both sidelines + both ends): a women's and a men's room each,
 	                         tiled floor + back wall (with a team-colour tile stripe), doors swinging
 	                         into the rooms (the sinks and hand dryers stay out of their swing),
-	                         stalls, urinals with a divider, sinks, mirrors (Look), hand dryers,
-	                         ceiling lights, a team-colour kick band along the front wall and a lit
-	                         WOMEN | RESTROOMS | MEN sign band (Look)
+	                         stalls, urinals with a divider, sinks (a tap over a painted bowl),
+	                         mirrors (Look), hand dryers, ceiling lights, a team-colour kick band
+	                         along the front wall and a lit WOMEN | RESTROOMS | MEN sign band (Look)
 	    2 Family Restrooms   2 single rooms on the sidelines (door at one end opening flat against
-	                         the side wall, toilet, sink, mirror, paper towels, baby changing table
-	                         (Look))
+	                         the side wall, toilet, sink with a tap, mirror, paper towels, baby
+	                         changing table (Look)); accent tiles, or Primary when the accent is as
+	                         pale as the tiles
 	    3 Water Fountains    a fountain (Look) with a bottle filler above it (its little screen counts
 	      & Signs            the bottles saved) beside every restroom (in front of the next column,
 	                         or against the wall by the family rooms) + a hanging two-sided blade
@@ -55,16 +56,17 @@
 	                         jersey wall (star QB jersey, Look roster:QB), cap wall, hoodie rack,
 	                         foam finger bin (Use foamfinger) under a shelf of footballs, checkout
 	                         counter (Look) with a card reader, a shopping bag and mini helmets on
-	                         the wall behind it, window mannequins, a signed game ball in a glass
-	                         case (Look), felt pennants on the side walls, a live "starting
-	                         lineup" screen, lit ceiling panels
+	                         the wall behind it, window mannequins in team caps, a signed game ball
+	                         in a glass case (Look), felt pennants on the side walls, a WELCOME mat
+	                         inside the doors, a live "starting lineup" screen, lit ceiling panels
 	    2 Jersey Kiosks      4 kiosks beside the gates: canopy, counter with a till and a football,
 	                         jerseys (Look roster:WR / RB / DEF / K)
 	    3 Foam Finger Carts  8 carts with umbrellas, a giant foam finger (Use foamfinger) and a stack
 	                         of rally towels: one in a bay of every straight + a team-colour "GAME
 	                         DAY GEAR" cart right inside every gate, across from its jersey kiosk
 
-	Flat layers: floor paint (tiles, pro shop floor) 30.00..30.04, only inside the shops/rooms.
+	Flat layers: floor paint (tiles, pro shop floor) 30.00..30.04, only inside the shops/rooms; the
+	pro shop's welcome mat 30.04..30.07 on its floor.
 	Collidable parts stay at offsets >= 76.2 (the lane ends at 76) - except the condiment stations,
 	which stand against the portal wall (offsets 57..58.6) on the far side of the lane; food icons
 	that stick out a little toward the lane and the restroom blade signs over its edge hang above
@@ -122,6 +124,7 @@ local CARDBOARD = Color3.fromRGB(196, 160, 112)
 local LEATHER = Color3.fromRGB(122, 64, 36) -- footballs
 local TILL_TEXT = Color3.fromRGB(120, 220, 160)
 local FILLER_TEXT = Color3.fromRGB(110, 210, 255)
+local BASIN = Color3.fromRGB(198, 206, 214) -- the bowl painted on a sink's top
 
 -- The main concourse band (Config.Layout.Bowl.MainConcourse: offsets 56..84, floor 30)
 local FRONT = 76.2 -- shop fronts: the walking lane (66..76) stays clear
@@ -939,6 +942,18 @@ local FAMILY_ROOMS = {
 local ROOM_WALL_IN = FRONT + 0.6 -- front walls 76.2..76.8
 local ROOM_HEAD_Y = 38.2 -- door heads (doors 8 tall) / bottom of the sign bands
 
+-- A sink: a steel tap out of the tiled back wall (its spout ends at offset `tip`, over the bowl)
+-- and the bowl painted on the sink's top (x = the sink's middle).
+local function sinkTap(ctx, seg, sink, x, tip)
+	cyl(ctx, seg, "Faucet", x, 33.5, (tip + BACK - 0.1) / 2, BACK - 0.1 - tip, 0.3, "o", STEEL, Enum.Material.Metal)
+	local bowl = write(sink, Enum.NormalId.Top, "", INK, { Left = 0.15, Width = 0.7, Top = 0.2, Height = 0.6, Name = "SinkBowl" })
+	bowl.BackgroundColor3 = BASIN
+	bowl.BackgroundTransparency = 0
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.45, 0)
+	corner.Parent = bowl
+end
+
 -- One room of a restroom block. s = -1 (women, toward -x) or 1 (men, toward +x); a = distance
 -- from the block's middle wall.
 local function restroomRoom(ctx, seg, cx, s, men)
@@ -962,7 +977,8 @@ local function restroomRoom(ctx, seg, cx, s, men)
 	end
 	-- wall-hung sinks + mirror on the back wall, outside the door's swing (the leaf is hinged at
 	-- a = 14.4 and sweeps everything closer than 6.2 to the hinge before it lies along the side wall)
-	spanU("SinkCounter", 8.4, 11.2, 82, BACK, 30, 33, PORCELAIN)
+	local sink = spanU("SinkCounter", 8.4, 11.2, 82, BACK, 30, 33, PORCELAIN)
+	sinkTap(ctx, seg, sink, u(9.8), 82.45)
 	local mirror = spanU("Mirror", 8.4, 11.2, 82.8, BACK, 34, 37.6, MIRROR, Enum.Material.Glass, { Reflectance = 0.35 })
 	-- a hand dryer beside the mirror (just outside the door's swing: 6.2 from its hinge)
 	spanU("HandDryer", 11.3, 12.3, 82.4, BACK - 0.1, 33.8, 35.4, STEEL, Enum.Material.Metal)
@@ -1055,7 +1071,8 @@ local function familyRestroom(ctx, seg, cx, team)
 	span(ctx, seg, "RestroomKickBand", cx + 0.7, cx + half, FRONT - 0.06, FRONT, 30, 32.8, band, nil, PAINT)
 	span(ctx, seg, "RestroomTileStripe", cx - half + 0.6, cx + half - 0.6, BACK - 0.16, BACK - 0.1, 38.2, 38.7, band, nil, PAINT)
 	span(ctx, seg, "Toilet", cx - 0.6, cx + 0.8, 81.4, BACK, 30, 31.6, PORCELAIN)
-	span(ctx, seg, "SinkCounter", cx + 2.2, cx + half - 0.6, 81.4, BACK, 30, 33, PORCELAIN)
+	local sink = span(ctx, seg, "SinkCounter", cx + 2.2, cx + half - 0.6, 81.4, BACK, 30, 33, PORCELAIN)
+	sinkTap(ctx, seg, sink, cx + 3.95, 82.2)
 	span(ctx, seg, "Mirror", cx + 2.4, cx + half - 0.8, 82.8, BACK, 34, 37.6, MIRROR, Enum.Material.Glass, { Reflectance = 0.35 })
 	span(ctx, seg, "PaperTowels", cx + 1, cx + 2, 82.4, BACK - 0.1, 33.8, 35.6, STEEL, Enum.Material.Metal)
 	-- a fold-down baby changing table on the side wall
@@ -1204,13 +1221,20 @@ local function proShop(ctx, seg, cx, team)
 		Info = "Come on in - the whole team's gear is inside!",
 	})
 
-	-- window display: two mannequins in home and away jerseys (left end)
+	-- window display: two mannequins in home and away jerseys (left end) and team caps (a crown
+	-- over the head, the brim toward the window)
 	for index, u in ipairs({ -20, -17 }) do
 		cyl(ctx, seg, "MannequinStand", x(u), 30.15, 78.2, 0.3, 1.4, "y", DARK_METAL, Enum.Material.Metal)
 		local color = index == 1 and team.Primary or team.Trim
 		span(ctx, seg, "MannequinJersey", x(u - 0.9), x(u + 0.9), 77.8, 78.6, 30.3, 34.2, color, Enum.Material.Fabric)
 		ball(ctx, seg, "MannequinHead", x(u), 34.75, 78.2, 1.1, SKIN)
+		local capColor = index == 1 and accent(team) or team.Primary
+		cyl(ctx, seg, "MannequinCap", x(u), 35.3, 78.2, 0.4, 1, "y", capColor, Enum.Material.Fabric)
+		span(ctx, seg, "MannequinCapBrim", x(u - 0.45), x(u + 0.45), 77.4, 78, 35.1, 35.18, capColor, Enum.Material.Fabric)
 	end
+	-- a welcome mat inside the doors (it reads upright for fans walking in)
+	local mat = span(ctx, seg, "ProShopMat", x(-3), x(3), inside + 0.1, inside + 2.3, 30.04, 30.07, wallColor, Enum.Material.Fabric, PAINT)
+	write(mat, Enum.NormalId.Top, "WELCOME, FAN!", ink(wallColor, team), { Top = 0.22, Height = 0.56, Font = Enum.Font.GothamBold })
 	-- live "starting lineup" screen on the back wall behind the mannequins
 	local lineup = span(ctx, seg, "LineupScreen", x(-21.6), x(-16), 82.7, BACK, 33.4, 39.6, SCREEN)
 	liveScreen(lineup, INWARD, "roster", LIVE_PLACEHOLDER.roster)
