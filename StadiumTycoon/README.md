@@ -133,11 +133,11 @@ and HQ pieces changed, so progress from earlier versions starts fresh.
 | --- | --- |
 | Gold gate | Touch it to claim an empty franchise (one per player). |
 | Buy buttons | One per piece. It shows the piece, the step ("Step 3/6: End Zones") and the price. After you buy a step, the next step's button appears in the same spot. |
-| Guide beam | A golden beam from your character to your next button, anywhere on your plot: the cheapest one in the part of the plot you are in (the HQ building, the campus, the stadium, the plaza or the fan zone), or the cheapest one anywhere when that costs less than 40% of it. It re-checks every 2 seconds and only moves to another button when that one wins twice in a row (`Config.GuideGoal`). |
+| Guide beam | A golden beam from your character to your next button, anywhere on your plot: the cheapest one in the part of the plot you are in (the HQ building, the campus, the stadium, the plaza or the fan zone), or the cheapest one anywhere when that costs less than 40% of it. It re-checks every 2 seconds and only moves to another button when that one wins twice in a row (`Config.GuideGoal`). In and around the Team HQ it leads you through the doors and up the stairs instead of through walls. |
 | Vault + collect pads | Income piles up in the vault. Step on a collect pad (HQ lobby, gold gate or the field's front sideline) to collect it. Buy buttons spend the vault too. |
 | Team Bus | Blue pads at the HQ and in the stadium plaza teleport you between them. |
-| Golf carts | The garage gives you up to 3 carts in your team colours. Abandoned carts drive themselves home. |
-| Day / night | A full day takes 10 minutes. Stadium lights switch on at night. |
+| Golf carts | The garage gives you up to 3 carts in your team colours. They roll over kerbs and curbs and drive anywhere on your plot. Abandoned carts drive themselves home once nobody is aboard and their bay is free. |
+| Day / night | A full day takes 10 minutes. At night the light towers' flood lights (and field-level lights) light up the field. |
 
 ### Things to do around your franchise
 
@@ -146,7 +146,7 @@ and HQ pieces changed, so progress from earlier versions starts fresh.
 | Stadium tour | Walk in through Gate A (or B, C, D), scan your ticket at a turnstile and ride the escalators or elevators up to the **main concourse** (food court, restrooms, pro shop), the **club level** (club lounge, luxury suites, press box, TV booth) and the **upper concourse**. Section portals and tunnels lead from the concourses into the seats. Corner ramps go from the ground up to the main concourse. Wayfinding signs show the way to every level and section. |
 | Locker rooms | The home and visitor locker rooms are built in under the stands. Walk down the players' tunnel from the field, open the lockers (they show your players' names) and visit the coach's office. |
 | Team HQ | Two floors: take the grand staircase in the atrium, the stairs or the elevator to the upstairs rooms. Covered walkways and skybridges link the HQ to the Hall of Fame, the dome and the garage. |
-| Press E to look | Prompts on interesting objects (tap them on a phone) show a short description. Some show live info from your team: lockers show your players' names, trophy cases show your championships, the Draft Board shows the next pick's price. |
+| Press E to look | Prompts on interesting objects (tap them on a phone) show a short description. Some show live info from your team: lockers show your players' names, trophy cases show your championships, the Draft Board shows the next pick's price. Prompts on solid objects only show when you can see the object (not through walls or floors). |
 | Doors | Rooms have doors: press E to open them. Most close again by themselves. |
 | Elevators | Every stadium gate hall has an elevator to the main concourse, the club level and the upper concourse. There are also lifts up the video boards, the light towers and the roof catwalk, the HQ elevator (both floors and the roof) and lifts up to the skybridges and the practice-field coach tower. |
 | Seats | Sit on chairs, couches, benches and stadium seats. Press-box, broadcast-booth, suite and other camera seats switch to a TV view of the field with a LIVE badge and your score. Jump to stand up. |
@@ -166,7 +166,7 @@ and HQ pieces changed, so progress from earlier versions starts fresh.
 | Draft | Build the **Draft Board** in the Front Office, then draft players from the **ROSTER** screen. Each has a position (QB, RB, WR, OL, DEF, K) and a rating. Your film room, coaches' offices and coaching staff give better picks. |
 | Training | Finish the **Weight Room** to train your weakest starter (+1 to +3 rating, +1 more with a Training Room). |
 | Staff | Hire a coaching staff and a medical staff (they appear on the practice field and raise your team rating) and food vendors for the plaza. |
-| Field goals | When the goal posts are finished, three kick spots appear on your field (25, 40 and 55 yards). Step on one, stop the aim needle in the green, then stop the power bar past the gold line. Good kicks pay. |
+| Field goals | When the goal posts are finished, three kick spots appear on your field (25, 40 and 55 yards). Step on one, stop the aim needle in the green, then stop the power bar past the gold line (Space, E, gamepad A or the KICK button; they don't make you jump while the meter is open). Good kicks pay. |
 | Game days | Every 4 minutes fans walk in and fill the stands you built, income is doubled for 60 seconds, and your team plays. Your team rating against the opponent decides the odds. The score goes up on your scoreboard. |
 | Seasons | Every game day is one week. Win 5 of 8 to make the playoffs: a semifinal, then the championship game. Titles pay a big prize. |
 | Leaderboard | The player list shows Wins, Rating and Titles. |
@@ -230,7 +230,7 @@ StadiumTycoon/
     KickGame.lua                 the field goal challenge (server side)
     Vehicles.lua                 golf carts
     GameDay.lua                  game day schedule, income boost, crowds
-    Crowd.lua                    NPC fan models (seated + walking)
+    Crowd.lua                    game-day fans: seated fans (filled section by section) + walking fans
     Bowl.lua                     the stadium bowl's shape: rows, segments, aisles, tunnels, fan seats
     BuildUtil.lua                helpers for parts, text, lights and build steps
     Builders/                    the geometry, one function per piece (each step marked with BuildUtil.Stage)
@@ -277,7 +277,8 @@ StadiumTycoon/
    `BuildUtil` helpers and the area's local coordinates (see `Config.Layout` and
    `docs/V5-LAYOUT.md`). Make it interactive with `BuildUtil.Look`, `Door`, `Seat`, `Elevator`,
    `Use` and `LiveText` (see the INTERACTIONS section of `BuildUtil.lua` and
-   `src/shared/Interact.lua`).
+   `src/shared/Interact.lua`). Look and Use prompts on solid parts need a line of sight; pass
+   `LineOfSight = false` (or move the prompt with `At`) for a prompt whose part is buried.
 3. Check it with `lune run tools/render_plot.luau tools/out <piece id>`, then rebuild the place
    file (below) or paste the changed scripts into Studio.
 
@@ -292,13 +293,16 @@ These tools are optional. You only need them to edit the code outside Studio.
     the real builder code and checks it: zones, plot bounds, blocked buttons, clear walkways and
     roads (flat enough for golf carts), players' tunnels, concourse lanes, HQ corridors on both
     floors, broken (NaN) positions, plus every prompt, door, seat, elevator (it must land on a
-    floor with head room) and live screen. Add `crowd` as a third argument to also seat a crowd.
+    floor with head room) and live screen. It also checks that nothing collidable stands on a
+    road or path golf carts use, that no walled-in area under the stands has no way out, and that
+    the plot base's team colours carry their palette roles (and stay readable in every palette).
+    Add `crowd` as a third argument to also seat a crowd.
   * `node tools/preview/shoot.js tools/out/parts.json tools/out` renders it to PNG images
     (run `npm install` in `tools/preview` first; needs Playwright + Chromium). `--prompts` marks
     every interaction, `--noroof` hides roofs and `--cam=x,y,z:tx,ty,tz` renders any close-up.
     The README pictures use the views `v5_aerial`, `v5_bowl`, `v5_concourse`, `v5_pressbox`,
     `v5_club`, `v5_lockers`, `v5_atrium`, `v5_back` and `v5_hq` (and `v5_field` with a crowd).
-  * `lune run tools/test_server.luau` runs about 430 checks of the server logic and the client
+  * `lune run tools/test_server.luau` runs about 500 checks of the server logic and the client
     scripts against a fake Roblox engine. It covers:
     * claiming (also from a golf cart), step-by-step buying, the vault, the three collect pads
       and auto-collect, buttons that spend the vault, and the guide beam's choice of button

@@ -56,7 +56,7 @@ outward from the turf edge. `src/server/Bowl.lua` turns this into geometry; use 
 | Club ring | 80..108 | floor 54, ceiling 66 | club lounge, suites, press box (home side, centre), broadcast booth (visitor side, centre) |
 | Upper deck, 18 rows | 80..152 | row tops 70..104 | undersides over the club ring >= 66 |
 | Upper concourse | 116..152 | floor 74, ceiling 86 (rising outward) | under upper rows 10-18; **vomitories** run inward under rows 9-18, as open trenches through upper rows 4-8, onto a cross-aisle at upper row 3 (also y = 74) at +-52 on each side and the middle of each end (8 wide) |
-| Facade | 152..160 | 0..112 | Gates A (front, x = 0), B (west, z = 30), C (east, z = 30), D (back, x = 0) at ground level |
+| Facade | 152..160 | 0..112 | Gates A (front, x = 0), B (west, z = 30), C (east, z = 30), D (back, x = 0) at ground level; a service exit door in the stone base on each straight side, so the event level is never sealed |
 | Roof canopy | over the upper deck | ~114..124 | ring roof, open over the field |
 
 Rows are **hollow raked slabs** (about 2 thick) on raker beams and columns wherever something
