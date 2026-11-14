@@ -5,13 +5,14 @@
 	(124, 324) sits on the open slab between the Hall of Fame and the garage, clear of the
 	carts' way out to the west.
 
-	The building X[129, 183] Z[329, 367] is one walk-in garage with two rooms:
-	  * CART BAYS (x 130 .. 160): three bays open to the west, one per cart. The server
-	    (Vehicles.lua) parks the drivable carts on Config.Layout.CartPads (x 138, z 336 / 348 / 360,
-	    facing -X). X[132, 144] x Z[pad - 5, pad + 5] holds nothing collidable and the west side has
-	    no doors (only rolled-up shutters above the openings), so the carts drive straight out.
-	    Low divider walls separate the backs of the bays (x 147 .. 160).
-	  * WORKSHOP (x 161 .. 182): mechanic's bench, a cart up on a lift, a rolling tool chest, a
+	The building X[139, 193] Z[329, 367] is one walk-in garage with two rooms:
+	  * CART BAYS (x 140 .. 170): three bays open to the west, one per cart. The server
+	    (Vehicles.lua) parks the drivable carts on Config.Layout.CartPads (x 148, z 336 / 348 / 360,
+	    facing -X). X[142, 154] x Z[pad - 5, pad + 5] holds nothing collidable and the west side has
+	    no doors (only rolled-up shutters above the openings), so the carts drive straight out onto
+	    a 22-stud apron (to the Campus Walk's columns at x 117, CampusLinks) with room to turn.
+	    Low divider walls separate the backs of the bays (x 157 .. 170).
+	  * WORKSHOP (x 171 .. 192): mechanic's bench, a cart up on a lift, a rolling tool chest, a
 	    parts shelf, a soda vending machine and a lounge bench facing a live TV (the bench is a TV
 	    camera seat). A double door from the back of bay 2 and a side door to the back road.
 
@@ -36,21 +37,21 @@ local Garage = {}
 -- Layout (plot-local studs)
 ---------------------------------------------------------------------------------------------
 
-local G = { X0 = 129, X1 = 183, Z0 = 329, Z1 = 367 } -- outside of the walls (1 thick)
+local G = { X0 = 139, X1 = 193, Z0 = 329, Z1 = 367 } -- outside of the walls (1 thick)
 local FLOOR_TOP = 0.1
 local WALL_TOP = 14 -- underside of the ceiling slab (y 14 .. 15); the pitched roof sits on it
 local ROOF_RISE = 4.8 -- ridge at y 19.8 (the zone allows 20)
 local OPEN_TOP = 10.5 -- top of the cart openings in the west facade
-local PART_X = 160 -- the partition between bays and workshop: x 160 .. 161
-local DIV_X0, DIV_TOP = 147, 9 -- low bay dividers from x 147 to the partition
+local PART_X = 170 -- the partition between bays and workshop: x 170 .. 171
+local DIV_X0, DIV_TOP = 157, 9 -- low bay dividers from x 157 to the partition
 local DOOR_TOP = 8.5
 local WORK_DOOR = { Z0 = 345, Z1 = 351 } -- partition doorway (back of bay 2)
-local SIDE_DOOR = { X0 = 168, X1 = 174 } -- north wall doorway to the back road
-local DEFAULT_PADS = { Vector3.new(138, 0, 336), Vector3.new(138, 0, 348), Vector3.new(138, 0, 360) }
-local CART_REAR_X = 142.5 -- back end of a parked cart (9 long, centred on its pad)
-local SIGN_X = 145.7 -- bay sign posts, just behind the carts
-local TRAY_X = 146.5 -- overhead charging cable tray
-local LIFT = { X = 170, Z = 339.4 } -- the cart lift in the workshop (4-stud aisles on every side)
+local SIDE_DOOR = { X0 = 178, X1 = 184 } -- north wall doorway to the back road
+local DEFAULT_PADS = { Vector3.new(148, 0, 336), Vector3.new(148, 0, 348), Vector3.new(148, 0, 360) }
+local CART_REAR_X = 152.5 -- back end of a parked cart (9 long, centred on its pad)
+local SIGN_X = 155.7 -- bay sign posts, just behind the carts
+local TRAY_X = 156.5 -- overhead charging cable tray
+local LIFT = { X = 180, Z = 339.4 } -- the cart lift in the workshop (4-stud aisles on every side)
 local LOUNGE_Z = 360 -- lounge bench + TV
 -- the lounge TV camera: high over the bowl's back corner, looking at the field centre. The garage is
 -- built in CAMPUS-area coordinates (Config.Layout.Areas.campus = +120 z), so the stadium's field
@@ -338,9 +339,9 @@ local function garageFloor(ctx, pads, team)
 		rect("BayLine", x0 + 1, CART_REAR_X + 2.6, pad.Z - 5.2, pad.Z - 4.8, BAY_YELLOW)
 		rect("BayLine", x0 + 1, CART_REAR_X + 2.6, pad.Z + 4.8, pad.Z + 5.2, BAY_YELLOW)
 		rect("BayLine", CART_REAR_X + 2.2, CART_REAR_X + 2.6, pad.Z - 5.2, pad.Z + 5.2, BAY_YELLOW)
-		text("BayNumber", 146.6, 152.6, pad.Z - 2.6, pad.Z + 2.6, tostring(index), numberColor)
+		text("BayNumber", 156.6, 162.6, pad.Z - 2.6, pad.Z + 2.6, tostring(index), numberColor)
 	end
-	text("ToWorkshop", 153.4, 159.4, WORK_DOOR.Z0 - 1, WORK_DOOR.Z1 + 1, "WORKSHOP", BAY_YELLOW)
+	text("ToWorkshop", 163.4, 169.4, WORK_DOOR.Z0 - 1, WORK_DOOR.Z1 + 1, "WORKSHOP", BAY_YELLOW)
 	-- yellow safety box around the cart lift
 	local lx0, lx1, lz0, lz1 = LIFT.X - 6, LIFT.X + 6, LIFT.Z - 3.6, LIFT.Z + 3.6
 	rect("LiftBox", lx0, lx1, lz0, lz0 + 0.4, BAY_YELLOW)
@@ -463,10 +464,10 @@ local function shell(ctx, pads, team, name)
 	local gableSign = span(s, "GableSign", G.X0 - 0.75, G.X0 - 0.45, WALL_TOP + 1.3, WALL_TOP + 4.5, 342, 354, team.Secondary)
 	sign(gableSign, Enum.NormalId.Left, name ~= "" and (name .. "\nGOLF CARTS") or "GOLF CART\nGARAGE", team.Secondary, team, 0.05, 0.08)
 	for _, pad in ipairs(pads) do
-		ceilingLight(s, 141, pad.Z, 7, 1.6, 24)
+		ceilingLight(s, 151, pad.Z, 7, 1.6, 24)
 	end
-	ceilingLight(s, 171.5, 340, 8, 2, 26)
-	ceilingLight(s, 171.5, 357, 8, 2, 26)
+	ceilingLight(s, 181.5, 340, 8, 2, 26)
+	ceilingLight(s, 181.5, 357, 8, 2, 26)
 
 	-- cart rules poster on the back wall of bay 1
 	local poster = span(s, "CartRulesPoster", PART_X - 0.15, PART_X, 3.4, 8.2, pads[1].Z - 3, pads[1].Z + 3, WHITE)
@@ -593,7 +594,7 @@ local function workshop(ctx, team)
 	)
 
 	-- rolling tool chest against the south wall (under the windows)
-	local chest = span(w, "ToolChest", 164, 168.6, FLOOR_TOP, 4.3, G.Z0 + 1.1, G.Z0 + 3.6, TOOL_RED, Enum.Material.Metal)
+	local chest = span(w, "ToolChest", 174, 178.6, FLOOR_TOP, 4.3, G.Z0 + 1.1, G.Z0 + 3.6, TOOL_RED, Enum.Material.Metal)
 	local drawers = canvas(chest, Enum.NormalId.Back, 10)
 	for k = 0, 5 do
 		blob(drawers, "Drawer", 0.06, 0.06 + k * 0.15, 0.88, 0.02, DARK_METAL)
@@ -709,7 +710,7 @@ local function bayDetails(ctx, index, pad, pads, team)
 	)
 
 	-- tool board on the south side: tool outlines, a few tools and the bay name
-	local toolBoard = span(bay, "ToolBoard", 149, 158, 3, 7.4, southFace, southFace + 0.2, PEGBOARD, Enum.Material.Wood)
+	local toolBoard = span(bay, "ToolBoard", 159, 168, 3, 7.4, southFace, southFace + 0.2, PEGBOARD, Enum.Material.Wood)
 	local toolsGui = canvas(toolBoard, Enum.NormalId.Back, 12) -- faces +Z, into the bay
 	words(toolsGui, "BayTitle", 0.05, 0.03, 0.4, 0.18, "BAY " .. index, team.Primary)
 	for k = 0, 6 do
@@ -727,12 +728,12 @@ local function bayDetails(ctx, index, pad, pads, team)
 	-- tire rack on the north side: a wall shelf with two tires, three more standing on the floor
 	-- (tires centred 1.3 off the wall, so they stand clear of it)
 	local rackZ0, tireZ = northFace - 2.6, northFace - 1.3
-	span(bay, "TireShelf", 150, 157.4, 3.3, 3.6, rackZ0, northFace, STEEL, Enum.Material.Metal)
+	span(bay, "TireShelf", 160, 167.4, 3.3, 3.6, rackZ0, northFace, STEEL, Enum.Material.Metal)
 	for k = 0, 2 do
-		cylinder(bay, "Tire", "X", Vector3.new(151.2 + k * 2.2, FLOOR_TOP + 1.25, tireZ), 1, 2.5, TIRE, Enum.Material.Rubber)
+		cylinder(bay, "Tire", "X", Vector3.new(161.2 + k * 2.2, FLOOR_TOP + 1.25, tireZ), 1, 2.5, TIRE, Enum.Material.Rubber)
 	end
 	for k = 0, 1 do
-		cylinder(bay, "Tire", "X", Vector3.new(152.6 + k * 2.6, 3.6 + 1.2, tireZ), 1, 2.4, TIRE, Enum.Material.Rubber)
+		cylinder(bay, "Tire", "X", Vector3.new(162.6 + k * 2.6, 3.6 + 1.2, tireZ), 1, 2.4, TIRE, Enum.Material.Rubber)
 	end
 end
 

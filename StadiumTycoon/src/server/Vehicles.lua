@@ -11,12 +11,14 @@
 	  * when someone sits in the driver's seat the server gives that player network ownership and
 	    the player's own client (Drive.client.lua) sets the velocities from the seat's throttle /
 	    steer, so driving feels instant
-	  * carts left far from their pad for a while (or that fall off the world) go back home
+	  * carts left far from their pad for a while with nobody aboard (or that fall off the world)
+	    go back home, as soon as nothing else (a cart, a player) stands on their pad
 ]]
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -29,6 +31,8 @@ local TURN_RATE = 2.4 -- radians per second at full steer
 local RETURN_AFTER = 45 -- seconds a cart may sit unused away from its pad
 local RETURN_DISTANCE = 30
 local FALL_Y = -40
+local RIDE_HEIGHT = 1.2 -- chassis centre above its pad (the wheel balls rest on the 0.1 garage floor)
+local PAD_SPACE = Vector3.new(7, 6, 10) -- a parked cart's room over its pad (width, height, length)
 
 local carts = {} -- [plot] = { [cartIndex] = cartInfo }
 local driveHooks = {} -- fn(player) when someone takes the wheel
@@ -79,7 +83,7 @@ function Vehicles.BuildCart(at, palette, number)
 	local chassis = makePart(model, nil, {
 		Name = "Chassis",
 		Size = Vector3.new(5, 1, 9),
-		CFrame = at * CFrame.new(0, 1.2, 0),
+		CFrame = at * CFrame.new(0, RIDE_HEIGHT, 0),
 		Color = palette.Primary,
 		CanCollide = false,
 		Massless = false,
@@ -131,7 +135,10 @@ function Vehicles.BuildCart(at, palette, number)
 		Transparency = 0.55,
 	})
 	-- wheels: a visible tyre + an invisible collision ball (low friction: the drive constraints
-	-- do the steering, the balls just roll/slide over the ground and climb small steps)
+	-- do the steering, the balls just roll/slide over the ground and climb small steps). Roblox
+	-- averages two touching parts' friction by FrictionWeight, so the balls' weight of 100 keeps
+	-- the contact slippery (about 0.06) on every ground material: with an even weight they would
+	-- grip asphalt at about 0.43 and a loaded cart could not push itself up a 0.4 kerb.
 	for _, x in ipairs({ -2.4, 2.4 }) do
 		for _, z in ipairs({ -3, 3 }) do
 			makePart(model, chassis, {
@@ -151,7 +158,7 @@ function Vehicles.BuildCart(at, palette, number)
 				CanCollide = true,
 				Massless = false,
 			})
-			collider.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.05, 0, 1, 1)
+			collider.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.05, 0, 100, 1)
 		end
 	end
 
@@ -190,6 +197,7 @@ function Vehicles.BuildCart(at, palette, number)
 	gui.Face = Enum.NormalId.Back
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = 40
+	gui.MaxDistance = 120 -- (a 2-stud plate can't be read from farther away: stop drawing it)
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.new(1, 0, 1, 0)
 	label.BackgroundTransparency = 1
@@ -249,9 +257,45 @@ local function stopCart(info)
 	end
 end
 
+-- True while anyone sits in the cart: the driver or a passenger.
+local function isOccupied(info)
+	for _, seat in ipairs(info.seats) do
+		local occupant = seat.Occupant
+		if occupant ~= nil and occupant.Parent ~= nil then
+			return true
+		end
+	end
+	return false
+end
+
+-- True when nothing that moves (another cart, a player, a dropped tool) is on the cart's pad:
+-- teleporting into it would overlap two assemblies and fling them apart. The pad's own building
+-- (anchored) doesn't count, nor does the cart itself.
+local function padClear(info)
+	local ok, parts = pcall(function()
+		return Workspace:GetPartBoundsInBox(info.home * CFrame.new(0, 0.5 + PAD_SPACE.Y / 2, 0), PAD_SPACE)
+	end)
+	if not ok then
+		return true -- (offline tools have no spatial queries; Roblox always answers)
+	end
+	for _, part in ipairs(parts) do
+		if not part.Anchored and not part:IsDescendantOf(info.model) then
+			return false
+		end
+	end
+	return true
+end
+
 local function sendHome(info)
 	stopCart(info)
-	info.model:PivotTo(info.home)
+	-- the model's pivot is the chassis: put it back at its spawn height over the pad (not on the
+	-- pad, which buries the wheels in the floor) and drop any speed it had (a falling cart)
+	info.model:PivotTo(info.home * CFrame.new(0, RIDE_HEIGHT, 0))
+	local chassis = info.model.PrimaryPart
+	if chassis then
+		chassis.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+		chassis.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+	end
 	info.lastUsed = os.clock()
 end
 
@@ -303,6 +347,7 @@ local function spawnCart(plot, index)
 	local info = {
 		model = model,
 		seat = model:FindFirstChild("DriverSeat"),
+		seats = {}, -- every seat (driver + passenger): anyone aboard keeps the cart in use
 		home = home,
 		lastUsed = os.clock(),
 	}
@@ -310,6 +355,16 @@ local function spawnCart(plot, index)
 	info.seat:GetPropertyChangedSignal("Occupant"):Connect(function()
 		onOccupantChanged(info)
 	end)
+	for _, seat in ipairs(model:GetDescendants()) do
+		if seat:IsA("Seat") or seat:IsA("VehicleSeat") then
+			table.insert(info.seats, seat)
+			if seat ~= info.seat then
+				seat:GetPropertyChangedSignal("Occupant"):Connect(function()
+					info.lastUsed = os.clock() -- a passenger getting in or out uses the cart too
+				end)
+			end
+		end
+	end
 end
 
 local function removeCarts(plot)
@@ -341,13 +396,14 @@ function Vehicles.Tidy(now)
 				table.insert(broken, { plot = plot, index = index, info = info })
 			else
 				local position = chassis.CFrame.Position
-				local occupant = info.seat and info.seat.Occupant
-				local occupied = occupant ~= nil and occupant.Parent ~= nil
+				local occupied = isOccupied(info)
 				if occupied then
 					info.lastUsed = now
 				end
 				local farFromHome = (position - info.home.Position).Magnitude > RETURN_DISTANCE
-				if position.Y < FALL_Y or (not occupied and farFromHome and now - info.lastUsed > RETURN_AFTER) then
+				local wantsHome = position.Y < FALL_Y or (not occupied and farFromHome and now - info.lastUsed > RETURN_AFTER)
+				-- (while something stands on the pad the cart waits: the next tick tries again)
+				if wantsHome and padClear(info) then
 					sendHome(info)
 					moved += 1
 				end
@@ -358,10 +414,13 @@ function Vehicles.Tidy(now)
 		pcall(function()
 			entry.info.model:Destroy()
 		end)
-		carts[entry.plot][entry.index] = nil
-		if entry.plot.Owner then
-			spawnCart(entry.plot, entry.index)
-			moved += 1
+		-- (a rebuild waits for a clear pad too: the broken entry stays until the next tick)
+		if not entry.plot.Owner or padClear(entry.info) then
+			carts[entry.plot][entry.index] = nil
+			if entry.plot.Owner then
+				spawnCart(entry.plot, entry.index)
+				moved += 1
+			end
 		end
 	end
 	return moved

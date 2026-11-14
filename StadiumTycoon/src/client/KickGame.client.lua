@@ -4,13 +4,15 @@
 	  1. AIM   - a needle sweeps left/right, press to lock it (stop it in the green zone)
 	  2. POWER - a bar fills up and down, press to lock it (past the gold line)
 	then sends KickAttempt(spotIndex, aim, power). The server judges the kick (KickGame.lua).
-	Press = Space, left click / tap the KICK button, or gamepad A. Walking away cancels.
+	Press = Space or E, left click / tap the KICK button, or gamepad A. Walking away cancels.
+	While the meter is open Space and A only kick (they don't also jump: landing back on the
+	kick spot would count as stepping on it again).
 ]]
 
+local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
@@ -24,7 +26,8 @@ local DARK = Color3.fromRGB(18, 22, 30)
 local GOLD = Color3.fromRGB(255, 196, 37)
 local GREEN = Color3.fromRGB(70, 210, 110)
 local CANCEL_DISTANCE = 14
-local TIMEOUT_SECONDS = 15
+local TIMEOUT_SECONDS = settings.MeterTimeoutSeconds or 15
+local KICK_ACTION = "TycoonKickMeter" -- Space / E / gamepad A while the meter is open
 
 local function create(className, props, children)
 	local instance = Instance.new(className)
@@ -177,6 +180,7 @@ end
 local function finish()
 	current = nil
 	screen.Enabled = false
+	ContextActionService:UnbindAction(KICK_ACTION)
 	if renderConnection then
 		renderConnection:Disconnect()
 		renderConnection = nil
@@ -267,14 +271,13 @@ kickStart.OnClientEvent:Connect(function(spotIndex, yards, name)
 	if not renderConnection then
 		renderConnection = RunService.RenderStepped:Connect(step)
 	end
+	-- the keys are sunk while the meter is open (finish() unbinds them), so they don't jump too
+	ContextActionService:BindActionAtPriority(KICK_ACTION, function(_, state)
+		if state == Enum.UserInputState.Begin then
+			press()
+		end
+		return Enum.ContextActionResult.Sink
+	end, false, Enum.ContextActionPriority.High.Value, Enum.KeyCode.Space, Enum.KeyCode.E, Enum.KeyCode.ButtonA)
 end)
 
 kickButton.Activated:Connect(press)
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed or not current then
-		return
-	end
-	if input.KeyCode == Enum.KeyCode.Space or input.KeyCode == Enum.KeyCode.ButtonA or input.KeyCode == Enum.KeyCode.E then
-		press()
-	end
-end)

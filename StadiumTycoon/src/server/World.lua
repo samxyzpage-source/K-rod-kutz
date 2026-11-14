@@ -11,6 +11,7 @@ local World = {}
 
 World.PlotY = 0.2 -- height of every plot's slab top (= the street's top)
 local PLOT_Y = World.PlotY
+local SIGN_MAX_DISTANCE = 300 -- the welcome sign's text stops drawing farther away (it is too small to read there)
 
 -- Plot origins: plots sit in two rows facing a central street that runs along X.
 -- Odd plots are on the +Z side, even plots on the -Z side; every plot's front (-Z local) faces the street.
@@ -60,6 +61,7 @@ local function addSurfaceText(part, face, text, textColor, backgroundColor)
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = 25
 	gui.LightInfluence = 0
+	gui.MaxDistance = SIGN_MAX_DISTANCE
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.new(1, 0, 1, 0)
 	label.BackgroundColor3 = backgroundColor
@@ -110,12 +112,14 @@ function World.Build(config)
 		end
 	end
 
+	-- the spawn pad in the middle of the street is a low step (top 0.4, the street's top is 0.2), so
+	-- golf carts roll over it on their way between the two plots' gates (as in default.project.json)
 	if not Workspace:FindFirstChildOfClass("SpawnLocation") then
 		local spawn = Instance.new("SpawnLocation")
 		spawn.Name = "SpawnLocation"
 		spawn.Anchored = true
-		spawn.Size = Vector3.new(12, 1, 12)
-		spawn.CFrame = CFrame.new(0, 0.5, 0)
+		spawn.Size = Vector3.new(12, 0.4, 12)
+		spawn.CFrame = CFrame.new(0, 0.2, 0)
 		spawn.Neutral = true
 		spawn.Duration = 0
 		spawn.Parent = Workspace

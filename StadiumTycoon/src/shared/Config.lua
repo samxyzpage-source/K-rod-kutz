@@ -124,6 +124,7 @@ Config.KickGame = {
 	PowerMax = 0.95,
 	MeterSeconds = 1.6, -- how long one sweep of the aim / power meter takes
 	MinMeterSeconds = 0.8, -- a kick sent back faster than this after the offer is ignored (no bots)
+	MeterTimeoutSeconds = 15, -- an open meter closes by itself after this long (the offer stays live as long)
 	RewardCooldownSeconds = 60, -- good kicks pay at most once per minute (the rest are practice)
 	RewardIncomeSecondsPerYard = 0.25, -- reward = yards * 8 + base income * yards * this
 	Spots = {
@@ -412,11 +413,12 @@ L.StaffSpots = {
 	staff_vendors = { Vector3.new(-85, 0, -150), Vector3.new(-85, 0, -138), Vector3.new(-85, 0, -126) },
 }
 
--- Golf carts spawn here (campus area, in front of the garage, facing -X)
+-- Golf carts spawn here (campus area, in the garage's bays, facing -X: they drive out west onto a
+-- 22-stud apron in front of the garage)
 L.CartPads = {
-	Vector3.new(138, 0, 336),
-	Vector3.new(138, 0, 348),
-	Vector3.new(138, 0, 360),
+	Vector3.new(148, 0, 336),
+	Vector3.new(148, 0, 348),
+	Vector3.new(148, 0, 360),
 }
 
 -- Every piece must stay inside its zone (the preview tool checks). Zones are in the piece's

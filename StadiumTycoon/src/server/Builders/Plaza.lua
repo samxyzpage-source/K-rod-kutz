@@ -1426,8 +1426,9 @@ function Plaza.parking(ctx)
 		C.Asphalt,
 		Enum.Material.Asphalt
 	)
-	-- low curbs around the lot (gaps for the car entrance and the walk to the plaza)
-	local curbH, curbW = 0.5, 0.8
+	-- low curbs around the lot (gaps for the car entrance and the walk to the plaza); 0.4 tall at most,
+	-- so golf carts can still roll over them
+	local curbH, curbW = 0.4, 0.8
 	local function curb(minX, maxX, minZ, maxZ)
 		BuildUtil.Block(
 			ctx,

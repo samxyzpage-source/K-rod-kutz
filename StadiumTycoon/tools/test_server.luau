@@ -1125,6 +1125,341 @@ local function runTests()
 		end
 		check(miss < 1, ("the garage's stadium TV looks at the stadium field (misses by %.1f)"):format(miss))
 	end
+	do
+		-- a cart sent home stands on its wheels on the garage floor like a new one (not sunk 1.2 into
+		-- it) and has lost the speed it had (a falling cart)
+		local list = Vehicles.GetCarts(PlotManager.GetPlot(alice))
+		local function lowestWheel(info)
+			local lowest = math.huge
+			for _, d in ipairs(info.model:GetDescendants()) do
+				if d.Name == "WheelCollider" then
+					lowest = math.min(lowest, info.home:PointToObjectSpace(d.CFrame.Position).Y - d.Size.Y / 2)
+				end
+			end
+			return lowest
+		end
+		local parked = lowestWheel(list[2]) -- (cart #2 hasn't moved since it was built)
+		local info = list[1]
+		local homeChassis = info.model.PrimaryPart
+		info.model:PivotTo(info.home * CFrame.new(0, -60, 150))
+		homeChassis.AssemblyLinearVelocity = Vector3.new(0, -300, 0)
+		homeChassis.AssemblyAngularVelocity = Vector3.new(0, 4, 0)
+		info.lastUsed = -1000
+		Vehicles.Tidy(os.clock())
+		local height = info.home:PointToObjectSpace(homeChassis.CFrame.Position).Y
+		local wheels = lowestWheel(info)
+		check(
+			math.abs(wheels - parked) < 0.01 and wheels >= 0.1 - 1e-3 and math.abs(height - 1.2) < 0.05,
+			("a cart sent home rests on the garage floor like a new one (wheels %.2f, new %.2f, floor top 0.1)"):format(wheels, parked)
+		)
+		check(
+			homeChassis.AssemblyLinearVelocity.Magnitude < 1e-3 and homeChassis.AssemblyAngularVelocity.Magnitude < 1e-3,
+			"a cart sent home stops (no fall speed carried onto the pad)"
+		)
+	end
+	do
+		-- Drive margins. Pitch and roll are locked, so at a kerb the front balls lift the whole cart:
+		-- quasi-static push F = W (cos t + mu sin t) / (sin t - mu cos t), sin t = (r - h) / r.
+		local model = Vehicles.GetCarts(PlotManager.GetPlot(alice))[2].model
+		local mass, ball = 2 * 16, nil -- two riders
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") and not d.Massless then
+				local s = d.Size
+				local volume = d.Shape == Enum.PartType.Ball and (4 / 3) * math.pi * (s.X / 2) ^ 3 or s.X * s.Y * s.Z
+				mass += volume * d.CustomPhysicalProperties.Density
+			end
+			if d.Name == "WheelCollider" then
+				ball = d
+			end
+		end
+		local props = ball.CustomPhysicalProperties
+		local mu = (props.Friction * props.FrictionWeight + 0.8) / (props.FrictionWeight + 1) -- on asphalt (0.8)
+		local r, h = ball.Size.X / 2, 0.5
+		local sinT = (r - h) / r
+		local cosT = math.sqrt(1 - sinT * sinT)
+		local push = mass * 196.2 * (cosT + mu * sinT) / (sinT - mu * cosT)
+		local maxForce = model.PrimaryPart.DriveVelocity.MaxForce
+		check(mu < 0.1, ("the wheel balls stay slippery on asphalt (friction %.3f)"):format(mu))
+		check(
+			sinT - mu * cosT > 0 and push < maxForce,
+			("the drive force lifts a cart with two riders over a 0.5 curb (needs %.0f of %.0f)"):format(push, maxForce)
+		)
+	end
+	do
+		-- the drive controller stops the cart the moment its driver gets out (the client still owns the
+		-- cart until the server takes it back, so it would roll on at its last speed until then)
+		local tester = makeCharacter("CartTester")
+		local testerHumanoid = tester:FindFirstChildOfClass("Humanoid")
+		local fakeLocal = { Character = tester }
+		local savedLocal = Players.LocalPlayer
+		Players.LocalPlayer = fakeLocal
+		local okScript, scriptErr = pcall(runScript, "StarterPlayer/StarterPlayerScripts/TycoonClient/Drive")
+		Players.LocalPlayer = savedLocal
+		local info = Vehicles.GetCarts(PlotManager.GetPlot(alice))[3]
+		local linear, angular = info.model.PrimaryPart.DriveVelocity, info.model.PrimaryPart.DriveTurn
+		local okSit = pcall(function()
+			testerHumanoid.SeatPart = info.seat
+			info.seat.ThrottleFloat = 1
+			info.seat.SteerFloat = 1
+		end)
+		for _ = 1, 20 do
+			RunServiceMock.Heartbeat:Fire(1 / 30)
+		end
+		task.wait(0.05)
+		local moving = linear.PlaneVelocity.Magnitude > 5 and angular.AngularVelocity.Magnitude > 0
+		pcall(function()
+			testerHumanoid.SeatPart = Instance.new("Seat") -- (Lune can't set it back to nil: out of the driver's seat)
+		end)
+		RunServiceMock.Heartbeat:Fire(1 / 30)
+		task.wait(0.05)
+		check(okScript and okSit and moving, "test drive: " .. tostring(scriptErr))
+		check(
+			linear.PlaneVelocity.Magnitude == 0 and angular.AngularVelocity.Magnitude == 0,
+			"getting out stops the cart at once (the driver's client zeroes its drive targets)"
+		)
+		pcall(function()
+			info.seat.ThrottleFloat = 0
+			info.seat.SteerFloat = 0
+		end)
+		fakeLocal.Character = nil -- (that Drive script stays connected: leave it nobody to drive)
+		tester:Destroy()
+	end
+	do
+		-- Cart teleports check who is aboard and what is on the pad. The fake engine gets a simple
+		-- GetPartBoundsInBox (by bounding box) over the carts, the characters and the test's parts.
+		local testParts = {}
+		roblox.implementMethod("Workspace", "GetPartBoundsInBox", function(_, cframe, size)
+			local candidates = table.clone(testParts)
+			for _, plot in ipairs(tycoons:GetChildren()) do
+				local folder = plot:FindFirstChild("Carts")
+				for _, d in ipairs(folder and folder:GetDescendants() or {}) do
+					table.insert(candidates, d)
+				end
+			end
+			for _, p in ipairs(Players:GetPlayers()) do
+				for _, d in ipairs(p.Character and p.Character:GetDescendants() or {}) do
+					table.insert(candidates, d)
+				end
+			end
+			local found = {}
+			for _, part in ipairs(candidates) do
+				if part:IsA("BasePart") then
+					local x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22 = cframe:ToObjectSpace(part.CFrame):GetComponents()
+					local h = part.Size / 2
+					local ex = math.abs(r00) * h.X + math.abs(r01) * h.Y + math.abs(r02) * h.Z
+					local ey = math.abs(r10) * h.X + math.abs(r11) * h.Y + math.abs(r12) * h.Z
+					local ez = math.abs(r20) * h.X + math.abs(r21) * h.Y + math.abs(r22) * h.Z
+					if math.abs(x) < size.X / 2 + ex and math.abs(y) < size.Y / 2 + ey and math.abs(z) < size.Z / 2 + ez then
+						table.insert(found, part)
+					end
+				end
+			end
+			return found
+		end)
+		local info = Vehicles.GetCarts(PlotManager.GetPlot(alice))[3]
+		local chassis = info.model.PrimaryPart
+		local passengerSeat = info.model:FindFirstChild("PassengerSeat")
+		local function leaveFarAway()
+			info.model:PivotTo(info.home * CFrame.new(0, 1.2, 200))
+			info.lastUsed = -1000
+		end
+		local function atHome()
+			return (chassis.CFrame.Position - info.home.Position).Magnitude < 5
+		end
+		-- (a) a passenger alone in the cart: it stays where it is
+		leaveFarAway()
+		local okRide = pcall(function()
+			passengerSeat.Occupant = alice.Character:FindFirstChildOfClass("Humanoid")
+		end)
+		Vehicles.Tidy(os.clock())
+		check(okRide and not atHome(), "a cart with only a passenger aboard is not sent home")
+		pcall(function()
+			passengerSeat.Occupant = Instance.new("Humanoid") -- (Lune can't set it back to nil: an empty seat)
+		end)
+		info.lastUsed = -1000
+		instanceSignal(passengerSeat, "PropOccupant"):Fire()
+		check(os.clock() - info.lastUsed < 1, "a passenger getting out counts as using the cart (its idle time restarts)")
+		-- (b) someone stands on the pad: the cart waits; anchored parts there (the garage) don't count
+		leaveFarAway()
+		local root = alice.Character.HumanoidRootPart
+		local rootBefore = root.CFrame
+		root.CFrame = info.home * CFrame.new(0, 3, 0)
+		local floorMark = Instance.new("Part")
+		floorMark.Anchored = true
+		floorMark.Size = Vector3.new(4, 1, 4)
+		floorMark.CFrame = info.home * CFrame.new(0, 1, 0)
+		table.insert(testParts, floorMark)
+		Vehicles.Tidy(os.clock())
+		local waited = not atHome()
+		root.CFrame = rootBefore
+		Vehicles.Tidy(os.clock())
+		check(waited and atHome(), "an idle cart waits while someone stands on its pad, then comes home")
+		-- a destroyed cart is rebuilt only once its pad is clear too
+		local list = Vehicles.GetCarts(PlotManager.GetPlot(alice))
+		root.CFrame = info.home * CFrame.new(0, 3, 0)
+		info.model:Destroy()
+		Vehicles.Tidy(os.clock())
+		local notYet = list[3] == info
+		root.CFrame = rootBefore
+		Vehicles.Tidy(os.clock())
+		check(notYet and list[3] ~= info and list[3].model.Parent ~= nil, "a destroyed cart is rebuilt once its pad is clear")
+		table.clear(testParts)
+	end
+	do
+		-- Cart routes off the roads (the whole franchise is built): parts a cart can't roll over (top
+		-- above 0.4, below the cart's roof) in plot coordinates
+		local L = Config.Layout
+		local origin = PlotManager.GetPlot(alice).Origin
+		local function plotBox(part)
+			local x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22 = origin:ToObjectSpace(part.CFrame):GetComponents()
+			local h = part.Size / 2
+			local ex = math.abs(r00) * h.X + math.abs(r01) * h.Y + math.abs(r02) * h.Z
+			local ey = math.abs(r10) * h.X + math.abs(r11) * h.Y + math.abs(r12) * h.Z
+			local ez = math.abs(r20) * h.X + math.abs(r21) * h.Y + math.abs(r22) * h.Z
+			return x - ex, x + ex, y - ey, y + ey, z - ez, z + ez
+		end
+		-- (a) the garage bays open onto an apron: nothing in front of the garage within 20 studs
+		local z0, z1 = L.Areas.campus.Z + 329, L.Areas.campus.Z + 367 -- the garage's west front
+		local front, inFront, blocker = math.huge, -math.huge, "nothing"
+		for _, item in ipairs({ plotModel(1).Base, table.unpack(plotModel(1).Items:GetChildren()) }) do
+			local isGarage = item.Name:sub(1, 11) == "golf_carts:"
+			for _, part in ipairs(item:GetDescendants()) do
+				if part:IsA("BasePart") and part.CanCollide then
+					local minX, maxX, minY, maxY, minZ, maxZ = plotBox(part)
+					if maxY > 0.4 and minY < 7 and maxZ > z0 and minZ < z1 and maxX < 200 and minX > 60 then
+						if isGarage then
+							front = math.min(front, minX)
+						elseif maxX < 140 and maxX > inFront then
+							inFront, blocker = maxX, item.Name .. "/" .. part.Name
+						end
+					end
+				end
+			end
+		end
+		check(
+			front - inFront >= 20 and L.CartPads[1].X - 4.5 > front,
+			("the garage bays open onto a %.1f-stud apron (front x %.1f, nearest: %s)"):format(front - inFront, front, blocker)
+		)
+		-- (b) the street spawn pad is a low step (the World fallback and the place's own)
+		local spawn = workspace:FindFirstChildOfClass("SpawnLocation")
+		local street = workspace.World:FindFirstChild("Street")
+		local streetTop = street.CFrame.Position.Y + street.Size.Y / 2
+		local spawnTop = spawn.CFrame.Position.Y + spawn.Size.Y / 2
+		local project = serde.decode("json", fs.readFile("default.project.json"))
+		local placeSpawn = project.tree.Workspace.SpawnLocation["$properties"]
+		local placeTop = placeSpawn.CFrame.CFrame.position[2] + placeSpawn.Size[2] / 2
+		check(
+			spawnTop - streetTop <= 0.2 + 1e-3 and placeTop - streetTop <= 0.2 + 1e-3,
+			("the street spawn pad is at most 0.2 above the street (%.2f, place file %.2f)"):format(
+				spawnTop - streetTop,
+				placeTop - streetTop
+			)
+		)
+		-- (c) the parking lot's curbs
+		local tallest = 0
+		for _, part in ipairs(plotModel(1).Items["parking:1"]:GetDescendants()) do
+			if part:IsA("BasePart") and part.CanCollide and part.Name:find("Curb") then
+				tallest = math.max(tallest, select(4, plotBox(part)))
+			end
+		end
+		check(tallest > 0 and tallest <= 0.4 + 1e-3, ("the parking lot's curbs are at most 0.4 tall (%.2f)"):format(tallest))
+	end
+	do
+		-- the dome tower's vending machine stands flush in the nook beside the elevator shaft (no
+		-- pocket with a narrow way out that a second player could be shut into)
+		local tower = plotModel(1).Items["campus_links:3"]
+		local function box(name)
+			local part = tower:FindFirstChild(name, true)
+			local p, h = part.CFrame.Position, part.Size / 2
+			return { minX = p.X - h.X, maxX = p.X + h.X, minZ = p.Z - h.Z, maxZ = p.Z + h.Z }
+		end
+		local machine, glass, shaft = box("VendingMachine"), box("DomeTowerGlassWest"), box("DomeTowerElevatorShaftGlass")
+		local gaps = {
+			machine.minX - glass.maxX, -- west glass
+			shaft.minX - machine.maxX, -- elevator shaft
+			shaft.maxZ - machine.maxZ, -- the back wall (the shaft reaches it too)
+		}
+		local closed = machine.maxZ > shaft.minZ and machine.minZ >= shaft.minZ
+		for _, gap in ipairs(gaps) do
+			closed = closed and math.abs(gap) < 0.05
+		end
+		check(
+			closed,
+			("the dome tower's vending machine leaves no narrow pocket (gaps %.2f, %.2f, %.2f)"):format(gaps[1], gaps[2], gaps[3])
+		)
+	end
+	do
+		-- the small campus signs keep their letters readable: the campus map, the dome tower's
+		-- directory and the skybridge elevators (estimated TextScaled size in studs: wrapped at
+		-- spaces, capitals about 0.7 em wide, one em per line)
+		local function textSize(text, w, h)
+			local best = 0
+			for step = 1, 200 do
+				local size = step / 100
+				local lines, line, fits = 1, 0, true
+				for word in text:gmatch("%S+") do
+					local ww = #word * 0.7 * size
+					local wider = line == 0 and ww or line + 0.3 * size + ww
+					if ww > w then
+						fits = false
+					elseif wider > w then
+						lines += 1
+						line = ww
+					else
+						line = wider
+					end
+				end
+				if fits and lines * size <= h then
+					best = size
+				end
+			end
+			return best
+		end
+		local smallest, worst = math.huge, "none"
+		for _, stepId in ipairs({ "campus_links:2", "campus_links:3" }) do
+			for _, gui in ipairs(plotModel(1).Items[stepId]:GetDescendants()) do
+				local part = gui.Parent
+				local name = part and part.Name or ""
+				if gui:IsA("SurfaceGui") and (name == "CampusMap" or name == "DomeTowerDirectory" or name:find("Elevator")) then
+					local s = part.Size
+					local faceW = (gui.Face == Enum.NormalId.Left or gui.Face == Enum.NormalId.Right) and s.Z or s.X
+					for _, label in ipairs(gui:GetChildren()) do
+						if label:IsA("TextLabel") then
+							local size = textSize(label.Text, faceW * label.Size.X.Scale, s.Y * label.Size.Y.Scale)
+							if size < smallest then
+								smallest, worst = size, name .. ": " .. label.Text
+							end
+						end
+					end
+				end
+			end
+		end
+		check(
+			smallest >= 0.3,
+			("the campus map, dome tower directory and skybridge elevator signs read at 0.3 studs or more (%.2f: %s)"):format(
+				smallest,
+				worst
+			)
+		)
+	end
+	do
+		-- far-off text stops drawing: the street's welcome sign and the golf carts' number plates
+		local limits = {}
+		for _, gui in ipairs(workspace.World:FindFirstChild("WelcomeSign"):GetChildren()) do
+			if gui:IsA("SurfaceGui") then
+				table.insert(limits, gui.MaxDistance)
+			end
+		end
+		for _, info in pairs(Vehicles.GetCarts(PlotManager.GetPlot(alice))) do
+			local plate = info.model:FindFirstChild("NumberPlate")
+			table.insert(limits, plate and plate:FindFirstChildOfClass("SurfaceGui").MaxDistance or 0)
+		end
+		local limited = #limits == 5
+		for _, limit in ipairs(limits) do
+			limited = limited and limit > 0 and limit <= 300
+		end
+		check(limited, "the welcome sign and the cart number plates have a draw distance (" .. table.concat(limits, ", ") .. ")")
+	end
 
 	section("Draft + roster")
 	do
@@ -1255,6 +1590,42 @@ local function runTests()
 		check(clientFires[#clientFires].player ~= bob, "only the owner can kick on their field")
 		Config.KickGame.CooldownSeconds = 3
 		Config.KickGame.MinMeterSeconds = 0.8
+	end
+	do
+		-- Space locks the aim and (in a real game) jumps: the landing touches the spot again after the
+		-- touch cooldown, while the meter is still open. With the real cooldown and meter minimum the
+		-- kick locked right after that landing must still be judged.
+		local k = Config.KickGame
+		local pads = KickGame.GetPads(alicePlot)
+		alice.Character.HumanoidRootPart.CFrame = pads[2].CFrame * CFrame.new(0, 3, 0)
+		local cooldown = k.CooldownSeconds
+		k.CooldownSeconds = 0 -- (only skips what is left of the cooldown from the kicks above)
+		local firesBefore = #clientFires
+		touch(pads[2], alice)
+		k.CooldownSeconds = cooldown
+		local offered = #clientFires == firesBefore + 1 and clientFires[#clientFires].remote == "KickStart"
+		touch(pads[2], alice) -- shuffling on the spot inside the cooldown changes nothing
+		local quiet = #clientFires == firesBefore + 1
+		task.wait(cooldown + 0.1)
+		touch(pads[2], alice) -- the jump lands: the client ignores the new KickStart (its meter is open)
+		local reoffered = #clientFires == firesBefore + 2
+		task.wait(0.1)
+		local notesBefore = #notifications
+		KickGame._onAttempt(alice, 2, 0, 1)
+		local judged = false
+		for index = notesBefore + 1, #notifications do
+			if notifications[index].player == alice and notifications[index].message:find("IT'S GOOD") then
+				judged = true
+			end
+		end
+		check(offered and quiet and reoffered, "a touch inside the cooldown is ignored, the landing after it re-offers the spot")
+		check(
+			judged,
+			("a kick locked 0.1s after landing back on the spot still counts (%gs cooldown, %gs meter minimum)"):format(
+				cooldown,
+				k.MinMeterSeconds
+			)
+		)
 	end
 
 	section("Staff + game-day results")
@@ -2873,9 +3244,11 @@ local function runTests()
 			task.wait(0.03)
 		end
 		task.wait(0.1)
-		UserInputServiceMock.InputBegan:Fire({ KeyCode = Enum.KeyCode.Space }, false)
+		local kickAction = boundActions.TycoonKickMeter
+		local spaceResult = kickAction and kickAction("TycoonKickMeter", Enum.UserInputState.Begin, { KeyCode = Enum.KeyCode.Space })
 		task.wait(0.2)
 		check(meter:FindFirstChild("Instruction", true).Text:find("POWER") ~= nil, "space locks the aim, then power")
+		check(spaceResult == Enum.ContextActionResult.Sink, "the open meter sinks Space / E / A (no jump back onto the kick spot)")
 		instanceSignal(meter:FindFirstChild("Kick", true), "Activated"):Fire()
 		task.wait(0.05)
 		check(
@@ -2888,7 +3261,7 @@ local function runTests()
 		viewer.Character.HumanoidRootPart.CFrame = CFrame.new(500, 3, 500)
 		RunServiceMock.RenderStepped:Fire(0.016)
 		task.wait(0.05)
-		check(not meter.Enabled, "walking away closes the meter")
+		check(not meter.Enabled and boundActions.TycoonKickMeter == nil, "walking away closes the meter (and gives the keys back)")
 		viewer.Character.HumanoidRootPart.CFrame = CFrame.new(0, 3, 0)
 	end
 

@@ -17,6 +17,17 @@ local ACCELERATION = 2.2 -- how quickly the cart reaches its target speed (per s
 local BRAKING = 4
 
 local speed = 0
+local drivenLinear, drivenAngular = nil, nil -- the drive constraints of the cart driven last frame
+
+-- Stops the cart we were driving (its driver got out, or jumped into another cart). This client
+-- keeps owning it until the server takes it back, so it would roll on at its last speed until then.
+local function stopDriven()
+	if drivenLinear then
+		drivenLinear.PlaneVelocity = Vector2.new(0, 0)
+		drivenAngular.AngularVelocity = Vector3.new(0, 0, 0)
+	end
+	drivenLinear, drivenAngular = nil, nil
+end
 
 -- The cart the local player is driving right now (or nil).
 local function currentCart()
@@ -37,6 +48,7 @@ local function drive(dt)
 	local model, seat = currentCart()
 	if not model then
 		speed = 0
+		stopDriven()
 		return
 	end
 	local chassis = model.PrimaryPart
@@ -44,6 +56,11 @@ local function drive(dt)
 	local angular = chassis and chassis:FindFirstChild("DriveTurn")
 	if not linear or not angular then
 		return
+	end
+	if drivenLinear ~= linear then
+		stopDriven()
+		speed = 0
+		drivenLinear, drivenAngular = linear, angular
 	end
 
 	local maxSpeed = model:GetAttribute("MaxSpeed") or 40
