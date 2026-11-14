@@ -22,10 +22,10 @@
 	             2 Team Logo   logo disk, the owner's name, a football and FOOTBALL CLUB
 	  benches    1 Sideline Mats            rubber mats with team borders, a TEAM AREA stencil and
 	                                        the coaching-box line
-	             2 Benches                  team benches with end panels, helmets and towels
+	             2 Benches                  team benches with an end panel, helmets and towels
 	             3 Coolers & Medical Tent   drinks table (sponsor skirt, cooler taps), misting fan,
 	                                        medical tent, heaters, kicking net, gear, the tablet cart
-	                                        and two exercise bikes
+	                                        and an exercise bike
 	             4 Sideline Boards          team boards behind the benches, framed by posts
 
 	Interactions (BuildUtil.Look / Seat / Use): a drain grate (turf 1), the home sideline
@@ -33,8 +33,8 @@
 	posts (the east one explains the field goal game), the midfield logo (LookKey "team"), three
 	seat cushions per bench (the west middle one is the SIDELINE CAM seat), the sports drink cooler
 	(use), the misting fan, the kicking net, the medical tent, the sideline tablets (LookKey
-	"roster:QB"), the exercise bikes (seats; the first one explains itself) and the home sideline
-	board (LookKey "record").
+	"roster:QB"), the exercise bike (a seat; its console explains it) and the home sideline board
+	(LookKey "record").
 
 	Layers (tops, y). The plot slab top is 0; paint bottoms sit on the grass top 0.2. Overlapping
 	flat layers are at least 0.04 apart so they never z-fight, even far away:
@@ -489,7 +489,8 @@ local function chainCrew(ctx, L)
 		Enum.Material.Metal,
 		ghost
 	)
-	BuildUtil.Block(gear, "DownMarkerPole", Vector3.new(0.25, 5.8, 0.25), Vector3.new(rearX, 0, DOWN_Z), WHITE, nil, ghost, TURF_TOP)
+	-- (the down marker's box rides higher than the stake's paddle behind it, so the "1" reads clearly)
+	BuildUtil.Block(gear, "DownMarkerPole", Vector3.new(0.25, 6.4, 0.25), Vector3.new(rearX, 0, DOWN_Z), WHITE, nil, ghost, TURF_TOP)
 	local box = BuildUtil.Block(
 		gear,
 		"DownMarker",
@@ -498,7 +499,7 @@ local function chainCrew(ctx, L)
 		PYLON_ORANGE,
 		Enum.Material.SmoothPlastic,
 		ghost,
-		TURF_TOP + 5.8
+		TURF_TOP + 6.4
 	)
 	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back, Enum.NormalId.Left, Enum.NormalId.Right }) do
 		BuildUtil.SurfaceText(box, face, "1", { LabelName = "DownNumber", TextColor3 = INK_BLACK, PixelsPerStud = 40 })
@@ -1035,8 +1036,8 @@ local function helmet(ctx, x, y, z, team)
 end
 
 -- A stationary exercise bike standing on the mat (top at `baseY`), its front at z = frontZ and
--- the rider facing -Z (the field). The seat is a real seat; the first bike also explains itself.
-local function exerciseBike(ctx, x, frontZ, baseY, team, withPrompts)
+-- the rider facing -Z (the field). The seat is a real seat, and the console explains the bike.
+local function exerciseBike(ctx, x, frontZ, baseY, team)
 	local metal = Enum.Material.Metal
 	BuildUtil.Block(ctx, "BikeBase", Vector3.new(1, 0.3, 3.2), Vector3.new(x, 0, frontZ + 1.7), BAG_GREY, metal, nil, baseY)
 	local console = BuildUtil.Block(
@@ -1067,16 +1068,13 @@ local function exerciseBike(ctx, x, frontZ, baseY, team, withPrompts)
 		Color = team.Secondary,
 		Material = Enum.Material.Fabric,
 		Object = "Exercise Bike",
-		NoPrompt = not withPrompts,
 	})
-	if withPrompts then
-		BuildUtil.Look(
-			console,
-			"Sideline Bike",
-			"Players pedal these bikes between plays to keep their legs warm and loose. Hop on and spin!",
-			{ At = Vector3.new(0, 1.1, -0.35), Distance = 8 }
-		)
-	end
+	BuildUtil.Look(
+		console,
+		"Sideline Bike",
+		"Players pedal this bike between plays to keep their legs warm and loose. Hop on and spin!",
+		{ At = Vector3.new(0, 1.1, -0.35), Distance = 8 }
+	)
 end
 
 function Field.benches(ctx)
@@ -1185,19 +1183,18 @@ function Field.benches(ctx)
 			nil,
 			seatTop + 1.5
 		)
-		-- team-coloured end panels (armrests) close off both ends of the bench
-		for _, e in ipairs({ -1, 1 }) do
-			BuildUtil.Block(
-				bench,
-				"BenchEnd",
-				Vector3.new(0.3, seatTop + 0.6 - matTop, 2.3),
-				Vector3.new(bx + e * (BENCH_LEN / 2 + 0.15), 0, seatZ + 0.05),
-				team.Secondary,
-				Enum.Material.SmoothPlastic,
-				nil,
-				matTop
-			)
-		end
+		-- a team-coloured end panel (armrest) closes off the outer end of the bench (the heater
+		-- stands at the inner end, its glowing grille aimed along the seat)
+		BuildUtil.Block(
+			bench,
+			"BenchEnd",
+			Vector3.new(0.3, seatTop + 0.6 - matTop, 2.3),
+			Vector3.new(bx + s * (BENCH_LEN / 2 + 0.15), 0, seatZ + 0.05),
+			team.Secondary,
+			Enum.Material.SmoothPlastic,
+			nil,
+			matTop
+		)
 		-- three team cushions players can sit on, facing the field (the middle one has the prompt;
 		-- touching any of them seats you). The west bench's middle seat is a TV camera seat.
 		for _, offset in ipairs({ -3.4, 0, 3.4 }) do
@@ -1446,9 +1443,10 @@ function Field.benches(ctx)
 		Material = Enum.Material.SmoothPlastic,
 	})
 
-	-- blue medical tent near the east end (the exercise bikes stand beside it)
+	-- blue medical tent near the east end (the exercise bike stands beside it; the walk between the
+	-- tent and the gear stays open)
 	local tent = BuildUtil.Child(ctx, "MedicalTent")
-	local tentX, tentZ = 51.1, areaFront + 3.6
+	local tentX, tentZ = 52.5, areaFront + 3.6
 	local tentW, tentD, tentH, roofH = 6, 5.4, 4, 1.6
 	local tentBody = BuildUtil.Block(
 		tent,
@@ -1609,10 +1607,8 @@ function Field.benches(ctx)
 		})
 	end
 
-	-- two exercise bikes at the east end of the mat: players pedal to keep their legs warm
-	for index, x in ipairs({ 55.3, 57.05 }) do
-		exerciseBike(BuildUtil.Child(ctx, "ExerciseBike"), x, areaFront + 1, matTop, team, index == 1)
-	end
+	-- an exercise bike at the east end of the mat, beside the tent: players pedal to keep their legs warm
+	exerciseBike(BuildUtil.Child(ctx, "ExerciseBike"), 57.05, areaFront + 1, matTop, team)
 
 	-- sideline heaters at the inner end of both benches, glowing grilles aimed at the bench
 	for _, s in ipairs({ -1, 1 }) do

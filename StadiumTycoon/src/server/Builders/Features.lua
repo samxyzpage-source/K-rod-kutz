@@ -382,9 +382,13 @@ function M.scoreboard(ctx)
 			STEEL,
 			Enum.Material.DiamondPlate
 		)
-		guard(support, walkX, backX - 0.1, deckY, zc < 30 and zc + 4.65 or zc - 4.95, zc < 30 and zc + 4.95 or zc - 4.65) -- catwalk side
-		guard(support, B.backX + 0.5, backX - 0.1, deckY, zc < 30 and zc - 4.95 or zc + 4.65, zc < 30 and zc - 4.65 or zc + 4.95) -- outer side
-		topRail(support, B.backX + 0.5, backX - 0.1, deckY, zc < 30 and zc - 4.95 or zc + 4.65, zc < 30 and zc - 4.65 or zc + 4.95)
+		local innerZ0, innerZ1 = zc < 30 and zc + 4.65 or zc - 4.95, zc < 30 and zc + 4.95 or zc - 4.65
+		local outerZ0, outerZ1 = zc < 30 and zc - 4.95 or zc + 4.65, zc < 30 and zc - 4.65 or zc + 4.95
+		guard(support, walkX, backX - 0.1, deckY, innerZ0, innerZ1) -- catwalk side
+		guard(support, B.backX + 0.5, backX - 0.1, deckY, outerZ0, outerZ1) -- outer side
+		-- yellow handrails on both open sides, up to the pylon's front columns (not through them)
+		topRail(support, walkX, frontX, deckY, innerZ0, innerZ1)
+		topRail(support, B.backX + 0.5, frontX, deckY, outerZ0, outerZ1)
 		guard(support, backX - 0.4, backX - 0.1, deckY, zc - 5 + col, zc + 5 - col)
 	end
 	-- arms from the pylons (and the truss in the middle) over the facade to the board's back
@@ -399,20 +403,49 @@ function M.scoreboard(ctx)
 	strut(support, "TrussBrace", Vector3.new(braceX, 22, south + 5), Vector3.new(braceX, 110, north - 5), 1.2, STEEL)
 	strut(support, "TrussBrace", Vector3.new(braceX, 22, north - 5), Vector3.new(braceX, 110, south + 5), 1.2, STEEL)
 	-- a team banner strapped across the outer (east) face of each pylon, greeting the fans who
-	-- walk in from the east road (beside Gate C, clear of the facade's team-name sign)
+	-- walk in from the east road (beside Gate C, clear of the facade's team-name sign). The words
+	-- run up the banner in big letters (turned 90 degrees, like a stadium pillar banner), and a
+	-- hem wraps its bottom edge.
+	local bannerY0, bannerY1, bannerHalf = 36, 82, 4.6
 	for _, zc in ipairs(B.supportZ) do
-		local banner =
-			span(support, "GateBanner", backX + 0.05, backX + 0.25, 36, 82, zc - 4.6, zc + 4.6, team.Primary, Enum.Material.Fabric, GLOW)
+		local banner = span(
+			support,
+			"GateBanner",
+			backX + 0.05,
+			backX + 0.25,
+			bannerY0,
+			bannerY1,
+			zc - bannerHalf,
+			zc + bannerHalf,
+			team.Primary,
+			Enum.Material.Fabric,
+			GLOW
+		)
 		local text = zc > B.zc and "WELCOME TO GATE C" or ("GO " .. (name ~= "" and name or "TEAM") .. "!")
 		local _, label = BuildUtil.SurfaceText(banner, Enum.NormalId.Right, text, {
 			LabelName = "GateBannerText",
 			TextColor3 = readable(team.Primary, team.Trim),
-			PixelsPerStud = 6,
+			PixelsPerStud = 10,
 		})
-		label.TextWrapped = true
-		label.Position = UDim2.new(0.08, 0, 0.06, 0)
-		label.Size = UDim2.new(0.84, 0, 0.84, 0)
-		span(support, "GateBannerHem", backX + 0.05, backX + 0.3, 36, 37.4, zc - 4.6, zc + 4.6, team.Secondary, nil, GLOW)
+		-- (the label's size is set before it turns round its centre: 40 studs along the banner and
+		-- 7.4 across it, centred a little above the middle, clear of the hem)
+		local sizeX, sizeY = 40 / (2 * bannerHalf), 7.4 / (bannerY1 - bannerY0)
+		label.Position = UDim2.new(0.5 - sizeX / 2, 0, 0.485 - sizeY / 2, 0)
+		label.Size = UDim2.new(sizeX, 0, sizeY, 0)
+		label.Rotation = -90
+		span(
+			support,
+			"GateBannerHem",
+			backX + 0.03,
+			backX + 0.3,
+			bannerY0 - 0.1,
+			bannerY0 + 1.4,
+			zc - bannerHalf - 0.05,
+			zc + bannerHalf + 0.05,
+			team.Secondary,
+			nil,
+			GLOW
+		)
 	end
 	-- aviation beacons on both pylon caps (the highest points of the stadium)
 	for _, zc in ipairs(B.supportZ) do
@@ -624,8 +657,8 @@ function M.scoreboard(ctx)
 	-- a bright bezel round the big score screen, so the score stands out from across the bowl
 	screenFrame(ctx, s, -30, 30, 125, 141, team.Trim)
 	-- the road case of spare LED tiles on the south landing (against its outer guard)
-	local case = span(ctx, "LedTileCase", 300, 302.4, deckY, deckY + 1.8, south - 4.6, south - 2.8, DESK_DARK, Enum.Material.Metal)
-	span(ctx, "LedTileCaseLid", 299.9, 302.5, deckY + 1.8, deckY + 2.05, south - 4.7, south - 2.7, SAFETY_YELLOW, Enum.Material.Metal)
+	local case = span(ctx, "LedTileCase", 300, 302.4, deckY, deckY + 1.8, south - 4.5, south - 2.7, DESK_DARK, Enum.Material.Metal)
+	span(ctx, "LedTileCaseLid", 299.9, 302.5, deckY + 1.8, deckY + 2.05, south - 4.6, south - 2.6, SAFETY_YELLOW, Enum.Material.Metal)
 	BuildUtil.Look(
 		case,
 		"Spare LED Tiles",
@@ -1113,10 +1146,10 @@ function M.jumbotron(ctx)
 
 	-- the Video Control Room inside the south tower (door on its +Z side, facing Gate B)
 	local rx0, rx1 = x0 + 1, x1 - 1 -- -319 .. -309
-	local rz0, rz1 = south[1] + 1, south[2] - 1 -- -21 .. -7
+	local rz0, rz1 = south[1] + 1, south[2] - 1 -- -37 .. -23
 	local roomTop = 10.4
 	local doorX0, doorX1, doorTop = (rx0 + rx1) / 2 - 3, (rx0 + rx1) / 2 + 3, 8.6
-	local midZ = (rz0 + rz1) / 2 -- -14
+	local midZ = (rz0 + rz1) / 2 -- -30
 
 	-------------------------------------------------------------------------- 1 Support Tower
 	BuildUtil.Stage(ctx, 1)
@@ -1437,7 +1470,7 @@ function M.jumbotron(ctx)
 		Font = Enum.Font.Arcade,
 		PixelsPerStud = 40,
 	})
-	local rundown = span(ctx, "RundownBoard", rx0, rx0 + 0.15, 3.6, 7.2, rz0 + 2.8, midZ + 1.4, DESK_DARK, nil, NO_COLLIDE)
+	local rundown = span(ctx, "RundownBoard", rx0, rx0 + 0.15, 4.2, 7.8, rz0 + 2.8, midZ + 1.4, DESK_DARK, nil, NO_COLLIDE) -- (above the wall stripe)
 	local _, rundownLabel = BuildUtil.SurfaceText(
 		rundown,
 		Enum.NormalId.Right,
@@ -1459,7 +1492,8 @@ function M.jumbotron(ctx)
 
 	-- the satellite uplink on the screen deck, its dish tilted up toward the southern sky
 	local dishFoot = Vector3.new(-300, deckY, south[1] + 8)
-	post(ctx, "DishPost", dishFoot.X, dishFoot.Z, deckY, deckY + 3.4, 0.5, STEEL, Enum.Material.Metal)
+	-- (the post reaches into the tilted dish's back, so the dish doesn't float above it)
+	post(ctx, "DishPost", dishFoot.X, dishFoot.Z, deckY, deckY + 4.1, 0.5, STEEL, Enum.Material.Metal)
 	local aim = Vector3.new(0, math.sin(math.rad(45)), -math.cos(math.rad(45)))
 	local dishCentre = dishFoot + Vector3.new(0, 4.2, 0)
 	local dish = BuildUtil.Part(ctx, {
@@ -1687,7 +1721,8 @@ local function mastAndGirder(ctx, seg, x, C, mastO)
 	local tieO = 108
 	strut(ctx, "RoofTie", Vector3.new(p.X, ROOF.mastTop - 1.5, p.Z), at(seg, x, girderTopAt(tieO, root) - 0.3, tieO).Position, 0.45, STEEL)
 	-- the girder's rib under the roof deck, seen by the fans below: it starts beyond the lighting
-	-- catwalk (head room there stays 6 studs) and stops over the back rows, before the facade top
+	-- catwalk (head room there stays 6 studs) and stops over the back rows, before the facade top.
+	-- It reaches up into the girder's foot, so it hangs from the girder before the decks are built.
 	segBlock(
 		ctx,
 		seg,
@@ -1695,7 +1730,7 @@ local function mastAndGirder(ctx, seg, x, C, mastO)
 		x - 0.5,
 		x + 0.5,
 		ROOF.ribBottom,
-		ROOF.deckBottom,
+		ROOF.girderBottom + 0.05,
 		ROOF.walkOut + 0.4,
 		151,
 		STEEL_PALE,
@@ -1796,11 +1831,12 @@ local function skyCam(ctx, cornerPieces)
 		strut(ctx, "SkyCamCable", from, podTop, 0.14, INK, Enum.Material.Metal, GLOW)
 	end
 	BuildUtil.Box(ctx, "SkyCamFrame", Vector3.new(2.4, 0.5, 2.4), podTop - Vector3.new(0, 0.25, 0), team.Primary, nil, GLOW)
+	-- the camera body hangs right under the frame (y 45.4 .. 47.3)
 	local body = BuildUtil.Box(
 		ctx,
 		"SkyCamBody",
-		Vector3.new(1.8, 1.6, 2.2),
-		SKYCAM.pod + Vector3.new(0, 0.2, 0),
+		Vector3.new(1.8, 1.9, 2.2),
+		SKYCAM.pod + Vector3.new(0, 0.35, 0),
 		DESK_DARK,
 		Enum.Material.Metal,
 		NO_COLLIDE
@@ -1822,7 +1858,9 @@ local function skyCam(ctx, cornerPieces)
 		body,
 		"SkyCam",
 		"This TV camera flies over the field on four cables from the roof, so fans at home watch the game from right above the players. Jump high to see it!",
-		{ Distance = 12 }
+		-- (it hangs in the open over the field: nothing can hide it, but its own lens sticks out
+		-- under the body, in the way of a line-of-sight test from below)
+		{ Distance = 12, LineOfSight = false }
 	)
 end
 
