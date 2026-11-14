@@ -947,6 +947,81 @@ local function runTests()
 			end
 			check(#blades == 6 and #bad == 0, "the restroom blade signs face along the concourse lane " .. table.concat(bad, ", "))
 		end
+
+		-- F5: the AWAY stencil over the visitor locker room door is not covered by the welcome sign, and
+		-- the staff's role signs stand in front of the figures (text toward the road, nothing of the
+		-- figure in front of it, no prop hidden behind it)
+		do
+			local visitor = build("visitor_lockerroom")
+			local others = partsOf(visitor)
+			local stencils, covered = 0, {}
+			for _, lintel in ipairs(partsOf(visitor, "DoorLintel")) do
+				local gui = lintel:FindFirstChild("DoorStencilGui")
+				local label = gui and gui:FindFirstChild("Stencil")
+				if label then
+					stencils += 1
+					-- the label's rectangle on the lintel's corridor face (Back, +Z), either way round
+					local lo, hi = bounds(lintel)
+					local w, h = hi.X - lo.X, hi.Y - lo.Y
+					local a0, a1 = label.Position.X.Scale, label.Position.X.Scale + label.Size.X.Scale
+					local top = hi.Y - label.Position.Y.Scale * h
+					local zoneLo = Vector3.new(lo.X + math.min(a0, 1 - a1) * w, top - label.Size.Y.Scale * h, hi.Z)
+					local zoneHi = Vector3.new(lo.X + math.max(a1, 1 - a0) * w, top, hi.Z + 0.5)
+					for _, part in ipairs(others) do
+						local pLo, pHi = bounds(part)
+						if part ~= lintel and boxesOverlap(zoneLo, zoneHi, pLo, pHi) then
+							table.insert(covered, part.Name)
+						end
+					end
+				end
+			end
+			check(
+				stencils == 1 and #covered == 0,
+				"the AWAY stencil over the visitor locker room door is in view " .. table.concat(covered, ", ")
+			)
+
+			local signs, problems = 0, {}
+			for _, pieceId in ipairs({ "staff_coaches", "staff_trainers" }) do
+				local staff = build(pieceId)
+				local figures = partsOf(staff)
+				local roleSigns = partsOf(staff, "RoleSign")
+				for _, sign in ipairs(roleSigns) do
+					local sLo, sHi = bounds(sign)
+					for _, face in ipairs(letteredFaces(sign)) do
+						signs += 1
+						if face.normal.Z > -0.99 then
+							problems[face.text .. " doesn't face the road"] = true
+						end
+						-- sight lines from spots across the text (between and in front of the legs too)
+						for _, u in ipairs({ -0.4, -0.25, -0.11, 0, 0.11, 0.25, 0.4 }) do
+							for _, v in ipairs({ -0.3, 0, 0.3 }) do
+								local from = face.centre
+									+ sign.CFrame.RightVector * (u * sign.Size.X)
+									+ sign.CFrame.UpVector * (v * sign.Size.Y)
+									+ face.normal * 0.02
+								local hit = blocker(figures, from, from + face.normal * 10, sign)
+								if hit then
+									problems[hit.Name .. " in front of " .. face.text] = true
+								end
+							end
+						end
+					end
+					for _, part in ipairs(figures) do
+						local pLo, pHi = bounds(part)
+						if part ~= sign and boxesOverlap(sLo, sHi, pLo, pHi) then
+							problems[part.Name .. " runs into a role sign"] = true
+						end
+					end
+				end
+				for _, bell in ipairs(partsOf(staff, "Kettlebell")) do
+					if blocker(roleSigns, bell.CFrame.Position, bell.CFrame.Position + Vector3.new(0, 0, -10)) then
+						problems["the kettlebell hides behind a sign"] = true
+					end
+				end
+			end
+			local list = keysOf(problems)
+			check(signs == 6 and #list == 0, "the staff's role signs stand in front of them, in view " .. table.concat(list, ", "))
+		end
 	end
 
 	section("Bowl geometry (V5)")

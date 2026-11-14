@@ -1440,8 +1440,10 @@ function M.visitor_lockerroom(ctx)
 	local goodLuck =
 		box(shell, "GoodLuckSign", -V.DoorHalf, V.DoorTop + 0.3, V.FrontZ0 - 0.15, V.DoorHalf, V.Ceil - 0.2, V.FrontZ0, VISITOR_SIGN)
 	sign(goodLuck, { Enum.NormalId.Front }, "GOOD LUCK. YOU'LL NEED IT.", VISITOR_SIGN, team, { TextColor3 = WHITE, InsetY = 0.16 })
-	local lintelGui = faceGui(lintel, Enum.NormalId.Back, "DoorStencilGui", 20)
-	addLabel(lintelGui, "Stencil", "AWAY", WHITE, 0.2, 0.15, 0.6, 0.6)
+	-- AWAY stencilled on the corridor face of the lintel, in the strip left under the welcome sign
+	-- (y 8.8..9.4; the small letters get more pixels)
+	local lintelGui = faceGui(lintel, Enum.NormalId.Back, "DoorStencilGui", 40)
+	addLabel(lintelGui, "Stencil", "AWAY", WHITE, 0.3, 0.78, 0.4, 0.2)
 
 	local doorH = V.DoorTop - FLOOR_TOP - 0.15
 	BuildUtil.Door(shell, {

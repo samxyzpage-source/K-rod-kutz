@@ -105,10 +105,12 @@ local function clipboard(ctx, at)
 	})
 end
 
+-- The role sign stands on the ground in front of the figure's feet (its text faces the road, and
+-- nothing of the figure stands in front of it).
 local function sign(ctx, at, text, color)
 	local post = BuildUtil.Part(
 		ctx,
-		{ Name = "RoleSign", Size = Vector3.new(4.4, 1.1, 0.2), CFrame = at(0, 0.9, -1.6), Color = color, CanCollide = false }
+		{ Name = "RoleSign", Size = Vector3.new(4.4, 1.1, 0.2), CFrame = at(0, 0.9, 1.6), Color = color, CanCollide = false }
 	)
 	BuildUtil.SurfaceText(post, Enum.NormalId.Back, text, { LabelName = "RoleText", TextColor3 = WHITE, PixelsPerStud = 30 })
 end
@@ -188,11 +190,11 @@ function Staff.staff_trainers(ctx)
 				CanCollide = false,
 			})
 		elseif index == 2 then
-			-- strength coach: stopwatch + kettlebell
+			-- strength coach: stopwatch + kettlebell (on the ground beside the role sign, not behind it)
 			cap(ctx, at, BLACK)
 			BuildUtil.Ball(
 				ctx,
-				{ Name = "Kettlebell", Position = (at(1.8, 0.6, 0.8)).Position, Diameter = 1.1, Color = BLACK, CanCollide = false }
+				{ Name = "Kettlebell", Position = (at(2.9, 0.6, 0.8)).Position, Diameter = 1.1, Color = BLACK, CanCollide = false }
 			)
 			BuildUtil.Part(ctx, {
 				Name = "Stopwatch",
