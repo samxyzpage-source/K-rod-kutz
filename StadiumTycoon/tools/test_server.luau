@@ -102,6 +102,13 @@ roblox.implementMethod("Model", "PivotTo", function(model, cf)
 			part.CFrame = offset * part.CFrame
 		end
 	end
+	-- a seated character is welded to its seat (the SeatWeld): like a Roblox assembly, the seat
+	-- (and the cart around it) comes along unless the weld was broken first
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	local seat = humanoid and humanoid.SeatPart
+	if seat and seat:FindFirstChild("SeatWeld") and not seat:IsDescendantOf(model) then
+		seat.CFrame = offset * seat.CFrame
+	end
 end)
 roblox.implementMethod("Instance", "GetPropertyChangedSignal", function(inst, name)
 	return instanceSignal(inst, "Prop" .. name)
@@ -4264,11 +4271,18 @@ local function runTests()
 		touch(fieldPad, alice)
 		check(PlayerData.GetCash(alice) >= cashBeforeField + 50, "the field pad collects the vault")
 		local fieldLabel = plotModel(1).Base:FindFirstChild("FieldVaultAmount", true)
-		check(fieldLabel ~= nil and fieldLabel.Text:sub(1, 1) == "$", "the field pad shows the vault amount")
 		aliceRoot.CFrame = fieldPad.CFrame * CFrame.new(0, 3, 0)
 		task.wait(0.2)
 		check(plot1.Vault < 1, "standing on the field pad keeps collecting")
 		aliceRoot.CFrame = CFrame.new(0, 3, 0)
+		-- (off the pad: the vault fills up again, and the field pad's label follows it - it is built
+		-- showing "$0", so it must really be written)
+		plot1.Vault = 4321
+		task.wait(Config.IncomeTickSeconds * 3)
+		check(
+			fieldLabel ~= nil and fieldLabel.Text ~= "$0" and fieldLabel.Text == plot1.Refs.VaultLabel.Text,
+			"the field pad shows the vault amount: " .. tostring(fieldLabel and fieldLabel.Text)
+		)
 		-- buy buttons spend the vault too
 		local quinn = makePlayer("Quinn", 6002)
 		local quinnProfile = PlayerData.Load(quinn)
@@ -5384,18 +5398,58 @@ local function runTests()
 		)
 		check(crowdsGone(), "and the crowd folders are gone afterwards")
 
-		-- a plot released while its fans arrive keeps no crowd (the arrival stops), and a game day
-		-- that ends while the fans are still arriving (1 per frame here) leaves no crowd behind
+		-- a plot released while its fans arrive keeps no crowd (the arrival stops at once: no fan joins
+		-- the crowd that leaves), and a game day that ends while the fans are still arriving (1 per
+		-- frame here) takes no fan after its final whistle and leaves no crowd behind
 		Config.GameDay.SeatedFans = 1200
 		Config.GameDay.FansPerFrame = 1
 		Config.GameDay.DurationSeconds = 0.6
-		local cleared = false
-		task.spawn(function()
-			for _ = 1, 2000 do
-				if seatedCount(testPlots[1]) > 0 then
+		local whistleFans, watching = nil, true
+		GameDay.OnEnded(function(plot) -- (at the final whistle, before the crowd leaves)
+			if watching and plot == testPlots[2] and whistleFans == nil then
+				whistleFans = 0
+				local crowd = plot.Model:FindFirstChild("GameDayFans")
+				for _, child in ipairs(crowd and crowd:GetChildren() or {}) do
+					if child.Name == "Fan" then
+						child:SetAttribute("Seen", true)
+						whistleFans += 1
+					end
+				end
+			end
+		end)
+		local function releasedGone() -- (test plot 1's crowd, which leaves after the release)
+			return testPlots[1].Model:FindFirstChild("GameDayFansLeaving") == nil
+				and testPlots[1].Model:FindFirstChild("GameDayFans") == nil
+		end
+		local function allGone()
+			return crowdsGone() and releasedGone()
+		end
+		-- the seated fans of a crowd folder not seen before (and marks them seen)
+		local function newFans(crowd)
+			local count = 0
+			for _, child in ipairs(crowd and crowd:GetChildren() or {}) do
+				if child.Name == "Fan" and not child:GetAttribute("Seen") then
+					child:SetAttribute("Seen", true)
+					count += 1
+				end
+			end
+			return count
+		end
+		local cleared, atRelease, lateLeaving, lateWhistle = false, 0, 0, 0
+		task.spawn(function() -- releases plot 1 once its first fan is in, then counts late fans every frame
+			for _ = 1, 4000 do
+				if not cleared and seatedCount(testPlots[1]) > 0 then
 					testPlots[1].Owner = nil -- (what PlotManager.Release does first)
 					GameDay.OnPlotReleased(testPlots[1])
 					cleared = true
+					atRelease = newFans(testPlots[1].Model:FindFirstChild("GameDayFansLeaving"))
+				elseif cleared then
+					lateLeaving += newFans(testPlots[1].Model:FindFirstChild("GameDayFansLeaving"))
+				end
+				if whistleFans ~= nil then
+					lateWhistle += newFans(testPlots[2].Model:FindFirstChild("GameDayFans"))
+				end
+				if cleared and whistleFans ~= nil and allGone() then
 					return
 				end
 				task.wait()
@@ -5414,11 +5468,19 @@ local function runTests()
 		waitUntil(function()
 			return not GameDay.IsActive(testPlots[2])
 		end, 2)
-		local atEnd = seatedCount(testPlots[2])
-		waitUntil(crowdsGone, 3)
+		waitUntil(allGone, 3)
+		task.wait(0.05)
+		watching = false
 		check(
-			atEnd < 1200 and crowdsGone(),
-			("a game day that ends while fans arrive (%d of 1200 in) leaves no crowd behind"):format(atEnd)
+			atRelease > 0 and lateLeaving == 0 and releasedGone(),
+			("no fan joins a released plot's crowd as it leaves (%d in at the release, %d later)"):format(atRelease, lateLeaving)
+		)
+		check(
+			whistleFans ~= nil and whistleFans > 0 and whistleFans < 1200 and lateWhistle == 0 and allGone(),
+			("a game day that ends while fans arrive (%s of 1200 in at the final whistle) takes no fan after it and leaves no crowd behind (%d late)"):format(
+				tostring(whistleFans),
+				lateWhistle
+			)
 		)
 
 		for key, value in pairs(saved) do
