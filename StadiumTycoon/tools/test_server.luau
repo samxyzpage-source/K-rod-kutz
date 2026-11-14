@@ -6255,6 +6255,15 @@ local function runTests()
 		expect(Vector3.new(-56, 0.3, 206), "hq_weightroom:1", Vector3.new(-76, 0.2, 208), "in front of them: west, past the Team Safe")
 		-- ... and at the foot of the west stair tower: to the doors (not through the tower's wall)
 		expect(Vector3.new(-258.3, 0.3, 279), "hq_weightroom:1", Vector3.new(-256, 0.2, 271), "foot of the stair tower -> to its doors")
+		do -- (on the hoverboard your feet float HoverHeight above the floor: the same way out)
+			local hover = Config.Hoverboard.HoverHeight
+			expect(
+				Vector3.new(-258.3, 0.3 + hover, 279),
+				"hq_weightroom:1",
+				Vector3.new(-256, 0.2, 271),
+				"hovering at the foot of the stair tower -> to its doors"
+			)
+		end
 		-- CLIENT-POLISH (b): from the west of the upper corridor the way down the grand staircase runs
 		-- along the corridor to the mezzanine, not across the atrium railing (x -126.2..-74.4, z 264)
 		expect(Vector3.new(-120, 17.1, 266), "turf:1", Vector3.new(-62, 17, 267), "upper corridor -> along it to the mezzanine")

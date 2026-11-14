@@ -483,7 +483,7 @@ L.HQGuide = {
 			Bottom = Vector3.new(-258.3, 1.2, 281.4), -- the first step
 			Top = Vector3.new(-252, 17, 272), -- the upper landing, by the doorway onto the corridor
 			Legs = {
-				guideLeg(-261.5, -250, 273.5, 280.6, -1, 0.9, Vector3.new(-258.3, 1.2, 281.4), Vector3.new(-256, 0.2, 271)), -- the ground floor at its foot: to the doors
+				guideLeg(-261.5, -250, 273.5, 280.6, -1, 4, Vector3.new(-258.3, 1.2, 281.4), Vector3.new(-256, 0.2, 271)), -- the ground floor at its foot (on foot or hovering): to the doors
 				guideLeg(-261.5, -255.5, 280.6, 295, 0.9, 9.5, Vector3.new(-258.3, 8.6, 297.5), Vector3.new(-258.3, 0.2, 278.5)), -- first flight
 				guideLeg(-261.5, -255.5, 295, 300.5, 7, 10.5, Vector3.new(-252.7, 8.6, 297.5), Vector3.new(-258.3, 7, 293)), -- half landing W
 				guideLeg(-255.5, -250, 295, 300.5, 7, 10.5, Vector3.new(-252.7, 10, 292), Vector3.new(-258.3, 8.6, 297.5)), -- half landing E
