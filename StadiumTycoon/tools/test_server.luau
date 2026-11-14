@@ -1156,6 +1156,73 @@ local function runTests()
 			"a cart sent home stops (no fall speed carried onto the pad)"
 		)
 	end
+	do
+		-- Drive margins. Pitch and roll are locked, so at a kerb the front balls lift the whole cart:
+		-- quasi-static push F = W (cos t + mu sin t) / (sin t - mu cos t), sin t = (r - h) / r.
+		local model = Vehicles.GetCarts(PlotManager.GetPlot(alice))[2].model
+		local mass, ball = 2 * 16, nil -- two riders
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") and not d.Massless then
+				local s = d.Size
+				local volume = d.Shape == Enum.PartType.Ball and (4 / 3) * math.pi * (s.X / 2) ^ 3 or s.X * s.Y * s.Z
+				mass += volume * d.CustomPhysicalProperties.Density
+			end
+			if d.Name == "WheelCollider" then
+				ball = d
+			end
+		end
+		local props = ball.CustomPhysicalProperties
+		local mu = (props.Friction * props.FrictionWeight + 0.8) / (props.FrictionWeight + 1) -- on asphalt (0.8)
+		local r, h = ball.Size.X / 2, 0.5
+		local sinT = (r - h) / r
+		local cosT = math.sqrt(1 - sinT * sinT)
+		local push = mass * 196.2 * (cosT + mu * sinT) / (sinT - mu * cosT)
+		local maxForce = model.PrimaryPart.DriveVelocity.MaxForce
+		check(mu < 0.1, ("the wheel balls stay slippery on asphalt (friction %.3f)"):format(mu))
+		check(
+			sinT - mu * cosT > 0 and push < maxForce,
+			("the drive force lifts a cart with two riders over a 0.5 curb (needs %.0f of %.0f)"):format(push, maxForce)
+		)
+	end
+	do
+		-- the drive controller stops the cart the moment its driver gets out (the client still owns the
+		-- cart until the server takes it back, so it would roll on at its last speed until then)
+		local tester = makeCharacter("CartTester")
+		local testerHumanoid = tester:FindFirstChildOfClass("Humanoid")
+		local fakeLocal = { Character = tester }
+		local savedLocal = Players.LocalPlayer
+		Players.LocalPlayer = fakeLocal
+		local okScript, scriptErr = pcall(runScript, "StarterPlayer/StarterPlayerScripts/TycoonClient/Drive")
+		Players.LocalPlayer = savedLocal
+		local info = Vehicles.GetCarts(PlotManager.GetPlot(alice))[3]
+		local linear, angular = info.model.PrimaryPart.DriveVelocity, info.model.PrimaryPart.DriveTurn
+		local okSit = pcall(function()
+			testerHumanoid.SeatPart = info.seat
+			info.seat.ThrottleFloat = 1
+			info.seat.SteerFloat = 1
+		end)
+		for _ = 1, 20 do
+			RunServiceMock.Heartbeat:Fire(1 / 30)
+		end
+		task.wait(0.05)
+		local moving = linear.PlaneVelocity.Magnitude > 5 and angular.AngularVelocity.Magnitude > 0
+		pcall(function()
+			testerHumanoid.SeatPart = Instance.new("Seat") -- (Lune can't set it back to nil: out of the driver's seat)
+		end)
+		RunServiceMock.Heartbeat:Fire(1 / 30)
+		task.wait(0.05)
+		check(okScript and okSit and moving, "test drive: " .. tostring(scriptErr))
+		check(
+			linear.PlaneVelocity.Magnitude == 0 and angular.AngularVelocity.Magnitude == 0,
+			"getting out stops the cart at once (the driver's client zeroes its drive targets)"
+		)
+		pcall(function()
+			info.seat.ThrottleFloat = 0
+			info.seat.SteerFloat = 0
+		end)
+		fakeLocal.Character = nil -- (that Drive script stays connected: leave it nobody to drive)
+		tester:Destroy()
+	end
 
 	section("Draft + roster")
 	do

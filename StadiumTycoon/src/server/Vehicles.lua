@@ -132,7 +132,10 @@ function Vehicles.BuildCart(at, palette, number)
 		Transparency = 0.55,
 	})
 	-- wheels: a visible tyre + an invisible collision ball (low friction: the drive constraints
-	-- do the steering, the balls just roll/slide over the ground and climb small steps)
+	-- do the steering, the balls just roll/slide over the ground and climb small steps). Roblox
+	-- averages two touching parts' friction by FrictionWeight, so the balls' weight of 100 keeps
+	-- the contact slippery (about 0.06) on every ground material: with an even weight they would
+	-- grip asphalt at about 0.43 and a loaded cart could not push itself up a 0.4 kerb.
 	for _, x in ipairs({ -2.4, 2.4 }) do
 		for _, z in ipairs({ -3, 3 }) do
 			makePart(model, chassis, {
@@ -152,7 +155,7 @@ function Vehicles.BuildCart(at, palette, number)
 				CanCollide = true,
 				Massless = false,
 			})
-			collider.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.05, 0, 1, 1)
+			collider.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.05, 0, 100, 1)
 		end
 	end
 
