@@ -511,15 +511,36 @@ end)
 local UserInputServiceMock = { InputBegan = Signal.new(), InputChanged = Signal.new(), TouchEnabled = false, KeyboardEnabled = true }
 local ProximityPromptServiceMock = { PromptTriggered = Signal.new() }
 local boundActions = {} -- [name] = handler
+-- [name] = { priority = number (nil: BindAction's default), inputs = { KeyCode... }, touchButton }
+local boundSpecs = {} -- (while bound)
+local lastBoundSpecs = {} -- (the last binding, kept after it is unbound)
 local ContextActionServiceMock = {}
-function ContextActionServiceMock:BindActionAtPriority(name, handler)
+function ContextActionServiceMock:BindActionAtPriority(name, handler, touchButton, priority, ...)
 	boundActions[name] = handler
+	boundSpecs[name] = { priority = priority, inputs = { ... }, touchButton = touchButton }
+	lastBoundSpecs[name] = boundSpecs[name]
 end
-function ContextActionServiceMock:BindAction(name, handler)
+function ContextActionServiceMock:BindAction(name, handler, touchButton, ...)
 	boundActions[name] = handler
+	boundSpecs[name] = { priority = nil, inputs = { ... }, touchButton = touchButton }
+	lastBoundSpecs[name] = boundSpecs[name]
 end
 function ContextActionServiceMock:UnbindAction(name)
 	boundActions[name] = nil
+	boundSpecs[name] = nil
+end
+-- is the action bound (right now) to every one of these inputs?
+local function bindsInputs(name, ...)
+	local spec = boundSpecs[name]
+	if not spec then
+		return false
+	end
+	for _, wanted in ipairs({ ... }) do
+		if not table.find(spec.inputs, wanted) then
+			return false
+		end
+	end
+	return true
 end
 local seatSits = {} -- [seat key] = humanoid
 roblox.implementMethod("Seat", "Sit", function(seat, humanoid)
@@ -5535,20 +5556,62 @@ local function runTests()
 			task.wait(0.03)
 		end
 		task.wait(0.1)
+		-- the keys while the meter is open: Space, E and gamepad A, above the character's jump and
+		-- the hoverboard's charged jump (Medium + 500, Hoverboard.client.lua), which would take them
+		-- first otherwise
+		local kickSpec = boundSpecs.TycoonKickMeter
+		local riderJump = lastBoundSpecs.TycoonHoverboardJump
+		local jumpPriority = riderJump and riderJump.priority or Enum.ContextActionPriority.Medium.Value + 500
+		check(
+			bindsInputs("TycoonKickMeter", Enum.KeyCode.Space, Enum.KeyCode.E, Enum.KeyCode.ButtonA)
+				and kickSpec.priority > Enum.ContextActionPriority.Medium.Value
+				and kickSpec.priority > jumpPriority,
+			("the open meter binds Space / E / A above the normal and the hoverboard's jump (%s > %s)"):format(
+				tostring(kickSpec and kickSpec.priority),
+				tostring(jumpPriority)
+			)
+		)
 		local kickAction = boundActions.TycoonKickMeter
 		local spaceResult = kickAction and kickAction("TycoonKickMeter", Enum.UserInputState.Begin, { KeyCode = Enum.KeyCode.Space })
 		task.wait(0.2)
-		check(meter:FindFirstChild("Instruction", true).Text:find("POWER") ~= nil, "space locks the aim, then power")
+		local instruction = meter:FindFirstChild("Instruction", true)
+		check(instruction.Text:find("POWER") ~= nil, "space locks the aim, then power")
 		check(spaceResult == Enum.ContextActionResult.Sink, "the open meter sinks Space / E / A (no jump back onto the kick spot)")
 		instanceSignal(meter:FindFirstChild("Kick", true), "Activated"):Fire()
+		local kickedAt = os.clock()
 		task.wait(0.05)
 		check(
 			attempt and attempt[1] == viewer and attempt[2] == 2 and math.abs(attempt[3]) <= 1 and attempt[4] >= 0 and attempt[4] <= 1,
 			"the kick is sent to the server (aim + power)"
 		)
+		local sunk = boundActions.TycoonKickMeter
+			and boundActions.TycoonKickMeter("TycoonKickMeter", Enum.UserInputState.Begin, { KeyCode = Enum.KeyCode.Space })
+		check(
+			meter.Enabled
+				and instruction.Text:find("Here it goes") ~= nil
+				and bindsInputs("TycoonKickMeter", Enum.KeyCode.Space, Enum.KeyCode.ButtonA)
+				and sunk == Enum.ContextActionResult.Sink,
+			"while the ball flies ('Here it goes...') the keys stay sunk: a jump can't land back on the kick spot"
+		)
+		-- stepping back onto the spot offers a new kick: its meter opens at once, and the first kick's
+		-- delayed close (1.2 s) must not cut the second kick's 'Here it goes...' short
 		instanceSignal(remotesFolder.KickStart, "OnClientEvent"):Fire(1, 25, "SHORT")
 		task.wait(0.05)
-		check(meter.Enabled, "a new kick opens the meter again")
+		check(meter.Enabled and instruction.Text:find("AIM") ~= nil, "a new kick opens the meter again")
+		task.wait(0.2)
+		instanceSignal(meter:FindFirstChild("Kick", true), "Activated"):Fire() -- lock the aim
+		task.wait(0.2)
+		instanceSignal(meter:FindFirstChild("Kick", true), "Activated"):Fire() -- kick
+		local secondAt = os.clock()
+		task.wait(math.max(0, kickedAt + 1.35 - os.clock()))
+		local stillOpen = meter.Enabled and boundActions.TycoonKickMeter ~= nil and instruction.Text:find("Here it goes") ~= nil
+		task.wait(math.max(0, secondAt + 1.35 - os.clock()))
+		check(
+			stillOpen and attempt[2] == 1 and not meter.Enabled and boundActions.TycoonKickMeter == nil,
+			"each kick's 'Here it goes...' lasts its own 1.2 s, then the meter closes and gives the keys back"
+		)
+		instanceSignal(remotesFolder.KickStart, "OnClientEvent"):Fire(1, 25, "SHORT")
+		task.wait(0.05)
 		viewer.Character.HumanoidRootPart.CFrame = CFrame.new(500, 3, 500)
 		RunServiceMock.RenderStepped:Fire(0.016)
 		task.wait(0.05)
@@ -5959,8 +6022,8 @@ local function runTests()
 	end
 	do
 		-- PJ-2: in and around the Team HQ the guide beam first points where it can be followed
-		-- (a door, the stairs, a corner of the building, the lobby's opening onto the corridor),
-		-- and it stays on when the button is on another floor right above or below
+		-- (a door, the stairs, a corner of the building, the lobby's lane onto the corridor, a
+		-- skybridge's HQ door), and it stays on when the button is on another floor right above or below
 		local CAMPUS = Config.Layout.Areas.campus
 		local guideOrigin = CFrame.new(400, 0.2, -1500) * CFrame.Angles(0, math.pi, 0) -- (turned like plot 2)
 		local guidePlot = Instance.new("Model")
@@ -5972,7 +6035,16 @@ local function runTests()
 		guideItems.Name = "Items"
 		guideItems.Parent = guidePlot
 		guidePlot.Parent = tycoons
-		for _, id in ipairs({ "practice_field:1", "hq_owner:1", "hq_media:1", "hq_weightroom:1", "turf:1" }) do
+		for _, id in ipairs({
+			"practice_field:1",
+			"hq_owner:1",
+			"hq_media:1",
+			"hq_weightroom:1",
+			"turf:1",
+			"hq_frontoffice:1",
+			"campus_links:1",
+			"hq_lobby:1",
+		}) do
 			local button = Items.ById[id].Button
 			local pad = Instance.new("Part")
 			pad.Name = "Buy_" .. id
@@ -6003,6 +6075,142 @@ local function runTests()
 				("%s (beam at %.1f, %.1f, %.1f)"):format(message, point.X, point.Y, point.Z)
 			)
 		end
+		-- GUIDE-LOBBY: the beam can be followed. The real HQ (the plot base's shell and Team Safe,
+		-- the lobby's furniture, the grand staircase) is built in campus coordinates; the beam is
+		-- followed from a few spots, waypoint by waypoint, and every leg on the flat is walked at
+		-- body height (1.1..4.6 above the feet, 0.8 to either side) looking for anything solid.
+		local function walkTheBeam()
+			local BuildUtil = requireNode("ServerScriptService/TycoonServer/BuildUtil")
+			local Builders = requireNode("ServerScriptService/TycoonServer/Builders")
+			local hq = Instance.new("Model")
+			Builders.PlotBase(BuildUtil.NewContext(CFrame.new(-CAMPUS), hq, Config.TeamColors[1], "TEST", Config))
+			for _, pieceId in ipairs({ "hq_lobby", "hq_atrium" }) do
+				local model = Instance.new("Model")
+				model.Name = pieceId
+				model.Parent = hq
+				Builders[pieceId](BuildUtil.NewContext(CFrame.new(), model, Config.TeamColors[1], "TEST", Config))
+			end
+			local solids = {} -- { part, min, max } (bounds with rotation) of what stands on the ground floor
+			for _, part in ipairs(hq:GetDescendants()) do
+				if part:IsA("BasePart") and part.CanCollide then
+					local cf, h = part.CFrame, part.Size / 2
+					local rv, uv, lv = cf.RightVector, cf.UpVector, cf.LookVector
+					local e = Vector3.new(
+						math.abs(rv.X) * h.X + math.abs(uv.X) * h.Y + math.abs(lv.X) * h.Z,
+						math.abs(rv.Y) * h.X + math.abs(uv.Y) * h.Y + math.abs(lv.Y) * h.Z,
+						math.abs(rv.Z) * h.X + math.abs(uv.Z) * h.Y + math.abs(lv.Z) * h.Z
+					)
+					local c = cf.Position
+					if c.Y - e.Y < 6 and c.Y + e.Y > 1 then
+						table.insert(solids, { part = part, min = c - e, max = c + e })
+					end
+				end
+			end
+			local function inside(part, point)
+				local l, h = part.CFrame:PointToObjectSpace(point), part.Size / 2
+				if math.abs(l.X) > h.X or math.abs(l.Y) > h.Y or math.abs(l.Z) > h.Z then
+					return false
+				elseif part:IsA("Part") and part.Shape == Enum.PartType.Cylinder then
+					local r = math.min(h.Y, h.Z) -- (a cylinder's axis is its X)
+					return l.Y * l.Y + l.Z * l.Z <= r * r
+				elseif part:IsA("Part") and part.Shape == Enum.PartType.Ball then
+					return l.Magnitude <= h.X
+				end
+				return true
+			end
+			-- the first solid part a body meets on the straight walk a -> b, or nil
+			local function blocked(a, b)
+				local flat = Vector3.new(b.X - a.X, 0, b.Z - a.Z)
+				if flat.Magnitude < 0.1 then
+					return nil
+				end
+				local side = Vector3.new(-flat.Z, 0, flat.X).Unit * 0.8
+				local near = {}
+				for _, s in ipairs(solids) do
+					if
+						s.max.X >= math.min(a.X, b.X) - 1
+						and s.min.X <= math.max(a.X, b.X) + 1
+						and s.max.Z >= math.min(a.Z, b.Z) - 1
+						and s.min.Z <= math.max(a.Z, b.Z) + 1
+					then
+						table.insert(near, s.part)
+					end
+				end
+				local floorY, steps = math.max(a.Y, b.Y), math.ceil(flat.Magnitude / 0.5)
+				for i = 0, steps do
+					local p = a:Lerp(b, i / steps)
+					for _, offset in ipairs({ Vector3.new(0, 0, 0), side, -side }) do
+						for _, height in ipairs({ 1.1, 2.3, 3.5, 4.6 }) do
+							local point = Vector3.new(p.X + offset.X, floorY + height, p.Z + offset.Z)
+							for _, part in ipairs(near) do
+								if inside(part, point) then
+									return ("%s/%s at (%.1f, %.1f)"):format(part.Parent.Name, part.Name, point.X, point.Z)
+								end
+							end
+						end
+					end
+				end
+				return nil
+			end
+			-- follows the beam from `feet` until it points at the button or `stop(waypoint)`
+			local function route(feet, goal, stop, message)
+				local button = Items.ById[goal].Button - CAMPUS + Vector3.new(0, 0.3, 0)
+				local points, problem, arrived = { feet }, nil, false
+				for _ = 1, 10 do
+					local point, enabled = aim(feet, goal)
+					if (point - button).Magnitude < 0.6 then -- (the beam hides right by its button)
+						table.insert(points, button)
+						arrived = true
+						break
+					elseif not enabled or (point - feet).Magnitude < 1 then
+						problem = ("the beam stops at (%.1f, %.1f, %.1f)"):format(point.X, point.Y, point.Z)
+						break
+					end
+					table.insert(points, point)
+					if stop(point) then
+						arrived = true
+						break
+					end
+					feet = point + Vector3.new(0, 0.1, 0)
+				end
+				local trail = {}
+				for i, point in ipairs(points) do
+					table.insert(trail, ("(%.0f, %.0f, %.0f)"):format(point.X, point.Y, point.Z))
+					local nextPoint = points[i + 1]
+					if not problem and nextPoint and math.abs(nextPoint.Y - point.Y) < 0.5 then
+						local hit = blocked(point, nextPoint)
+						problem = hit and ("leg %d is blocked by %s"):format(i, hit)
+					end
+				end
+				check(
+					arrived and not problem,
+					("%s: %s%s"):format(message, table.concat(trail, " > "), problem and (" - " .. problem) or "")
+				)
+			end
+			local function outOfTheHQ(point)
+				return point.Z < 200
+			end
+			local function onTheStairs(point)
+				return point.Y > 1
+			end
+			local function never()
+				return false
+			end
+			route(Vector3.new(30, 0.3, 271), "turf:1", outOfTheHQ, "walk: east corridor -> through the lobby and out")
+			route(Vector3.new(-200, 0.3, 271), "turf:1", outOfTheHQ, "walk: west corridor -> through the lobby and out")
+			route(Vector3.new(-140, 0.3, 255), "turf:1", outOfTheHQ, "walk: from behind the Team Wall -> out")
+			route(Vector3.new(-70, 0.3, 260), "turf:1", outOfTheHQ, "walk: from behind the trophy case -> out")
+			route(Vector3.new(-75, 0.3, 212), "hq_weightroom:1", never, "walk: Team Safe -> the corridor")
+			route(Vector3.new(-135, 0.3, 222), "hq_weightroom:1", never, "walk: reception -> the corridor")
+			route(Vector3.new(-140, 0.3, 207), "hq_weightroom:1", never, "walk: waiting sofa -> the corridor")
+			route(Vector3.new(-140, 0.3, 236), "hq_weightroom:1", never, "walk: beside the reception desk -> the corridor")
+			route(Vector3.new(-54.5, 0.3, 210), "hq_weightroom:1", never, "walk: foot of the grand staircase -> the corridor")
+			route(Vector3.new(30, 0.3, 271), "hq_media:1", onTheStairs, "walk: corridor -> the grand staircase")
+			route(Vector3.new(-100, 0.3, 210), "hq_media:1", onTheStairs, "walk: HQ spawn -> the grand staircase")
+			route(Vector3.new(-140, 0.3, 220), "hq_media:1", onTheStairs, "walk: reception -> the grand staircase")
+			route(Vector3.new(-100, 0.3, 203), "hq_media:1", onTheStairs, "walk: in through the doors -> the grand staircase")
+			hq:Destroy()
+		end
 		-- leaving the HQ for the practice fields behind it (the ground floor's back wall has no door)
 		expect(
 			Vector3.new(-100, 0.3, 230),
@@ -6010,7 +6218,8 @@ local function runTests()
 			Vector3.new(-100, 0.2, 267),
 			"lobby -> practice field: first to the corridor"
 		)
-		expect(Vector3.new(-200, 0.3, 271), "practice_field:1", Vector3.new(-266, 0.2, 271), "then out through the west doors")
+		expect(Vector3.new(-200, 0.3, 271), "practice_field:1", Vector3.new(-256, 0.2, 271), "then to the west doors")
+		expect(Vector3.new(-255, 0.3, 271), "practice_field:1", Vector3.new(-266, 0.2, 271), "and out through them")
 		expect(Vector3.new(-268, 0.3, 271), "practice_field:1", Vector3.new(-266, 0.2, 370), "outside: round the HQ's corner")
 		-- coming back in for a ground-floor room: round the corner, to the door, through it
 		expect(
@@ -6021,20 +6230,146 @@ local function runTests()
 		)
 		expect(Vector3.new(-265, 0.3, 273), "hq_weightroom:1", Vector3.new(-256, 0.2, 271), "and in through the west doors")
 		-- upstairs buttons: the grand staircase (atrium built), or the west stair tower
-		expect(Vector3.new(-90, 0.3, 215), "hq_media:1", Vector3.new(-61, 0.2, 208.5), "lobby -> upstairs: to the grand staircase")
+		expect(Vector3.new(-90, 0.3, 215), "hq_media:1", Vector3.new(-69, 0.2, 207), "lobby -> upstairs: to the grand staircase")
+		expect(Vector3.new(-69, 0.3, 207), "hq_media:1", Vector3.new(-54.5, 0.2, 209), "in front of it: past the Team Safe to its foot")
+		-- (walked past that point toward the doors - the beam is only worked out 4 times a second - you
+		-- are still in front of the stairs: on to the foot, not back)
+		expect(Vector3.new(-67, 0.3, 204.5), "hq_media:1", Vector3.new(-54.5, 0.2, 209), "past it toward the doors: still on to the foot")
+		-- leaving the doorway north of its plants for the stairs: no turn back to the doorway's point
+		expect(Vector3.new(-95, 0.3, 207.2), "hq_media:1", Vector3.new(-69, 0.2, 207), "just past the doorway's plants: on to the stairs")
+		expect(Vector3.new(-140, 0.3, 220), "hq_media:1", Vector3.new(-106, 0.2, 223), "reception -> the stairs: by the lane")
+		expect(Vector3.new(-100, 0.3, 203), "hq_media:1", Vector3.new(-100, 0.2, 209.5), "in through the doors -> past their plants first")
 		expect(Vector3.new(-54.5, 5, 225), "hq_media:1", Vector3.new(-54.5, 17, 256), "on the staircase: up to the top")
 		expect(Vector3.new(-200, 0.3, 271), "hq_owner:1", Vector3.new(-252, 0.2, 271), "west corridor -> upstairs: into the stair tower")
+		-- GUIDE-STAIR-FOOT: down the grand staircase and off it, no flip-flop at its foot (every Down
+		-- point lies outside its own leg), past the Team Safe instead of back over the stairs; the beam
+		-- still shows at the foot's front edge (its point is more than 2 studs away)
+		expect(Vector3.new(-55, 1.1, 211.8), "hq_weightroom:1", Vector3.new(-54.5, 0.2, 209), "first step -> down to its foot")
+		expect(Vector3.new(-54.5, 0.3, 209), "hq_weightroom:1", Vector3.new(-56, 0.2, 206), "at the foot: step back off the stairs")
+		expect(
+			Vector3.new(-55, 0.3, 208.6),
+			"hq_weightroom:1",
+			Vector3.new(-56, 0.2, 206),
+			"standing at the foot's front edge: still shown"
+		)
+		expect(Vector3.new(-56, 0.3, 206), "hq_weightroom:1", Vector3.new(-76, 0.2, 208), "in front of them: west, past the Team Safe")
+		-- ... and at the foot of the west stair tower: to the doors (not through the tower's wall)
+		expect(Vector3.new(-258.3, 0.3, 279), "hq_weightroom:1", Vector3.new(-256, 0.2, 271), "foot of the stair tower -> to its doors")
+		do -- (on the hoverboard your feet float HoverHeight above the floor: the same way out)
+			local hover = Config.Hoverboard.HoverHeight
+			expect(
+				Vector3.new(-258.3, 0.3 + hover, 279),
+				"hq_weightroom:1",
+				Vector3.new(-256, 0.2, 271),
+				"hovering at the foot of the stair tower -> to its doors"
+			)
+		end
+		-- CLIENT-POLISH (b): from the west of the upper corridor the way down the grand staircase runs
+		-- along the corridor to the mezzanine, not across the atrium railing (x -126.2..-74.4, z 264)
+		expect(Vector3.new(-120, 17.1, 266), "turf:1", Vector3.new(-62, 17, 267), "upper corridor -> along it to the mezzanine")
+		expect(Vector3.new(-62, 17.1, 267), "turf:1", Vector3.new(-62, 17, 262), "in front of the mezzanine: onto it")
+		-- ... but a button upstairs is straight along the corridor from there (that leg has no Up point)
+		expect(
+			Vector3.new(-62, 17.1, 267),
+			"hq_media:1",
+			Vector3.new(-25, 17.3, 268),
+			"in front of the mezzanine, button upstairs: straight to it"
+		)
+		-- in through the east portal (the way in from the HQ walk, the Hall of Fame, the garage) for the
+		-- grand staircase: out of the tower and along the corridor to the lobby's lane, not through walls
+		expect(
+			Vector3.new(108, 0.3, 271),
+			"hq_media:1",
+			Vector3.new(-92, 0.2, 268),
+			"east tower -> the stairs: along the corridor to the lane"
+		)
 		atrium.Parent = nil -- (no grand staircase yet)
-		expect(Vector3.new(-90, 0.3, 215), "hq_media:1", Vector3.new(-90, 0.2, 267), "no grand staircase: lobby -> the corridor first")
+		expect(Vector3.new(-90, 0.3, 215), "hq_media:1", Vector3.new(-100, 0.2, 243), "no grand staircase: lobby -> the lane first")
 		expect(Vector3.new(-255, 0.3, 270), "hq_media:1", Vector3.new(-258.3, 1.2, 281.4), "in the stair tower: to the first flight")
 		expect(Vector3.new(-258.3, 4.5, 288), "hq_media:1", Vector3.new(-258.3, 8.6, 297.5), "first flight: up to the half landing")
 		expect(Vector3.new(-252.7, 12, 288), "hq_media:1", Vector3.new(-252.7, 17, 278.5), "second flight: up to the top")
 		-- upstairs, for a button outside: down the stairs first
 		expect(Vector3.new(-150, 17.1, 271), "practice_field:1", Vector3.new(-252, 17, 272), "upstairs -> outside: to the stairs down")
 		expect(Vector3.new(-252.7, 12, 288), "practice_field:1", Vector3.new(-252.7, 8.6, 297.5), "second flight: down to the half landing")
-		-- from the corridor to the main entrance: along the corridor to the lobby's opening, through it
-		expect(Vector3.new(30, 0.3, 271), "turf:1", Vector3.new(-64, 0.2, 268), "east corridor -> main entrance: to the lobby's opening")
-		expect(Vector3.new(-80, 0.3, 270), "turf:1", Vector3.new(-80, 0.2, 261), "at the opening: into the lobby")
+		-- GUIDE-LOBBY: from the corridor to the main entrance: along the corridor to the lobby's lane
+		-- (between the Team Wall and the trophy case), into it, through the hub, out of the doors
+		expect(Vector3.new(30, 0.3, 271), "turf:1", Vector3.new(-92, 0.2, 268), "east corridor -> main entrance: to the lobby's lane")
+		expect(Vector3.new(-200, 0.3, 268), "hq_lobby:1", Vector3.new(-108, 0.2, 268), "west corridor -> lobby: to the lane too")
+		expect(Vector3.new(-100, 0.3, 270), "turf:1", Vector3.new(-100, 0.2, 261), "at the lane: into the lobby")
+		expect(Vector3.new(-100, 0.3, 258), "turf:1", Vector3.new(-100, 0.2, 243), "in the lane: down to the hub")
+		expect(Vector3.new(-100, 0.3, 240), "turf:1", Vector3.new(-100, 0.2, 208), "then to the main entrance")
+		expect(Vector3.new(-100, 0.3, 209), "turf:1", Vector3.new(-100, 0.2, 194), "and out through it")
+		expect(Vector3.new(-76, 0.3, 208), "turf:1", Vector3.new(-100, 0.2, 208), "from the stairs' foot: past the plants to it")
+		-- out of the strips behind the Team Wall and the trophy case: onto the corridor first
+		expect(Vector3.new(-70, 0.3, 260), "turf:1", Vector3.new(-70, 0.2, 267), "behind the trophy case -> out onto the corridor")
+		expect(Vector3.new(-140, 0.3, 255), "turf:1", Vector3.new(-140, 0.2, 267), "behind the Team Wall -> out onto the corridor")
+		-- the turn into the lane starts 2.5 studs before it, and the way in from there never meets
+		-- those strips (the beam would turn back onto the corridor, again and again)
+		do
+			local turnsBack = {}
+			for _, way in ipairs({
+				{ from = Vector3.new(-110.4, 0.3, 268), into = Vector3.new(-108, 0.2, 261) }, -- from the west
+				{ from = Vector3.new(-89.6, 0.3, 268), into = Vector3.new(-92, 0.2, 261) }, -- from the east
+			}) do
+				local first = aim(way.from, "turf:1")
+				if (first - way.into).Magnitude > 0.6 then
+					table.insert(
+						turnsBack,
+						("no turn at (%.1f, %.1f): beam at (%.1f, %.1f)"):format(way.from.X, way.from.Z, first.X, first.Z)
+					)
+				end
+				for _, z in ipairs({ 264.5, 264, 263.5, 263, 262.5 }) do
+					local feet = way.from:Lerp(way.into + Vector3.new(0, 0.1, 0), (way.from.Z - z) / (way.from.Z - way.into.Z))
+					local point = aim(feet, "turf:1")
+					if point.Z > feet.Z then
+						table.insert(turnsBack, ("(%.1f, %.1f): beam at (%.1f, %.1f)"):format(feet.X, feet.Z, point.X, point.Z))
+					end
+				end
+			end
+			check(#turnsBack == 0, "into the lane from the corridor: the beam never turns back " .. table.concat(turnsBack, "; "))
+		end
+		-- the lane's own edges are not behind anything: on to the hub from them
+		expect(Vector3.new(-110, 0.3, 258), "turf:1", Vector3.new(-100, 0.2, 243), "the lane's west edge -> the hub")
+		expect(Vector3.new(-90.5, 0.3, 261), "turf:1", Vector3.new(-100, 0.2, 243), "the lane's east edge -> the hub")
+		-- the towers at the corridor's ends lead to the lobby by the corridor too
+		expect(Vector3.new(108, 0.3, 271), "hq_lobby:1", Vector3.new(-92, 0.2, 268), "east tower -> lobby: along the corridor to the lane")
+		expect(
+			Vector3.new(-256, 0.3, 271),
+			"hq_lobby:1",
+			Vector3.new(-108, 0.2, 268),
+			"stair tower -> lobby: along the corridor to the lane"
+		)
+		-- from the lobby's front half to the corridor: onto the lane first (past the desk, the safe)
+		expect(Vector3.new(-75, 0.3, 212), "hq_weightroom:1", Vector3.new(-100, 0.2, 243), "Team Safe -> corridor: through the hub")
+		expect(Vector3.new(-135, 0.3, 222), "hq_weightroom:1", Vector3.new(-106, 0.2, 223), "reception -> corridor: past the desk")
+		expect(Vector3.new(-140, 0.3, 236), "hq_weightroom:1", Vector3.new(-138, 0.2, 242.5), "beside the desk -> past its wing")
+		expect(Vector3.new(-100, 0.3, 243), "hq_weightroom:1", Vector3.new(-100, 0.2, 267), "from the hub: up the lane")
+		-- GUIDE-BLOCK-STRIPS: from the strips beside the HQ (the covered HQ walk...) out and round
+		expect(Vector3.new(110, 0.3, 330), "turf:1", Vector3.new(122, 0.2, 330), "HQ walk -> stadium: out of the HQ's strip first")
+		expect(Vector3.new(110, 0.3, 330), "hq_frontoffice:1", Vector3.new(122, 0.2, 271), "HQ walk -> front office: the east portal")
+		-- ... coming down beside the elevator tower, in through the portal only once lined up with it (not
+		-- across the tower's glass beside it)
+		expect(
+			Vector3.new(120.4, 0.3, 279),
+			"hq_frontoffice:1",
+			Vector3.new(122, 0.2, 271),
+			"beside the tower: on to the front of the portal"
+		)
+		expect(Vector3.new(122, 0.3, 274.5), "hq_frontoffice:1", Vector3.new(108, 0.2, 271), "in front of the portal: in through it")
+		expect(Vector3.new(-130, 0.3, 420), "campus_links:1", Vector3.new(122, 0.2, 370), "practice field -> HQ walk: round the corner")
+		-- (the building counts a stud bigger: a beam that would only graze the elevator tower's corner
+		-- column goes round it too)
+		expect(
+			Vector3.new(122, 0.3, 271),
+			"campus_links:1",
+			Vector3.new(122, 0.2, 230),
+			"east portal -> HQ walk's button: clear of the tower's corner"
+		)
+		-- CLIENT-POLISH (c): up on a skybridge, a goal in the HQ: the "Walk into the HQ" prompt at its end
+		expect(Vector3.new(109, 17.1, 330), "hq_media:1", Vector3.new(109, 17, 288.4), "dome skybridge -> the HQ prompt")
+		expect(Vector3.new(134, 17.1, 271), "hq_media:1", Vector3.new(122.4, 17, 271), "Sky Lounge -> the HQ prompt")
+		atrium.Parent = guideItems -- (the walk's HQ has the grand staircase)
+		walkTheBeam()
 		-- straight at buttons away from the HQ; hidden right next to one on the same floor only
 		local _, sameFloor = aim(Vector3.new(5, 0.3, -80), "turf:1")
 		local _, below = aim(Vector3.new(5, -16.7, -80), "turf:1")

@@ -284,9 +284,9 @@ local function hqLevel(p)
 	return nil
 end
 
--- Does the line a-b (seen from above) pass through the HQ block?
-local function crossesBlock(a, b)
-	local block = GUIDE.Block
+-- Does the line a-b (seen from above) pass through the box (by default the HQ block)?
+local function crossesBlock(a, b, block)
+	block = block or GUIDE.Block
 	local dx, dz = b.X - a.X, b.Z - a.Z
 	local t0, t1 = 0, 1
 	local function clip(p, q)
@@ -310,9 +310,54 @@ do
 	CORNERS = { Vector3.new(x0, 0.2, z0), Vector3.new(x1, 0.2, z0), Vector3.new(x1, 0.2, z1), Vector3.new(x0, 0.2, z1) }
 end
 
--- The shortest way from a to b (both outside) round the HQ block: the first point to walk to
--- (b itself, or a corner) and the length.
+-- ... or through the building itself (its boxes, a stud bigger: clear of its corner columns)?
+local PADDED_BUILDING = {}
+for _, box in ipairs(GUIDE.Building) do
+	table.insert(PADDED_BUILDING, { MinX = box.MinX - 1, MaxX = box.MaxX + 1, MinZ = box.MinZ - 1, MaxZ = box.MaxZ + 1 })
+end
+local function crossesBuilding(a, b)
+	for _, box in ipairs(PADDED_BUILDING) do
+		if crossesBlock(a, b, box) then
+			return true
+		end
+	end
+	return false
+end
+
+-- A spot on the ground in the block but outside the building (the strips beside it: the covered HQ
+-- walk, beside the west wall, behind the back wall): the nearest point just outside the block.
+local function stepOut(p)
+	local block, margin = GUIDE.Block, GUIDE.CornerMargin
+	if p.Y >= GUIDE.UpstairsY or p.X <= block.MinX or p.X >= block.MaxX or p.Z <= block.MinZ or p.Z >= block.MaxZ then
+		return nil
+	end
+	local best, out = p.X - block.MinX, Vector3.new(block.MinX - margin, 0.2, p.Z)
+	if block.MaxX - p.X < best then
+		best, out = block.MaxX - p.X, Vector3.new(block.MaxX + margin, 0.2, p.Z)
+	end
+	if p.Z - block.MinZ < best then
+		best, out = p.Z - block.MinZ, Vector3.new(p.X, 0.2, block.MinZ - margin)
+	end
+	if block.MaxZ - p.Z < best then
+		out = Vector3.new(p.X, 0.2, block.MaxZ + margin)
+	end
+	return out
+end
+
+-- The shortest way from a to b (both outside the building) round the HQ block: the first point to
+-- walk to (b itself, a corner, or the way out of a strip beside the building) and the length.
 local function aroundBlock(a, b)
+	local out, into = stepOut(a), stepOut(b)
+	if out or into then
+		if not crossesBuilding(a, b) then
+			return b, (b - a).Magnitude
+		elseif out then
+			local _, rest = aroundBlock(out, b)
+			return out, (out - a).Magnitude + rest
+		end
+		local first, rest = aroundBlock(a, into)
+		return first, rest + (b - into).Magnitude
+	end
 	if not crossesBlock(a, b) then
 		return b, (b - a).Magnitude
 	end
@@ -343,21 +388,25 @@ local function aroundBlock(a, b)
 	return first, best
 end
 
--- Inside, goal outside: the door whose way out (to it, then round the block) is shortest.
+-- Inside, goal outside: the door whose way out (to it, then round the block) is shortest; first
+-- the spot just inside it, then (a little before you get there) through it.
 local function wayOut(p, goal)
 	local target, best = nil, math.huge
 	for _, door in ipairs(GUIDE.Doors) do
 		local _, outside = aroundBlock(door.Outside, goal)
 		local length = (door.Outside - p).Magnitude + outside
 		if length < best then
-			target, best = door.Outside, length
+			best = length
+			local atDoor = (door.Outside - p).Magnitude <= (door.Outside - door.Inside).Magnitude + 2
+			target = atDoor and door.Outside or door.Inside
 		end
 	end
 	return target
 end
 
 -- Outside, goal inside: round the block to the door with the shortest way in, then through it
--- (once you are as close to the spot inside as the door is).
+-- (once you stand in front of it: lined up with it, at most 2.5 studs short of the spot outside it,
+-- so the beam never cuts across the wall or glass beside a door when you come along the wall).
 local function wayIn(p, goal)
 	local target, best = nil, math.huge
 	for _, door in ipairs(GUIDE.Doors) do
@@ -365,7 +414,9 @@ local function wayIn(p, goal)
 		local length = outside + (goal - door.Inside).Magnitude
 		if length < best then
 			best = length
-			local atDoor = (door.Inside - p).Magnitude <= (door.Inside - door.Outside).Magnitude + 1
+			local axis = (door.Inside - door.Outside).Unit
+			local along = (p - door.Outside):Dot(axis)
+			local atDoor = along >= -2.5 and (p - door.Outside - axis * along).Magnitude <= 4
 			target = atDoor and door.Inside or first
 		end
 	end
@@ -376,11 +427,15 @@ local function usable(stair, built)
 	return stair.Piece == nil or built(stair.Piece)
 end
 
--- On a stair: the next point toward the goal's floor (nil = not on this stair, or off its bottom).
+-- On a stair: the next point toward the goal's floor (nil = not on this stair, or already off it
+-- at that end).
 local function alongStair(stair, p, up)
 	for _, leg in ipairs(stair.Legs) do
 		if inBox(leg, p) then
-			return up and leg.Up or leg.Down
+			if up then
+				return leg.Up
+			end
+			return leg.Down
 		end
 	end
 	return nil
@@ -407,24 +462,56 @@ local function toStairs(p, goal, up, built)
 	return target
 end
 
--- On the ground floor the lobby (with the main entrance) only opens onto the corridor: between
--- it and the rest of the HQ, the beam leads through that opening (out: just past it into the
--- corridor; in: along the corridor to the opening, then just past it into the lobby).
+-- In the lobby off its lane: where to walk first to get onto the lane (Config: Lobby.ToLane).
+local function toLane(lobby, p)
+	for _, way in ipairs(lobby.ToLane) do
+		if inBox(way, p) then
+			return way.Point
+		end
+	end
+	return lobby.Hub
+end
+
+-- On the ground floor the lobby (with the main entrance) only opens onto the corridor, and its
+-- furniture leaves one clear lane between the two: between the lobby and the rest of the HQ the
+-- beam leads through that lane (out: onto the lane, then just past it into the corridor; in: along
+-- the corridor to the lane, then just past it into the lobby). Inside the lobby it leads from the
+-- lane down into the lobby's front half through the Hub, in from the doors past the plants beside
+-- them, from the reception side across the lobby by the lane, and out of the strips behind the
+-- Team Wall and the trophy case onto the corridor. (Anywhere on the ground floor: the ground floors
+-- of the two towers at the corridor's ends lead to the lobby by the corridor too.)
 local function viaLobby(p, target)
 	local lobby = GUIDE.Lobby
-	if p.Y >= GUIDE.UpstairsY or target.Y >= GUIDE.UpstairsY or not inBox(Config.Layout.HQ, p) then
+	if target.Y >= GUIDE.UpstairsY or hqLevel(p) ~= "down" then
 		return target
 	end
-	local inLobby = inBox(lobby, p)
-	if inLobby == inBox(lobby, target) then
-		return target
-	end
-	local x = math.clamp(p.X, lobby.OpenMinX, lobby.OpenMaxX)
+	local inLobby, targetInLobby = inBox(lobby, p), inBox(lobby, target)
 	if inLobby then
-		return Vector3.new(x, 0.2, lobby.MaxZ + 3)
+		for _, pocket in ipairs(lobby.Pockets) do
+			if inBox(pocket, p) and not inBox(pocket, target) then
+				return Vector3.new(p.X, 0.2, lobby.MaxZ + 3)
+			end
+		end
+		if targetInLobby then
+			if p.Z > lobby.FrontZ and target.Z < lobby.FrontZ then
+				return lobby.Hub
+			elseif inBox(lobby.Doorway, p) and (target.X < lobby.Doorway.MinX or target.X > lobby.Doorway.MaxX) then
+				return lobby.Doorway.Point
+			elseif p.X < lobby.OpenMinX and target.X >= lobby.OpenMinX then
+				return toLane(lobby, p)
+			end
+			return target
+		elseif p.X >= lobby.OpenMinX and p.X <= lobby.OpenMaxX then
+			return Vector3.new(p.X, 0.2, lobby.MaxZ + 3)
+		end
+		return toLane(lobby, p)
+	elseif not targetInLobby then
+		return target
 	end
-	local atOpening = x == p.X and p.Z >= lobby.MaxZ and p.Z <= Config.Layout.HQCorridor.MaxZ
-	return Vector3.new(x, 0.2, atOpening and lobby.MaxZ - 3 or lobby.OpenZ)
+	-- (the turn into the lane comes a little before its edge, so the beam never hides there)
+	local x = math.clamp(p.X, lobby.OpenMinX, lobby.OpenMaxX)
+	local atLane = math.abs(x - p.X) < 2.5 and p.Z >= lobby.MaxZ and p.Z <= Config.Layout.HQCorridor.MaxZ
+	return Vector3.new(x, 0.2, atLane and lobby.MaxZ - 3 or lobby.OpenZ)
 end
 
 -- Where the beam points first (campus coordinates), or nil: straight at the goal.
@@ -435,6 +522,11 @@ local function guideWaypoint(p, goal, built)
 		return nil
 	elseif not playerLevel then
 		if goalLevel then
+			for _, bridge in ipairs(GUIDE.Bridges) do
+				if inBox(bridge, p) then
+					return bridge.Door -- up on a skybridge: in through the prompt at its HQ end
+				end
+			end
 			return wayIn(p, goal)
 		end
 		local first = aroundBlock(p, goal)
