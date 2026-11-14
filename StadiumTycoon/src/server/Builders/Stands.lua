@@ -75,6 +75,9 @@ local RAKER_FROM, RAKER_TO = 27, 55 -- raker beams under the hollow rows (offset
 -- inside row 7, the event level's inner wall, and rest on one column near the back)
 local RAKER_THICK = 1.4
 local RAKER_COLUMNS = { 53.5 }
+local BADGE = 0.9 -- row-number badges on the aisle-end caps (studs)
+local POST_EVERY = 3 -- the handrails get a post every 3 rows (behind the game-day fans)
+local POST_DEPTH = 2.4 -- (2.4 into a row: between the fans, 0.8..2.0, and the seat strip)
 
 local ROW_LIGHT = Color3.fromRGB(160, 160, 165)
 local ROW_DARK = Color3.fromRGB(136, 136, 142)
@@ -86,7 +89,11 @@ local SCREEN_TEXT = Color3.fromRGB(255, 220, 70)
 local PLAQUE_DARK = Color3.fromRGB(26, 30, 40)
 local WHITE = Color3.fromRGB(250, 250, 250)
 local VISITOR_GREY = Color3.fromRGB(58, 60, 68)
+local VISITOR_TRIM = Color3.fromRGB(150, 152, 160)
 local SEAT_GOLD = Color3.fromRGB(255, 196, 37)
+local CANNON_DARK = Color3.fromRGB(34, 34, 40)
+local CUP_DARK = Color3.fromRGB(40, 42, 50)
+local CANNON_STEEL = Color3.fromRGB(120, 124, 132)
 
 local KIND = {
 	visitor = "side",
@@ -509,8 +516,99 @@ local function seatStrips(ctx, L, name, plan, tunnel)
 	end
 end
 
--- Stair steps, row-end caps (sloped dark stringers on both sides) and a handrail for every aisle.
-local function aisles(ctx, L, name, plan)
+--[[
+	Aisle-end standards: a badge with the row number for every row on the face of an aisle-end cap
+	that looks into the aisle (cap at aisle `a`, side s = -1 / 1), in the colour of the seats beside
+	it. The cap follows the slope, so its face's own "up" leans toward the field: every badge is
+	turned back upright. Rows whose badge would not fit between o0 and o1 (the cap's ends) or
+	skipRow (a plaque hangs there) get none.
+]]
+local function rowBadges(ctx, L, name, cap, a, s, o0, o1, skipRow)
+	local F = frameOf(L, name)
+	local size = cap.Size
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "RowNumbersGui"
+	-- (the face toward the aisle: Left on the +along side, Right on the -along side)
+	gui.Face = s > 0 and Enum.NormalId.Left or Enum.NormalId.Right
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 24
+	gui.LightInfluence = 1
+	gui.Parent = cap
+	local tilt = math.deg(math.atan(slope(L)))
+	local color = sectionColour(ctx, L, name, a + s * 3)
+	local ink = readable(color, WHITE)
+	for k = 1, rowCount(L) do
+		local r = rowInfo(L, k)
+		local o = r.inner + 1.2 -- (the front of the row, where the cap stands 1.8 above the seats)
+		if k ~= skipRow and o - BADGE >= o0 and o + BADGE <= o1 then
+			local spot = ctx.origin * F * CFrame.new(a + s * CAP_IN, r.top + 0.9, -o)
+			local p = cap.CFrame:PointToObjectSpace(spot.Position)
+			-- face coordinates: x runs along the cap (+Z on the Left face, -Z on the Right face), y down
+			local x = s > 0 and (p.Z + size.Z / 2) or (size.Z / 2 - p.Z)
+			local y = size.Y / 2 - p.Y
+			local badge = Instance.new("TextLabel")
+			badge.Name = "Row" .. k
+			badge.AnchorPoint = Vector2.new(0.5, 0.5)
+			badge.Position = UDim2.new(x / size.Z, 0, y / size.Y, 0)
+			badge.Size = UDim2.new(BADGE / size.Z, 0, BADGE / size.Y, 0)
+			badge.Rotation = s > 0 and -tilt or tilt
+			badge.BackgroundColor3 = color
+			badge.BackgroundTransparency = 0
+			badge.BorderSizePixel = 0
+			badge.Font = Enum.Font.GothamBlack
+			badge.Text = tostring(k)
+			badge.TextColor3 = ink
+			badge.TextScaled = true
+			badge.Parent = gui
+		end
+	end
+	return gui
+end
+
+--[[
+	Cup-holder rails: a low dark rail along the front edge of rows 2..14 (row 1 has the field wall in
+	front of it), in front of the game-day fans (they sit 0.8..2.0 into a row) and only 0.3 tall. Not
+	collidable: where it crosses an aisle it is just the dark nosing of the tread. tunnel = true
+	stops it at the players' tunnel cut.
+]]
+local function cupRails(ctx, L, name, tunnel)
+	local B = L.Bowl
+	local F = frameOf(L, name)
+	local kind = KIND[name]
+	local cut = B.TunnelHalfWidth + 0.8
+	for k = 2, rowCount(L) do
+		local r = rowInfo(L, k)
+		local half = halfLength(L, kind, r.inner)
+		local pieces = { { -half, half } }
+		if tunnel and k <= B.TunnelRows then
+			pieces = { { -half, -cut }, { cut, half } }
+		end
+		if half >= 3 then
+			for _, piece in ipairs(pieces) do
+				segBox(
+					ctx,
+					F,
+					"CupRail",
+					piece[1],
+					piece[2],
+					r.top,
+					r.top + 0.3,
+					r.inner,
+					r.inner + 0.35,
+					CUP_DARK,
+					Enum.Material.SmoothPlastic,
+					{
+						CanCollide = false,
+					}
+				)
+			end
+		end
+	end
+end
+
+-- Stair steps, row-end caps (sloped dark stringers on both sides, with row numbers) and a handrail
+-- for every aisle. skipBadge = a row whose badge on the -along cap a section plaque covers.
+local function aisles(ctx, L, name, plan, skipBadge)
 	local C = ctx.config.Colors
 	local B = L.Bowl
 	local F = frameOf(L, name)
@@ -546,7 +644,7 @@ local function aisles(ctx, L, name, plan)
 			-- they sit inside the rows everywhere and stand CAP_ABOVE above the nosing line
 			local capThick = (CAP_ABOVE + B.Rise) * cos
 			for _, s in ipairs({ -1, 1 }) do
-				slopedBar(
+				local cap = slopedBar(
 					ctx,
 					F,
 					"AisleEndCap",
@@ -560,6 +658,7 @@ local function aisles(ctx, L, name, plan)
 					CAP_COLOR,
 					Enum.Material.SmoothPlastic
 				)
+				rowBadges(ctx, L, name, cap, a, s, o0, topInner, s < 0 and skipBadge or nil)
 			end
 			if aisle.count >= 4 then
 				-- handrail on the side toward the segment's middle
@@ -567,7 +666,15 @@ local function aisles(ctx, L, name, plan)
 				local x = a + side * RAIL_OFFSET
 				local r0, r1 = o0 + 0.4, topInner - 0.2
 				slopedBar(ctx, F, "Handrail", x, 0.25, r0, r1, nosing(L, r0) + RAIL_ABOVE, rise, 0.25, C.Metal, Enum.Material.Metal)
-				for _, o in ipairs({ r0 + 0.5, r1 - 0.5 }) do
+				local posts = { r0 + 0.5, r1 - 0.5 }
+				-- (and one every few rows in between, behind the fans of its row)
+				for k = aisle.first + POST_EVERY, rowCount(L) - 2, POST_EVERY do
+					local o = rowInfo(L, k).inner + POST_DEPTH
+					if o > r0 + 3 and o < r1 - 3 then
+						table.insert(posts, o)
+					end
+				end
+				for _, o in ipairs(posts) do
 					local base = nosing(L, o) + CAP_ABOVE - 0.3
 					local top = nosing(L, o) + RAIL_ABOVE - 0.25 / cos
 					segBox(ctx, F, "HandrailPost", x - 0.12, x + 0.12, base, top, o - 0.12, o + 0.12, C.Metal, Enum.Material.Metal)
@@ -848,7 +955,13 @@ local function playersTunnel(ctx, L, name, spec)
 		})
 		-- (up to just under row 7's bridge: the part above row 6's underside hides inside that bridge,
 		-- so no slot shows between the wall and row 7)
-		segBox(ctx, F, "TunnelWallCovered", s * inner, s * cut, 0, coveredTop, openEnd, coveredEnd, spec.wallColor, Enum.Material.Brick)
+		local covered =
+			segBox(ctx, F, "TunnelWallCovered", s * inner, s * cut, 0, coveredTop, openEnd, coveredEnd, spec.wallColor, Enum.Material.Brick)
+		-- a slogan painted on the covered stretch, above the LED strip, for the players walking out
+		local face = s > 0 and Enum.NormalId.Left or Enum.NormalId.Right
+		local _, slogan = addText(covered, face, spec.slogans[s > 0 and 2 or 1], readable(spec.wallColor, spec.inkColor), 20)
+		slogan.Position = UDim2.new(0.06, 0, 0.1, 0)
+		slogan.Size = UDim2.new(0.88, 0, 0.3, 0)
 		local led = segBox(
 			ctx,
 			F,
@@ -943,6 +1056,98 @@ local function playersTunnel(ctx, L, name, spec)
 	})
 	addText(plaque, Enum.NormalId.Right, spec.plaqueTitle:upper(), WHITE, 24)
 	BuildUtil.Look(plaque, spec.plaqueTitle, spec.plaqueInfo, { LookKey = spec.home and "record" or "season", Distance = 9 })
+
+	-- padded high-five rails along the tops of both walls (the fans beside the tunnel lean over them;
+	-- they stop 0.1 short of the nearest game-day fans)
+	local rise = slope(L)
+	for _, s in ipairs({ -1, 1 }) do
+		local pad = slopedBar(
+			ctx,
+			F,
+			"HighFiveRail",
+			s * (inner + cut) / 2,
+			cut - inner + 0.2,
+			mouthBack,
+			openEnd,
+			wallBase + 0.5,
+			rise,
+			0.6,
+			spec.padColor,
+			Enum.Material.Fabric
+		)
+		if s < 0 then
+			-- (the prompt sits on the pad's top: the wall would hide its middle from the tunnel floor)
+			BuildUtil.Look(pad, spec.padTitle, spec.padInfo, { At = Vector3.new(0, 0.35, 0), Distance = 14 })
+		end
+	end
+
+	-- a trim frame round the tunnel mouth: down the inside edges of both pillars and under the
+	-- header (paint-thin, so nothing to bump into)
+	for _, s in ipairs({ -1, 1 }) do
+		segBox(
+			ctx,
+			F,
+			"TunnelMouthTrim",
+			s * inner,
+			s * (inner + 0.45),
+			0,
+			headerBottom,
+			mouthFront - 0.12,
+			mouthFront,
+			spec.trimColor,
+			Enum.Material.SmoothPlastic,
+			{ CanCollide = false }
+		)
+	end
+	segBox(
+		ctx,
+		F,
+		"TunnelMouthTrim",
+		-inner - 0.45,
+		inner + 0.45,
+		headerBottom - 0.45,
+		headerBottom,
+		mouthFront - 0.12,
+		mouthFront,
+		spec.trimColor,
+		Enum.Material.SmoothPlastic,
+		{ CanCollide = false }
+	)
+
+	if spec.home then
+		-- game-day flame cannons in front of both pillars (beside the mouth, not in the way out)
+		for _, s in ipairs({ -1, 1 }) do
+			local box = segBox(
+				ctx,
+				F,
+				"FlameCannon",
+				s * (inner + 0.5),
+				s * pillarOut,
+				0,
+				1.3,
+				mouthFront - 1.4,
+				mouthFront,
+				CANNON_DARK,
+				Enum.Material.Metal
+			)
+			BuildUtil.Cylinder(ctx, {
+				Name = "FlameNozzle",
+				Position = (F * CFrame.new(s * (inner + 0.5 + pillarOut) / 2, 1.75, -(mouthFront - 0.7))).Position,
+				Height = 0.9,
+				Diameter = 0.7,
+				Axis = "Y",
+				Color = CANNON_STEEL,
+				Material = Enum.Material.Metal,
+			})
+			if s > 0 then
+				BuildUtil.Look(
+					box,
+					"Flame Cannons",
+					"WHOOSH! When the team runs out of the tunnel on game day, these cannons shoot flames high into the air. Stand back!"
+				)
+			end
+		end
+	end
 end
 
 -- Wall layout of a sideline (along positions): the plaques mark the 7 sections.
@@ -982,6 +1187,7 @@ local function sideline(ctx, name, home)
 
 	BuildUtil.Stage(ctx, 2)
 	seatStrips(ctx, L, name, plan, true)
+	cupRails(ctx, L, name, true)
 	local specs = {}
 	for _, a in ipairs(entries) do
 		table.insert(specs, { aisle = a, dir = a > 0 and -1 or 1 })
@@ -1040,6 +1246,12 @@ local function sideline(ctx, name, home)
 			home = true,
 			wallColor = team.Primary,
 			headerColor = team.Primary,
+			trimColor = team.Trim,
+			padColor = team.Secondary,
+			inkColor = team.Trim,
+			slogans = { "OUR\nHOUSE", "NEVER\nQUIT" },
+			padTitle = "High-Five Rail",
+			padInfo = "Fans lean over this padded rail to high-five the players as they run out to the field. On game day, hold out your hand!",
 			insideText = "LEAVE IT ALL ON THE FIELD",
 			slapText = "PLAY HARD. PLAY TOGETHER.",
 			slapInfo = "Every player jumps up and slaps this sign for luck on the way out to the field. Can you reach it?",
@@ -1051,6 +1263,12 @@ local function sideline(ctx, name, home)
 			home = false,
 			wallColor = VISITOR_GREY,
 			headerColor = VISITOR_GREY,
+			trimColor = VISITOR_TRIM,
+			padColor = CAP_COLOR,
+			inkColor = WHITE,
+			slogans = { "GOOD\nLUCK!", "YOU'LL\nNEED IT" },
+			padTitle = "Tunnel Rail",
+			padInfo = "Home fans hang over this rail to give the visitors a LOUD welcome as they run out. Friendly cheering only!",
 			fieldText = "VISITORS",
 			slapText = "WELCOME TO THE LOUDEST STADIUM IN THE LEAGUE",
 			slapInfo = "The home fans put this sign here to scare the visitors. It doesn't work... usually!",
@@ -1105,6 +1323,7 @@ function M.lower_ends(ctx)
 	BuildUtil.Stage(ctx, 3)
 	for _, name in ipairs({ "west", "east" }) do
 		seatStrips(ctx, L, name, plans[name], false)
+		cupRails(ctx, L, name, false)
 	end
 
 	BuildUtil.Stage(ctx, 4)
@@ -1132,14 +1351,16 @@ function M.lower_corners(ctx)
 	BuildUtil.Stage(ctx, 2)
 	for _, name in ipairs(Bowl.Corners) do
 		seatStrips(ctx, L, name, plans[name], false)
+		cupRails(ctx, L, name, false)
 	end
 
 	BuildUtil.Stage(ctx, 3)
 	for _, name in ipairs(Bowl.Corners) do
 		local plan = plans[name]
-		aisles(ctx, L, name, plan)
 		-- section plaque on the inside of the left row-end cap, on the second row of the aisle
+		-- (instead of that row's number badge)
 		local aisle = plan[1]
+		aisles(ctx, L, name, plan, aisle and aisle.first and aisle.first + 1)
 		if aisle and aisle.first then
 			local F = frameOf(L, name)
 			local r = rowInfo(L, aisle.first + 1)
