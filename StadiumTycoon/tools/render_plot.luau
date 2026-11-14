@@ -785,6 +785,124 @@ for _, e in ipairs(elevatorTargets) do
 end
 
 ---------------------------------------------------------------------------------------------
+-- Team colours: a team change repaints the always-present HQ shell in place by palette role
+-- (PlotManager.ApplyTeam: TeamRole on parts, TeamTextRole / TeamBackRole on text and panels).
+-- Build it in every palette: whatever changes with the palette must carry the role whose colour it
+-- has in every build, and text on or in team colours must stay readable (contrast 3) in all of them.
+---------------------------------------------------------------------------------------------
+do
+	local builds = {}
+	for index, colors in ipairs(Config.TeamColors) do
+		local holder = Instance.new("Model")
+		local ctx = BuildUtil.Child(BuildUtil.NewContext(origin, holder, colors, "", Config), "PlotBase")
+		local ok, err = pcall(Builders.PlotBase, ctx)
+		if not ok then
+			addError(("PlotBase failed with palette %d: %s"):format(index, tostring(err)))
+		end
+		local hq = holder:FindFirstChild("HQShell", true)
+		builds[index] = hq and hq:GetDescendants() or {}
+	end
+	local function same(a, b)
+		return math.abs(a.R - b.R) < 0.002 and math.abs(a.G - b.G) < 0.002 and math.abs(a.B - b.B) < 0.002
+	end
+	local function luminance(c)
+		local function channel(v)
+			return v <= 0.03928 and v / 12.92 or ((v + 0.055) / 1.055) ^ 2.4
+		end
+		return 0.2126 * channel(c.R) + 0.7152 * channel(c.G) + 0.0722 * channel(c.B)
+	end
+	local function contrast(a, b)
+		local la, lb = luminance(a), luminance(b)
+		return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05)
+	end
+	-- what a label is drawn on: the nearest visible panel behind it, else the part's face
+	local function backgroundOf(label)
+		local node = label
+		while node do
+			if node:IsA("GuiObject") and node.BackgroundTransparency < 1 then
+				return node.BackgroundColor3
+			elseif node:IsA("BasePart") then
+				return node.Color
+			end
+			node = node.Parent
+		end
+		return nil
+	end
+	local base = builds[1]
+	local sameTree = #base > 0
+	for index = 2, #builds do
+		if #builds[index] ~= #base then
+			sameTree = false
+		else
+			for k, inst in ipairs(base) do
+				if builds[index][k].ClassName ~= inst.ClassName or builds[index][k].Name ~= inst.Name then
+					sameTree = false
+					break
+				end
+			end
+		end
+	end
+	if not sameTree then
+		addError("the HQ shell must build the same instances in every team palette (the team colour check compares them)")
+	else
+		local channels = {
+			{ "BasePart", "Color", "TeamRole" },
+			{ "GuiObject", "BackgroundColor3", "TeamBackRole" },
+			{ "TextLabel", "TextColor3", "TeamTextRole" },
+		}
+		local problems = {}
+		for k, inst in ipairs(base) do
+			for _, channel in ipairs(channels) do
+				local class, prop, attr = channel[1], channel[2], channel[3]
+				if inst:IsA(class) and not (class == "GuiObject" and inst.BackgroundTransparency >= 1) then
+					local role = inst:GetAttribute(attr)
+					local varies, wrong = false, false
+					for index, list in ipairs(builds) do
+						local value = list[k][prop]
+						varies = varies or not same(value, inst[prop])
+						local palette = Config.TeamColors[index]
+						if list[k]:GetAttribute(attr) ~= role or (role ~= nil and not same(value, palette[role])) then
+							wrong = true
+						end
+					end
+					if wrong or (varies and role == nil) then
+						table.insert(
+							problems,
+							("%s.%s %s"):format(inst:GetFullName(), prop, role and "has the wrong " .. attr or "has no " .. attr)
+						)
+					end
+				end
+			end
+			if inst:IsA("TextLabel") and inst.Text ~= "" then
+				local worst, varies = math.huge, false
+				for _, list in ipairs(builds) do
+					local label = list[k]
+					local back = backgroundOf(label)
+					if back then
+						worst = math.min(worst, contrast(label.TextColor3, back))
+						varies = varies or not same(label.TextColor3, inst.TextColor3) or not same(back, backgroundOf(inst))
+					end
+				end
+				if varies and worst < 3 then
+					table.insert(
+						problems,
+						("%s ('%s') is hard to read in some team palette (contrast %.2f)"):format(inst:GetFullName(), inst.Text, worst)
+					)
+				end
+			end
+		end
+		for index, problem in ipairs(problems) do
+			if index <= 12 then
+				addWarning("team colours: " .. problem)
+			end
+		end
+		if #problems > 12 then
+			addWarning(("team colours: ... and %d more"):format(#problems - 12))
+		end
+	end
+end
+
+---------------------------------------------------------------------------------------------
 -- Report
 ---------------------------------------------------------------------------------------------
 fs.writeDir(outDir)

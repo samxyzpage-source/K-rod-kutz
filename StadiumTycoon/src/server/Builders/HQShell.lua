@@ -4,7 +4,9 @@
 	plot with the CAMPUS area's ctx, so everything here is in campus coordinates (Config.Layout.HQ,
 	HQCorridor, HQAtrium, Zones...). It is never built in steps (no BuildUtil.Stage) and
 	ctx.teamName is still empty, so printed text is generic; the team name and the owner appear
-	through live text (BuildUtil.LiveText) on the prow sign and the entrance monument.
+	through live text (BuildUtil.LiveText) on the prow sign and the entrance monument. It is built in
+	the plot's default palette; everything in a team colour is tagged with its palette role
+	(TeamRole / TeamTextRole / TeamBackRole, see tagTeamColors) so a team change repaints it in place.
 
 	Footprint Config.Layout.HQ = X[-250, 100] Z[200, 360]; the architecture sticks out a little
 	(X[-262, 118] Z[188, 366]):
@@ -195,17 +197,59 @@ local function contrastRatio(a, b)
 	return (la + 0.05) / (lb + 0.05)
 end
 
--- First candidate that reads well on `background`, else whichever of white / ink reads best.
-local function textColorOn(background, candidates)
-	for _, candidate in ipairs(candidates) do
-		if contrastRatio(background, candidate) >= 3 then
-			return candidate
+--[[
+	Text colour on `background` (a team colour role such as "Primary", or a fixed Color3): the first
+	candidate role ({ "Trim", "Secondary" }...) that reads well on it in EVERY team palette, else
+	whichever of white / ink reads best in all of them. A team change repaints the shell by role
+	(PlotManager.ApplyTeam, see tagTeamColors), so the choice must not depend on the palette.
+]]
+local function teamInk(ctx, background, candidates)
+	local palettes = ctx.config.TeamColors
+	local function worst(color)
+		local ratio = math.huge
+		for _, palette in ipairs(palettes) do
+			local back = type(background) == "string" and palette[background] or background
+			ratio = math.min(ratio, contrastRatio(back, type(color) == "string" and palette[color] or color))
+		end
+		return ratio
+	end
+	for _, role in ipairs(candidates) do
+		if worst(role) >= 3 then
+			return ctx.colors[role]
 		end
 	end
-	if contrastRatio(background, WHITE) >= contrastRatio(background, INK) then
-		return WHITE
+	return worst(WHITE) >= worst(INK) and WHITE or INK
+end
+
+--[[
+	Tags everything under `root` painted in a team colour with its palette role (the contract with
+	PlotManager.ApplyTeam / Release, which repaint the plot's Base in place): BaseParts get TeamRole,
+	text TeamTextRole and visible GUI panels TeamBackRole = "Primary" / "Secondary" / "Trim". No fixed
+	colour of the shell equals a palette colour (tools/render_plot.luau checks every palette).
+]]
+local TEAM_ROLES = { "Primary", "Secondary", "Trim" }
+local function tagTeamColors(root, team)
+	local function roleOf(color)
+		for _, role in ipairs(TEAM_ROLES) do
+			local c = team[role]
+			if math.abs(c.R - color.R) < 0.002 and math.abs(c.G - color.G) < 0.002 and math.abs(c.B - color.B) < 0.002 then
+				return role
+			end
+		end
+		return nil
 	end
-	return INK
+	for _, inst in ipairs(root:GetDescendants()) do
+		if inst:IsA("BasePart") then
+			inst:SetAttribute("TeamRole", roleOf(inst.Color))
+		elseif inst:IsA("GuiObject") then
+			if inst.BackgroundTransparency < 1 then
+				inst:SetAttribute("TeamBackRole", roleOf(inst.BackgroundColor3))
+			end
+			if inst:IsA("TextLabel") then
+				inst:SetAttribute("TeamTextRole", roleOf(inst.TextColor3))
+			end
+		end
+	end
 end
 
 -- Axis-aligned block between two corners (campus coordinates).
@@ -724,7 +768,7 @@ local function buildFloors(ctx, S, team)
 		CastShadow = false,
 	})
 	panelText(mat, { Enum.NormalId.Top }, {
-		{ Text = "TEAM HQ", Color = textColorOn(team.Primary, { team.Trim, team.Secondary }) },
+		{ Text = "TEAM HQ", Color = teamInk(ctx, "Primary", { "Trim", "Secondary" }) },
 	}, { PixelsPerStud = 16, InsetX = 0.1, InsetY = 0.18 })
 
 	-- wayfinding at the lobby / corridor junction: a team medallion and two arrows (in the front
@@ -734,7 +778,7 @@ local function buildFloors(ctx, S, team)
 	post(floor, "CorridorMedallionRing", junctionX, midZ, 0.23, 0.245, 10, team.Trim, Enum.Material.SmoothPlastic, PAINT)
 	post(floor, "CorridorMedallion", junctionX, midZ, 0.23, 0.25, 8.8, team.Primary, Enum.Material.SmoothPlastic, PAINT)
 	local laneZ = cor.MinZ + 3.8
-	local arrowText = textColorOn(team.Primary, { team.Trim, team.Secondary })
+	local arrowText = teamInk(ctx, "Primary", { "Trim", "Secondary" })
 	floorArrow(floor, "WayfindingArrowWest", junctionX - 6, junctionX - 31, laneZ, 0.23, team.Primary, {
 		"STAIRS + ELEVATOR",
 		"TO THE UPPER FLOOR",
@@ -930,7 +974,7 @@ local function buildFacades(ctx, S, team)
 		team.Primary,
 		Enum.Material.SmoothPlastic
 	)
-	local bandText = textColorOn(team.Primary, { team.Trim, team.Secondary })
+	local bandText = teamInk(ctx, "Primary", { "Trim", "Secondary" })
 	panelText(backBand, { Enum.NormalId.Back }, { { Text = "TEAM HEADQUARTERS", Color = bandText } }, {
 		PixelsPerStud = 8,
 		InsetX = 0.35,
@@ -1032,7 +1076,7 @@ local function buildAtrium(ctx, S, team)
 
 	-- the big lit team sign on the prow (live team name over HEADQUARTERS)
 	local facadeSign = span(atr, "HQFacadeSign", cx - 15, 31, 188.2, cx + 15, 37.4, 188.7, SIGN_DARK, Enum.Material.SmoothPlastic)
-	local signColor = textColorOn(SIGN_DARK, { team.Trim, team.Secondary, WHITE })
+	local signColor = teamInk(ctx, SIGN_DARK, { "Trim", "Secondary" })
 	S.refs.FacadeSignLabel = liveSign(facadeSign, Enum.NormalId.Front, "team", "TEAM", "HEADQUARTERS", {
 		LabelName = "FacadeTeamName",
 		TextColor3 = signColor,
@@ -1061,7 +1105,7 @@ local function buildAtrium(ctx, S, team)
 	local entranceSign =
 		span(atr, "EntranceSign", wx0 - 2, 10.3, 188, wx1 + 2, CANOPY_TOP + 0.2, 188.5, team.Primary, Enum.Material.SmoothPlastic)
 	panelText(entranceSign, { Enum.NormalId.Front }, {
-		{ Text = "MAIN ENTRANCE", Color = textColorOn(team.Primary, { team.Trim, team.Secondary }) },
+		{ Text = "MAIN ENTRANCE", Color = teamInk(ctx, "Primary", { "Trim", "Secondary" }) },
 	}, { PixelsPerStud = 20, InsetX = 0.12, InsetY = 0.16, LightInfluence = 0.5 })
 
 	-- ground floor of the atrium front: granite sills, glass storefront, a team-colour portal
@@ -1180,7 +1224,7 @@ local function buildAtrium(ctx, S, team)
 		Enum.Material.Fabric,
 		DECOR
 	)
-	local bannerText = textColorOn(bannerColor, { team.Primary, team.Secondary })
+	local bannerText = teamInk(ctx, "Trim", { "Primary", "Secondary" })
 	local bannerLabels = panelText(banner, { Enum.NormalId.Front }, {
 		{ Text = "WELCOME", Weight = 1.6, Color = bannerText },
 		{ Text = "TO YOUR TEAM HEADQUARTERS", Weight = 0.8, Color = bannerText },
@@ -1357,7 +1401,7 @@ local function buildInterior(ctx, S, team)
 	-- room-name signs over both corridors, facing them (front row -> +Z, back row -> -Z). Ground:
 	-- hung from the slab soffit; upstairs: hung from the wing roofs, or on rods from the atrium's
 	-- higher roof where the corridor passes behind the atrium
-	local signText = textColorOn(team.Primary, { team.Trim, team.Secondary })
+	local signText = teamInk(ctx, "Primary", { "Trim", "Secondary" })
 	local atrium = L.HQAtrium
 	local signRows = {
 		{ rooms = FRONT_ROOMS, z = cor.MinZ + 0.6, size = GROUND_SIGN_SIZE, y = sb - GROUND_SIGN_SIZE.Y / 2 },
@@ -1441,7 +1485,7 @@ local function buildInterior(ctx, S, team)
 				.. "The glass elevator at the east end goes up to the Sky Terrace on the roof!",
 		},
 	}
-	local accent = textColorOn(SIGN_DARK, { team.Trim, team.Secondary, WHITE })
+	local accent = teamInk(ctx, SIGN_DARK, { "Trim", "Secondary" })
 	for _, level in ipairs(floors) do
 		for index, board in ipairs({
 			-- west end: read facing -X, the back row is on the reader's left
@@ -1553,7 +1597,7 @@ local function buildWestCore(ctx, S, team)
 	local K = CORE
 	local ix0 = K.MinX + 1 -- inside face of the west wall
 	local top = K.Top
-	local accent = textColorOn(SIGN_DARK, { team.Trim, team.Secondary, WHITE })
+	local accent = teamInk(ctx, SIGN_DARK, { "Trim", "Secondary" })
 
 	-- floor, stone end walls, a glass west face (the stairs show from outside), roof
 	-- (0.05 inside the tower walls' outer faces)
@@ -1689,8 +1733,8 @@ local function buildWestCore(ctx, S, team)
 		DECOR
 	)
 	panelText(stairSign, { Enum.NormalId.Front }, {
-		{ Text = "STAIRS", Color = textColorOn(team.Primary, { team.Trim, team.Secondary }) },
-		{ Text = "UPPER FLOOR", Weight = 0.7, Color = textColorOn(team.Primary, { team.Trim, team.Secondary }) },
+		{ Text = "STAIRS", Color = teamInk(ctx, "Primary", { "Trim", "Secondary" }) },
+		{ Text = "UPPER FLOOR", Weight = 0.7, Color = teamInk(ctx, "Primary", { "Trim", "Secondary" }) },
 	}, { InsetX = 0.08, InsetY = 0.1, LightInfluence = 0.4 })
 
 	-- the elevator (doors on the lobby side of the shaft wall, both floors)
@@ -1760,8 +1804,8 @@ local function buildEastTower(ctx, S, team)
 	local doorZ = (cor.MinZ + cor.MaxZ) / 2
 	local T, sh = TOWER, TOWER_SHAFT
 	local top = T.Top
-	local accent = textColorOn(team.Primary, { team.Trim, team.Secondary })
-	local dark = textColorOn(SIGN_DARK, { team.Trim, team.Secondary, WHITE })
+	local accent = teamInk(ctx, "Primary", { "Trim", "Secondary" })
+	local dark = teamInk(ctx, SIGN_DARK, { "Trim", "Secondary" })
 	local glassProps = { Transparency = 0.55, Reflectance = 0.15, CastShadow = false }
 	local function glass(name, x0, y0, z0, x1, y1, z1)
 		return span(tower, name, x0, y0, z0, x1, y1, z1, C.Glass, Enum.Material.Glass, glassProps)
@@ -2163,7 +2207,7 @@ local function buildGrounds(ctx, S, team)
 	ownerLabel.Size = UDim2.new(0.8, 0, 0.7, 0)
 	ownerLabel.Position = UDim2.new(0.1, 0, 0.15, 0)
 	local monument = span(grounds, "Monument", mx - 6.5, 1.1, mz - 0.7, mx + 6.5, 5.6, mz + 0.7, SIGN_DARK, Enum.Material.SmoothPlastic)
-	local monumentText = textColorOn(SIGN_DARK, { team.Trim, team.Secondary, WHITE })
+	local monumentText = teamInk(ctx, SIGN_DARK, { "Trim", "Secondary" })
 	S.refs.MonumentLabel = liveSign(monument, Enum.NormalId.Front, "team", "TEAM", "HEADQUARTERS", {
 		LabelName = "MonumentTeamName",
 		TextColor3 = monumentText,
@@ -2222,7 +2266,7 @@ function HQShell.Build(ctx)
 	end
 	table.insert(S.wings[2].blades, hq.MaxX - 0.45)
 
-	local shell = BuildUtil.Child(ctx, "HQShell")
+	local shell, shellModel = BuildUtil.Child(ctx, "HQShell")
 	buildFloors(shell, S, team)
 	buildFacades(shell, S, team)
 	buildAtrium(shell, S, team)
@@ -2232,6 +2276,7 @@ function HQShell.Build(ctx)
 	buildEastTower(shell, S, team)
 	buildTerrace(shell, S, team)
 	buildGrounds(shell, S, team)
+	tagTeamColors(shellModel, team)
 	return S.refs
 end
 
