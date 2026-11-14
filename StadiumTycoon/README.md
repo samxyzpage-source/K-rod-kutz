@@ -58,6 +58,7 @@ and championships.
 | 4 | Much bigger plots. You start inside an empty **Team HQ** with 12 rooms to build. Every piece is built in 2-6 steps (177 steps). New: drivable **golf carts**, a **Hall of Fame & Museum**, a **tailgate fan zone**, cafeteria, player lounge, interview room, coaches' offices, equipment room and meeting room. Team features: **team picker, Owner's Bonus, quests, draft + roster, training, hired staff, field goal challenge, seasons + playoffs + titles**, and a leaderboard |
 | 4.1 | Walk-in, interactive rooms: doors, elevators, seats with TV camera views, "Press E to look" descriptions (lockers show your players' names), lift weights, arcade, ping-pong, press conferences, snacks and drinks to carry, live screens with your score, record and season |
 | 5 | A **real NFL-style stadium**: three decks for 72,000 (lower bowl, club level, upper deck), main + upper concourses with a food court, restrooms and a pro shop, tunnels into the seats, 4 gates with escalators, ramps and elevators, a club lounge, suites, press box and TV booth on the club level, locker rooms built in under the stands, two video boards and a roof. The **Team HQ is one two-storey building** with a grand atrium and 8 new upstairs rooms, joined to the campus by walkways and skybridges. Golf carts roll over kerbs and paths. 2 huge plots per server. 68 pieces, 252 steps |
+| 5.1 | A **hoverboard** for every owner (hotbar; 3x speed; hold jump to charge a jump up to 10x higher). **Softer room lighting** (dimmer, whiter lamps; soft-glowing light panels). A collect pad on the field, buy buttons that use the vault, a smarter guide beam that leads through the HQ's doors and stairs, the HQ and plot base repaint with your team colours, field-level lights at night, exit doors from the area under the stands, golf-cart and field-goal fixes, and a smoother rejoin for big franchises |
 
 ## Play it in Roblox Studio
 
@@ -94,6 +95,12 @@ and press **Start**. Each player can claim a different franchise (2 plots per se
 normal Owner's Bonus. You can also set `Config.IncomeMultiplier = 50` in
 `ReplicatedStorage > TycoonShared > Config`, and `Config.GameDay.IntervalSeconds = 30` to see a
 game day sooner. Put those two back before publishing.
+
+**Rooms too bright or too dark?** Every built step goes through one lighting pass
+(`BuildUtil.TuneLighting`): lamps in rooms and indoor halls are dimmed and made whiter, and white
+Neon light panels glow softly. Change the numbers in `Config.Lighting` (for example
+`Room.Brightness`) to make rooms brighter or darker. Outdoor lights and the stadium's flood lights
+aren't changed by it.
 
 ### Before you publish: set the server size
 
