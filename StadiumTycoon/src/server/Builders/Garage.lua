@@ -487,7 +487,7 @@ local function shell(ctx, pads, team, name)
 	BuildUtil.Look(
 		poster,
 		"Cart Rules",
-		"Stay on the roads, honk at your friends and never race the team bus. Leave a cart anywhere and it drives itself back to its bay!",
+		"Stay on the roads, honk at your friends and never race the team bus. Leave a cart out for a while and the crew brings it back to its bay!",
 		{ At = Vector3.new(-1.2, -1, 0), Distance = 8 }
 	)
 
@@ -703,7 +703,7 @@ local function bayDetails(ctx, index, pad, pads, team)
 	BuildUtil.Look(
 		board,
 		"Golf Cart #" .. index,
-		"Sit in the driver's seat and drive with WASD (or the thumbstick on a phone). Leave the cart anywhere - it drives itself back to bay "
+		"Sit in the driver's seat and drive with WASD (or the thumbstick on a phone). Leave it out for a while and the crew brings it back to bay "
 			.. index
 			.. "!",
 		{ At = Vector3.new(-0.6, -1.2, 0), Distance = 9 }
