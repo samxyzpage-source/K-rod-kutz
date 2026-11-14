@@ -15,7 +15,9 @@
 	                                 and titles panels, play clock, down & distance, LED power racks
 	  lights      four lattice flood-light towers (platform at y 140, banks up to ~165) at
 	              Layout.LightTowerPositions, ONE per step, every bank aimed at the field centre; a lift
-	              rides up to each tower's top platform (TOWER CAM seat)
+	              rides up to each tower's top platform (TOWER CAM seat). Lights reach 60 studs at most,
+	              so each tower also adds invisible field-level fixtures (FieldLight) that light its
+	              quarter of the turf
 	  jumbotron   the WEST end-zone video board (its screen faces +X)
 	                1 Support Tower  two concrete towers (x -320..-308) flanking the board like goalposts,
 	                                 joined by a bridge (the Gate B plaza stays open between them), the
@@ -614,6 +616,56 @@ local function floodBank(ctx, cframe, columns, rows, panelSize, lit)
 	return plateWidth, plateHeight, columns * rows
 end
 
+--[[
+	Field-level fixtures for one tower's quarter of the field (sx, sz = the tower's side in X / Z).
+	Roblox lights reach 60 studs at most, so the banks high up on the towers can't light the turf
+	themselves: these invisible fixtures throw their light onto it. Two stand on the field wall of
+	the tower's sideline and one on its end line (just above the wall's cap, facing the turf, tilted
+	15 degrees down), and one hangs over the middle of the field (the walls are more than 60 studs
+	from it). They all face away from the stands, so no light leaks into the rooms under the bowl.
+	They are SpotLights named "FloodLight" (Enabled = false): the night logic switches them.
+]]
+local FIELD_LIGHT_TILT = math.rad(15)
+
+local function fieldLights(ctx, L, sx, sz)
+	local inset = 0.6 -- in front of the field wall's padded face (offset -0.35)
+	local sideZ = sz > 0 and L.SurfaceMaxZ - inset or L.SurfaceMinZ + inset
+	local endX = sx * (L.SurfaceHalfX - inset)
+	local tilt = math.sin(FIELD_LIGHT_TILT)
+	local level = math.cos(FIELD_LIGHT_TILT)
+	local fixtures = {
+		{ Vector3.new(sx * 30, 5, sideZ), Vector3.new(0, -tilt, -sz * level) },
+		{ Vector3.new(sx * 90, 5, sideZ), Vector3.new(0, -tilt, -sz * level) },
+		{ Vector3.new(endX, 5, L.FieldCenterZ + sz * 32), Vector3.new(-sx * level, -tilt, 0) },
+		-- over the middle band: the home-side tower takes the inner half, the visitor-side one the
+		-- outer half of its end of the field
+		{ Vector3.new(sx * (sz > 0 and 35 or 100), 30, L.FieldCenterZ), Vector3.new(0, -1, 0) },
+	}
+	for _, spec in ipairs(fixtures) do
+		local position, direction = spec[1], spec[2]
+		local up = math.abs(direction.Y) > 0.99 and Vector3.new(0, 0, 1) or Vector3.new(0, 1, 0)
+		local fixture = BuildUtil.Part(ctx, {
+			Name = "FieldLight",
+			Size = Vector3.new(1, 1, 1),
+			CFrame = CFrame.lookAt(position, position + direction, up),
+			Transparency = 1,
+			CanCollide = false,
+			CastShadow = false,
+		})
+		fixture.CanTouch = false
+		fixture.CanQuery = false
+		BuildUtil.Light(fixture, "SpotLight", {
+			Name = "FloodLight",
+			Enabled = false,
+			Face = Enum.NormalId.Front,
+			Range = 60,
+			Angle = 120,
+			Brightness = 2.5,
+			Color = WARM_WHITE,
+		})
+	end
+end
+
 local function lightTower(ctx, number, base, target)
 	local C = ctx.config.Colors
 	local team = ctx.colors
@@ -838,6 +890,9 @@ local function lightTower(ctx, number, base, target)
 		),
 		{ Distance = 8 }
 	)
+
+	-- its quarter of the field lights up at night
+	fieldLights(tower, ctx.config.Layout, sx, sz)
 end
 
 function M.lights(ctx)
@@ -1140,7 +1195,8 @@ function M.jumbotron(ctx)
 		switcher,
 		"Video Switcher",
 		"Push a button and the jumbotron cuts to another camera: replay, crowd cam or the dance cam!",
-		{ At = atPoint(ctx, switcher, Vector3.new((deskX0 + deskX1) / 2, 3.5, midZ + 2.4)), Distance = 7 }
+		-- (just above the buttons, so the prompt is in plain sight and hides behind the tower walls)
+		{ At = atPoint(ctx, switcher, Vector3.new((deskX0 + deskX1) / 2, 3.9, midZ + 2.4)), Distance = 7 }
 	)
 	local chairX = deskX0 - 2.2
 	BuildUtil.Seat(ctx, {
@@ -1391,7 +1447,8 @@ local function catwalkRun(ctx, L, piece, bay)
 	post(ctx, "CatwalkHanger", p.X, p.Z, y + 3.4, ROOF.deckBottom, 0.35, STEEL, Enum.Material.Metal, NO_COLLIDE)
 end
 
--- A light bar hanging under the inner fascia, tilted down toward the field (step 4).
+-- A light bar hanging under the inner fascia, tilted down toward the field (step 4). From up here
+-- its light (Range 60) reaches the upper deck; the light towers' field lights light the turf.
 local function lightBar(ctx, seg, x, length)
 	local cframe = at(seg, x, 111.6, ROOF.inner + 0.8) * TURN * CFrame.Angles(math.rad(-40), 0, 0)
 	local panel = BuildUtil.Part(ctx, {

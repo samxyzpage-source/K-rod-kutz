@@ -1442,6 +1442,204 @@ local function runTests()
 		check((arrived - expected).Magnitude < 0.01, "the elevator takes you to the other level")
 		alice.Character.HumanoidRootPart.CFrame = CFrame.new(0, 3, 0)
 
+		do
+			-- every text label on a surface has room to draw its text (a label with no width shows nothing)
+			local function faceSize(part, face)
+				local size = part.Size
+				if face == Enum.NormalId.Front or face == Enum.NormalId.Back then
+					return size.X, size.Y
+				elseif face == Enum.NormalId.Left or face == Enum.NormalId.Right then
+					return size.Z, size.Y
+				end
+				return size.X, size.Z
+			end
+			local function boxOf(gui, inst)
+				local parent = inst.Parent
+				local pw, ph
+				if parent == gui then
+					local fw, fh = faceSize(gui.Parent, gui.Face)
+					pw, ph = fw * gui.PixelsPerStud, fh * gui.PixelsPerStud
+				else
+					local _, _, w, h = boxOf(gui, parent)
+					pw, ph = w, h
+				end
+				local size, position = inst.Size, inst.Position
+				return position.X.Scale * pw + position.X.Offset,
+					position.Y.Scale * ph + position.Y.Offset,
+					size.X.Scale * pw + size.X.Offset,
+					size.Y.Scale * ph + size.Y.Offset,
+					pw
+			end
+			local labels, empty, words = 0, {}, {}
+			for _, gui in ipairs(plotModel(1).Items:GetDescendants()) do
+				if gui:IsA("SurfaceGui") and gui.Parent:IsA("BasePart") then
+					for _, label in ipairs(gui:GetDescendants()) do
+						if label:IsA("TextLabel") then
+							labels += 1
+							local x, _, w, h, canvasWidth = boxOf(gui, label)
+							if w <= 0 or h <= 0 then
+								table.insert(empty, gui.Parent.Name .. "/" .. label.Text)
+							end
+							if gui.Parent.Name == "Tier6" then
+								words[label.Text] = { x = x, w = w, canvas = canvasWidth }
+							end
+						end
+					end
+				end
+			end
+			check(labels > 1000 and #empty == 0, ("%d surface labels, none without room: %s"):format(labels, table.concat(empty, ", ")))
+			local game_, film = words.GAME, words.FILM
+			check(
+				game_ ~= nil
+					and film ~= nil
+					and game_.w > 100
+					and game_.x >= 0
+					and game_.x + game_.w < film.x
+					and film.x + film.w <= film.canvas,
+				"the film room riser reads GAME | stairs | FILM"
+			)
+		end
+
+		do
+			-- the night flood lights reach the turf (Roblox lights reach 60 studs at most, so the
+			-- light towers add field-level fixtures)
+			local L = Config.Layout
+			local floods, fieldLights, quadrants, hidden = {}, 0, {}, true
+			for _, light in ipairs(plotModel(1).Items:GetDescendants()) do
+				if light:IsA("SpotLight") and light.Name == "FloodLight" then
+					local host = light.Parent
+					local cf = alicePlot.Origin:ToObjectSpace(host.CFrame)
+					table.insert(floods, { light = light, position = cf.Position, axis = cf.LookVector })
+					if host.Name == "FieldLight" then
+						fieldLights += 1
+						local p = cf.Position
+						quadrants[(p.X > 0 and "E" or "W") .. (p.Z > L.FieldCenterZ and "H" or "V")] = true
+						hidden = hidden and host.Transparency == 1 and not host.CanCollide and not host.CanQuery and not light.Enabled
+					end
+				end
+			end
+			local reached, cells = 0, 0
+			for x = -130, 130, 10 do
+				for z = L.SurfaceMinZ + 3, L.SurfaceMaxZ - 3, 10 do
+					cells += 1
+					local spot = Vector3.new(x, 0.2, z)
+					for _, flood in ipairs(floods) do
+						local offset = spot - flood.position
+						local distance = offset.Magnitude
+						if distance <= flood.light.Range and offset.Unit:Dot(flood.axis) >= math.cos(math.rad(flood.light.Angle / 2)) then
+							reached += 1
+							break
+						end
+					end
+				end
+			end
+			check(
+				fieldLights >= 12 and quadrants.EH and quadrants.EV and quadrants.WH and quadrants.WV and hidden,
+				("%d invisible field-level flood lights, in every quarter of the field, off by day"):format(fieldLights)
+			)
+			check(reached >= cells * 0.85, ("night flood lights reach %d of %d spots on the turf"):format(reached, cells))
+		end
+
+		do
+			-- prompts hide behind walls and floors (line of sight), except where that would lose them
+			local los = Instance.new("Model")
+			los.Name = "LineOfSightFixtures"
+			los.Parent = fixtures
+			local losCtx = BuildUtil.NewContext(alicePlot.Origin, los, alicePlot.Palette, alicePlot.TeamName, Config)
+			local plaque = BuildUtil.Box(losCtx, "Plaque", Vector3.new(4, 3, 0.3), Vector3.new(-180, 5, 260))
+			local glass = BuildUtil.Box(losCtx, "Glass", Vector3.new(4, 4, 4), Vector3.new(-190, 2, 260), nil, nil, { Transparency = 0.6 })
+			local wheel = BuildUtil.Box(losCtx, "Wheel", Vector3.new(2, 5, 5), Vector3.new(-200, 2.5, 260))
+			BuildUtil.Box(losCtx, "WheelStripe", Vector3.new(2.2, 1, 5.2), Vector3.new(-200, 2.5, 260)) -- round its middle
+			local plaqueLook = BuildUtil.Look(plaque, "Plaque", "A plaque.")
+			local glassLook = BuildUtil.Look(glass, "Case", "A glass case.")
+			local wheelLook = BuildUtil.Look(wheel, "Wheel", "A tackle wheel.")
+			local wheelTop = BuildUtil.Look(wheel, "Wheel Top", "Its top.", { At = Vector3.new(0, 2.4, 0) })
+			local plaqueUse = BuildUtil.Use(losCtx, plaque, "soda")
+			local forced = BuildUtil.Look(plaque, "Plaque", "A plaque.", { LineOfSight = false })
+			check(
+				plaqueLook.RequiresLineOfSight and plaqueUse.RequiresLineOfSight and not glassLook.RequiresLineOfSight,
+				"look / use prompts on solid parts need line of sight (not on see-through glass)"
+			)
+			check(
+				not doorPrompt.RequiresLineOfSight
+					and not camSeat:FindFirstChild("Interact").RequiresLineOfSight
+					and not elevatorPrompt.RequiresLineOfSight
+					and not forced.RequiresLineOfSight,
+				"doors, seats and elevators keep showing without line of sight (and builders can opt out)"
+			)
+			Interactions.Decorate(los)
+			check(
+				not wheelLook.RequiresLineOfSight and wheelTop.RequiresLineOfSight and plaqueLook.RequiresLineOfSight,
+				"a prompt buried inside another part of its piece drops line of sight (it could never show)"
+			)
+
+			-- a seat's Sit prompt hides while someone sits in it
+			local taken = BuildUtil.Seat(losCtx, { CFrame = CFrame.new(-180, 0.7, 270) })
+			local free = BuildUtil.Seat(losCtx, { CFrame = CFrame.new(-184, 0.7, 270) })
+			Interactions.Decorate(los)
+			local takenPrompt, freePrompt = taken:FindFirstChild("Interact"), free:FindFirstChild("Interact")
+			check(takenPrompt.Enabled and freePrompt.Enabled, "seat prompts start enabled")
+			local seated = pcall(function()
+				taken.Occupant = alice.Character:FindFirstChildOfClass("Humanoid")
+			end)
+			instanceSignal(taken, "PropOccupant"):Fire()
+			freePrompt.Enabled = false -- (as if someone had just stood up)
+			instanceSignal(free, "PropOccupant"):Fire()
+			task.wait(0.03)
+			check(seated and not takenPrompt.Enabled, "an occupied seat hides its Sit prompt")
+			check(freePrompt.Enabled, "the Sit prompt comes back when the seat is free")
+
+			-- the finished franchise
+			local kinds, buriedLeft, midfieldLos = {}, 0, nil
+			for _, model in ipairs(plotModel(1).Items:GetChildren()) do
+				local parts = {}
+				for _, part in ipairs(model:GetDescendants()) do
+					if part:IsA("BasePart") then
+						table.insert(parts, part)
+					end
+				end
+				for _, prompt in ipairs(model:GetDescendants()) do
+					if prompt:IsA("ProximityPrompt") then
+						local key = tostring(prompt:GetAttribute("Kind")) .. (prompt.RequiresLineOfSight and "+los" or "")
+						kinds[key] = (kinds[key] or 0) + 1
+						local host = prompt.Parent:IsA("Attachment") and prompt.Parent.Parent or prompt.Parent
+						if host.Name == "LogoDisk" then
+							midfieldLos = prompt.RequiresLineOfSight
+						end
+						if prompt.RequiresLineOfSight then
+							local point = prompt.Parent:IsA("Attachment") and host.CFrame:PointToWorldSpace(prompt.Parent.Position)
+								or host.CFrame.Position
+							for _, part in ipairs(parts) do
+								local offset = part.CFrame:PointToObjectSpace(point)
+								if
+									part ~= host
+									and part.CanQuery
+									and math.abs(offset.X) < part.Size.X / 2
+									and math.abs(offset.Y) < part.Size.Y / 2
+									and math.abs(offset.Z) < part.Size.Z / 2
+								then
+									buriedLeft += 1
+									break
+								end
+							end
+						end
+					end
+				end
+			end
+			check(
+				(kinds["look+los"] or 0) > 400
+					and (kinds["use+los"] or 0) > 80
+					and kinds["door+los"] == nil
+					and kinds["seat+los"] == nil
+					and kinds["elevator+los"] == nil,
+				("line of sight on %d look and %d use prompts, never on doors, seats or elevators"):format(
+					kinds["look+los"] or 0,
+					kinds["use+los"] or 0
+				)
+			)
+			check(buriedLeft == 0 and midfieldLos == false, ("no line-of-sight prompt is buried in a part (%d)"):format(buriedLeft))
+		end
+
 		section("Items, mini-games, live screens")
 		local counter = BuildUtil.Box(fixCtx, "Counter", Vector3.new(4, 3, 2), Vector3.new(-150, 1.5, 220))
 		local hotdogPrompt = BuildUtil.Use(fixCtx, counter, "hotdog")
@@ -2565,6 +2763,31 @@ local function runTests()
 			check(not fadeFrame.Visible, "and fade back in")
 			clientFix:Destroy()
 		end
+	end
+	do
+		-- the TV view hides every prompt (the seat's own Sit bubble would float in the middle of the shot)
+		local tvFix = Instance.new("Model")
+		tvFix.Name = "TVPromptFixtures"
+		tvFix.Parent = plotModel(2)
+		local tctx = BuildUtil.NewContext(CFrame.new(), tvFix, Config.TeamColors[1], "TEST", Config)
+		local cam = BuildUtil.Seat(tctx, {
+			CFrame = CFrame.new(10, 0.5, 4),
+			Camera = { From = Vector3.new(0, 30, -40), To = Vector3.new(0, 0, 30), Fov = 40, Label = "MIRROR CAM" },
+		})
+		local humanoid = viewer.Character:FindFirstChildOfClass("Humanoid")
+		local sat = pcall(function()
+			humanoid.SeatPart = cam
+		end)
+		instanceSignal(humanoid, "PropSeatPart"):Fire()
+		task.wait(0.03)
+		check(sat and ProximityPromptServiceMock.Enabled == false, "prompts are hidden in the TV camera view")
+		pcall(function()
+			humanoid.SeatPart = Instance.new("Part") -- standing up (see above)
+		end)
+		instanceSignal(humanoid, "PropSeatPart"):Fire()
+		task.wait(0.03)
+		check(ProximityPromptServiceMock.Enabled == true, "and come back when you stand up")
+		tvFix:Destroy()
 	end
 
 	section("Drive controller")

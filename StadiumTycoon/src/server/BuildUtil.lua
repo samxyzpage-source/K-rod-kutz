@@ -288,12 +288,20 @@ end
 -- describe WHAT can be done, here, with these helpers. Prompts belong to the step of their part.
 ---------------------------------------------------------------------------------------------
 
+-- Prompt hosts that a part of another piece covers (the 50-yard line runs across the midfield
+-- logo's centre): with line of sight they could never show. (Prompts buried in a part of their own
+-- piece are found by Interactions.Decorate.)
+local NO_LINE_OF_SIGHT_HOSTS = { LogoDisk = true }
+
 --[[
 	Adds an "Interact" prompt to `host` (a part, or an Attachment).
 	spec: Kind ("look" | "door" | "seat" | "elevator" | "use"), Action (button text, e.g. "Look"),
 	      Object (small text above it, e.g. "Draft Board"), Distance (default 10), Hold (seconds),
 	      At (Vector3 offset in the part's own space: the prompt shows there instead of the centre),
-	      Attributes (table copied onto the prompt)
+	      Attributes (table copied onto the prompt),
+	      LineOfSight (true = hidden behind walls and floors. Default: true for look / use prompts
+	      on a solid part; false for doors (the prompt sits inside the closed leaf), seats,
+	      elevators and see-through hosts)
 ]]
 function BuildUtil.Prompt(host, spec)
 	if spec.At and host:IsA("BasePart") then
@@ -303,13 +311,22 @@ function BuildUtil.Prompt(host, spec)
 		attachment.Parent = host
 		host = attachment
 	end
+	local lineOfSight = spec.LineOfSight
+	if lineOfSight == nil then
+		local part = host:IsA("Attachment") and host.Parent or host
+		lineOfSight = (spec.Kind == "look" or spec.Kind == "use")
+			and part ~= nil
+			and part:IsA("BasePart")
+			and part.Transparency < 0.5
+			and not NO_LINE_OF_SIGHT_HOSTS[part.Name]
+	end
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "Interact"
 	prompt.ActionText = spec.Action or ""
 	prompt.ObjectText = spec.Object or ""
 	prompt.HoldDuration = spec.Hold or 0
 	prompt.MaxActivationDistance = spec.Distance or 10
-	prompt.RequiresLineOfSight = false
+	prompt.RequiresLineOfSight = lineOfSight == true
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt:SetAttribute("Kind", spec.Kind)
 	for key, value in pairs(spec.Attributes or {}) do
@@ -322,7 +339,7 @@ end
 --[[
 	"Press E to look": shows a card with `title` and `info` (one or two short sentences).
 	opts: LookKey (adds live info from the owner's team, see Interact.LookKeys, e.g. "roster:QB",
-	      "locker:3", "record"), Action (default "Look"), Distance, At
+	      "locker:3", "record"), Action (default "Look"), Distance, At, LineOfSight (see Prompt)
 ]]
 function BuildUtil.Look(part, title, info, opts)
 	opts = opts or {}
@@ -332,6 +349,7 @@ function BuildUtil.Look(part, title, info, opts)
 		Object = title,
 		Distance = opts.Distance,
 		At = opts.At,
+		LineOfSight = opts.LineOfSight,
 		Attributes = { Title = title, Info = info or "", LookKey = opts.LookKey },
 	})
 end
@@ -340,6 +358,7 @@ end
 	A "use" action (Interact.Uses): use = "lift" | "arcade" | "pingpong" | "podium" (mini-games)
 	or "tray" | "smoothie" | "hotdog" | "popcorn" | "soda" | "sportsdrink" | "foamfinger" (items).
 	opts: Action (button text; default from Interact.Uses), Object, Title, Info, Distance, At,
+	      LineOfSight (see Prompt),
 	      Camera = { From = Vector3, To = Vector3, Fov = number } (local; podium / arcade view)
 ]]
 function BuildUtil.Use(ctx, part, use, opts)
@@ -355,6 +374,7 @@ function BuildUtil.Use(ctx, part, use, opts)
 		Object = opts.Object or "",
 		Distance = opts.Distance,
 		At = opts.At,
+		LineOfSight = opts.LineOfSight,
 		Attributes = attributes,
 	})
 end
@@ -462,6 +482,7 @@ function BuildUtil.Door(ctx, props)
 		Action = "Open",
 		Object = props.Object or "Door",
 		Distance = props.Distance or 10,
+		LineOfSight = false, -- (the marker sits inside the closed leaf)
 		Attributes = { Title = props.Title, Info = props.Info, LookKey = props.LookKey },
 	})
 	return model
@@ -488,11 +509,14 @@ function BuildUtil.Seat(ctx, props)
 		seat:SetAttribute("CameraLabel", props.Camera.Label or "LIVE")
 	end
 	if not props.NoPrompt then
+		-- (no line of sight: chair backs and arms would hide it; Interactions hides it while the
+		-- seat is taken)
 		BuildUtil.Prompt(seat, {
 			Kind = "seat",
 			Action = "Sit",
 			Object = props.Object or (props.Camera and "TV Camera Seat" or "Seat"),
 			Distance = 8,
+			LineOfSight = false,
 		})
 	end
 	return seat
@@ -502,7 +526,8 @@ end
 	An elevator (or staircase) call button: rides the player to `target`.
 	target: local CFrame where the player arrives (standing on a floor there; they face its -Z)
 	opts: Action (default "Ride the elevator"), Object (default "Elevator"),
-	      Label (shown when you arrive, e.g. "PRESS LEVEL"), Distance, At
+	      Label (shown when you arrive, e.g. "PRESS LEVEL"), Distance, At,
+	      LineOfSight (default false: a lift button must never hide behind a rail or a column)
 ]]
 function BuildUtil.Elevator(ctx, part, target, opts)
 	opts = opts or {}
@@ -512,6 +537,7 @@ function BuildUtil.Elevator(ctx, part, target, opts)
 		Object = opts.Object or "Elevator",
 		Distance = opts.Distance,
 		At = opts.At,
+		LineOfSight = opts.LineOfSight,
 		Attributes = { Target = ctx.origin * target, Label = opts.Label or "" },
 	})
 end

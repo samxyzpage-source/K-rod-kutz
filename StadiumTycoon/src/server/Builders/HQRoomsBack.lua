@@ -729,7 +729,7 @@ function HQRoomsBack.hq_lockerroom(ctx)
 		water,
 		"Team Showers",
 		"Hot showers after a muddy practice. Team rule: the last one in has to sing the fight song!",
-		{ Distance = 8 }
+		{ Distance = 8, LineOfSight = true } -- (the stall is open at the front: no need to show through walls)
 	)
 	-- vanity on the east wall: a counter with two sinks under a long mirror
 	box(showers, "VanityCounter", IX1 - 3, FLOOR_TOP, 334, IX1, 3.4, 348, WHITE, Enum.Material.Marble)
@@ -811,6 +811,7 @@ function HQRoomsBack.hq_lockerroom(ctx)
 		{
 			LookKey = "record",
 			Distance = 8,
+			LineOfSight = true, -- (the prompt sits in the glass case above the ball: hidden from the corridor)
 		}
 	)
 end
@@ -1247,7 +1248,7 @@ function HQRoomsBack.hq_weightroom(ctx)
 		plates[3],
 		"Plate Stack",
 		"Spare bumper plates in team colours, heaviest at the bottom. Load up the bar!",
-		{ Distance = 7 }
+		{ Distance = 7, At = Vector3.new(0, 1.1, 0) } -- on the rim toward the room (the post runs through the middle)
 	)
 
 	-- Step 3: bench presses, dumbbell rack, kettlebells, plyo boxes ----------------------------
@@ -1848,11 +1849,13 @@ function HQRoomsBack.hq_filmroom(ctx)
 			PAINT
 		)
 		if k == #FILM_ROWS then
-			-- big GAME / FILM letters on the back riser, either side of the staircase
+			-- big GAME / FILM letters on the back riser, either side of the staircase (the canvas
+			-- runs from the east end, IX1, westward: GAME fills 2 studs from the east wall to 3 short
+			-- of the stairs, FILM the far side)
 			local gui = canvas(tier, Enum.NormalId.Front, 12, nil, 0.4)
 			local h = row.top - SHELL_FLOOR
 			local textColor = textColorOn(step, team)
-			guiText(gui, IX1 - (SX1 + 3), h * 0.15, (SX1 + 3) - (IX1 + 2) - 0.1, h * 0.7, "GAME", textColor, Enum.Font.GothamBlack)
+			guiText(gui, 2, h * 0.15, (IX1 - 2) - (SX1 + 3) - 0.1, h * 0.7, "GAME", textColor, Enum.Font.GothamBlack)
 			guiText(gui, IX1 - (IX0 + 15.5), h * 0.15, 13.5, h * 0.7, "FILM", textColor, Enum.Font.GothamBlack)
 		end
 	end
