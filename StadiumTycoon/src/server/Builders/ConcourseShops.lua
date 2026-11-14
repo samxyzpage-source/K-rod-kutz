@@ -15,46 +15,62 @@
 	pizza green, bars slate, BBQ wood, desserts pink; stands in the same bay share a wall), a
 	team-colour fascia with the stand's name (+ a 3D food icon, + on some a live screen), a counter
 	(Use) set back from the lane so a short queue alcove with a steel rail divider fits in front of
-	it, its own back wall (tiles, brick or a dark bar wall over the grey concourse wall), a steel back
+	it, a cash register right behind the order spot (its lit TAP TO PAY display faces the queue),
+	its own back wall (tiles, brick or a dark bar wall over the grey concourse wall), a steel back
 	counter with the cooking gear and a lit menu board on the back wall (Look).
 
 	  concourse_food       (4 stands per step: a sideline each, plus the ends or two corners)
-	    1 Hot Dog Stands     roller grills, giant hot dog icons (Use hotdog)
-	    2 Pizza & Nachos     brick pizza ovens, a pizza on the counter, pizza-slice icons (Use tray)
+	    1 Hot Dog Stands     roller grills, giant hot dog icons, ketchup + mustard on the counter
+	                         (Use hotdog); a condiment station (look) across the lane from every hot
+	                         dog stand, against the portal wall on Concourse.lua's "food" spots
+	    2 Pizza & Nachos     brick pizza ovens, a pizza and a tray of nachos on the counter, a stack
+	                         of pizza boxes, pizza-slice icons (Use tray)
 	    3 Drink Bars         soda fountains + drink fridges, a bar counter with 3 stools (cushion
-	                         on a post; the first is a "CONCOURSE BAR TV" camera seat), live
-	                         screens (Use soda / sportsdrink)
-	    4 Grill & BBQ        smokers with smoke stacks, glowing grills, flame icons (Use tray)
-	    5 Desserts & Snacks  popcorn machines, milkshake machines (Use popcorn / smoothie)
+	                         on a post; the first is a "CONCOURSE BAR TV" camera seat) and a stack
+	                         of team cups, live screens (Use soda / sportsdrink)
+	    4 Grill & BBQ        smokers with smoke stacks, glowing grills, a burger basket on the
+	                         counter, flame icons (Use tray)
+	    5 Desserts & Snacks  popcorn machines, milkshake machines (Use popcorn / smoothie) or soft
+	                         serve machines, waffle cones on the counter
 	    (one stand per step has a live GAME DAY screen in its fascia; three bars show the score)
 	  concourse_restrooms
 	    1 Restrooms          4 blocks (both sidelines + both ends): a women's and a men's room each,
-	                         tiled floor + back wall, doors swinging into the rooms (the sinks stay
-	                         out of their swing), stalls, urinals, sinks, mirrors (Look), ceiling
-	                         lights and a lit WOMEN | RESTROOMS | MEN sign band (Look)
+	                         tiled floor + back wall (with a team-colour tile stripe), doors swinging
+	                         into the rooms (the sinks and hand dryers stay out of their swing),
+	                         stalls, urinals with a divider, sinks (a tap over a painted bowl),
+	                         mirrors (Look), hand dryers, ceiling lights, a team-colour kick band
+	                         along the front wall and a lit WOMEN | RESTROOMS | MEN sign band (Look)
 	    2 Family Restrooms   2 single rooms on the sidelines (door at one end opening flat against
-	                         the side wall, toilet, sink, mirror, baby changing table (Look))
-	    3 Water Fountains    a fountain (Look) beside every restroom (in front of the next column, or
-	      & Signs            against the wall by the family rooms) + a hanging two-sided blade sign
-	                         on the nearest column line, over the lane's outer edge (offsets
+	                         the side wall, toilet, sink with a tap, mirror, paper towels, baby
+	                         changing table (Look)); accent tiles, or Primary when the accent is as
+	                         pale as the tiles
+	    3 Water Fountains    a fountain (Look) with a bottle filler above it (its little screen counts
+	      & Signs            the bottles saved) beside every restroom (in front of the next column,
+	                         or against the wall by the family rooms) + a hanging two-sided blade
+	                         sign on the nearest column line, over the lane's outer edge (offsets
 	                         72.7..76, y 39.6+: above the lane's head room, non-collidable) where
 	                         fans walking along the lane see it
 	  concourse_merch
 	    1 Pro Shop           a walk-in shop next to Gate A (white back wall, wood floor): glass
 	                         storefront + sliding glass doors,
 	                         jersey wall (star QB jersey, Look roster:QB), cap wall, hoodie rack,
-	                         foam finger bin (Use foamfinger), checkout counter (Look), window
-	                         mannequins, a live "starting lineup" screen, lit ceiling panels
-	    2 Jersey Kiosks      4 kiosks beside the gates: canopy, counter, jerseys (Look roster:WR /
-	                         RB / DEF / K)
-	    3 Foam Finger Carts  8 carts with umbrellas and a giant foam finger (Use foamfinger): one in a
-	                         bay of every straight + a team-colour "GAME DAY GEAR" cart right inside
-	                         every gate, across from its jersey kiosk
+	                         foam finger bin (Use foamfinger) under a shelf of footballs, checkout
+	                         counter (Look) with a card reader, a shopping bag and mini helmets on
+	                         the wall behind it, window mannequins in team caps, a signed game ball
+	                         in a glass case (Look), felt pennants on the side walls, a WELCOME mat
+	                         inside the doors, a live "starting lineup" screen, lit ceiling panels
+	    2 Jersey Kiosks      4 kiosks beside the gates: canopy, counter with a till and a football,
+	                         jerseys (Look roster:WR / RB / DEF / K)
+	    3 Foam Finger Carts  8 carts with umbrellas, a giant foam finger (Use foamfinger) and a stack
+	                         of rally towels: one in a bay of every straight + a team-colour "GAME
+	                         DAY GEAR" cart right inside every gate, across from its jersey kiosk
 
-	Flat layers: floor paint (tiles, pro shop floor) 30.00..30.04, only inside the shops/rooms.
-	Collidable parts stay at offsets >= 76.2 (the lane ends at 76); food icons that stick out a
-	little toward the lane and the restroom blade signs over its edge hang above head height
-	(y > 37.5) and don't collide.
+	Flat layers: floor paint (tiles, pro shop floor) 30.00..30.04, only inside the shops/rooms; the
+	pro shop's welcome mat 30.04..30.07 on its floor.
+	Collidable parts stay at offsets >= 76.2 (the lane ends at 76) - except the condiment stations,
+	which stand against the portal wall (offsets 57..58.6) on the far side of the lane; food icons
+	that stick out a little toward the lane and the restroom blade signs over its edge hang above
+	head height (y > 37.5) and don't collide.
 ]]
 
 local BuildUtil = require(script.Parent.Parent.BuildUtil)
@@ -64,6 +80,7 @@ local ConcourseShops = {}
 
 -- Segment frames: local +Z points toward the field (the lane), -Z outward, +X along the ring.
 local INWARD = Enum.NormalId.Back -- faces the lane
+local OUTWARD = Enum.NormalId.Front -- faces the lane from the portal side (condiment stations)
 local TOWARD_PLUS_X = Enum.NormalId.Right
 local TOWARD_MINUS_X = Enum.NormalId.Left
 
@@ -101,11 +118,19 @@ local CONE = Color3.fromRGB(214, 160, 92)
 local CUP_RED = Color3.fromRGB(214, 40, 44)
 local SKIN = Color3.fromRGB(226, 226, 222) -- mannequins
 local HEATHER = Color3.fromRGB(150, 154, 162) -- grey hoodies
+local KETCHUP = Color3.fromRGB(200, 30, 30)
+local MUSTARD = Color3.fromRGB(255, 205, 20)
+local CARDBOARD = Color3.fromRGB(196, 160, 112)
+local LEATHER = Color3.fromRGB(122, 64, 36) -- footballs
+local TILL_TEXT = Color3.fromRGB(120, 220, 160)
+local FILLER_TEXT = Color3.fromRGB(110, 210, 255)
+local BASIN = Color3.fromRGB(198, 206, 214) -- the bowl painted on a sink's top
 
 -- The main concourse band (Config.Layout.Bowl.MainConcourse: offsets 56..84, floor 30)
 local FRONT = 76.2 -- shop fronts: the walking lane (66..76) stays clear
 local BACK = 83 -- the inner face of the concourse outer wall (Concourse.lua: 83..84.1)
 local FASCIA_Y = 37.6 -- bottom of the stand name signs
+local PORTAL_WALL = 57 -- the concourse face of the portal wall across the lane (Concourse.lua)
 
 ---------------------------------------------------------------------------------------------
 -- Colour + text helpers (same rules as Concourse.lua so signs match)
@@ -140,6 +165,12 @@ local function ink(background, team)
 		return WHITE
 	end
 	return INK
+end
+
+-- Two colours that are hard to tell apart side by side (close in every channel, whatever the hue).
+local function similar(a, b)
+	local dr, dg, db = a.R - b.R, a.G - b.G, a.B - b.B
+	return dr * dr + dg * dg + db * db < 0.09
 end
 
 -- White or ink, whichever reads better on `background`.
@@ -290,6 +321,35 @@ end
 -- The point (x, y, o) of a segment in `part`'s own space (for prompt positions).
 local function localPoint(ctx, part, seg, x, y, o)
 	return part.CFrame:PointToObjectSpace((ctx.origin * at(seg, x, y, o)).Position)
+end
+
+-- A football lying along the segment (a ball stretched by a sphere mesh).
+local function football(ctx, seg, name, x, y, o, length, diameter, extra)
+	local part = ball(ctx, seg, name, x, y, o, diameter, LEATHER, nil, extra)
+	local mesh = Instance.new("SpecialMesh")
+	mesh.Name = "FootballShape"
+	mesh.MeshType = Enum.MeshType.Sphere
+	mesh.Scale = Vector3.new(length / diameter, 1, 1)
+	mesh.Parent = part
+	return part
+end
+
+-- A cash register on a counter (bottom at y = top, x0..x1 / o0..o1): its little lit display faces
+-- the customers (the lane).
+local function till(ctx, seg, x0, x1, o0, o1, top)
+	local part = span(ctx, seg, "CashRegister", x0, x1, o0, o1, top, top + 0.9, DARK_METAL)
+	local _, label = BuildUtil.SurfaceText(part, INWARD, "TAP TO PAY", {
+		LabelName = "TillDisplay",
+		TextColor3 = TILL_TEXT,
+		BackgroundColor3 = SCREEN,
+		BackgroundTransparency = 0,
+		Font = Enum.Font.Code,
+		PixelsPerStud = 32,
+		LightInfluence = 0,
+	})
+	label.Position = UDim2.new(0.1, 0, 0.12, 0)
+	label.Size = UDim2.new(0.8, 0, 0.42, 0)
+	return part
 end
 
 ---------------------------------------------------------------------------------------------
@@ -651,8 +711,10 @@ local function standGear(ctx, seg, spec, style, gx, other, team)
 	elseif style.gear == "oven" then
 		span(ctx, seg, "PizzaOven", gx - 2.1, gx + 2.1, 81.5, 83, top, top + 4, BRICK, Enum.Material.Brick)
 		span(ctx, seg, "OvenMouth", gx - 1.2, gx + 1.2, 81.4, 81.5, top + 0.6, top + 2, GLOW_ORANGE, Enum.Material.Neon, NO_COLLIDE)
-		-- a fresh pizza on the counter
+		-- a fresh pizza on the counter, a stack of boxes ready to go behind it
 		cyl(ctx, seg, "CounterPizza", other, 33.8, 79.6, 0.2, 2.6, "y", CHEESE)
+		local boxes = span(ctx, seg, "PizzaBoxes", other - 1.3, other + 1.3, 81.75, 82.9, top, top + 1.2, CARDBOARD)
+		write(boxes, INWARD, "HOT PIZZA", KETCHUP, { Top = 0.2, Height = 0.6, Font = Enum.Font.GothamBold, PPS = 24 })
 	elseif style.gear == "fountain" then
 		local fountain = span(ctx, seg, "SodaFountain", gx - 2, gx + 2, 81.8, 83, top, top + 3.6, team.Primary)
 		write(fountain, INWARD, "ICE COLD", ink(team.Primary, team), { Top = 0.08, Height = 0.3 })
@@ -676,8 +738,56 @@ local function standGear(ctx, seg, spec, style, gx, other, team)
 				Object = spec.title,
 				At = localPoint(ctx, shaker, seg, gx, 34.8, 80.2),
 			})
+		else
+			-- (the stands without shakes swirl soft serve instead)
+			local machine = span(ctx, seg, "SoftServeMachine", gx - 1.3, gx + 1.3, 81.8, 83, top, top + 3, PORCELAIN)
+			write(machine, INWARD, "SOFT SERVE", PINK, { Top = 0.06, Height = 0.24 })
 		end
 	end
+end
+
+-- The stand kind's own touch at the +x end of its counter (top y 33.7; `x1` = the counter's end).
+local function counterExtras(ctx, seg, style, x1, counterIn, team)
+	local o = counterIn + 0.7
+	if style.gear == "roller" then
+		cyl(ctx, seg, "SauceBottle", x1 - 1, 34.3, o, 1.2, 0.45, "y", KETCHUP)
+		cyl(ctx, seg, "SauceBottle", x1 - 1.6, 34.3, o, 1.2, 0.45, "y", MUSTARD)
+	elseif style.gear == "oven" then
+		-- a tray of nachos under a mound of melty cheese
+		span(ctx, seg, "NachoTray", x1 - 2.4, x1 - 0.8, o - 0.55, o + 0.55, 33.7, 33.9, INK)
+		cyl(ctx, seg, "NachoCheese", x1 - 1.6, 34.05, o, 0.3, 1.2, "y", CHEESE)
+	elseif style.gear == "fountain" then
+		cyl(ctx, seg, "CupStack", x1 - 1.2, 34.6, o, 1.8, 0.8, "y", team.Primary)
+	elseif style.gear == "smoker" then
+		span(ctx, seg, "BurgerBasket", x1 - 2.4, x1 - 0.8, o - 0.55, o + 0.55, 33.7, 34, CUP_RED)
+		cyl(ctx, seg, "Burger", x1 - 1.6, 34.3, o, 0.6, 1, "y", BUN)
+	elseif style.gear == "popcorn" then
+		span(ctx, seg, "WaffleCones", x1 - 2, x1 - 0.6, o - 0.5, o + 0.5, 33.7, 34.5, CONE)
+	end
+end
+
+--[[
+	A condiment station against the portal wall across the lane from a hot dog stand (on one of
+	Concourse.lua's "food" spots): a steel cabinet with napkins, ketchup + mustard pumps (look).
+]]
+local CONDIMENT_STATIONS = {
+	{ seg = "visitor", x = -112 },
+	{ seg = "home", x = 96 },
+	{ seg = "west", x = -60 },
+	{ seg = "east", x = -60 },
+}
+
+local function condimentStation(ctx, seg, x, team)
+	local cabinet =
+		span(ctx, seg, "CondimentStation", x - 1.4, x + 1.4, PORTAL_WALL, PORTAL_WALL + 1.6, 30, 33.2, STEEL, Enum.Material.Metal)
+	local title = write(cabinet, OUTWARD, "CONDIMENTS", ink(STEEL, team), { Top = 0.08, Height = 0.16, Font = Enum.Font.GothamBold })
+	addLine(title, "NAPKINS  -  STRAWS  -  LIDS", 0.1, 0.3, 0.8, 0.1, Enum.Font.GothamBold, INK)
+	for index, color in ipairs({ KETCHUP, MUSTARD }) do
+		cyl(ctx, seg, "CondimentPump", x + (index == 1 and -0.6 or 0.6), 33.85, PORTAL_WALL + 0.8, 1.3, 0.6, "y", color)
+	end
+	BuildUtil.Look(cabinet, "Condiment Station", "Ketchup, mustard, relish and onions. Build the ultimate stadium hot dog!", {
+		At = localPoint(ctx, cabinet, seg, x, 33.8, PORTAL_WALL + 2.4),
+	})
 end
 
 local function foodStand(ctx, seg, spec, team, cameraFrom)
@@ -743,6 +853,11 @@ local function foodStand(ctx, seg, spec, team, cameraFrom)
 		Object = spec.title,
 		At = localPoint(ctx, counter, seg, useX, 34.6, counterIn - 0.6),
 	})
+	-- the register right behind the order spot (beside it toward the middle: clear of the counter
+	-- pizza and the bar's cups), the kind's own touch at the counter's +x end
+	local tillX = style.bar and useX - 0.6 or useX + 0.6
+	till(ctx, seg, tillX - 0.7, tillX + 0.7, counterIn + 0.25, counterIn + 1.15, 33.7)
+	counterExtras(ctx, seg, style, inner1, counterIn, team)
 
 	-- the stand's own back wall (tiles / brick / dark bar wall over the concourse wall), the steel
 	-- back counter + gear at both ends, menu board in the middle of the back wall
@@ -797,6 +912,11 @@ function ConcourseShops.concourse_food(ctx)
 				foodStand(ctx, seg, spec, team, cameraFrom)
 			end
 		end
+		if step == 1 then
+			for _, spot in ipairs(CONDIMENT_STATIONS) do
+				condimentStation(ctx, segs[spot.seg], spot.x, team)
+			end
+		end
 	end
 end
 
@@ -822,6 +942,18 @@ local FAMILY_ROOMS = {
 local ROOM_WALL_IN = FRONT + 0.6 -- front walls 76.2..76.8
 local ROOM_HEAD_Y = 38.2 -- door heads (doors 8 tall) / bottom of the sign bands
 
+-- A sink: a steel tap out of the tiled back wall (its spout ends at offset `tip`, over the bowl)
+-- and the bowl painted on the sink's top (x = the sink's middle).
+local function sinkTap(ctx, seg, sink, x, tip)
+	cyl(ctx, seg, "Faucet", x, 33.5, (tip + BACK - 0.1) / 2, BACK - 0.1 - tip, 0.3, "o", STEEL, Enum.Material.Metal)
+	local bowl = write(sink, Enum.NormalId.Top, "", INK, { Left = 0.15, Width = 0.7, Top = 0.2, Height = 0.6, Name = "SinkBowl" })
+	bowl.BackgroundColor3 = BASIN
+	bowl.BackgroundTransparency = 0
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.45, 0)
+	corner.Parent = bowl
+end
+
 -- One room of a restroom block. s = -1 (women, toward -x) or 1 (men, toward +x); a = distance
 -- from the block's middle wall.
 local function restroomRoom(ctx, seg, cx, s, men)
@@ -839,13 +971,17 @@ local function restroomRoom(ctx, seg, cx, s, men)
 		for _, a in ipairs({ 5, 6.6 }) do
 			spanU("Urinal", a - 0.5, a + 0.5, 82.3, BACK, 31.2, 33.8, PORCELAIN)
 		end
+		spanU("UrinalDivider", 5.7, 5.9, 81.6, BACK - 0.1, 31, 34.8, STEEL, Enum.Material.Metal)
 	else
 		spanU("Toilet", 5.1, 6.5, 81.4, BACK, 30, 31.6, PORCELAIN)
 	end
 	-- wall-hung sinks + mirror on the back wall, outside the door's swing (the leaf is hinged at
 	-- a = 14.4 and sweeps everything closer than 6.2 to the hinge before it lies along the side wall)
-	spanU("SinkCounter", 8.4, 11.2, 82, BACK, 30, 33, PORCELAIN)
+	local sink = spanU("SinkCounter", 8.4, 11.2, 82, BACK, 30, 33, PORCELAIN)
+	sinkTap(ctx, seg, sink, u(9.8), 82.45)
 	local mirror = spanU("Mirror", 8.4, 11.2, 82.8, BACK, 34, 37.6, MIRROR, Enum.Material.Glass, { Reflectance = 0.35 })
+	-- a hand dryer beside the mirror (just outside the door's swing: 6.2 from its hinge)
+	spanU("HandDryer", 11.3, 12.3, 82.4, BACK - 0.1, 33.8, 35.4, STEEL, Enum.Material.Metal)
 	BuildUtil.Look(
 		mirror,
 		"Mirror",
@@ -878,6 +1014,10 @@ local function restroomBlock(ctx, seg, cx, team)
 	span(ctx, seg, "RestroomWall", cx - half, cx - half + 0.6, ROOM_WALL_IN, BACK, 30, 41.3, TILE_WALL)
 	span(ctx, seg, "RestroomWall", cx + half - 0.6, cx + half, ROOM_WALL_IN, BACK, 30, 41.3, TILE_WALL)
 	span(ctx, seg, "RestroomWall", cx - 0.3, cx + 0.3, ROOM_WALL_IN, BACK, 30, 41.3, TILE_WALL)
+	-- team-colour tiles: a kick band along the front wall between the doors and a stripe across
+	-- the back wall over the mirrors (through the middle wall into both rooms)
+	span(ctx, seg, "RestroomKickBand", cx - 8.2, cx + 8.2, FRONT - 0.06, FRONT, 30, 32.8, team.Primary, nil, PAINT)
+	span(ctx, seg, "RestroomTileStripe", cx - half + 0.6, cx + half - 0.6, BACK - 0.16, BACK - 0.1, 38.2, 38.7, team.Primary, nil, PAINT)
 	for _, s in ipairs({ -1, 1 }) do
 		local men = s > 0
 		-- doors swing into the rooms (the door's front, -Z, points outward = into the room);
@@ -923,9 +1063,18 @@ local function familyRestroom(ctx, seg, cx, team)
 	})
 	span(ctx, seg, "RestroomTiles", cx - half + 0.6, cx + half - 0.6, ROOM_WALL_IN, BACK, 30, 30.04, TILE, nil, PAINT)
 	span(ctx, seg, "RestroomBackTiles", cx - half + 0.6, cx + half - 0.6, BACK - 0.1, BACK, 30, 41.3, TILE)
+	-- accent tiles like the door, unless the accent is as pale as the tiles (silver, white)
+	local band = accent(team)
+	if similar(band, TILE_WALL) then
+		band = team.Primary
+	end
+	span(ctx, seg, "RestroomKickBand", cx + 0.7, cx + half, FRONT - 0.06, FRONT, 30, 32.8, band, nil, PAINT)
+	span(ctx, seg, "RestroomTileStripe", cx - half + 0.6, cx + half - 0.6, BACK - 0.16, BACK - 0.1, 38.2, 38.7, band, nil, PAINT)
 	span(ctx, seg, "Toilet", cx - 0.6, cx + 0.8, 81.4, BACK, 30, 31.6, PORCELAIN)
-	span(ctx, seg, "SinkCounter", cx + 2.2, cx + half - 0.6, 81.4, BACK, 30, 33, PORCELAIN)
+	local sink = span(ctx, seg, "SinkCounter", cx + 2.2, cx + half - 0.6, 81.4, BACK, 30, 33, PORCELAIN)
+	sinkTap(ctx, seg, sink, cx + 3.95, 82.2)
 	span(ctx, seg, "Mirror", cx + 2.4, cx + half - 0.8, 82.8, BACK, 34, 37.6, MIRROR, Enum.Material.Glass, { Reflectance = 0.35 })
+	span(ctx, seg, "PaperTowels", cx + 1, cx + 2, 82.4, BACK - 0.1, 33.8, 35.6, STEEL, Enum.Material.Metal)
 	-- a fold-down baby changing table on the side wall
 	local changer = span(ctx, seg, "ChangingTable", cx + half - 2.4, cx + half - 0.6, 77.8, 80.4, 32.6, 33.2, Color3.fromRGB(150, 205, 235))
 	BuildUtil.Look(changer, "Baby Changing Station", "A fold-down table for the littlest fans. Even future quarterbacks need diapers!", {
@@ -936,13 +1085,28 @@ local function familyRestroom(ctx, seg, cx, team)
 end
 
 -- A drinking fountain standing against `back` (a column's face - its TV hangs above from y 35.6 -
--- or the outer wall).
+-- or the outer wall), with a bottle filler above it whose little screen counts the bottles saved.
 local function waterFountain(ctx, seg, x, back, team)
 	local body = span(ctx, seg, "WaterFountain", x - 1, x + 1, back - 1.3, back - 0.1, 30, 32.9, STEEL, Enum.Material.Metal)
 	span(ctx, seg, "FountainBowl", x - 1.1, x + 1.1, back - 1.5, back - 0.1, 32.9, 33.2, team.Primary)
-	BuildUtil.Look(body, "Water Fountain", "Free, ice-cold water! Cheering is thirsty work - take a sip.", {
-		At = localPoint(ctx, body, seg, x, 34, back - 2),
+	local filler = span(ctx, seg, "BottleFiller", x - 0.9, x + 0.9, back - 0.45, back - 0.1, 33.3, 35.5, STEEL, Enum.Material.Metal)
+	local _, counter = BuildUtil.SurfaceText(filler, INWARD, "BOTTLES SAVED\n12,345", {
+		LabelName = "BottleCounter",
+		TextColor3 = FILLER_TEXT,
+		BackgroundColor3 = SCREEN,
+		BackgroundTransparency = 0,
+		Font = Enum.Font.Code,
+		PixelsPerStud = 32,
+		LightInfluence = 0,
 	})
+	counter.Position = UDim2.new(0.12, 0, 0.08, 0)
+	counter.Size = UDim2.new(0.76, 0, 0.24, 0)
+	BuildUtil.Look(
+		body,
+		"Water Fountain",
+		"Free, ice-cold water! Fill your bottle up top - its little screen counts every bottle fans have saved.",
+		{ At = localPoint(ctx, body, seg, x, 34, back - 2) }
+	)
 end
 
 -- A two-sided blade sign hanging from the ceiling on a column line, over the lane's outer edge in
@@ -1057,13 +1221,20 @@ local function proShop(ctx, seg, cx, team)
 		Info = "Come on in - the whole team's gear is inside!",
 	})
 
-	-- window display: two mannequins in home and away jerseys (left end)
+	-- window display: two mannequins in home and away jerseys (left end) and team caps (a crown
+	-- over the head, the brim toward the window)
 	for index, u in ipairs({ -20, -17 }) do
 		cyl(ctx, seg, "MannequinStand", x(u), 30.15, 78.2, 0.3, 1.4, "y", DARK_METAL, Enum.Material.Metal)
 		local color = index == 1 and team.Primary or team.Trim
 		span(ctx, seg, "MannequinJersey", x(u - 0.9), x(u + 0.9), 77.8, 78.6, 30.3, 34.2, color, Enum.Material.Fabric)
 		ball(ctx, seg, "MannequinHead", x(u), 34.75, 78.2, 1.1, SKIN)
+		local capColor = index == 1 and accent(team) or team.Primary
+		cyl(ctx, seg, "MannequinCap", x(u), 35.3, 78.2, 0.4, 1, "y", capColor, Enum.Material.Fabric)
+		span(ctx, seg, "MannequinCapBrim", x(u - 0.45), x(u + 0.45), 77.4, 78, 35.1, 35.18, capColor, Enum.Material.Fabric)
 	end
+	-- a welcome mat inside the doors (it reads upright for fans walking in)
+	local mat = span(ctx, seg, "ProShopMat", x(-3), x(3), inside + 0.1, inside + 2.3, 30.04, 30.07, wallColor, Enum.Material.Fabric, PAINT)
+	write(mat, Enum.NormalId.Top, "WELCOME, FAN!", ink(wallColor, team), { Top = 0.22, Height = 0.56, Font = Enum.Font.GothamBold })
 	-- live "starting lineup" screen on the back wall behind the mannequins
 	local lineup = span(ctx, seg, "LineupScreen", x(-21.6), x(-16), 82.7, BACK, 33.4, 39.6, SCREEN)
 	liveScreen(lineup, INWARD, "roster", LIVE_PLACEHOLDER.roster)
@@ -1107,6 +1278,46 @@ local function proShop(ctx, seg, cx, team)
 	BuildUtil.Look(register, "Checkout", "Ka-ching! Every jersey sold here helps your franchise grow.", {
 		At = localPoint(ctx, register, seg, x(15.4), 34.6, 80),
 	})
+	-- a card reader in front of the till, a team shopping bag ready to go, and mini helmets on a
+	-- shelf on the wall behind the counter
+	span(ctx, seg, "CardReader", x(16.8), x(17.4), 78.5, 79.1, 33.7, 34.05, INK)
+	local bag = span(ctx, seg, "ShoppingBag", x(16.7), x(17.9), 81, 81.9, 33.7, 35.1, wallColor)
+	write(bag, TOWARD_MINUS_X, name, ink(wallColor, team), { Top = 0.3, Height = 0.4, Font = Enum.Font.GothamBold })
+	span(ctx, seg, "HelmetShelf", x(18.6), x(21.7), 82, 82.9, 36.4, 36.6, STEEL, Enum.Material.Metal)
+	for index, u in ipairs({ 19.4, 20.9 }) do
+		ball(ctx, seg, "MiniHelmet", x(u), 37.2, 82.3, 1.2, index == 1 and team.Primary or accent(team))
+	end
+
+	-- a big felt pennant on each (dark) side wall, pointing at the storefront (two wedges: upper and
+	-- lower half, meeting at y 38.6; the pole edge at offset 81.6, the tip at 78.6)
+	for _, u in ipairs({ -21.84, 21.84 }) do
+		for _, flip in ipairs({ false, true }) do
+			BuildUtil.Wedge(ctx, {
+				Name = "Pennant",
+				Size = Vector3.new(0.12, 0.8, 3),
+				CFrame = at(seg, x(u), flip and 38.2 or 39, 80.1)
+					* CFrame.Angles(0, math.pi, 0)
+					* (flip and CFrame.Angles(0, 0, math.pi) or CFrame.new()),
+				Color = ink(STAND_DARK, team),
+				Material = Enum.Material.Fabric,
+			})
+		end
+	end
+
+	-- a shelf of footballs over the foam finger bin
+	span(ctx, seg, "FootballShelf", x(8.4), x(13.2), 81.9, 82.9, 37, 37.2, STEEL, Enum.Material.Metal)
+	for _, u in ipairs({ 9.2, 10.8, 12.4 }) do
+		football(ctx, seg, "ShelfFootball", x(u), 37.6, 82.4, 1.3, 0.8)
+	end
+
+	-- the signed game ball in a glass case in the window (look: your record)
+	local plinth = span(ctx, seg, "DisplayCase", x(-13.2), x(-10.4), 77.5, 78.9, 30, 32.4, wallColor)
+	span(ctx, seg, "DisplayGlass", x(-13.1), x(-10.5), 77.6, 78.8, 32.4, 34.6, GLASS, Enum.Material.Glass, { Transparency = 0.6 })
+	football(ctx, seg, "SignedBall", x(-11.8), 32.83, 78.2, 1.4, 0.85)
+	BuildUtil.Look(plinth, "Signed Game Ball", "Signed by the whole team after a big win. Not for sale - sorry!", {
+		LookKey = "record",
+		At = localPoint(ctx, plinth, seg, x(-11.8), 33.4, 79.8),
+	})
 
 	-- ceiling light panels
 	for _, u in ipairs({ -13, 0, 13 }) do
@@ -1132,6 +1343,9 @@ local function jerseyKiosk(ctx, seg, spec, team)
 	local counter = span(ctx, seg, "KioskCounter", cx - 4.6, cx + 4.6, 78.8, 80.2, 30, 33.4, accent(team))
 	write(counter, INWARD, "JERSEYS", ink(accent(team), team), { Top = 0.2, Height = 0.5, Left = 0.2, Width = 0.6 })
 	span(ctx, seg, "KioskCounterTop", cx - 4.8, cx + 4.8, 78.6, 80.4, 33.4, 33.7, STEEL, Enum.Material.Metal)
+	-- a till at one end of the counter, a football at the other
+	till(ctx, seg, cx - 3.9, cx - 2.5, 79, 79.9, 33.7)
+	football(ctx, seg, "CounterFootball", cx + 3.2, 34.1, 79.5, 1.3, 0.8)
 	-- canopy on two posts, with a name sign along its front edge
 	for _, s in ipairs({ -1, 1 }) do
 		cyl(ctx, seg, "KioskPost", cx + s * (half - 0.4), 34.7, 78.1, 9.4, 0.4, "y", STEEL, Enum.Material.Metal)
@@ -1155,6 +1369,8 @@ local function foamFingerCart(ctx, seg, cx, team, gate)
 	cyl(ctx, seg, "UmbrellaPole", cx - 1.6, 36.25, o + 0.4, 5.5, 0.25, "y", STEEL, Enum.Material.Metal)
 	cyl(ctx, seg, "CartUmbrella", cx - 1.6, 39.2, o + 0.4, 0.4, 5.6, "y", topColor, nil, NO_COLLIDE)
 	foamFinger(ctx, seg, cx + 0.8, 33.5, o, topColor, team)
+	-- a folded stack of rally towels beside the finger
+	span(ctx, seg, "RallyTowels", cx + 1.9, cx + 2.7, o - 0.7, o + 0.7, 33.5, 34.1, topColor, Enum.Material.Fabric)
 	BuildUtil.Use(ctx, body, "foamfinger", {
 		Object = gate and "Game Day Gear Cart" or "Foam Finger Cart",
 		Title = gate and "Game Day Gear" or "Foam Finger Cart",

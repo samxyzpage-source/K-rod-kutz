@@ -5,48 +5,66 @@
 	coordinates. "Offset" = distance outward from the turf edge, as everywhere in the bowl.
 
 	  main_concourse   offsets 56..84, floor y 30 (flush with the lower bowl's top row), ceiling ~41.3
-	    1 Concourse Floor & Columns  the floor slab, lane-edge stripes, a painted "WELCOME TO ..." logo
-	                                 inside each gate and a column on every aisle line at offsets
-	                                 80.6..83.2 (down to the ground where nothing is underneath: not over
-	                                 the locker rooms, not beside the end gates)
+	    1 Concourse Floor & Columns  the floor slab (sealed concrete), lane-edge stripes, a painted
+	                                 "WELCOME TO ..." logo inside each gate and a column on every aisle
+	                                 line at offsets 80.6..83.2 (down to the ground where nothing is
+	                                 underneath: not over the locker rooms, not beside the end gates)
 	    2 Walls & Ceiling            the outer wall (offset 83..84.1) with 16-wide openings on the four
 	                                 gate axes (escalator landings, Exterior.lua) + lit GATE signs (look),
-	                                 a team band outside, the ceiling over the whole ring
+	                                 a team band outside, the ceiling over the whole ring and a round
+	                                 air duct along it over the portal side (offset ~63.6)
 	    3 Section Portals            the inner wall (offset 56..57, team colour) with a 7 x 9 portal onto
 	                                 the lower bowl's top row at every aisle (Bowl.Aisles), each a short
 	                                 tunnel mouth (deep jambs to offset 60.5) under a lit section sign
 	                                 naming the two sections either side of its aisle ("SECTIONS
-	                                 103-104", numbered like Stands.lua's plaques; look card says where)
+	                                 103-104", numbered like Stands.lua's plaques; look card says where).
+	                                 Big painted section numbers on the wall beside every portal (and one
+	                                 per section on the bowl side), a fire extinguisher cabinet (look) on
+	                                 every corner wall
 	    4 Lights & TV Screens        neon light strips with PointLights, a TV on every column (live
 	                                 score / game day / summary, 4 with a look card), team banners on the
 	                                 inner wall and overhead wayfinding signs above the walking lane (each
-	                                 face lists the sections + gate ahead of its readers)
+	                                 face lists the sections + gate ahead of its readers; one more in every
+	                                 corner). Along the portal side: trash + recycling bins, hand
+	                                 sanitiser stations (look), an ATM at every gate (look), the Guest
+	                                 Services desk across from Gate A and the First Aid room across from
+	                                 Gate D (look) - they stand on the AMENITIES spots, between the
+	                                 painted section numbers and the banners
 	  upper_concourse  offsets 116..152, floor y 74, flat ceiling ~85.2 (under the upper rows 10-18)
-	    1 Concourse Floor            slab, ceiling with light strips, inner wall (team colour) with 8-wide
-	                                 vomitory openings, outer wall (151..152) with gate openings and two
-	                                 rings of columns down to the ground (offsets ~118 and ~150)
+	    1 Concourse Floor            slab, lane-edge stripes, ceiling with light strips and concrete
+	                                 beams between the column pairs (straights), inner wall (team colour)
+	                                 with 8-wide vomitory openings and painted "SECTIONS 3xx" numbers
+	                                 beside them, outer wall (151..152) with gate openings and a painted
+	                                 team mural on every straight, two rings of columns down to the
+	                                 ground (offsets ~118 and ~150)
 	    2 Vomitories                 portal frames + lit "SECTIONS 3xx" signs (look) where the upper
 	                                 deck's vomitory tunnels arrive (+-52 on the sides, the middle of
 	                                 each end) and "ESCALATORS / STAIRS / ELEVATOR" signs (look) over the
 	                                 four gate openings
 	    3 Food Stands                6 stands on the outer side (hot dogs, kettle corn, sodas, sports
-	                                 drinks): an alcove with a queue divider, counter (use), lit menu
-	                                 board (look) and gear (grill, popcorn machine, soda fountain...)
+	                                 drinks): an alcove with a queue divider, counter (use) with a cash
+	                                 register, lit menu board (look) and gear (grill, popcorn machine,
+	                                 soda fountain...)
 	    4 Restrooms & Signs          2 restroom blocks (women + men, swinging doors, stalls, sinks,
-	                                 mirror + hand dryer to look at), overhead wayfinding signs, 6 live
-	                                 screens on the inner wall, drink rails with bar stools under the 4
-	                                 sideline screens (one per rail is a "CONCOURSE TV" camera seat)
+	                                 mirror + hand dryer to look at), overhead wayfinding signs (one in
+	                                 every corner too), 6 live screens on the inner wall, drink rails
+	                                 with bar stools under the 4 sideline screens (one per rail is a
+	                                 "CONCOURSE TV" camera seat), TVs on the inner columns of the
+	                                 straights, trash + recycling bins and two standing tables
 	                                 Painted slogans on the corner walls come with step 1.
 
 	Walking lanes (kept clear, the harness checks them): main offsets 66..76 (y 30.8..39), upper
 	128..138 (y 74.8..83). Everything collidable sits outside them; overhead signs and light strips
-	are non-collidable and hang well above head height. The main concourse's outer side (76..84)
-	stays free between the columns for ConcourseShops.lua; on the sidelines nothing of this module
-	goes below y = 29 at |x| < 84 (the locker rooms are underneath).
+	are non-collidable and hang well above head height (the upper ceiling beams cross the lane at
+	y 84+, above its head room). The main concourse's outer side (76..84) stays free between the
+	columns for ConcourseShops.lua (its condiment stations stand on this module's portal side, on
+	the AMENITIES spots marked "food"); on the sidelines nothing of this module goes below y = 29 at
+	|x| < 84 (the locker rooms are underneath).
 
 	Flat layers: main floor top 30, lane stripes 30.05 (corners 30.09), gate logo border 30.06 + logo
-	30.08 (between the stripes); upper floor top 74, restroom tiles 74.05. Ceiling blocks of the
-	corners sit 0.05 lower than the straights' (they overlap).
+	30.08 (between the stripes); upper floor top 74, lane stripes 74.05 (corners 74.09), restroom
+	tiles 74.05 (outside the lane). Ceiling blocks of the corners sit 0.05 lower than the straights'
+	(they overlap).
 ]]
 
 local BuildUtil = require(script.Parent.Parent.BuildUtil)
@@ -87,6 +105,14 @@ local POPCORN = Color3.fromRGB(255, 224, 120)
 local POPCORN_RED = Color3.fromRGB(196, 36, 40)
 local COOLER_ORANGE = Color3.fromRGB(245, 130, 32)
 local GLOW_ORANGE = Color3.fromRGB(255, 120, 40)
+local BIN_DARK = Color3.fromRGB(46, 48, 54)
+local RECYCLE_BLUE = Color3.fromRGB(28, 104, 190)
+local FIRE_RED = Color3.fromRGB(190, 28, 34)
+local AID_RED = Color3.fromRGB(206, 34, 40)
+local SANITIZER_WHITE = Color3.fromRGB(232, 236, 240)
+local ATM_GREY = Color3.fromRGB(122, 128, 138)
+local ATM_TEXT = Color3.fromRGB(120, 220, 160)
+local TABLE_TOP = Color3.fromRGB(236, 236, 232)
 
 local COLUMN = 2.6 -- square columns
 
@@ -101,6 +127,60 @@ local MAIN_PORTAL_DEPTH = 3.5 -- the tunnel mouth sticks out this far into the c
 local MAIN_GATE_HALF = 8 -- 16 wide
 local MAIN_GATE_HEIGHT = 8.8
 local MAIN_TV_KINDS = { "score", "gameday", "summary" }
+local MAIN_DUCT_O = 63.6 -- the air duct runs along the ring here (between the portal mouths and the lane)
+local MAIN_DUCT_D = 1.3 -- its diameter
+local MAIN_NUMBER_INSET = 6 -- painted section numbers: centred this far from a portal's opening edge
+
+--[[
+	What stands against the portal wall (offset 57, facing the lane) on the main concourse, at
+	segment x. Every straight wall piece between two portals is one lower-bowl section: its
+	painted numbers sit at its ends (next to the portals), its banner in the middle (x = m) and
+	these on the two spots m - 8 / m + 8 between them (gates: the desk and the First Aid door
+	take the banner's place, with a spot at +-9 either side). "food" spots are kept free for
+	ConcourseShops' condiment stations (concourse_food step 1, across from the hot dog stands).
+]]
+local AMENITIES = {
+	visitor = {
+		{ -112, "food" },
+		{ -96, "bins" },
+		{ -60, "sanitizer" },
+		{ -44, "bins" },
+		{ -9, "bins" },
+		{ 0, "guest" },
+		{ 9, "atm" },
+		{ 60, "bins" },
+		{ 96, "bins" },
+	},
+	home = {
+		{ -112, "bins" },
+		{ -44, "bins" },
+		{ -9, "atm" },
+		{ 0, "firstaid" },
+		{ 9, "bins" },
+		{ 44, "sanitizer" },
+		{ 60, "bins" },
+		{ 96, "food" },
+	},
+	west = {
+		{ -60, "food" },
+		{ -44, "bins" },
+		{ -9, "bins" },
+		{ 9, "atm" },
+		{ 44, "sanitizer" },
+	},
+	east = {
+		{ -60, "food" },
+		{ -44, "bins" },
+		{ -9, "bins" },
+		{ 9, "atm" },
+		{ 60, "sanitizer" },
+	},
+	-- corners: a bin on the wall piece at +x (the fire extinguisher hangs on the one at -x)
+	corner_hw = { { 17, "bins" } },
+	corner_vw = { { 17, "bins" } },
+	corner_ve = { { 17, "bins" } },
+	corner_he = { { 17, "bins" } },
+}
 
 -- Upper concourse (Config.Layout.Bowl.UpperConcourse: 116..152, floor 74, ceiling 86)
 local UPPER_INNER_WALL = 1 -- inner wall 116..117
@@ -114,6 +194,19 @@ local UPPER_COLUMNS = {
 	corner = { 0 },
 }
 local UPPER_STAND_FRONT = 139.4 -- stands + restrooms start here (the lane ends at 138)
+local UPPER_VOM_PAINT = 11 -- painted "SECTIONS 3xx" numbers: centred this far either side of a vomitory
+-- a painted team mural on the outer wall of every straight (x0..x1: clear of the stands, the
+-- restrooms, the columns and the gate; %s = the team name)
+local UPPER_MURALS = {
+	visitor = { -126, -82, "HOME OF THE %s" },
+	home = { -126, -82, "ONCE A FAN, ALWAYS A FAN" },
+	west = { -100, -48, "STAND UP AND CHEER!" },
+	east = { 48, 100, "EVERY SEAT IS A GOOD SEAT" },
+}
+-- TVs on the inner columns, bins against the inner wall, standing tables in front of it (segment x)
+local UPPER_TVS = { side = { -78, 78 }, ["end"] = { -44, 44 } }
+local UPPER_BINS = { visitor = { -26, 26 }, home = { -26, 26 }, west = { -24, 24 }, east = { -24, 24 } }
+local UPPER_TABLES = { visitor = { 0 }, home = { 0 } }
 
 local SECTION_FACTS = {
 	"These seats are so close you can hear the quarterback call the play!",
@@ -162,6 +255,12 @@ local function contrast(a, b)
 	return (la + 0.05) / (lb + 0.05)
 end
 
+-- Two colours that are hard to tell apart side by side (close in every channel, whatever the hue).
+local function similar(a, b)
+	local dr, dg, db = a.R - b.R, a.G - b.G, a.B - b.B
+	return dr * dr + dg * dg + db * db < 0.09
+end
+
 -- A team colour that reads well on `background`, else white or ink.
 local function ink(background, team)
 	for _, candidate in ipairs({ team.Trim, team.Secondary, team.Primary }) do
@@ -181,6 +280,15 @@ local function accent(team)
 		return team.Secondary
 	end
 	return team.Trim
+end
+
+-- The bins' lid colour: the team's accent, unless that is as dark as the bins (teal & black).
+local function binLid(team)
+	local trim = accent(team)
+	if similar(trim, BIN_DARK) then
+		return ink(BIN_DARK, team)
+	end
+	return trim
 end
 
 local function teamLabel(ctx)
@@ -219,6 +327,27 @@ local function addLine(label, text, top, height, font)
 	line.Font = font or label.Font
 	line.Parent = label.Parent
 	return line
+end
+
+-- Another label anywhere on the same SurfaceGui as `label` (fractions of the face).
+local function addLabel(label, text, left, top, width, height, font)
+	local line = label:Clone()
+	line.Name = label.Name .. "Line"
+	line.Text = text
+	line.Position = UDim2.new(left, 0, top, 0)
+	line.Size = UDim2.new(width, 0, height, 0)
+	line.Font = font or label.Font
+	line.Parent = label.Parent
+	return line
+end
+
+-- A coloured panel (with text) on a label's SurfaceGui: decals on bins, stickers, screens.
+local function decal(label, text, left, top, width, height, textColor, background)
+	local panel = addLabel(label, text, left, top, width, height)
+	panel.TextColor3 = textColor
+	panel.BackgroundColor3 = background
+	panel.BackgroundTransparency = 0
+	return panel
 end
 
 -- A live screen (dark LED background, bright text) the server keeps up to date.
@@ -304,6 +433,40 @@ local function span(ctx, seg, name, x0, x1, o0, o1, y0, y1, color, material, ext
 	return BuildUtil.Part(ctx, props)
 end
 
+local AXIS = {
+	x = CFrame.new(), -- along the segment
+	y = CFrame.Angles(0, 0, math.pi / 2), -- vertical
+	o = CFrame.Angles(0, math.pi / 2, 0), -- across the ring
+}
+
+-- Cylinder centred at (x, y, o) along `axis` ("x" | "y" | "o").
+local function cyl(ctx, seg, name, x, y, o, length, diameter, axis, color, material, extra)
+	local props = extra and table.clone(extra) or {}
+	props.Name = name
+	props.Shape = Enum.PartType.Cylinder
+	props.Size = Vector3.new(length, diameter, diameter)
+	props.CFrame = at(seg, x, y, o) * AXIS[axis]
+	props.Color = color
+	props.Material = material or Enum.Material.SmoothPlastic
+	return BuildUtil.Part(ctx, props)
+end
+
+-- The point (x, y, o) of a segment in `part`'s own space (prompt positions).
+local function localPoint(ctx, part, seg, x, y, o)
+	return part.CFrame:PointToObjectSpace((ctx.origin * at(seg, x, y, o)).Position)
+end
+
+--[[
+	Where the rectangle x0..x1 (along the segment) / y0..y1 lies on a face of a wall piece that
+	spans a..b and py0..py1: Left, Top, Width, Height as fractions of the face. The face toward the
+	field (INWARD) runs from a to b for its readers, the face away from it (OUTWARD) from b to a.
+]]
+local function faceRect(face, a, b, py0, py1, x0, x1, y0, y1)
+	local len, h = b - a, py1 - py0
+	local left = face == INWARD and (x0 - a) / len or (b - x1) / len
+	return left, (py1 - y1) / h, (x1 - x0) / len, (y1 - y0) / h
+end
+
 --[[
 	The exact trapezoid of a segment's band o0..o1 (a slab y0..y1): a block as long as the band's
 	inner edge plus two flat wedges that fill the 22.5-degree joints, so neighbouring segments meet
@@ -346,19 +509,20 @@ end
 --[[
 	A wall along the whole segment (offsets o0..o1, y0..y1) with openings
 	{ x = centre, half = half width, top = head height } and a lintel above each opening.
-	Returns the wall pieces and the lintels.
+	Returns the wall pieces, the lintels and each piece's { a, b } (its x range along the segment).
 ]]
 local function wallRun(ctx, seg, name, o0, o1, y0, y1, openings, color, material)
 	local half = seg.len(o1) / 2 -- the outer length closes the corners
 	table.sort(openings, function(a, b)
 		return a.x < b.x
 	end)
-	local pieces, lintels = {}, {}
+	local pieces, lintels, ranges = {}, {}, {}
 	local cursor = -half
 	for _, opening in ipairs(openings) do
 		local a, b = opening.x - opening.half, opening.x + opening.half
 		if a - cursor > 0.05 then
 			table.insert(pieces, span(ctx, seg, name, cursor, a, o0, o1, y0, y1, color, material))
+			table.insert(ranges, { cursor, a })
 		end
 		if not opening.noLintel and opening.top < y1 - 0.05 then
 			table.insert(lintels, span(ctx, seg, name .. "Lintel", a, b, o0, o1, opening.top, y1, color, material))
@@ -367,8 +531,9 @@ local function wallRun(ctx, seg, name, o0, o1, y0, y1, openings, color, material
 	end
 	if half - cursor > 0.05 then
 		table.insert(pieces, span(ctx, seg, name, cursor, half, o0, o1, y0, y1, color, material))
+		table.insert(ranges, { cursor, half })
 	end
-	return pieces, lintels
+	return pieces, lintels, ranges
 end
 
 --[[
@@ -457,6 +622,132 @@ local function mainColumnReachesGround(seg, x)
 	return true
 end
 
+--[[
+	Big painted section numbers ("SECTION" over "103") on one face of a wall piece spanning a..b /
+	py0..py1: one per x in `centres` (skipped where it doesn't fit on the piece). opts: half (half
+	width), y0..y1 (the number; the caption goes right above it), caption, label (a label painted
+	on this face before: the new numbers share its GUI). Returns the label (nil if none fit).
+]]
+local function paintSections(piece, face, a, b, py0, py1, centres, text, color, opts)
+	local label = opts.label -- (more numbers on a GUI painted before)
+	for _, xc in ipairs(centres) do
+		local x0, x1 = xc - opts.half, xc + opts.half
+		if x0 >= a + 0.3 and x1 <= b - 0.3 then
+			local l, t, w, h = faceRect(face, a, b, py0, py1, x0, x1, opts.y0, opts.y1)
+			if label then
+				addLabel(label, text, l, t, w, h)
+			else
+				label = write(piece, face, text, color, { Left = l, Top = t, Width = w, Height = h, Name = "SectionPaint" })
+			end
+			if opts.caption then
+				local cl, ct, cw, ch = faceRect(face, a, b, py0, py1, x0, x1, opts.y1 + 0.1, opts.y1 + 1.3)
+				addLabel(label, opts.caption, cl, ct, cw, ch, Enum.Font.GothamBold)
+			end
+		end
+	end
+	return label
+end
+
+-- The amenities below stand against a wall whose face is at offset `back` and reach toward the
+-- lane (+o); their lettered face is OUTWARD.
+
+-- A trash + recycling bin pair: a dark body with TRASH / RECYCLE decals under a coloured lid.
+local function binPair(ctx, seg, x, floorY, back, lidColor)
+	local body = span(ctx, seg, "TrashBins", x - 1.7, x + 1.7, back, back + 1.4, floorY, floorY + 2.9, BIN_DARK)
+	local thanks = write(body, OUTWARD, "THANK YOU!", WHITE, {
+		Top = 0.7,
+		Height = 0.16,
+		Left = 0.15,
+		Width = 0.7,
+		Font = Enum.Font.GothamBold,
+		PPS = 24,
+		Name = "BinLabel",
+	})
+	decal(thanks, "TRASH", 0.06, 0.1, 0.4, 0.46, WHITE, INK)
+	decal(thanks, "RECYCLE", 0.54, 0.1, 0.4, 0.46, WHITE, RECYCLE_BLUE)
+	span(ctx, seg, "TrashBinLid", x - 1.8, x + 1.8, back, back + 1.5, floorY + 2.9, floorY + 3.2, lidColor)
+	return body
+end
+
+-- A hand sanitiser station: a slim white stand with the dispenser on top (look). The dispenser is
+-- in the team's accent colour: the wall behind it is Primary.
+local function sanitizer(ctx, seg, x, floorY, back, team)
+	local trim = accent(team)
+	span(ctx, seg, "SanitizerStand", x - 0.5, x + 0.5, back, back + 0.7, floorY, floorY + 3.3, SANITIZER_WHITE)
+	local unit = span(ctx, seg, "SanitizerStation", x - 0.6, x + 0.6, back, back + 1.1, floorY + 3.3, floorY + 4.9, trim)
+	local label = write(unit, OUTWARD, "HAND SANITIZER", ink(trim, team), {
+		Top = 0.08,
+		Height = 0.36,
+		Font = Enum.Font.GothamBold,
+		PPS = 24,
+		Name = "SanitizerLabel",
+	})
+	decal(label, "PUSH", 0.25, 0.56, 0.5, 0.24, INK, SANITIZER_WHITE)
+	BuildUtil.Look(unit, "Hand Sanitizer", "Squirt! Clean hands before you grab those nachos.", {
+		At = localPoint(ctx, unit, seg, x, floorY + 3.6, back + 1.9),
+	})
+end
+
+-- An ATM (look): a steel cabinet with a lit screen, a keypad and a cash slot.
+local function atm(ctx, seg, x, floorY, back, gate)
+	local body = span(ctx, seg, "ATM", x - 1.3, x + 1.3, back, back + 1.8, floorY, floorY + 6, ATM_GREY, Enum.Material.Metal)
+	local header = write(body, OUTWARD, "FIRST DOWN BANK", WHITE, { Top = 0.02, Height = 0.05, Name = "ATMLabel" })
+	addLabel(header, "ATM", 0.05, 0.07, 0.9, 0.07)
+	addLabel(header, "1  2  3\n4  5  6\n7  8  9", 0.25, 0.5, 0.5, 0.18, Enum.Font.Code)
+	decal(header, "CASH", 0.2, 0.74, 0.6, 0.07, WHITE, INK)
+	local screen = span(ctx, seg, "ATMScreen", x - 0.95, x + 0.95, back + 1.8, back + 1.9, floorY + 3.5, floorY + 5.1, SCREEN)
+	write(screen, OUTWARD, "WELCOME, FAN!\nTOUCH TO START", ATM_TEXT, { Glow = true, Font = Enum.Font.Code, Top = 0.18, Height = 0.64 })
+	BuildUtil.Look(
+		body,
+		"ATM",
+		("The First Down Bank cash machine at Gate %s. Their motto: we never fumble your money!"):format(gate),
+		{ At = localPoint(ctx, body, seg, x, floorY + 3.2, back + 2.7) }
+	)
+end
+
+-- The Guest Services desk (look) with its lit sign on the wall behind.
+local function guestServices(ctx, seg, x, floorY, back, team, trim)
+	local desk = span(ctx, seg, "GuestServicesDesk", x - 4.2, x + 4.2, back + 2.8, back + 4.2, floorY, floorY + 3.4, trim)
+	write(desk, OUTWARD, "?  ASK US ANYTHING  ?", ink(trim, team), { Top = 0.22, Height = 0.3, Font = Enum.Font.GothamBold })
+	span(ctx, seg, "GuestServicesTop", x - 4.4, x + 4.4, back + 2.6, back + 4.4, floorY + 3.4, floorY + 3.7, STEEL, Enum.Material.Metal)
+	local sign = span(ctx, seg, "GuestServicesSign", x - 4.8, x + 4.8, back, back + 0.3, floorY + 4.6, floorY + 8.8, SIGN_DARK)
+	local title = write(sign, OUTWARD, "GUEST SERVICES", ink(SIGN_DARK, team), { Glow = true, Top = 0.1, Height = 0.44 })
+	addLine(title, "INFO  -  LOST & FOUND  -  BIRTHDAY SHOUT-OUTS", 0.62, 0.22, Enum.Font.GothamBold)
+	BuildUtil.Look(
+		desk,
+		"Guest Services",
+		"Lost your little brother? Want a birthday shout-out on the big screen? Guest Services can help with almost anything!",
+		{ At = localPoint(ctx, desk, seg, x, floorY + 4.4, back + 5) }
+	)
+end
+
+-- The First Aid room's door (look) with a red cross, and a blade sign over it.
+local function firstAid(ctx, seg, x, floorY, back)
+	local door = span(ctx, seg, "FirstAidDoor", x - 3.4, x + 3.4, back, back + 0.3, floorY, floorY + 8.6, WHITE)
+	local label = write(door, OUTWARD, "FIRST AID", AID_RED, { Top = 0.05, Height = 0.12, Name = "FirstAidLabel" })
+	decal(label, "", 0.42, 0.22, 0.16, 0.34, AID_RED, AID_RED) -- the cross: upright bar
+	decal(label, "", 0.3, 0.33, 0.4, 0.12, AID_RED, AID_RED) -- and cross bar
+	addLabel(label, "MEDICS ON DUTY\nEVERY GAME", 0.1, 0.64, 0.8, 0.14, Enum.Font.GothamBold)
+	local blade = span(ctx, seg, "FirstAidSign", x + 3.6, x + 3.9, back, back + 3, floorY + 8.9, floorY + 10.7, WHITE, nil, NO_COLLIDE)
+	for _, face in ipairs({ Enum.NormalId.Left, Enum.NormalId.Right }) do
+		write(blade, face, "+ FIRST AID", AID_RED, { Top = 0.15, Height = 0.7 })
+	end
+	BuildUtil.Look(door, "First Aid", "Scraped knee? Too much cheering? The medics here have ice packs, bandages and lollipops.", {
+		At = localPoint(ctx, door, seg, x, floorY + 4, back + 2),
+	})
+end
+
+-- A red fire extinguisher cabinet on a wall (look); a steel one with red letters on a red wall.
+local function fireCabinet(ctx, seg, x, floorY, back, wall)
+	local steel = similar(FIRE_RED, wall)
+	local cabinet = span(ctx, seg, "FireCabinet", x - 0.8, x + 0.8, back, back + 0.5, floorY + 3, floorY + 6, steel and STEEL or FIRE_RED)
+	local label = write(cabinet, OUTWARD, "FIRE", steel and FIRE_RED or WHITE, { Top = 0.06, Height = 0.16, Name = "FireLabel" })
+	decal(label, "", 0.18, 0.3, 0.64, 0.6, FIRE_RED, Color3.fromRGB(150, 24, 28)) -- (the extinguisher behind its window)
+	BuildUtil.Look(cabinet, "Fire Extinguisher", "For emergencies only - like a grill that gets a little TOO excited.", {
+		At = localPoint(ctx, cabinet, seg, x, floorY + 4.2, back + 1.6),
+	})
+end
+
 function Concourse.main_concourse(ctx)
 	local L = ctx.config.Layout
 	local MC = L.Bowl.MainConcourse
@@ -477,7 +768,7 @@ function Concourse.main_concourse(ctx)
 	-- 1 CONCOURSE FLOOR & COLUMNS ----------------------------------------------------------
 	BuildUtil.Stage(ctx, 1)
 	for _, seg in ipairs(segs) do
-		bandExact(ctx, seg, "ConcourseFloor", MC.Inner, MC.Outer, floorY - MAIN_SLAB, floorY, FLOOR)
+		bandExact(ctx, seg, "ConcourseFloor", MC.Inner, MC.Outer, floorY - MAIN_SLAB, floorY, FLOOR, Enum.Material.Concrete)
 		-- team stripes along both edges of the walking lane
 		local stripeTop = floorY + (seg.straight and 0.05 or 0.09)
 		for _, o in ipairs({ laneIn + 0.6, laneOut - 0.6 }) do
@@ -547,6 +838,23 @@ function Concourse.main_concourse(ctx)
 			PAINT
 		)
 		bandBlock(ctx, seg, "ConcourseCeiling", MC.Inner, MAIN_OUTER_WALL_IN, ceilBottom, ceilTop, CEILING)
+		-- a round air duct under the ceiling along the whole ring, over the portal side. Every piece
+		-- runs r * tan(22.5) past the 45-degree segment joints: neighbours meet in a mitre on the
+		-- outside of the bend and each flat end hides inside the next piece
+		cyl(
+			ctx,
+			seg,
+			"ConcourseDuct",
+			0,
+			ceilBottom - 0.75,
+			MAIN_DUCT_O,
+			seg.len(MAIN_DUCT_O) + MAIN_DUCT_D * math.tan(math.pi / 8),
+			MAIN_DUCT_D,
+			"x",
+			STEEL,
+			Enum.Material.Metal,
+			NO_COLLIDE
+		)
 
 		if seg.gate then
 			-- lit gate sign over the opening (inside) + team-colour jambs
@@ -601,7 +909,36 @@ function Concourse.main_concourse(ctx)
 		for _, x in ipairs(seg.portals) do
 			table.insert(openings, { x = x, half = MAIN_PORTAL_HALF, top = floorY + MAIN_PORTAL_HEIGHT, noLintel = true })
 		end
-		wallRun(ctx, seg, "PortalWall", MC.Inner, MC.Inner + 1, floorY, ceilBottom, openings, wallColor)
+		local pieces, _, ranges = wallRun(ctx, seg, "PortalWall", MC.Inner, MC.Inner + 1, floorY, ceilBottom, openings, wallColor)
+		-- every wall piece is one section: its number is painted big beside each portal on the
+		-- concourse side ("SECTION 103") and once in the middle on the bowl side
+		local wallHalf = seg.len(MC.Inner + 1) / 2
+		local paintInk = ink(wallColor, team)
+		for index, piece in ipairs(pieces) do
+			local a, b = ranges[index][1], ranges[index][2]
+			local number = tostring(lowerSection(L, seg, (a + b) / 2))
+			local centres = {}
+			if a > -wallHalf + 0.1 then
+				table.insert(centres, a + MAIN_NUMBER_INSET)
+			end
+			if b < wallHalf - 0.1 then
+				table.insert(centres, b - MAIN_NUMBER_INSET)
+			end
+			paintSections(piece, OUTWARD, a, b, floorY, ceilBottom, centres, number, paintInk, {
+				half = 3.4,
+				y0 = floorY + 1.8,
+				y1 = floorY + 6.4,
+				caption = "SECTION",
+			})
+			paintSections(piece, INWARD, a, b, floorY, ceilBottom, { (a + b) / 2 }, number, paintInk, {
+				half = 6,
+				y0 = floorY + 3,
+				y1 = floorY + 9.4,
+			})
+		end
+		if not seg.straight then
+			fireCabinet(ctx, seg, -17, floorY, MC.Inner + 1, wallColor)
+		end
 		for _, x in ipairs(seg.portals) do
 			local left, right = lowerSection(L, seg, x - 0.5), lowerSection(L, seg, x + 0.5)
 			local headY0 = floorY + MAIN_PORTAL_HEIGHT
@@ -664,7 +1001,7 @@ function Concourse.main_concourse(ctx)
 		"ALL\nIN!",
 	}
 	local tvIndex, bannerIndex = 0, 0
-	for _, seg in ipairs(segs) do
+	for segIndex, seg in ipairs(segs) do
 		-- neon strips over the lane (and over the portal side on the straights)
 		local laneMid = (laneIn + laneOut) / 2
 		local half = seg.len(laneMid) / 2 - 1.5
@@ -717,10 +1054,14 @@ function Concourse.main_concourse(ctx)
 		end
 
 		if seg.straight then
-			-- banners on the inner wall, halfway between the portals
+			-- banners on the inner wall, halfway between the portals (across from Gates A and D the
+			-- Guest Services desk and the First Aid room take their place)
 			local spots = {}
 			for index = 1, #seg.portals - 1 do
-				table.insert(spots, (seg.portals[index] + seg.portals[index + 1]) / 2)
+				local x = (seg.portals[index] + seg.portals[index + 1]) / 2
+				if not (seg.kind == "side" and math.abs(x) < 1) then
+					table.insert(spots, x)
+				end
 			end
 			for _, x in ipairs(spots) do
 				bannerIndex += 1
@@ -752,6 +1093,42 @@ function Concourse.main_concourse(ctx)
 					team,
 					sectionsText(first, here) .. (x > 0 and gateText or "")
 				)
+			end
+		else
+			-- in the corners: the sections and the gate of the straight ahead, both ways
+			local function ahead(other)
+				local first = LOWER_SECTION_BASE[other.name]
+				return sectionsText(first, first + #lowerBounds(L, other.kind)) .. "  |  GATE " .. other.gate
+			end
+			overheadSign(
+				ctx,
+				seg,
+				0,
+				laneIn + 0.5,
+				laneOut - 0.5,
+				ceilBottom - 3.6,
+				ceilBottom,
+				ahead(segs[segIndex % #segs + 1]),
+				team.Primary,
+				team,
+				ahead(segs[(segIndex - 2) % #segs + 1])
+			)
+		end
+
+		-- along the portal side: bins, sanitiser stations, ATMs, Guest Services, First Aid
+		for _, spot in ipairs(AMENITIES[seg.name] or {}) do
+			local x, kind = spot[1], spot[2]
+			local back = MC.Inner + 1
+			if kind == "bins" then
+				binPair(ctx, seg, x, floorY, back, binLid(team))
+			elseif kind == "sanitizer" then
+				sanitizer(ctx, seg, x, floorY, back, team)
+			elseif kind == "atm" then
+				atm(ctx, seg, x, floorY, back, seg.gate)
+			elseif kind == "guest" then
+				guestServices(ctx, seg, x, floorY, back, team, trim)
+			elseif kind == "firstaid" then
+				firstAid(ctx, seg, x, floorY, back)
 			end
 		end
 	end
@@ -916,6 +1293,20 @@ local function foodStand(ctx, seg, spec, team)
 		Enum.Material.Metal
 	)
 	BuildUtil.Use(ctx, counter, spec.use, { Object = spec.title, At = Vector3.new(-4, 2.6, 1.6) })
+	-- a cash register between the order spot and the menu's prompt (its display faces the queue)
+	local till = span(ctx, seg, "CashRegister", cx + 0.4, cx + 1.8, counterIn + 0.3, counterIn + 1.3, 77.7, 78.6, DARK_METAL)
+	local display = write(till, INWARD, "TAP TO PAY", ATM_TEXT, {
+		Glow = true,
+		Font = Enum.Font.Code,
+		PPS = 32,
+		Left = 0.12,
+		Top = 0.12,
+		Width = 0.76,
+		Height = 0.42,
+		Name = "TillDisplay",
+	})
+	display.BackgroundColor3 = SCREEN
+	display.BackgroundTransparency = 0
 	-- back counter + gear
 	span(ctx, seg, "BackCounter", cx - half + 0.8, cx + half - 0.8, back - 3, back, floorY, 77.4, STEEL, Enum.Material.Metal)
 	standGear(ctx, seg, cx, spec.gear, 77.4, back, team)
@@ -1060,7 +1451,13 @@ function Concourse.upper_concourse(ctx)
 	}
 	local muralIndex = 0
 	for _, seg in ipairs(segs) do
-		bandExact(ctx, seg, "UpperConcourseFloor", UC.Inner, UC.Outer, floorY - 1, floorY, FLOOR)
+		bandExact(ctx, seg, "UpperConcourseFloor", UC.Inner, UC.Outer, floorY - 1, floorY, FLOOR, Enum.Material.Concrete)
+		-- team stripes along both edges of the walking lane (as on the main concourse)
+		local stripeTop = floorY + (seg.straight and 0.05 or 0.09)
+		for _, o in ipairs({ laneIn + 0.6, laneOut - 0.6 }) do
+			local stripeHalf = seg.len(o) / 2
+			span(ctx, seg, "LaneStripe", -stripeHalf, stripeHalf, o - 0.25, o + 0.25, floorY, stripeTop, team.Primary, nil, PAINT)
+		end
 		bandBlock(ctx, seg, "UpperConcourseCeiling", innerOut, UPPER_OUTER_WALL_IN, ceilBottom, ceilTop, CEILING)
 		local laneMid = (laneIn + laneOut) / 2
 		local half = seg.len(laneMid) / 2 - 1.5
@@ -1085,7 +1482,27 @@ function Concourse.upper_concourse(ctx)
 		for _, x in ipairs(seg.voms) do
 			table.insert(voms, { x = x, half = Bowl.Vomitory.Width / 2, top = floorY + UPPER_VOM_HEIGHT })
 		end
-		wallRun(ctx, seg, "UpperInnerWall", UC.Inner, innerOut, floorY, ceilBottom, voms, team.Primary)
+		local innerPieces, _, innerRanges = wallRun(ctx, seg, "UpperInnerWall", UC.Inner, innerOut, floorY, ceilBottom, voms, team.Primary)
+		-- big painted "SECTIONS 301-304" on the wall either side of every vomitory
+		for index, piece in ipairs(innerPieces) do
+			local a, b = innerRanges[index][1], innerRanges[index][2]
+			local label
+			for vom, x in ipairs(seg.voms) do
+				local range = seg.vomSections[vom]
+				label = paintSections(
+					piece,
+					OUTWARD,
+					a,
+					b,
+					floorY,
+					ceilBottom,
+					{ x - UPPER_VOM_PAINT, x + UPPER_VOM_PAINT },
+					("%d-%d"):format(range[1], range[2]),
+					ink(team.Primary, team),
+					{ half = 4.2, y0 = floorY + 2, y1 = floorY + 5.2, caption = "SECTIONS", label = label }
+				) or label
+			end
+		end
 		-- outer wall with the gate openings (escalators arrive here)
 		local gates = {}
 		if seg.gate then
@@ -1093,16 +1510,52 @@ function Concourse.upper_concourse(ctx)
 		end
 		local outerPieces = wallRun(ctx, seg, "UpperOuterWall", UPPER_OUTER_WALL_IN, UC.Outer, floorY, ceilTop, gates, WALL)
 		if not seg.straight then
-			-- a big painted slogan on the corner walls
+			-- a big painted slogan on the corner walls, in two halves either side of the corner's
+			-- outer column (it stands in front of the wall's middle)
 			muralIndex += 1
-			write(outerPieces[1], INWARD, murals[(muralIndex - 1) % #murals + 1], ink(WALL, team), {
+			local slogan = murals[(muralIndex - 1) % #murals + 1]
+			local cut, best = nil, math.huge
+			for index = 1, #slogan do
+				if slogan:sub(index, index) == " " and math.abs(index - #slogan / 2) < best then
+					cut, best = index, math.abs(index - #slogan / 2)
+				end
+			end
+			local first = write(outerPieces[1], INWARD, cut and slogan:sub(1, cut - 1) or slogan, ink(WALL, team), {
 				Top = 0.3,
 				Height = 0.3,
 				Left = 0.08,
-				Width = 0.84,
+				Width = cut and 0.39 or 0.84,
 				PPS = 8,
 				Name = "Mural",
 			})
+			if cut then
+				first.TextXAlignment = Enum.TextXAlignment.Right
+				addLabel(first, slogan:sub(cut + 1), 0.53, 0.3, 0.39, 0.3).TextXAlignment = Enum.TextXAlignment.Left
+			end
+		else
+			-- a painted team mural on the straights' outer wall
+			local mural = UPPER_MURALS[seg.name]
+			local panel = span(
+				ctx,
+				seg,
+				"WallMural",
+				mural[1],
+				mural[2],
+				UPPER_OUTER_WALL_IN - 0.12,
+				UPPER_OUTER_WALL_IN,
+				floorY + 3.4,
+				floorY + 8.6,
+				team.Primary,
+				nil,
+				PAINT
+			)
+			write(
+				panel,
+				INWARD,
+				mural[3]:format(teamLabel(ctx)),
+				ink(team.Primary, team),
+				{ Top = 0.16, Height = 0.68, Left = 0.04, Width = 0.92, Name = "WallMural" }
+			)
 		end
 		-- two rings of columns down to the ground
 		for _, x in ipairs(UPPER_COLUMNS[seg.kind]) do
@@ -1116,6 +1569,23 @@ function Concourse.upper_concourse(ctx)
 					o0,
 					o0 + COLUMN,
 					0,
+					ceilBottom,
+					CONCRETE,
+					Enum.Material.Concrete
+				)
+			end
+			if seg.straight then
+				-- a concrete beam under the ceiling from column to column, across the concourse
+				-- (above the lane's head room)
+				span(
+					ctx,
+					seg,
+					"CeilingBeam",
+					x - 0.8,
+					x + 0.8,
+					innerOut,
+					UPPER_OUTER_WALL_IN,
+					ceilBottom - 1.2,
 					ceilBottom,
 					CONCRETE,
 					Enum.Material.Concrete
@@ -1230,8 +1700,49 @@ function Concourse.upper_concourse(ctx)
 			end
 		end
 	end
-	-- overhead wayfinding over the lane (straights): sections one way, food + restrooms the other
-	for _, seg in ipairs(segs) do
+	-- overhead wayfinding over the lane (straights): sections one way, food + restrooms the other;
+	-- in the corners the sections + gate of the straight ahead, both ways
+	local tvIndex = 0
+	for segIndex, seg in ipairs(segs) do
+		if not seg.straight then
+			local function ahead(other)
+				local first, last = other.vomSections[1][1], other.vomSections[#other.vomSections][2]
+				return ("SECTIONS %d-%d  |  GATE %s"):format(first, last, other.gate)
+			end
+			overheadSign(
+				ctx,
+				seg,
+				0,
+				laneIn + 0.5,
+				laneOut - 0.5,
+				ceilBottom - 3.2,
+				ceilBottom,
+				ahead(segs[segIndex % #segs + 1]),
+				team.Primary,
+				team,
+				ahead(segs[(segIndex - 2) % #segs + 1])
+			)
+		end
+		-- TVs on the inner columns (facing the lane), bins against the inner wall, standing tables
+		for index, x in ipairs(UPPER_TVS[seg.kind] or {}) do
+			tvIndex += 1
+			local live = MAIN_TV_KINDS[(tvIndex - 1) % #MAIN_TV_KINDS + 1]
+			-- (its bottom stays above head height: it sticks out from the column into the walkway)
+			local tv = span(ctx, seg, "ConcourseTV", x - 3.3, x + 3.3, innerOut + 2.4, innerOut + 3, floorY + 5.4, floorY + 9, SCREEN)
+			liveScreen(tv, OUTWARD, live, LIVE_PLACEHOLDER[live])
+			if index == 1 then
+				BuildUtil.Look(tv, "Upper Deck TV", "Can't see the far end zone from up here? This TV shows every play up close.", {
+					At = Vector3.new(0, -3, -1.4),
+				})
+			end
+		end
+		for _, x in ipairs(UPPER_BINS[seg.name] or {}) do
+			binPair(ctx, seg, x, floorY, innerOut, binLid(team))
+		end
+		for _, x in ipairs(UPPER_TABLES[seg.name] or {}) do
+			cyl(ctx, seg, "StandingTablePost", x, floorY + 1.8, 122.6, 3.6, 0.5, "y", DARK_METAL, Enum.Material.Metal)
+			cyl(ctx, seg, "StandingTable", x, floorY + 3.7, 122.6, 0.2, 3.2, "y", TABLE_TOP)
+		end
 		if seg.straight then
 			local first = seg.vomSections[1][1]
 			local last = seg.vomSections[#seg.vomSections][2]
