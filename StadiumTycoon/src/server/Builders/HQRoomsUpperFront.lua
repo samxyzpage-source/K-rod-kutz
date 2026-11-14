@@ -67,7 +67,9 @@
 	THE LOBBY BELOW (Builders/HQRoomsFront.lua hq_lobby) keeps its reception desk, team wall, trophy
 	case, seating and big screen: the staircase runs between the lobby seating and the east wall,
 	the balconies stay clear of the team wall (top 19.6) and the big screen (y 14..26), and the
-	entrance -> corridor path, the spawn, the safe and both lobby buttons stay clear.
+	entrance -> corridor path, the spawn, the safe and both lobby buttons stay clear. So do the
+	interview room's PRESS ROOM panel + ON AIR light on the east wall (hq_interview, x -50.4..-50,
+	z 212..224, y 10.4..15.9: above the first flight, whose handrail tops out at y 9.9 at z 224).
 
 	Charts, cards, bottles and books are drawn with GUI frames on SurfaceGuis (no extra parts).
 	Every player, legend, school and show name is fictional.

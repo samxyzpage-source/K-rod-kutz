@@ -691,6 +691,113 @@ local function runTests()
 		check(World.IsNight(Config, 20) and World.IsNight(Config, 3) and not World.IsNight(Config, 12), "IsNight boundaries")
 	end
 
+	do
+		-- Signs and props stay in view: each piece is built with its real builder (all steps) in its
+		-- own area's coordinates, then sight lines are checked against the parts that could hide them.
+		section("Signs and props stay in view")
+		local BuildUtil = requireNode("ServerScriptService/TycoonServer/BuildUtil")
+		local Builders = requireNode("ServerScriptService/TycoonServer/Builders")
+		local function build(pieceId)
+			local model = Instance.new("Model")
+			model.Name = pieceId
+			Builders[pieceId](BuildUtil.NewContext(CFrame.new(), model, Config.TeamColors[1], "TEST", Config))
+			return model
+		end
+		local function partsOf(model, name)
+			local list = {}
+			for _, d in ipairs(model:GetDescendants()) do
+				if d:IsA("BasePart") and (name == nil or d.Name == name) then
+					table.insert(list, d)
+				end
+			end
+			return list
+		end
+		-- world-space bounds of a part (rotation included)
+		local function bounds(part)
+			local cf, h = part.CFrame, part.Size / 2
+			local rv, uv, lv = cf.RightVector, cf.UpVector, cf.LookVector
+			local e = Vector3.new(
+				math.abs(rv.X) * h.X + math.abs(uv.X) * h.Y + math.abs(lv.X) * h.Z,
+				math.abs(rv.Y) * h.X + math.abs(uv.Y) * h.Y + math.abs(lv.Y) * h.Z,
+				math.abs(rv.Z) * h.X + math.abs(uv.Z) * h.Y + math.abs(lv.Z) * h.Z
+			)
+			return cf.Position - e, cf.Position + e
+		end
+		-- true if the straight line a -> b passes through the part's box
+		local function crosses(part, a, b)
+			local p0 = part.CFrame:PointToObjectSpace(a)
+			local d = part.CFrame:PointToObjectSpace(b) - p0
+			local half = part.Size / 2
+			local t0, t1 = 0, 1
+			for _, axis in ipairs({ "X", "Y", "Z" }) do
+				local o, v, h = p0[axis], d[axis], half[axis]
+				if math.abs(v) < 1e-9 then
+					if math.abs(o) > h then
+						return false
+					end
+				else
+					local ta, tb = (-h - o) / v, (h - o) / v
+					t0, t1 = math.max(t0, math.min(ta, tb)), math.min(t1, math.max(ta, tb))
+					if t0 > t1 then
+						return false
+					end
+				end
+			end
+			return true
+		end
+		-- the first part of `list` (other than `skip`) that the line a -> b passes through
+		local function blocker(list, a, b, skip)
+			for _, part in ipairs(list) do
+				if part ~= skip and crosses(part, a, b) then
+					return part
+				end
+			end
+			return nil
+		end
+		-- the keys of a set, sorted (for the messages)
+		local function keysOf(set)
+			local list = {}
+			for key in pairs(set) do
+				table.insert(list, key)
+			end
+			table.sort(list)
+			return list
+		end
+
+		-- F1: the interview room's PRESS ROOM panel and ON AIR light (on the lobby's east wall) are in
+		-- plain view from the lobby floor: the grand staircase doesn't stand in front of them
+		do
+			local stairs = partsOf(build("hq_atrium"))
+			local interview = build("hq_interview")
+			local eyes =
+				{ Vector3.new(-100, 5.3, 210), Vector3.new(-100, 5.3, 232), Vector3.new(-120, 5.3, 222), Vector3.new(-75, 5.3, 215) }
+			local found, hidden = 0, {}
+			for _, name in ipairs({ "LobbySign", "OnAirLight" }) do
+				for _, panel in ipairs(partsOf(interview, name)) do
+					found += 1
+					local lo, hi = bounds(panel)
+					for i = 1, 5 do
+						for j = 1, 3 do
+							local spot = Vector3.new(lo.X - 0.01, lo.Y + (hi.Y - lo.Y) * j / 4, lo.Z + (hi.Z - lo.Z) * i / 6)
+							for _, eye in ipairs(eyes) do
+								local hit = blocker(stairs, eye, spot)
+								if hit then
+									hidden[name .. " (" .. hit.Name .. ")"] = true
+								end
+							end
+						end
+					end
+				end
+			end
+			local list = keysOf(hidden)
+			check(
+				found == 2 and #list == 0,
+				"the PRESS ROOM panel and ON AIR light are in plain view from the lobby, not behind the grand staircase "
+					.. table.concat(list, ", ")
+			)
+		end
+	end
+
 	section("Bowl geometry (V5)")
 	do
 		local Bowl = requireNode("ServerScriptService/TycoonServer/Bowl")
