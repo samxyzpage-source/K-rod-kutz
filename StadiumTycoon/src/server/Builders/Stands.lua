@@ -31,17 +31,24 @@
 
 	SEATS are strips along the back 1.2 studs of every row (Bowl.SeatSpots puts game-day fans on the
 	front of the rows), coloured by section: the colour changes at every aisle line, so the bowl
-	shows alternating Primary / Secondary sections all the way round.
+	shows alternating Primary / Secondary sections all the way round. A low dark cup-holder rail
+	(0.3 tall, not collidable) runs along the front edge of rows 2-14, in front of the fans' seats.
 
 	AISLES (Bowl.Aisles, 3 wide): one 1-stud step on the back half of every row, so the climb goes
-	row top -> step -> next row top. Each aisle has dark sloped row-end caps on both sides and a
-	metal handrail; the sideline / end-zone aisles marked as entries also get an opening in the
-	field wall with three steps up from the turf.
+	row top -> step -> next row top. Each aisle has dark sloped row-end caps on both sides, each with
+	a row-number badge per row on its aisle face (in the colour of the seats beside it, turned
+	upright), and a metal handrail with a post every 3 rows (2.4 into a row: behind the fans); the
+	sideline / end-zone aisles marked as entries also get an opening in the field wall with three
+	steps up from the turf.
+
+	PLAYERS' TUNNELS: pillars, walls and a LED header at the mouth, a trim frame round the opening,
+	padded high-five rails along the wall tops, LED strips, painted slogans and a slap sign inside;
+	at home also a team medallion on the runway and two flame cannons beside the mouth.
 
 	Interactions: section plaques on the field walls (and on the corner aisles) with a description
 	card, gold TV camera seats near the front of both sidelines (Label "SEATS"), live score /
 	game-day / team panels in the sideline walls, and in each players' tunnel a LED header, a
-	"slap the sign" board and a plaque.
+	"slap the sign" board, a plaque and the high-five rail (plus the flame cannons at home).
 ]]
 
 local BuildUtil = require(script.Parent.Parent.BuildUtil)
@@ -1115,6 +1122,25 @@ local function playersTunnel(ctx, L, name, spec)
 	)
 
 	if spec.home then
+		-- a team medallion on the runway just inside the mouth, the live team name reading toward
+		-- the field (a disc lying flat: its +X axis points up, its face's text runs along -along)
+		local medallion = BuildUtil.Part(ctx, {
+			Name = "TunnelMedallion",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.06, 7, 7),
+			CFrame = F * CFrame.fromMatrix(Vector3.new(0, 0.15, -(mouthBack + 4)), Vector3.new(0, 1, 0), Vector3.new(0, 0, 1)),
+			Color = team.Secondary,
+			Material = Enum.Material.SmoothPlastic,
+			CanCollide = false,
+		})
+		BuildUtil.LiveText(medallion, Enum.NormalId.Right, "team", {
+			LabelName = "Live_team",
+			Text = displayName(ctx),
+			TextColor3 = readable(team.Secondary, team.Primary),
+			PixelsPerStud = 20,
+			Font = Enum.Font.GothamBlack,
+		})
+
 		-- game-day flame cannons in front of both pillars (beside the mouth, not in the way out)
 		for _, s in ipairs({ -1, 1 }) do
 			local box = segBox(
