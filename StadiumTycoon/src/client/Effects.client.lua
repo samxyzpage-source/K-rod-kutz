@@ -5,8 +5,8 @@
 	  * a guide beam points from your character to the button for your next goal
 	    (server sets the player attribute "NextGoal" to an item id)
 	  * small sounds for purchases and collecting cash (Config.Sounds)
-	  * game-day fans (tagged "TycoonFan" by the server) bounce and cheer - only on this
-	    screen, so it costs no network traffic
+	  * game-day fans near the camera (tagged "TycoonFan" by the server) hop and cheer - only
+	    on this screen, so it costs no network traffic
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -24,7 +24,7 @@ local notifyRemote = ReplicatedStorage:WaitForChild("TycoonRemotes"):WaitForChil
 local BUTTON_TAG = "TycoonBuyButton"
 local FAN_TAG = "TycoonFan"
 local GUIDE_HIDE_DISTANCE = 18
-local FAN_ANIMATE_DISTANCE = 260
+local FAN_CHEER_DISTANCE = 140 -- only fans this close to the camera cheer (the others just sit)
 
 ---------------------------------------------------------------------------------------------
 -- Pulsing buy buttons
@@ -46,66 +46,105 @@ CollectionService:GetInstanceRemovedSignal(BUTTON_TAG):Connect(function(pad)
 end)
 
 ---------------------------------------------------------------------------------------------
--- Cheering fans
+-- Cheering fans: a seated fan is its jersey block (the part the server tags) with its head
+-- inside it. Only the fans near the camera cheer, with a simple two-state hop, from Heartbeat
+-- (not RenderStepped), so two full stadiums cost little: nothing is worked out per fan when a
+-- crowd arrives, and every hop moves two parts to CFrames worked out once.
 ---------------------------------------------------------------------------------------------
-local fans = {} -- [Model] = { parts = { {part, restingCFrame} }, phase, speed }
+local FAN_HOP = Vector3.new(0, 0.7, 0)
+local FAN_UP_ABOVE = 0.35 -- a fan is in the air while sin(...) is above this (about 40% of the time)
+local FAN_UPDATE_INTERVAL = 1 / 15 -- a two-state hop needs no more updates than this
+local FAN_NEAR_INTERVAL = 0.5 -- how often the list of fans near the camera is rebuilt
 
-local function scanFan(model, entry)
-	entry.parts = {}
-	for _, descendant in ipairs(model:GetDescendants()) do
-		if descendant:IsA("BasePart") then
-			table.insert(entry.parts, { descendant, descendant.CFrame })
-		end
+-- [jersey block] = { phase, speed, position (where it sits), up (in the air?), gone (removed?),
+--   parts = { {part, restCFrame, raisedCFrame} } (made when the fan first comes near),
+--   near = the nearStamp of the last refresh that found it near the camera }
+local fans = {}
+local nearFans = {} -- entries of the fans near the camera (the ones that hop)
+local nearStamp = 0
+local nextFanUpdate, nextNearUpdate = 0, 0
+local movedParts, movedCFrames = {}, {}
+
+local function trackFan(fan)
+	if fan:IsA("BasePart") then
+		fans[fan] = { phase = math.random() * math.pi * 2, speed = 5 + math.random() * 3, position = fan.CFrame.Position, up = false }
 	end
 end
 
-local function trackFan(model)
-	if not model:IsA("Model") then
-		return
-	end
-	local entry = { parts = {}, phase = math.random() * math.pi * 2, speed = 5 + math.random() * 3 }
-	scanFan(model, entry)
-	fans[model] = entry
-end
-
-for _, model in ipairs(CollectionService:GetTagged(FAN_TAG)) do
-	trackFan(model)
+for _, fan in ipairs(CollectionService:GetTagged(FAN_TAG)) do
+	trackFan(fan)
 end
 CollectionService:GetInstanceAddedSignal(FAN_TAG):Connect(trackFan)
-CollectionService:GetInstanceRemovedSignal(FAN_TAG):Connect(function(model)
-	fans[model] = nil
+CollectionService:GetInstanceRemovedSignal(FAN_TAG):Connect(function(fan)
+	local entry = fans[fan]
+	if entry then
+		entry.gone = true
+		fans[fan] = nil
+	end
 end)
 
-local FAN_UPDATE_INTERVAL = 1 / 20 -- cheering doesn't need 60 updates a second
-local nextFanUpdate = 0
-local movedParts, movedCFrames = {}, {}
+-- Where the fan's parts rest and where they are in the air (only while it sits, so the CFrames
+-- read are the resting ones).
+local function scanFan(fan, entry)
+	local parts = { { fan, fan.CFrame, fan.CFrame + FAN_HOP } }
+	for _, descendant in ipairs(fan:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			table.insert(parts, { descendant, descendant.CFrame, descendant.CFrame + FAN_HOP })
+		end
+	end
+	entry.parts = parts
+end
+
+local function moveFan(entry, up)
+	entry.up = up
+	local slot = up and 3 or 2
+	for _, item in ipairs(entry.parts) do
+		table.insert(movedParts, item[1])
+		table.insert(movedCFrames, item[slot])
+	end
+end
+
+-- Rebuilds the list of fans near the camera; fans that are no longer near sit back down.
+local function refreshNearFans(cameraPosition)
+	nearStamp += 1
+	local near = {}
+	for fan, entry in pairs(fans) do
+		if fan.Parent == nil then
+			entry.gone = true
+			fans[fan] = nil
+		elseif (entry.position - cameraPosition).Magnitude < FAN_CHEER_DISTANCE then
+			if not entry.parts or (#entry.parts < 2 and not entry.up) then
+				scanFan(fan, entry) -- (the head may replicate a moment after the tag)
+			end
+			entry.near = nearStamp
+			table.insert(near, entry)
+		end
+	end
+	for _, entry in ipairs(nearFans) do
+		if entry.near ~= nearStamp and entry.up and not entry.gone then
+			moveFan(entry, false)
+		end
+	end
+	nearFans = near
+end
 
 local function animateFans(now)
 	if now < nextFanUpdate then
 		return
 	end
 	nextFanUpdate = now + FAN_UPDATE_INTERVAL
-	local camera = Workspace.CurrentCamera
-	local cameraPosition = camera and camera.CFrame.Position or Vector3.new()
 	table.clear(movedParts)
 	table.clear(movedCFrames)
-	for model, entry in pairs(fans) do
-		if model.Parent == nil then
-			fans[model] = nil
-		else
-			if #entry.parts < 2 then
-				scanFan(model, entry) -- children may replicate a moment after the tag
-			end
-			local first = entry.parts[1]
-			if first and (first[2].Position - cameraPosition).Magnitude < FAN_ANIMATE_DISTANCE then
-				local lift = math.floor(math.max(0, math.sin(now * entry.speed + entry.phase)) * 9) / 10
-				if lift ~= entry.lift then
-					entry.lift = lift
-					for _, pair in ipairs(entry.parts) do
-						table.insert(movedParts, pair[1])
-						table.insert(movedCFrames, pair[2] + Vector3.new(0, lift, 0))
-					end
-				end
+	if now >= nextNearUpdate then
+		nextNearUpdate = now + FAN_NEAR_INTERVAL
+		local camera = Workspace.CurrentCamera
+		refreshNearFans(camera and camera.CFrame.Position or Vector3.new())
+	end
+	for _, entry in ipairs(nearFans) do
+		if not entry.gone then
+			local up = math.sin(now * entry.speed + entry.phase) > FAN_UP_ABOVE
+			if up ~= entry.up then
+				moveFan(entry, up)
 			end
 		end
 	end
@@ -113,6 +152,10 @@ local function animateFans(now)
 		Workspace:BulkMoveTo(movedParts, movedCFrames, Enum.BulkMoveMode.FireCFrameChanged)
 	end
 end
+
+RunService.Heartbeat:Connect(function()
+	animateFans(os.clock())
+end)
 
 ---------------------------------------------------------------------------------------------
 -- Walking fans (game-day parade): the server sets WalkFrom/WalkTo/WalkStart/WalkDuration on
@@ -156,7 +199,6 @@ local function animateWalkers()
 end
 
 RunService.RenderStepped:Connect(function()
-	animateFans(os.clock())
 	animateWalkers()
 	local wave = (math.sin(os.clock() * 4) + 1) / 2 -- 0..1
 	for pad in pairs(buttons) do

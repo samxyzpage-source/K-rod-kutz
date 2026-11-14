@@ -43,6 +43,7 @@ Config.GameDay = {
 	DurationSeconds = 60,
 	IncomeMultiplier = 2,
 	SeatedFans = 1200, -- max seated fans per stadium (sections about half full, best seats first: see Crowd.lua)
+	FansPerFrame = 150, -- seated fans arrive (and leave) this many per server frame, one stadium after the other
 	WalkingFans = 8, -- fans that walk in through the gate at kick-off
 }
 
