@@ -1500,6 +1500,46 @@ local function runTests()
 			)
 		end
 
+		do
+			-- the night flood lights reach the turf (Roblox lights reach 60 studs at most, so the
+			-- light towers add field-level fixtures)
+			local L = Config.Layout
+			local floods, fieldLights, quadrants, hidden = {}, 0, {}, true
+			for _, light in ipairs(plotModel(1).Items:GetDescendants()) do
+				if light:IsA("SpotLight") and light.Name == "FloodLight" then
+					local host = light.Parent
+					local cf = alicePlot.Origin:ToObjectSpace(host.CFrame)
+					table.insert(floods, { light = light, position = cf.Position, axis = cf.LookVector })
+					if host.Name == "FieldLight" then
+						fieldLights += 1
+						local p = cf.Position
+						quadrants[(p.X > 0 and "E" or "W") .. (p.Z > L.FieldCenterZ and "H" or "V")] = true
+						hidden = hidden and host.Transparency == 1 and not host.CanCollide and not host.CanQuery and not light.Enabled
+					end
+				end
+			end
+			local reached, cells = 0, 0
+			for x = -130, 130, 10 do
+				for z = L.SurfaceMinZ + 3, L.SurfaceMaxZ - 3, 10 do
+					cells += 1
+					local spot = Vector3.new(x, 0.2, z)
+					for _, flood in ipairs(floods) do
+						local offset = spot - flood.position
+						local distance = offset.Magnitude
+						if distance <= flood.light.Range and offset.Unit:Dot(flood.axis) >= math.cos(math.rad(flood.light.Angle / 2)) then
+							reached += 1
+							break
+						end
+					end
+				end
+			end
+			check(
+				fieldLights >= 12 and quadrants.EH and quadrants.EV and quadrants.WH and quadrants.WV and hidden,
+				("%d invisible field-level flood lights, in every quarter of the field, off by day"):format(fieldLights)
+			)
+			check(reached >= cells * 0.85, ("night flood lights reach %d of %d spots on the turf"):format(reached, cells))
+		end
+
 		section("Items, mini-games, live screens")
 		local counter = BuildUtil.Box(fixCtx, "Counter", Vector3.new(4, 3, 2), Vector3.new(-150, 1.5, 220))
 		local hotdogPrompt = BuildUtil.Use(fixCtx, counter, "hotdog")
