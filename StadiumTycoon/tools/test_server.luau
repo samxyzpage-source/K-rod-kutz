@@ -3210,132 +3210,551 @@ local function runTests()
 	check(hank:GetAttribute("TestBonus") == true, "the bonus button knows it's test cash in Studio")
 
 	section("Game day")
-	local GameDay = requireNode("ServerScriptService/TycoonServer/GameDay")
-	Config.GameDay.IntervalSeconds = 0.3
-	Config.GameDay.DurationSeconds = 3 -- (long enough for the crowd to arrive, a chunk per frame)
-	local fullPlot = PlotManager.GetPlot(alice2)
-	local incomeBefore = alice2:GetAttribute("Income")
-	GameDay.Init(tycoons, PlotManager)
-	GameDay.Start()
-	check(type(tycoons:GetAttribute("NextGameDayAt")) == "number", "next game day time is published for the HUD")
-	task.wait(0.6)
-	check(tycoons:GetAttribute("GameDayActive") == true and GameDay.IsActive(), "a game day starts on schedule")
-	Config.GameDay.IntervalSeconds = 1000 -- no more game days during the rest of the tests
-	check(alice2:GetAttribute("Income") == incomeBefore * Config.GameDay.IncomeMultiplier, "income is boosted during the game day")
-	for _ = 1, 75 do -- (the fans arrive a chunk per frame: wait until the whole crowd is in)
-		local arriving, inStands = fullPlot.Model:FindFirstChild("GameDayFans"), 0
-		for _, child in ipairs(arriving and arriving:GetChildren() or {}) do
-			if child.Name == "Fan" then
-				inStands += 1
-			end
-		end
-		if inStands >= Config.GameDay.SeatedFans then
-			break
-		end
-		task.wait(0.02)
-	end
-	local crowd = fullPlot.Model:FindFirstChild("GameDayFans")
-	local seated, walkers = 0, 0
-	for _, child in ipairs(crowd and crowd:GetChildren() or {}) do
-		if child.Name:sub(1, 3) == "Fan" then
-			seated += 1
-		elseif child.Name:sub(1, 6) == "Walker" then
-			walkers += 1
-		end
-	end
-	check(seated > 0 and seated <= Config.GameDay.SeatedFans, ("fans fill the stands (%d seated)"):format(seated))
 	do
-		-- fans sit together in sections (not one here and one there), the lower bowl first
-		local bodies = {}
-		for _, child in ipairs(crowd and crowd:GetChildren() or {}) do
-			local body = child.Name:sub(1, 3) == "Fan" and child:IsA("BasePart") and child
-			if body then
-				table.insert(bodies, body.CFrame.Position)
-			end
-		end
-		local withNeighbour, lowerBowl = 0, 0
-		local floorY = fullPlot.Origin.Position.Y
-		for i, a in ipairs(bodies) do
-			for j, b in ipairs(bodies) do
-				if i ~= j and (a - b).Magnitude < 2.7 then
-					withNeighbour += 1
-					break
+		-- Every plot plays its own game days; the owner starts them (START GAME -> StartGameDay).
+		-- Plot 2 is alice2's finished franchise (her save was released at shutdown, so her games are
+		-- friendly scrimmages); plot 1 is hank's, with nothing built yet.
+		local GameDay = requireNode("ServerScriptService/TycoonServer/GameDay")
+		local savedSettings = table.clone(Config.GameDay)
+		Config.GameDay.DurationSeconds = 3 -- (long enough for the crowd to arrive, a chunk per frame)
+		Config.GameDay.CooldownSeconds = 1.5
+		local fullPlot = PlotManager.GetPlot(alice2)
+		local hankPlot = PlotManager.GetPlot(hank)
+		local model2, model1 = fullPlot.Model, hankPlot.Model
+		local incomeBefore = alice2:GetAttribute("Income")
+		GameDay.Init(PlotManager, remoteInstances, notifyRemote)
+		GameDay.SetMatchMaker(Franchise.DecideGame)
+		GameDay.OnEnded(Franchise.FinishGame)
+		GameDay.Start()
+		local startRemote = remoteInstances:FindFirstChild("StartGameDay")
+		remotesFolder.StartGameDay = startRemote
+		local function said(player, from, text)
+			for index = from, #notifications do
+				local note = notifications[index]
+				if note.player == player and note.message:find(text, 1, true) then
+					return true
 				end
 			end
-			if a.Y - floorY < 32 then
-				lowerBowl += 1
+			return false
+		end
+		local function waitUntil(condition, seconds)
+			local deadline = os.clock() + seconds
+			while not condition() and os.clock() < deadline do
+				task.wait(0.02)
 			end
+			return condition()
 		end
-		local n = math.max(#bodies, 1)
+		local function crowdOf(plot)
+			local seated, walkers = 0, 0
+			local folder = plot.Model:FindFirstChild("GameDayFans")
+			for _, child in ipairs(folder and folder:GetChildren() or {}) do
+				if child.Name == "Fan" then
+					seated += 1
+				elseif child.Name:sub(1, 6) == "Walker" then
+					walkers += 1
+				end
+			end
+			return seated, walkers, folder
+		end
+
+		check(startRemote ~= nil and startRemote.ClassName == "RemoteEvent", "the StartGameDay remote is created")
 		check(
-			#bodies >= math.min(Config.GameDay.SeatedFans, 600) and withNeighbour / n > 0.5, -- (spread evenly, about 15% would be)
-			("fans sit together in sections (%d of %d next to another fan)"):format(withNeighbour, #bodies)
+			model2:GetAttribute("GameDayStatus") == "ready"
+				and model2:GetAttribute("GameReady") == true
+				and model2:GetAttribute("NextGameReadyAt") == nil,
+			"a finished field is ready for its first game straight away: " .. tostring(model2:GetAttribute("GameDayStatus"))
 		)
-		check(lowerBowl / n > 0.5, ("the lower bowl fills first (%d of %d fans)"):format(lowerBowl, #bodies))
-	end
-	task.wait(0.1)
-	local walkerTagged = CollectionServiceMock:GetTagged("TycoonWalker")[1]
-	local walkerRootPart = walkerTagged and walkerTagged:FindFirstChild("Root")
-	check(
-		walkerRootPart ~= nil and walkerRootPart:GetAttribute("WalkTo") ~= nil and walkerRootPart:GetAttribute("WalkDuration") ~= nil,
-		"walking fans carry their path for the client to animate"
-	)
-	check(#CollectionServiceMock:GetTagged("TycoonFan") >= seated, "fans are tagged for the cheering animation")
-	local hankPlot = PlotManager.GetPlot(hank)
-	local hankCrowd = hankPlot.Model:FindFirstChild("GameDayFans")
-	local hankSeated = 0
-	for _, child in ipairs(hankCrowd and hankCrowd:GetChildren() or {}) do
-		if child.Name:sub(1, 3) == "Fan" then
-			hankSeated += 1
+		check(
+			model1:GetAttribute("GameDayStatus") == "nofield" and model1:GetAttribute("GameReady") == false,
+			"a plot without goal posts can't play yet: " .. tostring(model1:GetAttribute("GameDayStatus"))
+		)
+		check(
+			LiveScreens.Texts(fullPlot).gameday == "READY - PRESS START GAME"
+				and LiveScreens.Texts(hankPlot).gameday == "BUILD THE GOAL POSTS",
+			"the live screens say whether each plot can play: " .. LiveScreens.Texts(fullPlot).gameday
+		)
+		task.wait(0.7)
+		check(
+			not GameDay.IsActive() and model2:GetAttribute("GameDayActive") == false and tycoons:GetAttribute("GameDayActive") == nil,
+			"game days never start by themselves (and there is no server-wide game day any more)"
+		)
+
+		-- the request is checked on the server
+		local okBob, whyBob = GameDay.RequestStart(bob)
+		check(
+			not okBob and tostring(whyBob):find("Claim a stadium") ~= nil,
+			"a player without a stadium can't start one: " .. tostring(whyBob)
+		)
+		local okHank, whyHank = GameDay.RequestStart(hank)
+		check(
+			not okHank and tostring(whyHank):find("goal posts") ~= nil and not GameDay.IsActive(hankPlot),
+			"no game before the goal posts are built: " .. tostring(whyHank)
+		)
+		local aliceRoot = alice2.Character.HumanoidRootPart
+		aliceRoot.CFrame = fullPlot.Origin * CFrame.new(0, 3, -1500) -- (out past the street)
+		local okAway, whyAway = GameDay.RequestStart(alice2)
+		check(
+			not okAway and tostring(whyAway):find("Head back") ~= nil and not GameDay.IsActive(fullPlot),
+			"the owner has to be at their own franchise to kick off: " .. tostring(whyAway)
+		)
+		local aliceCharacter = alice2.Character
+		alice2.Character = nil -- (respawning)
+		local okRespawn, whyRespawn = GameDay.RequestStart(alice2)
+		alice2.Character = aliceCharacter
+		check(
+			not okRespawn and tostring(whyRespawn):find("back on your feet") ~= nil and not GameDay.IsActive(fullPlot),
+			"no kick-off while the owner is respawning: " .. tostring(whyRespawn)
+		)
+		aliceRoot.CFrame = fullPlot.Refs.SpawnCFrame -- (in the HQ lobby, far behind the stadium: still on the plot)
+
+		-- START GAME (through the remote, like the HUD button)
+		local fromStart = #notifications + 1
+		instanceSignal(startRemote, "OnServerEvent"):Fire(alice2)
+		local endsAt = model2:GetAttribute("GameDayEndsAt")
+		check(
+			GameDay.IsActive(fullPlot) and model2:GetAttribute("GameDayActive") == true and model2:GetAttribute("GameDayStatus") == "active",
+			"START GAME kicks off the owner's game day"
+		)
+		check(
+			model2:GetAttribute("GameReady") == false
+				and type(endsAt) == "number"
+				and math.abs(endsAt - workspace:GetServerTimeNow() - Config.GameDay.DurationSeconds) < 0.3,
+			"its end time is published for the HUD"
+		)
+		check(model2:GetAttribute("HomeScore") == 0 and model2:GetAttribute("AwayScore") == 0, "the scoreboard starts at 0 - 0 at kick-off")
+		check(alice2:GetAttribute("Income") == incomeBefore * Config.GameDay.IncomeMultiplier, "the owner's income is boosted")
+		check(
+			hankPlot.IncomeBoost == 1 and not GameDay.IsActive(hankPlot) and model1:GetAttribute("GameDayActive") == false,
+			"the other franchise has no game day and no boost"
+		)
+		check(said(alice2, fromStart, "GAME DAY!"), "the owner is told the game day started")
+		check(
+			LiveScreens.Texts(fullPlot).gameday:find("GAME DAY!", 1, true) ~= nil,
+			"the live screens count the game down: " .. LiveScreens.Texts(fullPlot).gameday
+		)
+		local notesBefore = #notifications
+		instanceSignal(startRemote, "OnServerEvent"):Fire(alice2)
+		check(#notifications == notesBefore, "start requests less than a second apart are ignored")
+		local okAgain, whyAgain = GameDay.RequestStart(alice2)
+		check(not okAgain and tostring(whyAgain):find("already on") ~= nil, "a game that is on can't start again")
+
+		-- the score goes up play by play (scoreboard, jumbotron, plot attributes)
+		local samples, jumboTexts, sampling = {}, {}, true
+		local jumbo = fullPlot.ItemsFolder:FindFirstChild("JumbotronText", true)
+		task.spawn(function()
+			while sampling do
+				table.insert(samples, { fullPlot.HomeScore, fullPlot.AwayScore })
+				if jumbo then
+					jumboTexts[jumbo.Text] = true
+				end
+				task.wait()
+			end
+		end)
+
+		-- the crowd fills the stands this owner built
+		waitUntil(function() -- (the fans arrive a chunk per frame: wait until the whole crowd is in)
+			return (crowdOf(fullPlot)) >= Config.GameDay.SeatedFans
+		end, 1.5)
+		local seated, _, crowd = crowdOf(fullPlot)
+		check(seated > 0 and seated <= Config.GameDay.SeatedFans, ("fans fill the stands (%d seated)"):format(seated))
+		do
+			-- fans sit together in sections (not one here and one there), the lower bowl first
+			local bodies = {}
+			for _, child in ipairs(crowd and crowd:GetChildren() or {}) do
+				local body = child.Name:sub(1, 3) == "Fan" and child:IsA("BasePart") and child
+				if body then
+					table.insert(bodies, body.CFrame.Position)
+				end
+			end
+			local withNeighbour, lowerBowl = 0, 0
+			local floorY = fullPlot.Origin.Position.Y
+			for i, a in ipairs(bodies) do
+				for j, b in ipairs(bodies) do
+					if i ~= j and (a - b).Magnitude < 2.7 then
+						withNeighbour += 1
+						break
+					end
+				end
+				if a.Y - floorY < 32 then
+					lowerBowl += 1
+				end
+			end
+			local n = math.max(#bodies, 1)
+			check(
+				#bodies >= math.min(Config.GameDay.SeatedFans, 600) and withNeighbour / n > 0.5, -- (spread evenly, about 15% would be)
+				("fans sit together in sections (%d of %d next to another fan)"):format(withNeighbour, #bodies)
+			)
+			check(lowerBowl / n > 0.5, ("the lower bowl fills first (%d of %d fans)"):format(lowerBowl, #bodies))
+		end
+		task.wait(0.1)
+		local walkerTagged = CollectionServiceMock:GetTagged("TycoonWalker")[1]
+		local walkerRootPart = walkerTagged and walkerTagged:FindFirstChild("Root")
+		check(
+			walkerRootPart ~= nil and walkerRootPart:GetAttribute("WalkTo") ~= nil and walkerRootPart:GetAttribute("WalkDuration") ~= nil,
+			"walking fans carry their path for the client to animate"
+		)
+		check(#CollectionServiceMock:GetTagged("TycoonFan") >= seated, "fans are tagged for the cheering animation")
+
+		-- the second owner: finishing the goal posts makes their field ready, then they kick off
+		-- while the first game is still on (two owners, two game days, each on its own clock)
+		local hankProfile = PlayerData.GetProfile(hank)
+		hankProfile.Owned["goalposts:1"] = true -- (plot.Owned is the profile's table)
+		hankProfile.Owned["goalposts:2"] = true
+		GameDay.Refresh(hankPlot)
+		check(model1:GetAttribute("GameDayStatus") == "nofield", "half-built goal posts don't make a field yet")
+		local postsItem = Items.ById["goalposts:3"]
+		PlayerData.AddCash(hank, postsItem.Cost)
+		local fromPosts = #notifications + 1
+		check(PlotManager.Purchase(hankPlot, postsItem), "the last goal-post step is bought")
+		task.wait(0.05)
+		check(
+			model1:GetAttribute("GameDayStatus") == "ready" and model1:GetAttribute("GameReady") == true,
+			"finishing the goal posts makes the field ready for its first game"
+		)
+		check(said(hank, fromPosts, "Press START GAME"), "and the owner is told to press START GAME")
+		hankPlot.Building = true -- (the plot being rebuilt: a returning owner or new team colours)
+		GameDay.Refresh(hankPlot)
+		local okBuilding, whyBuilding = GameDay.RequestStart(hank)
+		check(
+			model1:GetAttribute("GameDayStatus") == "building" and not okBuilding and tostring(whyBuilding):find("being built") ~= nil,
+			"no kick-off while the plot is being rebuilt: " .. tostring(whyBuilding)
+		)
+		hankPlot.Building = false
+		GameDay.Refresh(hankPlot)
+		local hankF = hankProfile.Franchise
+		local hankGames = (hankF.Stats.Wins or 0) + (hankF.Stats.Losses or 0)
+		local hankSeason = ("%d/%d/%s"):format(hankF.Season.Number, hankF.Season.Week, hankF.Season.Stage)
+		local hankIncome = hank:GetAttribute("Income")
+		hank.Character.HumanoidRootPart.CFrame = hankPlot.Refs.SpawnCFrame
+		local fromHank = #notifications + 1
+		check(GameDay.RequestStart(hank) == true, "the second owner kicks off too")
+		check(
+			GameDay.IsActive(hankPlot)
+				and GameDay.IsActive(fullPlot)
+				and model1:GetAttribute("GameDayEndsAt") > model2:GetAttribute("GameDayEndsAt"),
+			"two game days run at once, each on its own clock"
+		)
+		check(
+			hank:GetAttribute("Income") == hankIncome * Config.GameDay.IncomeMultiplier
+				and alice2:GetAttribute("Income") == incomeBefore * Config.GameDay.IncomeMultiplier,
+			"each owner's income is boosted by their own game day"
+		)
+		task.wait(0.1)
+		check((crowdOf(hankPlot)) == 0, "no seated fans in a stadium without stands")
+		-- new team colours in the middle of the game: the plot is rebuilt, the game goes on
+		check(PlotManager.ApplyTeam(hank, Config.TeamColors[2], "TESTGD"), "(new team colours during the game)")
+		task.wait(0.05)
+		check(
+			not hankPlot.Building
+				and GameDay.IsActive(hankPlot)
+				and model1:GetAttribute("GameDayStatus") == "active"
+				and hank:GetAttribute("Income") == hankIncome * Config.GameDay.IncomeMultiplier,
+			"a team change during the game day doesn't stop it (or its boost)"
+		)
+
+		-- the first game ends: the result stays on the board, the cooldown starts
+		local fromEnd = #notifications + 1
+		check(
+			waitUntil(function()
+				return not GameDay.IsActive(fullPlot)
+			end, 3),
+			"the game day ends after DurationSeconds"
+		)
+		local readyAt = model2:GetAttribute("NextGameReadyAt")
+		check(
+			model2:GetAttribute("GameDayActive") == false
+				and model2:GetAttribute("GameDayStatus") == "cooldown"
+				and model2:GetAttribute("GameReady") == false
+				and type(readyAt) == "number"
+				and math.abs(readyAt - workspace:GetServerTimeNow() - Config.GameDay.CooldownSeconds) < 0.3,
+			"then the next game is ready CooldownSeconds later: " .. tostring(model2:GetAttribute("GameDayStatus"))
+		)
+		check(GameDay.IsActive(hankPlot), "the other owner's game goes on")
+		check(alice2:GetAttribute("Income") == incomeBefore and fullPlot.IncomeBoost == 1, "income goes back to normal")
+		check(said(alice2, fromEnd, "next game is ready in"), "the owner is told when the next game is ready")
+		check(
+			LiveScreens.Texts(fullPlot).gameday:find("NEXT GAME IN", 1, true) ~= nil,
+			"the live screens count down to the next game: " .. LiveScreens.Texts(fullPlot).gameday
+		)
+		local okRest, whyRest = GameDay.RequestStart(alice2)
+		check(not okRest and tostring(whyRest):find("ready in") ~= nil, "no new game during the cooldown: " .. tostring(whyRest))
+		Config.GameDay.CooldownSeconds = 2.5 -- (the second game's cooldown: time to leave and come back during it)
+		-- (the plot is "being rebuilt" (e.g. new team colours) while this cooldown runs out: see below)
+		local fromReady = #notifications + 1
+		fullPlot.Building = true
+		sampling = false
+		local rising, last = true, { 0, 0 }
+		for _, sample in ipairs(samples) do
+			if sample[1] < last[1] or sample[2] < last[2] then
+				rising = false
+			end
+			last = sample
+		end
+		local scoreLabel = fullPlot.ItemsFolder:FindFirstChild("ScoreboardScore", true)
+		check(
+			rising and last[1] + last[2] > 0 and last[1] == fullPlot.HomeScore and last[2] == fullPlot.AwayScore,
+			("the score only goes up during the game, to the final score (%d - %d)"):format(fullPlot.HomeScore, fullPlot.AwayScore)
+		)
+		check(
+			fullPlot.HomeScore ~= fullPlot.AwayScore
+				and scoreLabel ~= nil
+				and scoreLabel.Text == ("HOME %d  -  AWAY %d"):format(fullPlot.HomeScore, fullPlot.AwayScore)
+				and model2:GetAttribute("HomeScore") == fullPlot.HomeScore,
+			"the final score stays on the scoreboard: " .. tostring(scoreLabel and scoreLabel.Text)
+		)
+		check(jumboTexts["TOUCHDOWN!"] or jumboTexts["FIELD GOAL!"], "the jumbotron cheers the home team's touchdowns and field goals")
+		check(
+			waitUntil(function()
+				return fullPlot.Model:FindFirstChild("GameDayFans") == nil
+			end, 2),
+			"the crowd leaves afterwards"
+		)
+
+		-- the cooldown runs out while the plot is being rebuilt: once the game can really start, the
+		-- owner is told and START GAME comes back
+		check(
+			waitUntil(function()
+				return model2:GetAttribute("GameDayStatus") == "building"
+			end, 2.5),
+			"a cooldown that runs out during a rebuild waits for the rebuild"
+		)
+		check(not said(alice2, fromReady, "next game is ready"), "(nobody is told yet)")
+		fullPlot.Building = false
+		check(
+			waitUntil(function()
+				return model2:GetAttribute("GameDayStatus") == "ready"
+			end, 1),
+			"the next game is ready when the cooldown (and the rebuild) are over"
+		)
+		check(
+			model2:GetAttribute("GameReady") == true
+				and model2:GetAttribute("NextGameReadyAt") == nil
+				and said(alice2, fromReady, "next game is ready"),
+			"and the owner is told to press START GAME"
+		)
+
+		-- the second game ends: Franchise records it (a week of the season, the prize, the record)
+		check(
+			waitUntil(function()
+				return not GameDay.IsActive(hankPlot)
+			end, 3),
+			"the second game day ends on its own clock"
+		)
+		local hankGamesAfter = (hankF.Stats.Wins or 0) + (hankF.Stats.Losses or 0)
+		check(hankGamesAfter == hankGames + 1, "the game counts as a win or a loss")
+		check(
+			("%d/%d/%s"):format(hankF.Season.Number, hankF.Season.Week, hankF.Season.Stage) ~= hankSeason,
+			"and as a week of the season: " .. tostring(hank:GetAttribute("Season"))
+		)
+		check(said(hank, fromHank, "FINAL:"), "the final score is announced")
+		check(
+			hankPlot.HomeScore ~= hankPlot.AwayScore
+				and math.max(hankPlot.HomeScore, hankPlot.AwayScore) >= 14
+				and model1:GetAttribute("HomeScore") == hankPlot.HomeScore,
+			("the result decided at kick-off is the final score (%d - %d)"):format(hankPlot.HomeScore, hankPlot.AwayScore)
+		)
+
+		-- leaving during the cooldown and coming back (same server) doesn't skip it
+		local hankReadyAt = model1:GetAttribute("NextGameReadyAt")
+		check(model1:GetAttribute("GameDayStatus") == "cooldown" and type(hankReadyAt) == "number", "(the second game's cooldown runs)")
+		removePlayer(hank)
+		PlotManager.Release(hank)
+		check(
+			model1:GetAttribute("GameDayStatus") == nil
+				and model1:GetAttribute("GameReady") == false
+				and model1:GetAttribute("NextGameReadyAt") == nil,
+			"a freed plot has no game-day status"
+		)
+		hank.Parent = Players
+		table.insert(Players.list, hank)
+		touch(claimTrigger(1), hank)
+		check(
+			PlotManager.GetPlot(hank) == hankPlot
+				and model1:GetAttribute("GameDayStatus") == "cooldown"
+				and model1:GetAttribute("NextGameReadyAt") == hankReadyAt,
+			"a returning owner's cooldown carries on: " .. tostring(model1:GetAttribute("GameDayStatus"))
+		)
+
+		-- the owner leaves in the middle of a game day: it stops at once, with no result
+		Config.GameDay.DurationSeconds = 1
+		check(
+			waitUntil(function()
+				return model1:GetAttribute("GameDayStatus") == "ready"
+			end, 3),
+			"(the cooldown runs out)"
+		)
+		hank.Character.HumanoidRootPart.CFrame = hankPlot.Refs.SpawnCFrame
+		check(GameDay.RequestStart(hank) == true, "(a new game day starts)")
+		local gamesAtLeave = (hankF.Stats.Wins or 0) + (hankF.Stats.Losses or 0)
+		task.wait(0.3)
+		local fromLeave = #notifications + 1
+		removePlayer(hank)
+		PlotManager.Release(hank)
+		check(
+			not GameDay.IsActive(hankPlot)
+				and model1:GetAttribute("GameDayActive") == false
+				and model1:GetAttribute("GameDayStatus") == nil
+				and model1:GetAttribute("GameDayEndsAt") == nil,
+			"releasing the plot ends its game day at once"
+		)
+		check(hankPlot.IncomeBoost == 1 and hankPlot.GameDayActive == false, "and its income boost")
+		check(model1:FindFirstChild("GameDayFans") == nil, "and its crowd is gone")
+		task.wait(1.2)
+		check(
+			(hankF.Stats.Wins or 0) + (hankF.Stats.Losses or 0) == gamesAtLeave and not said(hank, fromLeave, "FINAL:"),
+			"a game day cut short has no result (and nothing happens to the freed plot later)"
+		)
+		check(model1:GetAttribute("GameDayActive") == false and model1:GetAttribute("GameDayStatus") == nil, "the freed plot stays quiet")
+
+		-- coming back: the franchise is rebuilt over several frames; no kick-off until it's done
+		Config.BuildFrameBudget = 0 -- (one step per frame)
+		hank.Parent = Players
+		table.insert(Players.list, hank)
+		local fromRejoin = #notifications + 1
+		task.spawn(PlotManager.Claim, hankPlot, hank, hankProfile)
+		local okRebuild, whyRebuild = GameDay.RequestStart(hank)
+		check(
+			hankPlot.Building and model1:GetAttribute("GameDayStatus") == "building" and not okRebuild,
+			"while a returning owner's franchise is rebuilt, the game waits: " .. tostring(whyRebuild)
+		)
+		check(
+			waitUntil(function()
+				return not hankPlot.Building and model1:GetAttribute("GameDayStatus") == "ready"
+			end, 2),
+			"then it's ready"
+		)
+		check(not said(hank, fromRejoin, "press START GAME"), "(a returning owner isn't told again that the game is ready)")
+		Config.BuildFrameBudget = math.huge
+		removePlayer(hank)
+		PlotManager.Release(hank)
+
+		-- back to how the later tests expect plot 1: hank owns it, nothing built
+		for stage = 1, 3 do
+			hankProfile.Owned["goalposts:" .. stage] = nil
+		end
+		hank.Parent = Players
+		table.insert(Players.list, hank)
+		touch(claimTrigger(1), hank)
+		check(
+			PlotManager.GetPlot(hank) == hankPlot and model1:GetAttribute("GameDayStatus") == "nofield" and button(1, "hq_lobby:1") ~= nil,
+			"(plot 1 is hank's again, with no goal posts)"
+		)
+		for key, value in pairs(savedSettings) do
+			Config.GameDay[key] = value
+		end
+
+		-- the plays that make up a final score: touchdowns and field goals, all before the whistle
+		do
+			local function sum(list)
+				local total = 0
+				for _, points in ipairs(list) do
+					total += points
+				end
+				return total
+			end
+			local good = true
+			for points = 0, 63 do
+				local split = GameDay._splitPoints(points)
+				local onlyBig = true
+				for _, p in ipairs(split) do
+					if p ~= 7 and p ~= 3 then
+						onlyBig = false
+					end
+				end
+				local representable = points >= 12 or points == 0 or points % 7 == 0 or points % 3 == 0 or points == 10
+				if sum(split) ~= points or (representable and not onlyBig) then
+					good = false
+				end
+			end
+			check(good, "a score is split into touchdowns (7) and field goals (3) wherever it can be")
+			local plays = GameDay._planPlays(24, 13, 60)
+			local home, away, ordered, inside = 0, 0, true, true
+			for index, play in ipairs(plays) do
+				if play.Home then
+					home += play.Points
+				else
+					away += play.Points
+				end
+				if index > 1 and play.At < plays[index - 1].At then
+					ordered = false
+				end
+				if play.At < 0.08 * 60 - 0.001 or play.At > 0.9 * 60 + 0.001 then
+					inside = false
+				end
+			end
+			check(
+				home == 24 and away == 13 and ordered and inside,
+				"the plays add up to the final score, in order, before the final whistle"
+			)
+		end
+
+		-- Franchise: the result is decided at kick-off; the hype it used is spent at the final whistle
+		do
+			hankF.Hype = 2
+			local game = Franchise.DecideGame(hankPlot)
+			check(
+				game ~= nil and game.Owner == hank and game.Hype == 2 and hankF.Hype == 2 and (game.Home > game.Away) == game.Won,
+				"kick-off decides the result with the team's hype"
+			)
+			hankF.Hype = 3 -- (a press conference during the game)
+			Franchise.FinishGame(hankPlot, game)
+			check(hankF.Hype == 1, "the final whistle spends the hype the game used (a press conference during the game counts next time)")
+			local before = (hankF.Stats.Wins or 0) + (hankF.Stats.Losses or 0)
+			Franchise.FinishGame(hankPlot, { Owner = alice2, Home = 7, Away = 3, Won = true, Hype = 0 })
+			check((hankF.Stats.Wins or 0) + (hankF.Stats.Losses or 0) == before, "a game decided for another owner doesn't count")
 		end
 	end
-	check(hankSeated == 0, "no seated fans in a stadium without stands")
-	local gameDayNote = lastNotification(alice2)
-	check(gameDayNote and gameDayNote.message:find("GAME DAY") ~= nil, "owners are told the game day started")
-	for _ = 1, 250 do -- (until the game day is over and its fans have left, a chunk per frame)
-		if not GameDay.IsActive() and fullPlot.Model:FindFirstChild("GameDayFans") == nil then
-			break
-		end
-		task.wait(0.02)
-	end
-	check(tycoons:GetAttribute("GameDayActive") == false and not GameDay.IsActive(), "the game day ends")
-	check(fullPlot.Model:FindFirstChild("GameDayFans") == nil, "the crowd leaves afterwards")
-	check(alice2:GetAttribute("Income") == incomeBefore, "income goes back to normal")
-	Config.GameDay.IntervalSeconds = 1000 -- no more game days during the rest of the tests
 	do
 		-- PERF-3: a seated fan is two instances (its tagged jersey block with the head inside), and
-		-- the crowds arrive and leave a chunk of fans per frame, one stadium after the other. Two
-		-- short game days on two test plots (through a stand-in plot manager).
-		local saved = {
-			SeatedFans = Config.GameDay.SeatedFans,
-			FansPerFrame = Config.GameDay.FansPerFrame,
-			WalkingFans = Config.GameDay.WalkingFans,
-			DurationSeconds = Config.GameDay.DurationSeconds,
-		}
+		-- the crowds arrive and leave a chunk of fans per frame, one stadium after the other (two
+		-- owners kick off at the same moment here, on two test plots through a stand-in plot manager).
+		local GameDay = requireNode("ServerScriptService/TycoonServer/GameDay")
+		local saved = table.clone(Config.GameDay)
 		Config.GameDay.SeatedFans = 400
 		Config.GameDay.FansPerFrame = 50
 		Config.GameDay.WalkingFans = 0
-		local testPlots = {}
+		Config.GameDay.CooldownSeconds = 0
+		local testPlots, owners = {}, {}
 		for index, z in ipairs({ 3000, -3000 }) do
 			local model = Instance.new("Model")
 			model.Name = "CrowdTestPlot" .. index
 			model.Parent = workspace
+			local origin = CFrame.new(0, 0.2, z)
+			local character = makeCharacter("CrowdOwner" .. index)
+			character.HumanoidRootPart.CFrame = origin * CFrame.new(0, 3, 0)
+			local owner = { Name = "CrowdOwner" .. index, UserId = 7100 + index, Parent = Players, Character = character }
+			owners[index] = owner
 			table.insert(testPlots, {
 				Index = index,
-				Origin = CFrame.new(0, 0.2, z),
+				Origin = origin,
 				Model = model,
-				Owner = hank,
+				Owner = owner,
 				Palette = Config.TeamColors[index],
 				TeamName = "TEST",
-				Owned = { ["lower_home:1"] = true },
+				Owned = { ["lower_home:1"] = true, ["goalposts:1"] = true, ["goalposts:2"] = true, ["goalposts:3"] = true },
+				HomeScore = 0,
+				AwayScore = 0,
 			})
 		end
-		GameDay.Init(Instance.new("Folder"), {
+		local function scoreSet(plot, home, away)
+			plot.HomeScore, plot.AwayScore = home, away
+		end
+		GameDay.Init({
 			GetPlots = function()
 				return testPlots
 			end,
+			GetPlot = function(player)
+				for _, plot in ipairs(testPlots) do
+					if plot.Owner == player then
+						return plot
+					end
+				end
+				return nil
+			end,
 			SetGameDay = function() end,
-		})
+			SetScore = scoreSet,
+			ScorePlay = scoreSet,
+		}, nil, notifyRemote)
 		local function seatedCount(plot)
 			local folder = plot.Model:FindFirstChild("GameDayFans")
 			local count = 0
@@ -3362,13 +3781,14 @@ local function runTests()
 		local function crowdsGone()
 			return testPlots[1].Model:FindFirstChild("GameDayFans") == nil and testPlots[2].Model:FindFirstChild("GameDayFans") == nil
 		end
-		Config.GameDay.IntervalSeconds = 0.05
+		local function bothActive()
+			return GameDay.IsActive(testPlots[1]) or GameDay.IsActive(testPlots[2])
+		end
 		Config.GameDay.DurationSeconds = 1.2
-		GameDay.Start()
+		check(GameDay.RequestStart(owners[1]) == true and GameDay.RequestStart(owners[2]) == true, "two owners kick off at the same moment")
 		waitUntil(function()
 			return seatedCount(testPlots[1]) >= 400 and seatedCount(testPlots[2]) >= 400
 		end, 1.1)
-		Config.GameDay.IntervalSeconds = 1000
 		local crowdA = testPlots[1].Model:FindFirstChild("GameDayFans")
 		local fansA, wellFormed, models = 0, 0, 0
 		for _, child in ipairs(crowdA and crowdA:GetChildren() or {}) do
@@ -3396,8 +3816,8 @@ local function runTests()
 				models
 			)
 		)
-		waitUntil(function() -- the game day ends and the fans leave
-			return not GameDay.IsActive() and crowdsGone()
+		waitUntil(function() -- the game days end and the fans leave
+			return not bothActive() and crowdsGone()
 		end, 4)
 		task.wait(0.05)
 		sampling = false
@@ -3430,36 +3850,35 @@ local function runTests()
 		)
 		check(crowdsGone(), "and the crowd folders are gone afterwards")
 
-		-- a crowd cleared while its fans arrive (plot released) isn't rebuilt, and a game day that
-		-- ends while the fans are still arriving (1 per frame here) leaves no crowd behind
+		-- a plot released while its fans arrive keeps no crowd (the arrival stops), and a game day
+		-- that ends while the fans are still arriving (1 per frame here) leaves no crowd behind
 		Config.GameDay.SeatedFans = 1200
 		Config.GameDay.FansPerFrame = 1
-		Config.GameDay.IntervalSeconds = 0.05
 		Config.GameDay.DurationSeconds = 0.6
 		local cleared = false
 		task.spawn(function()
 			for _ = 1, 2000 do
 				if seatedCount(testPlots[1]) > 0 then
-					GameDay.ClearCrowd(testPlots[1])
+					testPlots[1].Owner = nil -- (what PlotManager.Release does first)
+					GameDay.OnPlotReleased(testPlots[1])
 					cleared = true
 					return
 				end
 				task.wait()
 			end
 		end)
-		GameDay.Start()
+		check(GameDay.RequestStart(owners[1]) == true and GameDay.RequestStart(owners[2]) == true, "(two more game days)")
 		waitUntil(function()
 			return cleared
 		end, 0.6)
 		task.wait(0.05)
-		Config.GameDay.IntervalSeconds = 1000
 		Config.GameDay.FansPerFrame = 50 -- (for the leaving; the arrival keeps its 1 per frame)
 		check(
-			cleared and testPlots[1].Model:FindFirstChild("GameDayFans") == nil,
-			"a crowd cleared while its fans arrive stays gone (the arrival stops)"
+			cleared and testPlots[1].Model:FindFirstChild("GameDayFans") == nil and not GameDay.IsActive(testPlots[1]),
+			"a plot released while its fans arrive keeps no crowd (the arrival stops)"
 		)
 		waitUntil(function()
-			return not GameDay.IsActive()
+			return not GameDay.IsActive(testPlots[2])
 		end, 2)
 		local atEnd = seatedCount(testPlots[2])
 		waitUntil(crowdsGone, 3)
@@ -3471,10 +3890,10 @@ local function runTests()
 		for key, value in pairs(saved) do
 			Config.GameDay[key] = value
 		end
-		Config.GameDay.IntervalSeconds = 1000
-		GameDay.Init(tycoons, PlotManager)
-		for _, plot in ipairs(testPlots) do
+		GameDay.Init(PlotManager, remoteInstances, notifyRemote)
+		for index, plot in ipairs(testPlots) do
 			plot.Model:Destroy()
+			owners[index].Character:Destroy()
 		end
 	end
 
@@ -3516,19 +3935,80 @@ local function runTests()
 		)
 		check(hud:FindFirstChild("Income", true).Text == "+$45/s", "income label: " .. hud:FindFirstChild("Income", true).Text)
 		check(hud:FindFirstChild("SaveStatus", true).Text:find("ON") ~= nil, "save status label")
-		tycoons:SetAttribute("GameDayActive", false)
-		tycoons:SetAttribute("NextGameDayAt", os.clock() + 125)
-		task.wait(0.3)
-		local banner = hud:FindFirstChild("GameDay", true)
-		check(
-			banner and banner.Visible and banner.Text:find("Next game day in 2:0") ~= nil,
-			"game day countdown: " .. tostring(banner and banner.Text)
-		)
-		tycoons:SetAttribute("GameDayActive", true)
-		tycoons:SetAttribute("GameDayEndsAt", os.clock() + 42)
-		task.wait(0.3)
-		check(banner.Text:find("GAME DAY") ~= nil and banner.Text:find("0:4") ~= nil, "game day banner: " .. banner.Text)
-		tycoons:SetAttribute("GameDayActive", false)
+		do
+			-- the game-day panel follows the player's own plot (the attributes GameDay.lua sets on it)
+			local myPlot = Instance.new("Model")
+			myPlot.Name = "Plot7"
+			myPlot.Parent = tycoons
+			viewer:SetAttribute("PlotIndex", 7)
+			local banner = hud:FindFirstChild("GameDay", true)
+			local scoreLine = hud:FindFirstChild("GameScore", true)
+			local startButton = hud:FindFirstChild("StartGame", true)
+			local startHint = startButton and startButton:FindFirstChild("StartHint")
+			task.wait(0.3)
+			check(
+				banner and scoreLine and startButton and not banner.Visible and not startButton.Visible and not scoreLine.Visible,
+				"no game-day panel until the server says how the plot's game day stands"
+			)
+			myPlot:SetAttribute("GameDayStatus", "nofield")
+			task.wait(0.3)
+			check(
+				banner.Visible and banner.Text == "Build the goal posts to play your first game" and not startButton.Visible,
+				"before the goal posts: " .. banner.Text
+			)
+			myPlot:SetAttribute("GameDayStatus", "cooldown")
+			myPlot:SetAttribute("NextGameReadyAt", workspace:GetServerTimeNow() + 151)
+			task.wait(0.3)
+			check(
+				banner.Visible and banner.Text:find("Next game ready in 2:3") ~= nil and not startButton.Visible,
+				"the cooldown counts down: " .. banner.Text
+			)
+			myPlot:SetAttribute("GameDayStatus", "building")
+			myPlot:SetAttribute("NextGameReadyAt", nil)
+			task.wait(0.3)
+			check(banner.Visible and banner.Text:find("Getting your stadium ready") ~= nil, "while the plot is rebuilt: " .. banner.Text)
+			check(boundActions.TycoonStartGame == nil, "no start keys while the game isn't ready")
+			myPlot:SetAttribute("GameDayStatus", "ready")
+			task.wait(0.3)
+			check(startButton.Visible and not banner.Visible, "the big START GAME button shows when the game is ready")
+			check(
+				startHint and startHint.Text:find("press G") ~= nil,
+				"it says how to start it: " .. tostring(startHint and startHint.Text)
+			)
+			check(boundActions.TycoonStartGame ~= nil, "G and gamepad Y are bound while it shows")
+			local requests = {}
+			instanceSignal(remotesFolder.StartGameDay, "OnServerEvent"):Connect(function(who)
+				table.insert(requests, who)
+			end)
+			instanceSignal(startButton, "Activated"):Fire()
+			task.wait(0.05)
+			check(#requests == 1 and requests[1] == viewer, "clicking (or tapping) it asks the server to start the game")
+			instanceSignal(startButton, "Activated"):Fire()
+			task.wait(0.05)
+			check(#requests == 1 and startHint.Text == "Kicking off...", "a double click sends one request")
+			task.wait(1.05)
+			local action = boundActions.TycoonStartGame
+			local pressed = action and action("TycoonStartGame", Enum.UserInputState.Begin, { KeyCode = Enum.KeyCode.ButtonY })
+			check(#requests == 2 and pressed == Enum.ContextActionResult.Sink, "gamepad Y (or G) starts it too")
+			local released = action and action("TycoonStartGame", Enum.UserInputState.End, { KeyCode = Enum.KeyCode.ButtonY })
+			check(#requests == 2 and released == Enum.ContextActionResult.Pass, "(letting go of the key does nothing)")
+			myPlot:SetAttribute("GameDayStatus", "active")
+			myPlot:SetAttribute("GameDayEndsAt", workspace:GetServerTimeNow() + 42)
+			myPlot:SetAttribute("TeamName", "TESTERS")
+			myPlot:SetAttribute("HomeScore", 14)
+			myPlot:SetAttribute("AwayScore", 7)
+			task.wait(0.3)
+			check(
+				banner.Visible and banner.Text:find("GAME DAY!", 1, true) ~= nil and banner.Text:find("0:4") ~= nil,
+				"during the game: " .. banner.Text
+			)
+			check(scoreLine.Visible and scoreLine.Text == "TESTERS 14  -  7 VISITORS", "with the score: " .. scoreLine.Text)
+			check(not startButton.Visible and boundActions.TycoonStartGame == nil, "the button (and its keys) go away once the game is on")
+			myPlot:Destroy()
+			task.wait(0.3)
+			check(not banner.Visible and not scoreLine.Visible and not startButton.Visible, "no game-day panel without the plot")
+			viewer:SetAttribute("PlotIndex", 2)
+		end
 		for i = 1, 7 do
 			notifyRemote.OnClientEvent:Fire("Message " .. i, i % 2 == 0 and "error" or "success")
 		end

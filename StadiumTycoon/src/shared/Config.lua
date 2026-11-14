@@ -56,11 +56,14 @@ Config.ShowGuideBeam = true -- a glowing beam points to your next buy button
 -- only moves to another button when that one wins two checks in a row.
 Config.GuideGoal = { RecheckSeconds = 2, ZoneCostFactor = 2.5 }
 
--- Game days: every IntervalSeconds a game day starts for everyone. Fans walk in, fill the
--- stands you've built, and income is multiplied for DurationSeconds.
+-- Game days: every franchise plays its own, and the OWNER starts them with the START GAME button
+-- (HUD) once the goal posts are finished. Fans walk in and fill the stands you've built, your
+-- income is multiplied for DurationSeconds and your team plays one game (a week of the season).
+-- The next game is ready CooldownSeconds after one ends (set it to 10 while testing to play again
+-- sooner).
 Config.GameDay = {
 	Enabled = true,
-	IntervalSeconds = 240,
+	CooldownSeconds = 150,
 	DurationSeconds = 60,
 	IncomeMultiplier = 2,
 	SeatedFans = 1200, -- max seated fans per stadium (sections about half full, best seats first: see Crowd.lua)

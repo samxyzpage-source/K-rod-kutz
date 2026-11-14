@@ -1,13 +1,20 @@
 --[[
 	HUD
-	Shows the player's cash, income per second, build progress, save status and pop-up messages.
+	Shows the player's cash, income per second, build progress, save status, pop-up messages and
+	their franchise's game day: why it can't start yet / when the next one is ready, a big START
+	GAME button when it is (click or tap it, or press G / gamepad Y), and the time left and the
+	score while it is on.
 	Everything it shows comes from player attributes set by the server (Cash, Income, Built,
-	PlotIndex, SaveStatus) and from the TycoonRemotes.Notify RemoteEvent.
+	PlotIndex, SaveStatus), the player's plot model (GameDayStatus, GameDayEndsAt,
+	NextGameReadyAt, HomeScore, AwayScore, TeamName: see GameDay.lua) and the
+	TycoonRemotes.Notify RemoteEvent. START GAME fires TycoonRemotes.StartGameDay.
 ]]
 
+local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
@@ -15,7 +22,12 @@ local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
 local Format = require(Shared:WaitForChild("Format"))
 local Config = require(Shared:WaitForChild("Config"))
 local Items = require(Shared:WaitForChild("Items"))
-local notifyRemote = ReplicatedStorage:WaitForChild("TycoonRemotes"):WaitForChild("Notify")
+local remotes = ReplicatedStorage:WaitForChild("TycoonRemotes")
+local notifyRemote = remotes:WaitForChild("Notify")
+local startGameRemote = nil -- (found below, without holding up the HUD)
+task.spawn(function()
+	startGameRemote = remotes:WaitForChild("StartGameDay")
+end)
 
 local TOAST_COLORS = {
 	success = Color3.fromRGB(34, 150, 80),
@@ -29,6 +41,11 @@ local TOAST_GAP = 6
 local CLAIM_HINT = "Walk through a glowing GOLD GATE to claim your stadium!"
 local FULL_HINT = "All stadiums are taken right now - one opens when a player leaves."
 local TOAST_SECONDS = 3.5
+local START_ACTION = "TycoonStartGame"
+local GOLD = Color3.fromRGB(255, 196, 37)
+local DARK = Color3.fromRGB(18, 22, 30)
+local START_GREEN = Color3.fromRGB(30, 150, 72)
+local START_GREEN_BRIGHT = Color3.fromRGB(56, 196, 100)
 
 local function create(className, props, children)
 	local instance = Instance.new(className)
@@ -58,14 +75,14 @@ local screen = create("ScreenGui", {
 	Parent = player:WaitForChild("PlayerGui"),
 })
 
--- Cash panel, progress, hint and game-day banner sit in one top-centre stack that shrinks on
--- short (landscape phone) screens so it never covers the middle of the screen.
+-- Cash panel, progress, hint and the game-day banner / START GAME button sit in one top-centre
+-- stack that shrinks on short (landscape phone) screens so it never covers the middle of the screen.
 local topScale = create("UIScale", { Scale = 1 })
 local topStack = create("Frame", {
 	Name = "TopStack",
 	AnchorPoint = Vector2.new(0.5, 0),
 	Position = UDim2.new(0.5, 0, 0, 0),
-	Size = UDim2.new(0, 640, 0, 170),
+	Size = UDim2.new(0, 640, 0, 180),
 	BackgroundTransparency = 1,
 	Parent = screen,
 }, { topScale })
@@ -151,12 +168,14 @@ local hintLabel = create("TextLabel", {
 	create("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10) }),
 })
 
+-- Game day: one line saying why a game can't start yet / when the next one is ready, or the time
+-- left in the game (with the score on a second line); the START GAME button when it's ready.
 local gameDayLabel = create("TextLabel", {
 	Name = "GameDay",
 	AnchorPoint = Vector2.new(0.5, 0),
 	Position = UDim2.new(0.5, 0, 0, 118),
-	Size = UDim2.new(0, 270, 0, 24),
-	BackgroundColor3 = Color3.fromRGB(18, 22, 30),
+	Size = UDim2.new(0, 330, 0, 26),
+	BackgroundColor3 = DARK,
 	BackgroundTransparency = 0.35,
 	Font = Enum.Font.GothamBold,
 	Text = "",
@@ -165,6 +184,61 @@ local gameDayLabel = create("TextLabel", {
 	Visible = false,
 	Parent = topStack,
 }, { corner(8), create("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }) })
+
+local gameScoreLabel = create("TextLabel", {
+	Name = "GameScore",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 148),
+	Size = UDim2.new(0, 270, 0, 24),
+	BackgroundColor3 = DARK,
+	BackgroundTransparency = 0.2,
+	Font = Enum.Font.GothamBlack,
+	Text = "",
+	TextColor3 = Color3.new(1, 1, 1),
+	TextScaled = true,
+	Visible = false,
+	Parent = topStack,
+}, { corner(8), create("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }) })
+
+local startStroke = create("UIStroke", {
+	Color = GOLD,
+	Thickness = 3,
+	ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+})
+local startButton = create("TextButton", {
+	Name = "StartGame",
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 116),
+	Size = UDim2.new(0, 270, 0, 58),
+	BackgroundColor3 = START_GREEN,
+	AutoButtonColor = true,
+	Text = "",
+	Visible = false,
+	Parent = topStack,
+}, { corner(14), startStroke })
+create("TextLabel", {
+	Name = "StartLabel",
+	Position = UDim2.new(0, 10, 0, 4),
+	Size = UDim2.new(1, -20, 0, 34),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBlack,
+	Text = "START GAME!",
+	TextColor3 = Color3.new(1, 1, 1),
+	TextStrokeTransparency = 0.6,
+	TextScaled = true,
+	Parent = startButton,
+})
+local startHint = create("TextLabel", {
+	Name = "StartHint",
+	Position = UDim2.new(0, 10, 0, 38),
+	Size = UDim2.new(1, -20, 0, 15),
+	BackgroundTransparency = 1,
+	Font = Enum.Font.GothamBold,
+	Text = "",
+	TextColor3 = Color3.fromRGB(225, 255, 232),
+	TextScaled = true,
+	Parent = startButton,
+})
 
 local saveLabel = create("TextLabel", {
 	Name = "SaveStatus",
@@ -284,35 +358,108 @@ onBuiltChanged()
 onSaveStatusChanged()
 
 ---------------------------------------------------------------------------------------------
--- Game day banner (countdown to the next game day, or time left in the current one)
+-- Game day (the player's own plot: see GameDay.lua) and the START GAME button
 ---------------------------------------------------------------------------------------------
 local function clock(seconds)
-	seconds = math.max(0, math.floor(seconds))
+	seconds = math.max(0, math.ceil(seconds))
 	return ("%d:%02d"):format(math.floor(seconds / 60), seconds % 60)
 end
 
+local lastStartPress = -math.huge
+local startBound = false
+
+local function startHintText()
+	if os.clock() - lastStartPress < 1.5 then
+		return "Kicking off..."
+	elseif UserInputService.GamepadEnabled then
+		return "Press Y - your fans are waiting!"
+	elseif UserInputService.KeyboardEnabled then
+		return "Click or press G - your fans are waiting!"
+	end
+	return "Tap to kick off - your fans are waiting!"
+end
+
+-- (the server checks everything again: the owner, ready, on their plot, not too often)
+local function requestStart()
+	if os.clock() - lastStartPress < 1 or not startButton.Visible then
+		return
+	end
+	lastStartPress = os.clock()
+	startHint.Text = startHintText()
+	if startGameRemote then
+		startGameRemote:FireServer()
+	end
+end
+startButton.Activated:Connect(requestStart)
+
+-- G and gamepad Y start the game while the button shows (and do nothing else meanwhile).
+local function bindStartKeys(on)
+	if on == startBound then
+		return
+	end
+	startBound = on
+	if on then
+		ContextActionService:BindAction(START_ACTION, function(_, state)
+			if state ~= Enum.UserInputState.Begin then
+				return Enum.ContextActionResult.Pass
+			end
+			requestStart()
+			return Enum.ContextActionResult.Sink
+		end, false, Enum.KeyCode.G, Enum.KeyCode.ButtonY)
+	else
+		ContextActionService:UnbindAction(START_ACTION)
+	end
+end
+
+local function myPlotModel()
+	local index = player:GetAttribute("PlotIndex")
+	if index == nil or not tycoonsFolder then
+		return nil
+	end
+	return tycoonsFolder:FindFirstChild("Plot" .. tostring(index))
+end
+
+local function showStatus(text, gold)
+	gameDayLabel.Text = text
+	gameDayLabel.BackgroundColor3 = gold and GOLD or DARK
+	gameDayLabel.TextColor3 = gold and Color3.fromRGB(25, 25, 30) or Color3.fromRGB(220, 220, 225)
+	gameDayLabel.BackgroundTransparency = gold and 0.05 + (math.sin(os.clock() * 6) + 1) * 0.1 or 0.35
+	gameDayLabel.Visible = true
+end
+
 local function updateGameDay()
-	if not tycoonsFolder or player:GetAttribute("PlotIndex") == nil then
+	local model = myPlotModel()
+	local status = model and model:GetAttribute("GameDayStatus")
+	local ready = status == "ready"
+	startButton.Visible = ready
+	bindStartKeys(ready)
+	gameScoreLabel.Visible = status == "active"
+	if not status then
 		gameDayLabel.Visible = false
 		return
 	end
 	local now = Workspace:GetServerTimeNow()
-	if tycoonsFolder:GetAttribute("GameDayActive") then
-		local multiplier = Config.GameDay and Config.GameDay.IncomeMultiplier or 2
-		local endsAt = tycoonsFolder:GetAttribute("GameDayEndsAt") or now
-		gameDayLabel.Text = ("GAME DAY!  %dX CASH  %s"):format(multiplier, clock(endsAt - now))
-		gameDayLabel.BackgroundColor3 = Color3.fromRGB(255, 196, 37)
-		gameDayLabel.BackgroundTransparency = 0.05 + (math.sin(os.clock() * 6) + 1) * 0.1
-		gameDayLabel.TextColor3 = Color3.fromRGB(25, 25, 30)
-		gameDayLabel.Visible = true
-	elseif tycoonsFolder:GetAttribute("NextGameDayAt") then
-		gameDayLabel.Text = "Next game day in " .. clock(tycoonsFolder:GetAttribute("NextGameDayAt") - now)
-		gameDayLabel.BackgroundColor3 = Color3.fromRGB(18, 22, 30)
-		gameDayLabel.BackgroundTransparency = 0.35
-		gameDayLabel.TextColor3 = Color3.fromRGB(220, 220, 225)
-		gameDayLabel.Visible = true
-	else
+	if ready then
 		gameDayLabel.Visible = false
+		local pulse = (math.sin(os.clock() * 5) + 1) / 2
+		startButton.BackgroundColor3 = START_GREEN:Lerp(START_GREEN_BRIGHT, pulse)
+		startStroke.Transparency = pulse * 0.6
+		startHint.Text = startHintText()
+	elseif status == "active" then
+		local multiplier = Config.GameDay and Config.GameDay.IncomeMultiplier or 2
+		local endsAt = model:GetAttribute("GameDayEndsAt") or now
+		showStatus(("GAME DAY!  %dX CASH  -  %s LEFT"):format(multiplier, clock(endsAt - now)), true)
+		gameScoreLabel.Text = ("%s %d  -  %d VISITORS"):format(
+			tostring(model:GetAttribute("TeamName") or "HOME"),
+			model:GetAttribute("HomeScore") or 0,
+			model:GetAttribute("AwayScore") or 0
+		)
+	elseif status == "cooldown" then
+		showStatus("Next game ready in " .. clock((model:GetAttribute("NextGameReadyAt") or now) - now), false)
+	elseif status == "nofield" then
+		showStatus("Build the goal posts to play your first game", false)
+	else
+		showStatus("Getting your stadium ready for the game...", false)
 	end
 end
 

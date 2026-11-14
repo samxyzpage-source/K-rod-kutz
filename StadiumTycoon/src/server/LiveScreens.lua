@@ -3,7 +3,8 @@
 	Keeps every live screen / board up to date. Builders mark a TextLabel with a "Live"
 	attribute (BuildUtil.LiveText); this module finds them when a step is built and refreshes
 	them every second with the owner's team: name, score, record, season, titles, rating,
-	starters, game-day countdown and the arcade / ping-pong records. See Interact.LiveKinds.
+	starters, the plot's game day (GameDay.lua's plot attributes) and the arcade / ping-pong
+	records. See Interact.LiveKinds.
 ]]
 
 local HttpService = game:GetService("HttpService")
@@ -16,13 +17,28 @@ local Config = require(Shared:WaitForChild("Config"))
 local LiveScreens = {}
 
 local plotManager = nil
-local tycoonsFolder = nil
 local labelsByPlot = {} -- [plot] = { TextLabel, ... } in the built steps
 local baseLabels = {} -- [plot] = { TextLabel, ... } in the always-present plot base (HQ shell signs)
 
 local function clock(seconds)
-	seconds = math.max(0, math.floor(seconds))
+	seconds = math.max(0, math.ceil(seconds))
 	return ("%d:%02d"):format(math.floor(seconds / 60), seconds % 60)
+end
+
+-- The plot's game day, from the attributes GameDay.lua keeps on the plot model.
+local function gameDayText(model)
+	local now = Workspace:GetServerTimeNow()
+	local status = model:GetAttribute("GameDayStatus")
+	if status == "active" then
+		return "GAME DAY!  " .. clock((model:GetAttribute("GameDayEndsAt") or now) - now) .. " LEFT"
+	elseif status == "ready" then
+		return "READY - PRESS START GAME"
+	elseif status == "cooldown" then
+		return "NEXT GAME IN " .. clock((model:GetAttribute("NextGameReadyAt") or now) - now)
+	elseif status == "nofield" then
+		return "BUILD THE GOAL POSTS"
+	end
+	return "GAME DAY SOON"
 end
 
 local function shortName(fullName)
@@ -69,15 +85,7 @@ function LiveScreens.Texts(plot)
 		rating = ("TEAM RATING %d"):format(get("TeamRating", 0)),
 	}
 	texts.summary = ("%s\n%d - %d\nRECORD %s\n%s"):format(team, plot.HomeScore, plot.AwayScore, record, season)
-	-- game day countdown
-	local now = Workspace:GetServerTimeNow()
-	if tycoonsFolder and tycoonsFolder:GetAttribute("GameDayActive") then
-		texts.gameday = "GAME DAY!  " .. clock((tycoonsFolder:GetAttribute("GameDayEndsAt") or now) - now) .. " LEFT"
-	elseif tycoonsFolder and tycoonsFolder:GetAttribute("NextGameDayAt") then
-		texts.gameday = "NEXT GAME IN " .. clock(tycoonsFolder:GetAttribute("NextGameDayAt") - now)
-	else
-		texts.gameday = "GAME DAY SOON"
-	end
+	texts.gameday = gameDayText(model)
 	-- starters
 	local lines = {}
 	local byPos = {}
@@ -164,9 +172,8 @@ function LiveScreens.TrackBase(plot)
 	baseLabels[plot] = list
 end
 
-function LiveScreens.Init(manager, folder)
+function LiveScreens.Init(manager)
 	plotManager = manager
-	tycoonsFolder = folder
 	for _, plot in ipairs(plotManager.GetPlots()) do
 		LiveScreens.TrackBase(plot)
 	end
