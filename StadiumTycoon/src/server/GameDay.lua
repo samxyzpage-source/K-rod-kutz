@@ -10,14 +10,16 @@
 	A game day on one plot:
 	  * fans walk in through the plot's gate and fill the stands its owner built. Crowds arrive and
 	    leave Config.GameDay.FansPerFrame per server frame, one crowd after the other (two owners
-	    may kick off together), so neither the server nor the clients make a whole crowd in a frame
+	    may kick off together), so neither the server nor the clients make or remove a whole crowd
+	    in a frame
 	  * that plot's income is multiplied (Config.GameDay.IncomeMultiplier) while it lasts
 	  * the team plays one game: the result is decided at kick-off (GameDay.SetMatchMaker, see
 	    Franchise.DecideGame) and the score goes up play by play on the scoreboard, the jumbotron,
 	    the live screens and the HUD; at the final whistle the result counts as a week of the
 	    season (GameDay.OnEnded, see Franchise.FinishGame)
 	It ends after DurationSeconds. Releasing the plot (the owner leaves) ends it at once, with no
-	result.
+	result; its crowd leaves a chunk per frame, and PlotManager takes the departed franchise down
+	once the fans are gone (GameDay.IsCrowdLeaving).
 
 	Attributes on each plot model (read by the HUD, the live screens and the TV camera seats):
 	  GameDayStatus    "active", "ready", "cooldown", "nofield" (the goal posts aren't finished)
@@ -47,6 +49,7 @@ local GameDay = {}
 local FAN_TAG = "TycoonFan" -- Effects.client.lua makes these cheer (a seated fan's jersey block)
 local WALKER_TAG = "TycoonWalker" -- Effects.client.lua walks these in from the gate
 local CROWD_FOLDER = "GameDayFans"
+local LEAVING_FOLDER = "GameDayFansLeaving" -- a released plot's crowd while it leaves
 local REMOTE_NAME = "StartGameDay"
 local FIELD_PIECE = "goalposts" -- the field is playable once this piece is finished
 local WALK_SPEED = 12 -- studs per second
@@ -197,7 +200,8 @@ local function framePacer()
 	end
 end
 
--- Removes a plot's game-day crowds at once (e.g. when the plot is released).
+-- Removes a plot's game-day crowds at once (a new crowd replaces one that is somehow still there;
+-- crowds that are done leave a chunk per frame, see removeFans).
 function GameDay.ClearCrowd(plot)
 	for _, child in ipairs(plot.Model:GetChildren()) do
 		if child.Name == CROWD_FOLDER then
@@ -289,23 +293,27 @@ local function spawnCrowd(plot, token)
 	return arrived
 end
 
--- The fans leave the way they came: fansPerFrame() per frame (GameDay.ClearCrowd removes a crowd
--- at once, e.g. when its plot is released). Leaves the crowd of a game that is on alone.
+-- The fans leave the way they came: fansPerFrame() per frame, then the crowd folder goes.
+local function removeFans(folder)
+	local perFrame = fansPerFrame()
+	for index, child in ipairs(folder:GetChildren()) do
+		if folder.Parent == nil then
+			break -- cleared meanwhile
+		end
+		child:Destroy()
+		if index % perFrame == 0 then
+			task.wait()
+		end
+	end
+	folder:Destroy()
+end
+
+-- After the final whistle: the plot's crowd leaves (the crowd of a game that is on stays).
 local function dismissCrowd(plot)
 	local state = stateOf(plot)
-	local perFrame = fansPerFrame()
 	for _, folder in ipairs(plot.Model:GetChildren()) do
 		if folder.Name == CROWD_FOLDER and folder ~= state.Crowd then
-			for index, child in ipairs(folder:GetChildren()) do
-				if folder.Parent == nil then
-					break -- cleared meanwhile
-				end
-				child:Destroy()
-				if index % perFrame == 0 then
-					task.wait()
-				end
-			end
-			folder:Destroy()
+			removeFans(folder)
 		end
 	end
 end
@@ -597,8 +605,10 @@ function GameDay.OnPlotClaimed(plot)
 	refresh(plot)
 end
 
--- The plot was released (its owner left): a game day that is on stops at once, with no result,
--- and its crowd goes. Called by PlotManager.Release (which resets the income boost itself).
+-- The plot was released (its owner left): a game day that is on stops at once, with no result.
+-- Its crowd stops arriving and steps aside (renamed: it isn't the plot's crowd any more), then
+-- leaves a chunk per frame like any crowd, so nobody's client removes thousands of fans in one
+-- frame. Called by PlotManager.Release (which resets the income boost itself).
 function GameDay.OnPlotReleased(plot)
 	local state = stateOf(plot)
 	state.Token += 1
@@ -607,8 +617,21 @@ function GameDay.OnPlotReleased(plot)
 	state.ReadyAt = nil
 	state.Announce = nil
 	state.Crowd = nil
-	GameDay.ClearCrowd(plot)
+	for _, folder in ipairs(plot.Model:GetChildren()) do
+		if folder.Name == CROWD_FOLDER then
+			folder.Name = LEAVING_FOLDER
+			queueCrowd(function()
+				removeFans(folder)
+			end)
+		end
+	end
 	publish(plot, nil)
+end
+
+-- True while a released plot's crowd is still leaving: PlotManager takes the stands down after
+-- that, so no fan is left sitting in mid-air.
+function GameDay.IsCrowdLeaving(plot)
+	return plot.Model:FindFirstChild(LEAVING_FOLDER) ~= nil
 end
 
 -- fn(plot) -> { Home, Away, ... } decides a plot's game at kick-off (the table is passed to the

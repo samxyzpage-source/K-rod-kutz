@@ -149,7 +149,7 @@ and HQ pieces changed, so progress from earlier versions starts fresh.
 | Guide beam | A golden beam from your character to your next button, anywhere on your plot: the cheapest one in the part of the plot you are in (the HQ building, the campus, the stadium, the plaza or the fan zone), or the cheapest one anywhere when that costs less than 40% of it. It re-checks every 2 seconds and only moves to another button when that one wins twice in a row (`Config.GuideGoal`). In and around the Team HQ it leads you through the doors and up the stairs instead of through walls. |
 | Vault + collect pads | Income piles up in the vault. Step on a collect pad (HQ lobby, gold gate or the field's front sideline) to collect it. Buy buttons spend the vault too. |
 | Team Bus | Blue pads at the HQ and in the stadium plaza teleport you between them. |
-| Golf carts | The garage gives you up to 3 carts in your team colours. They roll over kerbs and curbs and drive anywhere on your plot. Abandoned carts drive themselves home once nobody is aboard and their bay is free. |
+| Golf carts | The garage gives you up to 3 carts in your team colours. They roll over kerbs and curbs and drive anywhere on your plot. A cart left unused for 45 seconds more than 30 studs from its bay (or one that falls off the world) is put back in its bay as soon as nothing stands there. |
 | Day / night | A full day takes 10 minutes. At night the light towers' flood lights (and field-level lights) light up the field. |
 
 ### Things to do around your franchise
@@ -298,6 +298,10 @@ StadiumTycoon/
    `Use` and `LiveText` (see the INTERACTIONS section of `BuildUtil.lua` and
    `src/shared/Interact.lua`). Look and Use prompts on solid parts need a line of sight; pass
    `LineOfSight = false` (or move the prompt with `At`) for a prompt whose part is buried.
+   Signs and screens get a draw distance that suits their size (PlotManager's `limitGuiDistance`:
+   60 studs per stud of the face's shorter side plus half the longer side, 150 to 1000). Text
+   that must read from across the bowl needs its piece in PlotManager's `FAR_TEXT_PIECES`, or a
+   non-zero `MaxDistance` on its SurfaceGui.
 3. Check it with `lune run tools/render_plot.luau tools/out <piece id>`, then rebuild the place
    file (below) or paste the changed scripts into Studio.
 
@@ -313,8 +317,10 @@ These tools are optional. You only need them to edit the code outside Studio.
     roads (flat enough for golf carts), players' tunnels, concourse lanes, HQ corridors on both
     floors, broken (NaN) positions, plus every prompt, door, seat, elevator (it must land on a
     floor with head room) and live screen. It also checks that nothing collidable stands on a
-    road or path golf carts use, that no walled-in area under the stands has no way out, and that
-    the plot base's team colours carry their palette roles (and stay readable in every palette).
+    road or path golf carts use, that every walkable ground spot of the event level (offsets
+    60..156 from the turf, between the lower bowl and the facade) leads back to the plaza or the
+    field on foot, and that the plot base's team colours carry their palette roles (and stay
+    readable in every palette).
     Add `crowd` as a third argument to also seat a crowd.
   * `node tools/preview/shoot.js tools/out/parts.json tools/out` renders it to PNG images
     (run `npm install` in `tools/preview` first; needs Playwright + Chromium). `--prompts` marks

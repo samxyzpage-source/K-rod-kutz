@@ -46,6 +46,8 @@ outward from the turf edge. `src/server/Bowl.lua` turns this into geometry; use 
 * Ownership (`Bowl.Pieces`): lower tier: `lower_home` (home side), `lower_visitor`,
   `lower_ends` (west = step 1, east = step 2), `lower_corners`; club tier: `club_seats`; upper
   tier: `upper_home`, `upper_visitor`, `upper_ends` (ends = step 1, corners = step 2).
+* The field's collect pad (`L.FieldCollectPadPosition`, (0, -29): the front sideline by the
+  visitors' tunnel) is part of the plot base: keep it clear.
 
 | Tier / level | Offsets | Heights (y) | Notes |
 | --- | --- | --- | --- |
@@ -105,10 +107,18 @@ vomitories ("tunnels into the seats") to their sections.
   `LiveText`) as in V4. Make things walk-in and interactive.
 * Part budget per piece (all steps together): rooms <= 170, stadium structure pieces <= 300
   (hard cap 380). Prefer long merged parts over many small ones.
+* Signs and screens get a draw distance that suits their size (PlotManager's `limitGuiDistance`:
+  60 studs per stud of the face's shorter side plus half the longer side, 150 to 1000). Text
+  that must read from across the bowl needs its piece in PlotManager's `FAR_TEXT_PIECES`, or a
+  non-zero `MaxDistance` on its SurfaceGui.
 * The preview harness (`tools/render_plot.luau`) checks zones, plot bounds, buttons, walkways,
   roads, players' tunnels, HQ corridors (both floors), concourse lanes, prompts, doors, seats,
-  elevator targets and live screens. Concourse **lanes** that must stay clear (y floor+0.8 to
-  floor+9) on the straight sides: main concourse offsets 66..76, club ring 96..104, upper
-  concourse 128..138. Shops and suites go outside the lanes.
+  elevator targets and live screens. It also checks that nothing collidable taller than 0.4
+  stands on a road or path golf carts use, that every walkable ground spot of the event level
+  (offsets 60..156) leads back to the plaza or the field (no sealed pocket of 2 x 2 studs or
+  more), and that team-coloured parts and labels of the plot base carry their palette role
+  (`TeamRole` / `TeamTextRole` / `TeamBackRole`). Concourse **lanes** that must stay clear (y
+  floor+0.8 to floor+9) on the straight sides: main concourse offsets 66..76, club ring 96..104,
+  upper concourse 128..138. Shops and suites go outside the lanes.
 * New camera views: `plot`, `v5_aerial`, `v5_back`, `v5_bowl`, `v5_field`, `v5_hq`
   (`node tools/preview/shoot.js <out>/parts.json <out> v5_aerial`).

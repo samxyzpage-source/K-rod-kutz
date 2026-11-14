@@ -102,6 +102,13 @@ roblox.implementMethod("Model", "PivotTo", function(model, cf)
 			part.CFrame = offset * part.CFrame
 		end
 	end
+	-- a seated character is welded to its seat (the SeatWeld): like a Roblox assembly, the seat
+	-- (and the cart around it) comes along unless the weld was broken first
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	local seat = humanoid and humanoid.SeatPart
+	if seat and seat:FindFirstChild("SeatWeld") and not seat:IsDescendantOf(model) then
+		seat.CFrame = offset * seat.CFrame
+	end
 end)
 roblox.implementMethod("Instance", "GetPropertyChangedSignal", function(inst, name)
 	return instanceSignal(inst, "Prop" .. name)
@@ -1043,6 +1050,95 @@ local function runTests()
 			local list = keysOf(problems)
 			check(signs == 6 and #list == 0, "the staff's role signs stand in front of them, in view " .. table.concat(list, ", "))
 		end
+
+		-- TRAP-2: the club ring's skirt over the main concourse roof doesn't collide, so anyone up on
+		-- that roof when club_lounge step 1 lays the ring floor walks out under it and drops down
+		do
+			local skirts, solid = partsOf(build("club_lounge"), "ClubRingSkirt"), {}
+			for _, skirt in ipairs(skirts) do
+				if skirt.CanCollide then
+					table.insert(solid, ("(%.0f, %.0f)"):format(skirt.CFrame.Position.X, skirt.CFrame.Position.Z))
+				end
+			end
+			check(
+				#skirts > 0 and #solid == 0,
+				("the club ring's skirt over the main concourse roof doesn't collide (%d spans) %s"):format(
+					#skirts,
+					table.concat(solid, ", ")
+				)
+			)
+		end
+
+		-- the gate halls' wayfinding signs stand on posts or hang from the lobby ceiling (none floats),
+		-- and the club lounge's popcorn carts stand on the floor: each post's foot is on something
+		-- solid and its top under a sign, each hanger hangs from a ceiling over a sign
+		do
+			local escalators = build("escalators")
+			local structure = partsOf(escalators)
+			for _, part in ipairs(partsOf(build("gates"))) do
+				table.insert(structure, part) -- (the gate halls' lobby ceilings)
+			end
+			local signs = partsOf(escalators, "WayfindingSign")
+			-- a part of `list` whose top (or bottom) face is at height y over the point `at` (`solid`: a
+			-- collidable one, so a trim or light that ends at the same height doesn't hide the support)
+			local function meets(list, at, y, face, solid)
+				for _, other in ipairs(list) do
+					local lo, hi = bounds(other)
+					local h = face == "top" and hi.Y or lo.Y
+					if
+						(other.CanCollide or not solid)
+						and math.abs(h - y) < 0.01
+						and at.X > lo.X
+						and at.X < hi.X
+						and at.Z > lo.Z
+						and at.Z < hi.Z
+					then
+						return other
+					end
+				end
+				return nil
+			end
+			local held, loose = {}, {}
+			for _, name in ipairs({ "SignPost", "SignHanger" }) do
+				for _, rod in ipairs(partsOf(escalators, name)) do
+					local lo, hi = bounds(rod)
+					local at = rod.CFrame.Position
+					local base, sign
+					if name == "SignPost" then
+						base, sign = meets(structure, at, lo.Y, "top", true), meets(signs, at, hi.Y, "bottom")
+					else
+						base, sign = meets(structure, at, hi.Y, "bottom", true), meets(signs, at, lo.Y, "top")
+					end
+					if base and sign then
+						held[sign] = (held[sign] or 0) + 1
+					else
+						table.insert(loose, ("%s (%.1f, %.1f, %.1f)"):format(name, at.X, at.Y, at.Z))
+					end
+				end
+			end
+			local carried = 0
+			for _, rods in pairs(held) do
+				if rods >= 2 then
+					carried += 1
+				end
+			end
+			local lounge = build("club_lounge")
+			local all = partsOf(lounge)
+			local carts = partsOf(lounge, "PopcornCart")
+			for _, cart in ipairs(carts) do
+				local lo = bounds(cart)
+				if not meets(all, cart.CFrame.Position, lo.Y, "top") then
+					table.insert(loose, ("PopcornCart (%.1f, %.2f, %.1f)"):format(cart.CFrame.Position.X, lo.Y, cart.CFrame.Position.Z))
+				end
+			end
+			check(
+				carried >= 12 and #carts > 0 and #loose == 0,
+				("the gate halls' wayfinding signs stand on posts or hang from the ceiling (%d signs held by two rods) and the club popcorn carts stand on the floor %s"):format(
+					carried,
+					table.concat(loose, ", ")
+				)
+			)
+		end
 	end
 
 	section("Bowl geometry (V5)")
@@ -1537,7 +1633,25 @@ local function runTests()
 	cart:PivotTo(info1.home * CFrame.new(0, 0, 200))
 	info1.lastUsed = -1000
 	local moved = Vehicles.Tidy(os.clock())
-	check(moved >= 1 and (cart.PrimaryPart.CFrame.Position - info1.home.Position).Magnitude < 5, "abandoned carts drive themselves home")
+	check(moved >= 1 and (cart.PrimaryPart.CFrame.Position - info1.home.Position).Magnitude < 5, "abandoned carts are sent home")
+	do
+		-- the README says what really happens to an abandoned cart (it is put back in its bay; it
+		-- doesn't drive there), with the numbers Vehicles.lua uses
+		local source = fs.readFile("src/server/Vehicles.lua")
+		local after, distance = source:match("RETURN_AFTER = (%d+)"), source:match("RETURN_DISTANCE = (%d+)")
+		local row = fs.readFile("README.md"):match("\n| Golf carts |([^\n]*)") or ""
+		check(
+			after ~= nil
+				and distance ~= nil
+				and row:find("drive themselves", 1, true) == nil
+				and row:find(after .. " seconds", 1, true) ~= nil
+				and row:find(distance .. " studs", 1, true) ~= nil,
+			("the README says abandoned carts are put back in their bay (%s s unused, %s studs away)"):format(
+				tostring(after),
+				tostring(distance)
+			)
+		)
+	end
 	cart:Destroy()
 	Vehicles.Tidy(os.clock())
 	local respawned = Vehicles.GetCarts(PlotManager.GetPlot(alice))[1]
@@ -1874,6 +1988,57 @@ local function runTests()
 			("the campus map, dome tower directory and skybridge elevator signs read at 0.3 studs or more (%.2f: %s)"):format(
 				smallest,
 				worst
+			)
+		)
+		-- the small Exterior signs (corner ramp exit panels, the concourse doorways, the elevator door
+		-- headers) and the HQ glass elevator's call panels keep their bigger letters (each minimum sits
+		-- about halfway between the old, too-small size and today's: 0.6 / 0.78, 0.4 / 0.64,
+		-- 0.4 / 0.63, 0.24 / 0.54)
+		local MINIMUM = { CornerRampExitPanel = 0.7, ConcourseEntryDoor = 0.5, ElevatorDoor = 0.5, ElevatorCallPanel = 0.4 }
+		local least, short = {}, {}
+		local roots = { plotModel(1).Base } -- (the HQ building)
+		for _, stepId in ipairs(Items.PieceById.escalators.StageIds) do
+			local step = plotModel(1).Items:FindFirstChild(stepId) -- (corner ramps and elevators, whichever step)
+			if step then
+				table.insert(roots, step)
+			end
+		end
+		for _, root in ipairs(roots) do
+			for _, gui in ipairs(root:GetDescendants()) do
+				local part = gui.Parent
+				local name = part and part.Name or ""
+				if gui:IsA("SurfaceGui") and MINIMUM[name] then
+					local s = part.Size
+					local faceW = (gui.Face == Enum.NormalId.Left or gui.Face == Enum.NormalId.Right) and s.Z or s.X
+					for _, label in ipairs(gui:GetChildren()) do
+						if label:IsA("TextLabel") and label.Text ~= "" then
+							local size = textSize(label.Text, faceW * label.Size.X.Scale, s.Y * label.Size.Y.Scale)
+							least[name] = math.min(least[name] or math.huge, size)
+							if size < MINIMUM[name] then
+								short[("%s '%s' %.2f"):format(name, label.Text, size)] = true
+							end
+						end
+					end
+				end
+			end
+		end
+		local report, list = {}, {}
+		for name in pairs(MINIMUM) do
+			table.insert(report, ("%s %.2f"):format(name, least[name] or 0))
+			if not least[name] then
+				short[name .. " (none found)"] = true
+			end
+		end
+		for key in pairs(short) do
+			table.insert(list, key)
+		end
+		table.sort(report)
+		table.sort(list)
+		check(
+			#list == 0,
+			("the corner ramp panels, concourse doorways, elevator door headers and HQ call panels keep big letters (%s) %s"):format(
+				table.concat(report, ", "),
+				table.concat(list, ", ")
 			)
 		)
 	end
@@ -4200,14 +4365,25 @@ local function runTests()
 		)
 		check(lastNotification(pat).message:find("being built") ~= nil, "the owner is told to wait a moment")
 		-- the owner leaves in the middle of the rebuild: it stops, nothing is built into the freed plot
+		-- (its franchise steps aside into another folder and comes down step by step, see below)
 		removePlayer(pat)
 		PlotManager.Release(pat)
 		for _ = 1, 5 do
 			task.wait()
 		end
 		check(
-			countChildren(items2) == 0 and plot2.Owner == nil and not plot2.Building,
+			-- (items2 itself may be gone already: a destroyed instance's name can't be read)
+			countChildren(plotModel(2).Items) == 0 and plot2.ItemsFolder ~= items2 and plot2.Owner == nil and not plot2.Building,
 			"an owner who leaves mid-rebuild stops it (the freed plot stays empty)"
+		)
+		local takedownFrames = 0
+		while items2.Parent ~= nil and takedownFrames < 300 do
+			task.wait()
+			takedownFrames += 1
+		end
+		check(
+			items2.Parent == nil and plot2.TearingDown == 0 and takedownFrames >= 1,
+			("and the departed franchise comes down a step per frame here (%d more frames)"):format(takedownFrames)
 		)
 		PlayerData.Release(pat)
 		Config.BuildFrameBudget = math.huge
@@ -4251,6 +4427,26 @@ local function runTests()
 		check(fieldPaint, "field numbers, the midfield logo and the video boards stay visible from anywhere in the bowl")
 		local gate = guiOf(plotModel(1).Base, "GateSign")
 		check(gate and gate.MaxDistance >= 150, "the plot base's signs get a draw distance too")
+		-- builders are told about it (README "Adding a new piece" and the V5 layout's builder rules),
+		-- with PlotManager's own numbers
+		local perStud, least, most = fs.readFile("src/server/PlotManager.lua")
+			:match("math%.clamp%((%d+) %* math%.min%(a, b%) %+ 0%.5 %* math%.max%(a, b%), (%d+), (%d+)%)")
+		local told = perStud ~= nil
+		for _, doc in ipairs({ "README.md", "docs/V5-LAYOUT.md" }) do
+			local text = fs.readFile(doc)
+			told = told
+				and text:find("FAR_TEXT_PIECES", 1, true) ~= nil
+				and text:find(("%s studs per stud"):format(tostring(perStud)), 1, true) ~= nil
+				and text:find(("%s to %s"):format(tostring(least), tostring(most)), 1, true) ~= nil
+		end
+		check(
+			told,
+			("the README and the V5 layout tell builders about draw distances (%s studs per stud, %s to %s; FAR_TEXT_PIECES)"):format(
+				tostring(perStud),
+				tostring(least),
+				tostring(most)
+			)
+		)
 	end
 
 	section("Server core: collect pads and the vault")
@@ -4275,11 +4471,18 @@ local function runTests()
 		touch(fieldPad, alice)
 		check(PlayerData.GetCash(alice) >= cashBeforeField + 50, "the field pad collects the vault")
 		local fieldLabel = plotModel(1).Base:FindFirstChild("FieldVaultAmount", true)
-		check(fieldLabel ~= nil and fieldLabel.Text:sub(1, 1) == "$", "the field pad shows the vault amount")
 		aliceRoot.CFrame = fieldPad.CFrame * CFrame.new(0, 3, 0)
 		task.wait(0.2)
 		check(plot1.Vault < 1, "standing on the field pad keeps collecting")
 		aliceRoot.CFrame = CFrame.new(0, 3, 0)
+		-- (off the pad: the vault fills up again, and the field pad's label follows it - it is built
+		-- showing "$0", so it must really be written)
+		plot1.Vault = 4321
+		task.wait(Config.IncomeTickSeconds * 3)
+		check(
+			fieldLabel ~= nil and fieldLabel.Text ~= "$0" and fieldLabel.Text == plot1.Refs.VaultLabel.Text,
+			"the field pad shows the vault amount: " .. tostring(fieldLabel and fieldLabel.Text)
+		)
 		-- buy buttons spend the vault too
 		local quinn = makePlayer("Quinn", 6002)
 		local quinnProfile = PlayerData.Load(quinn)
@@ -5011,13 +5214,18 @@ local function runTests()
 			"releasing the plot ends its game day at once"
 		)
 		check(hankPlot.IncomeBoost == 1 and hankPlot.GameDayActive == false, "and its income boost")
-		check(model1:FindFirstChild("GameDayFans") == nil, "and its crowd is gone")
+		check(model1:FindFirstChild("GameDayFans") == nil, "and its crowd isn't the plot's crowd any more (it leaves)")
 		task.wait(1.2)
 		check(
 			(hankF.Stats.Wins or 0) + (hankF.Stats.Losses or 0) == gamesAtLeave and not said(hank, fromLeave, "FINAL:"),
 			"a game day cut short has no result (and nothing happens to the freed plot later)"
 		)
-		check(model1:GetAttribute("GameDayActive") == false and model1:GetAttribute("GameDayStatus") == nil, "the freed plot stays quiet")
+		check(
+			model1:GetAttribute("GameDayActive") == false
+				and model1:GetAttribute("GameDayStatus") == nil
+				and model1:FindFirstChild("GameDayFansLeaving") == nil,
+			"the freed plot stays quiet (and its crowd has left)"
+		)
 
 		-- coming back: the franchise is rebuilt over several frames; no kick-off until it's done
 		Config.BuildFrameBudget = 0 -- (one step per frame)
@@ -5040,6 +5248,134 @@ local function runTests()
 		Config.BuildFrameBudget = math.huge
 		removePlayer(hank)
 		PlotManager.Release(hank)
+
+		do
+			-- the owner of a big franchise leaves during their game day (PERF-1's other half): the
+			-- plot steps aside at once, the fans leave a chunk per frame, then the franchise comes down
+			-- a step per frame; a player who claims the plot meanwhile gets a clean plot once it's gone
+			Config.GameDay.DurationSeconds = 30 -- (on until the owner leaves)
+			Config.GameDay.SeatedFans = 400
+			Config.GameDay.FansPerFrame = 50
+			Config.GameDay.WalkingFans = 0
+			local tess = makePlayer("Tess", 6101)
+			local tessProfile = PlayerData.Load(tess)
+			local tessSteps = 0
+			for _, pieceId in ipairs({ "hq_lobby", "goalposts", "lower_home" }) do
+				for _, stepId in ipairs(Items.PieceById[pieceId].StageIds) do
+					tessProfile.Owned[stepId] = true
+					tessSteps += 1
+				end
+			end
+			PlotManager.Claim(hankPlot, tess, tessProfile)
+			check(GameDay.RequestStart(tess) == true, "(the owner of a big franchise kicks off)")
+			waitUntil(function()
+				return (crowdOf(hankPlot)) >= 400
+			end, 2)
+			task.wait(0.05) -- (the whole crowd is in)
+			local oldItems = hankPlot.ItemsFolder
+			local fromRelease = #notifications + 1
+			Config.BuildFrameBudget = 0 -- (a step per frame)
+			removePlayer(tess)
+			PlotManager.Release(tess)
+			local leaving = model1:FindFirstChild("GameDayFansLeaving")
+			local atRelease = 0
+			for _, fan in ipairs(leaving and leaving:GetChildren() or {}) do
+				fan:SetAttribute("AtRelease", true)
+				atRelease += 1
+			end
+			local oldSteps = oldItems.Parent ~= nil and countChildren(oldItems) or 0 -- (a destroyed folder can't be read)
+			check(
+				hankPlot.ItemsFolder ~= oldItems
+					and plotModel(1).Items == hankPlot.ItemsFolder
+					and countChildren(hankPlot.ItemsFolder) == 0
+					and oldItems.Parent == model1
+					and oldSteps == tessSteps,
+				("a released franchise steps aside at once into its own folder (%d of %d steps there, a fresh Items folder)"):format(
+					oldSteps,
+					tessSteps
+				)
+			)
+			check(
+				not GameDay.IsActive(hankPlot) and model1:FindFirstChild("GameDayFans") == nil and atRelease > 0,
+				("its game day ends at once and its crowd steps aside to leave (%d fans)"):format(atRelease)
+			)
+			-- somebody claims the plot straight away, while the old franchise is still there
+			local uma = makePlayer("Uma", 6102)
+			local umaProfile = PlayerData.Load(uma)
+			local umaSteps = { "hq_lobby:1", "hq_lobby:2", "hq_lobby:3", "lower_home:1" }
+			for _, stepId in ipairs(umaSteps) do
+				umaProfile.Owned[stepId] = true
+			end
+			task.spawn(PlotManager.Claim, hankPlot, uma, umaProfile)
+			local frames, fanFrames, maxDrop, late, lastFans = 0, 0, 0, 0, atRelease
+			local downFrames, standsEarly, builtEarly = 0, false, false
+			while (oldItems.Parent ~= nil or hankPlot.Building) and frames < 600 do
+				task.wait()
+				frames += 1
+				local folder = model1:FindFirstChild("GameDayFansLeaving")
+				local fans = 0
+				for _, fan in ipairs(folder and folder:GetChildren() or {}) do
+					fans += 1
+					if not fan:GetAttribute("AtRelease") then
+						late += 1 -- (a fan that arrived after the release)
+						fan:SetAttribute("AtRelease", true)
+					end
+				end
+				maxDrop = math.max(maxDrop, lastFans - fans)
+				lastFans = fans
+				local oldLeft = oldItems.Parent and countChildren(oldItems) or 0
+				if fans > 0 then
+					fanFrames += 1
+					standsEarly = standsEarly or oldLeft < tessSteps
+				elseif oldItems.Parent ~= nil and oldLeft < tessSteps then
+					downFrames += 1
+				end
+				if oldItems.Parent ~= nil and (countChildren(hankPlot.ItemsFolder) > 0 or countChildren(plotModel(1).Buttons) > 0) then
+					builtEarly = true
+				end
+			end
+			check(
+				fanFrames >= 2 and maxDrop <= 2 * 50 and late == 0 and model1:FindFirstChild("GameDayFansLeaving") == nil,
+				("the fans leave a chunk per frame (over %d frames, at most %d in one), and none arrives after the release"):format(
+					fanFrames,
+					maxDrop
+				)
+			)
+			check(not standsEarly, "the stands stay up until the fans have left (nobody sits in mid-air)")
+			check(
+				oldItems.Parent == nil and downFrames >= 2 and hankPlot.TearingDown == 0,
+				("then the departed franchise comes down over several frames, not in one (%d frames here)"):format(downFrames)
+			)
+			local leftovers, itemFolders, onlyUma = {}, 0, countChildren(hankPlot.ItemsFolder) == #umaSteps
+			for _, child in ipairs(model1:GetChildren()) do
+				if child.Name == "Items" then
+					itemFolders += 1
+				elseif child.Name == "ReleasedItems" or child.Name:find("GameDayFans", 1, true) then
+					table.insert(leftovers, child.Name)
+				end
+			end
+			for _, stepId in ipairs(umaSteps) do
+				local model = hankPlot.ItemModels[stepId]
+				onlyUma = onlyUma and model ~= nil and model.Parent == hankPlot.ItemsFolder
+			end
+			check(
+				not builtEarly
+					and hankPlot.Owner == uma
+					and not hankPlot.Building
+					and onlyUma
+					and itemFolders == 1
+					and #leftovers == 0
+					and button(1, "hq_lobby:4") ~= nil,
+				"a player who claims the plot meanwhile waits for it, then gets a clean plot with only their steps "
+					.. table.concat(leftovers, ", ")
+			)
+			check(not said(tess, fromRelease, "FINAL:"), "(the game day cut short has no result)")
+			Config.BuildFrameBudget = math.huge
+			removePlayer(uma)
+			PlotManager.Release(uma)
+			PlayerData.Release(uma)
+			PlayerData.Release(tess)
+		end
 
 		-- back to how the later tests expect plot 1: hank owns it, nothing built
 		for stage = 1, 3 do
@@ -5263,18 +5599,58 @@ local function runTests()
 		)
 		check(crowdsGone(), "and the crowd folders are gone afterwards")
 
-		-- a plot released while its fans arrive keeps no crowd (the arrival stops), and a game day
-		-- that ends while the fans are still arriving (1 per frame here) leaves no crowd behind
+		-- a plot released while its fans arrive keeps no crowd (the arrival stops at once: no fan joins
+		-- the crowd that leaves), and a game day that ends while the fans are still arriving (1 per
+		-- frame here) takes no fan after its final whistle and leaves no crowd behind
 		Config.GameDay.SeatedFans = 1200
 		Config.GameDay.FansPerFrame = 1
 		Config.GameDay.DurationSeconds = 0.6
-		local cleared = false
-		task.spawn(function()
-			for _ = 1, 2000 do
-				if seatedCount(testPlots[1]) > 0 then
+		local whistleFans, watching = nil, true
+		GameDay.OnEnded(function(plot) -- (at the final whistle, before the crowd leaves)
+			if watching and plot == testPlots[2] and whistleFans == nil then
+				whistleFans = 0
+				local crowd = plot.Model:FindFirstChild("GameDayFans")
+				for _, child in ipairs(crowd and crowd:GetChildren() or {}) do
+					if child.Name == "Fan" then
+						child:SetAttribute("Seen", true)
+						whistleFans += 1
+					end
+				end
+			end
+		end)
+		local function releasedGone() -- (test plot 1's crowd, which leaves after the release)
+			return testPlots[1].Model:FindFirstChild("GameDayFansLeaving") == nil
+				and testPlots[1].Model:FindFirstChild("GameDayFans") == nil
+		end
+		local function allGone()
+			return crowdsGone() and releasedGone()
+		end
+		-- the seated fans of a crowd folder not seen before (and marks them seen)
+		local function newFans(crowd)
+			local count = 0
+			for _, child in ipairs(crowd and crowd:GetChildren() or {}) do
+				if child.Name == "Fan" and not child:GetAttribute("Seen") then
+					child:SetAttribute("Seen", true)
+					count += 1
+				end
+			end
+			return count
+		end
+		local cleared, atRelease, lateLeaving, lateWhistle = false, 0, 0, 0
+		task.spawn(function() -- releases plot 1 once its first fan is in, then counts late fans every frame
+			for _ = 1, 4000 do
+				if not cleared and seatedCount(testPlots[1]) > 0 then
 					testPlots[1].Owner = nil -- (what PlotManager.Release does first)
 					GameDay.OnPlotReleased(testPlots[1])
 					cleared = true
+					atRelease = newFans(testPlots[1].Model:FindFirstChild("GameDayFansLeaving"))
+				elseif cleared then
+					lateLeaving += newFans(testPlots[1].Model:FindFirstChild("GameDayFansLeaving"))
+				end
+				if whistleFans ~= nil then
+					lateWhistle += newFans(testPlots[2].Model:FindFirstChild("GameDayFans"))
+				end
+				if cleared and whistleFans ~= nil and allGone() then
 					return
 				end
 				task.wait()
@@ -5293,11 +5669,19 @@ local function runTests()
 		waitUntil(function()
 			return not GameDay.IsActive(testPlots[2])
 		end, 2)
-		local atEnd = seatedCount(testPlots[2])
-		waitUntil(crowdsGone, 3)
+		waitUntil(allGone, 3)
+		task.wait(0.05)
+		watching = false
 		check(
-			atEnd < 1200 and crowdsGone(),
-			("a game day that ends while fans arrive (%d of 1200 in) leaves no crowd behind"):format(atEnd)
+			atRelease > 0 and lateLeaving == 0 and releasedGone(),
+			("no fan joins a released plot's crowd as it leaves (%d in at the release, %d later)"):format(atRelease, lateLeaving)
+		)
+		check(
+			whistleFans ~= nil and whistleFans > 0 and whistleFans < 1200 and lateWhistle == 0 and allGone(),
+			("a game day that ends while fans arrive (%s of 1200 in at the final whistle) takes no fan after it and leaves no crowd behind (%d late)"):format(
+				tostring(whistleFans),
+				lateWhistle
+			)
 		)
 
 		for key, value in pairs(saved) do
