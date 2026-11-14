@@ -1993,24 +1993,25 @@ local function buildEastTower(ctx, S, team)
 			end
 		end
 		for i, other in ipairs(others) do
-			local px = i == 1 and sh.MinX + 2 or sh.MaxX - 3.4
+			-- (one panel on each shaft pillar beside the doors, wide enough for a readable floor name)
+			local px = i == 1 and sh.MinX + 1.4 or sh.MaxX - 4.6
 			local call = span(
 				tower,
 				"ElevatorCallPanel",
 				px,
-				y0 + 3.6,
+				y0 + 3.4,
 				sh.FaceZ + 0.6,
-				px + 1.4,
-				y0 + 5.6,
+				px + 3.2,
+				y0 + 5.8,
 				sh.FaceZ + 0.8,
 				SIGN_DARK,
 				Enum.Material.SmoothPlastic
 			)
 			local goingUp = other > level
 			panelText(call, { Enum.NormalId.Back }, {
-				{ Text = goingUp and "UP" or "DOWN", Color = BUTTON_GLOW },
-				{ Text = names[other], Weight = 0.6, Color = WHITE },
-			}, { InsetX = 0.08, InsetY = 0.12, LightInfluence = 0 })
+				{ Text = goingUp and "UP" or "DOWN", Weight = 0.8, Color = BUTTON_GLOW },
+				{ Text = names[other], Weight = 1.2, Color = WHITE },
+			}, { InsetX = 0.08, InsetY = 0.1, LightInfluence = 0, PixelsPerStud = 40 })
 			BuildUtil.Elevator(ctx, call, target(other), {
 				Action = (goingUp and "Ride up to " or "Ride down to ")
 					.. (other == 1 and "the ground floor" or other == 2 and "the upper floor" or "the Sky Terrace"),
