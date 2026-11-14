@@ -4,8 +4,11 @@
 	  * seated fans that fill the stands the owner has built (rows come from Bowl.lua)
 	  * walking fans that stroll in from the entrance gate
 
-	Fans are a couple of anchored blocks (no Humanoids), so even a full crowd is cheap.
-	Every fan model is tagged "TycoonFan" by the GameDay module; the client makes them cheer.
+	Fans are a couple of anchored blocks (no Humanoids), so even a full crowd is cheap. A seated
+	fan is just TWO instances, no Model: its jersey block (a part named "Fan", straight in the
+	crowd folder) with its head as a child part. The GameDay module tags every jersey block
+	"TycoonFan" and the client makes the fans near the camera hop (Effects.client.lua moves the
+	block and the parts inside it together).
 	Like the Builders, this module only uses BuildUtil + datatypes, so it can run in the
 	offline preview tools.
 ]]
@@ -25,35 +28,39 @@ local SKIN_TONES = {
 local VISITOR_COLOR = Color3.fromRGB(150, 150, 158)
 local SEAT_SPACING = 2.6 -- fans are 2 studs wide
 
--- One seated fan: a jersey block and a head, sitting on top of a row, facing the field.
 local function quiet(part)
-	-- fans are decoration only: no touches, no raycasts (they move every frame on clients)
+	-- fans are decoration only: no touches, no raycasts (they hop on clients)
 	part.CanTouch = false
 	part.CanQuery = false
 	return part
 end
 
-local function seatedFan(ctx, seatCFrame, jersey, skin, number)
-	local fanCtx, model = BuildUtil.Child(ctx, "Fan" .. number)
-	quiet(BuildUtil.Part(fanCtx, {
-		Name = "Body",
+--[[
+	One seated fan, sitting on top of a row, facing the field: the jersey block (named "Fan", made
+	in ctx.parent) with the head as its child part. Returns the jersey block.
+	seat = { cframe = plot-local seat CFrame, jersey = Color3, skin = Color3 } (see PlanSeats)
+]]
+function Crowd.SeatedFan(ctx, seat)
+	local body = quiet(BuildUtil.Part(ctx, {
+		Name = "Fan",
 		Size = Vector3.new(2, 2.4, 1.2),
-		CFrame = seatCFrame * CFrame.new(0, 1.2, 0),
-		Color = jersey,
+		CFrame = seat.cframe * CFrame.new(0, 1.2, 0),
+		Color = seat.jersey,
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		CastShadow = false,
 	}))
-	quiet(BuildUtil.Part(fanCtx, {
+	quiet(BuildUtil.Part(ctx, {
 		Name = "Head",
 		Size = Vector3.new(1.3, 1.3, 1.3),
-		CFrame = seatCFrame * CFrame.new(0, 3.05, 0),
-		Color = skin,
+		CFrame = seat.cframe * CFrame.new(0, 3.05, 0),
+		Color = seat.skin,
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		CastShadow = false,
+		Parent = body,
 	}))
-	return model
+	return body
 end
 
 -- Which stands fill first: the lower bowl's sidelines (what the field, the press box and the TV
@@ -73,22 +80,25 @@ local function shuffle(list, rng)
 end
 
 --[[
-	Fills the owner's stands with up to `maxFans` seated fans.
+	Works out where up to `maxFans` seated fans sit in the owner's stands and what they wear.
+	No instances are made here: Crowd.SeatedFan builds each planned fan.
 	Fans sit together in SECTIONS (a tier's rows between two aisles of one segment), like a real
 	crowd, instead of one here and one there: the best sections fill up first (see TIER_WEIGHT)
 	and a few fans are scattered over the rest of the seats.
-	ctx      BuildUtil context (ctx.parent = folder for the fans)
+	ctx      BuildUtil context (only ctx.config and ctx.colors are read)
 	owned    set of owned item ids (a tier/segment has seats once its owning step is built, see
 	         Bowl.Pieces)
 	rng      a Random object (or anything with :NextNumber() and :NextInteger(a, b))
-	Returns the list of fan models.
+	pace     optional fn() called between rows and sections: GameDay yields in it, so looking at
+	         the ~15,000 seats of a full bowl is spread over several frames
+	Returns a list of seats { cframe (plot-local), jersey, skin } for Crowd.SeatedFan.
 ]]
-function Crowd.SeatedFans(ctx, owned, maxFans, rng)
+function Crowd.PlanSeats(ctx, owned, maxFans, rng, pace)
 	local L = ctx.config.Layout
 	local B = L.Bowl
-	local fans = {}
+	local planned = {}
 	if maxFans <= 0 then
-		return fans
+		return planned
 	end
 
 	-- every free seat of every built row, grouped into sections
@@ -117,9 +127,12 @@ function Crowd.SeatedFans(ctx, owned, maxFans, rng)
 			table.insert(section.seats, { cframe = spot, visitor = entry.visitor })
 			total += 1
 		end
+		if pace then
+			pace()
+		end
 	end
 	if total == 0 then
-		return fans
+		return planned
 	end
 	table.sort(sections, function(a, b)
 		return a.priority > b.priority
@@ -139,13 +152,16 @@ function Crowd.SeatedFans(ctx, owned, maxFans, rng)
 				table.insert(rest, seat)
 			end
 		end
+		if pace then
+			pace()
+		end
 	end
 	shuffle(rest, rng)
 	for index = 1, math.min(count - #chosen, #rest) do
 		table.insert(chosen, rest[index])
 	end
 
-	for index, seat in ipairs(chosen) do
+	for _, seat in ipairs(chosen) do
 		local jersey
 		if seat.visitor and rng:NextNumber() < 0.5 then
 			jersey = VISITOR_COLOR
@@ -155,7 +171,20 @@ function Crowd.SeatedFans(ctx, owned, maxFans, rng)
 			jersey = roll < 0.4 and ctx.colors.Secondary or (roll < 0.7 and ctx.colors.Trim or ctx.colors.Primary)
 		end
 		local skin = SKIN_TONES[rng:NextInteger(1, #SKIN_TONES)]
-		table.insert(fans, seatedFan(ctx, seat.cframe, jersey, skin, index))
+		table.insert(planned, { cframe = seat.cframe, jersey = jersey, skin = skin })
+	end
+	return planned
+end
+
+--[[
+	Plans and builds the whole seated crowd at once (ctx.parent = folder for the fans), e.g. for
+	the offline preview. Returns the list of jersey blocks. (On game days GameDay.lua builds the
+	planned fans a chunk per frame instead.)
+]]
+function Crowd.SeatedFans(ctx, owned, maxFans, rng)
+	local fans = {}
+	for _, seat in ipairs(Crowd.PlanSeats(ctx, owned, maxFans, rng)) do
+		table.insert(fans, Crowd.SeatedFan(ctx, seat))
 	end
 	return fans
 end

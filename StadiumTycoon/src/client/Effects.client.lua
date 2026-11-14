@@ -3,10 +3,11 @@
 	Client-only polish (nothing here affects gameplay or is seen by other players):
 	  * buy buttons gently pulse so they are easy to spot
 	  * a guide beam points from your character to the button for your next goal
-	    (server sets the player attribute "NextGoal" to an item id)
+	    (server sets the player attribute "NextGoal" to an item id); in and around the Team HQ
+	    it first points at the door or the stairs on the way (Config.Layout.HQGuide)
 	  * small sounds for purchases and collecting cash (Config.Sounds)
-	  * game-day fans (tagged "TycoonFan" by the server) bounce and cheer - only on this
-	    screen, so it costs no network traffic
+	  * game-day fans near the camera (tagged "TycoonFan" by the server) hop and cheer - only
+	    on this screen, so it costs no network traffic
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -19,12 +20,14 @@ local Workspace = game:GetService("Workspace")
 local player = Players.LocalPlayer
 local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
 local Config = require(Shared:WaitForChild("Config"))
+local Items = require(Shared:WaitForChild("Items"))
 local notifyRemote = ReplicatedStorage:WaitForChild("TycoonRemotes"):WaitForChild("Notify")
 
 local BUTTON_TAG = "TycoonBuyButton"
 local FAN_TAG = "TycoonFan"
-local GUIDE_HIDE_DISTANCE = 18
-local FAN_ANIMATE_DISTANCE = 260
+local GUIDE_HIDE_DISTANCE = 18 -- the beam hides this close to its button (sideways)...
+local GUIDE_SAME_FLOOR = 8 -- ... unless the button is more than this far above or below
+local FAN_CHEER_DISTANCE = 140 -- only fans this close to the camera cheer (the others just sit)
 
 ---------------------------------------------------------------------------------------------
 -- Pulsing buy buttons
@@ -46,66 +49,105 @@ CollectionService:GetInstanceRemovedSignal(BUTTON_TAG):Connect(function(pad)
 end)
 
 ---------------------------------------------------------------------------------------------
--- Cheering fans
+-- Cheering fans: a seated fan is its jersey block (the part the server tags) with its head
+-- inside it. Only the fans near the camera cheer, with a simple two-state hop, from Heartbeat
+-- (not RenderStepped), so two full stadiums cost little: nothing is worked out per fan when a
+-- crowd arrives, and every hop moves two parts to CFrames worked out once.
 ---------------------------------------------------------------------------------------------
-local fans = {} -- [Model] = { parts = { {part, restingCFrame} }, phase, speed }
+local FAN_HOP = Vector3.new(0, 0.7, 0)
+local FAN_UP_ABOVE = 0.35 -- a fan is in the air while sin(...) is above this (about 40% of the time)
+local FAN_UPDATE_INTERVAL = 1 / 15 -- a two-state hop needs no more updates than this
+local FAN_NEAR_INTERVAL = 0.5 -- how often the list of fans near the camera is rebuilt
 
-local function scanFan(model, entry)
-	entry.parts = {}
-	for _, descendant in ipairs(model:GetDescendants()) do
-		if descendant:IsA("BasePart") then
-			table.insert(entry.parts, { descendant, descendant.CFrame })
-		end
+-- [jersey block] = { phase, speed, position (where it sits), up (in the air?), gone (removed?),
+--   parts = { {part, restCFrame, raisedCFrame} } (made when the fan first comes near),
+--   near = the nearStamp of the last refresh that found it near the camera }
+local fans = {}
+local nearFans = {} -- entries of the fans near the camera (the ones that hop)
+local nearStamp = 0
+local nextFanUpdate, nextNearUpdate = 0, 0
+local movedParts, movedCFrames = {}, {}
+
+local function trackFan(fan)
+	if fan:IsA("BasePart") then
+		fans[fan] = { phase = math.random() * math.pi * 2, speed = 5 + math.random() * 3, position = fan.CFrame.Position, up = false }
 	end
 end
 
-local function trackFan(model)
-	if not model:IsA("Model") then
-		return
-	end
-	local entry = { parts = {}, phase = math.random() * math.pi * 2, speed = 5 + math.random() * 3 }
-	scanFan(model, entry)
-	fans[model] = entry
-end
-
-for _, model in ipairs(CollectionService:GetTagged(FAN_TAG)) do
-	trackFan(model)
+for _, fan in ipairs(CollectionService:GetTagged(FAN_TAG)) do
+	trackFan(fan)
 end
 CollectionService:GetInstanceAddedSignal(FAN_TAG):Connect(trackFan)
-CollectionService:GetInstanceRemovedSignal(FAN_TAG):Connect(function(model)
-	fans[model] = nil
+CollectionService:GetInstanceRemovedSignal(FAN_TAG):Connect(function(fan)
+	local entry = fans[fan]
+	if entry then
+		entry.gone = true
+		fans[fan] = nil
+	end
 end)
 
-local FAN_UPDATE_INTERVAL = 1 / 20 -- cheering doesn't need 60 updates a second
-local nextFanUpdate = 0
-local movedParts, movedCFrames = {}, {}
+-- Where the fan's parts rest and where they are in the air (only while it sits, so the CFrames
+-- read are the resting ones).
+local function scanFan(fan, entry)
+	local parts = { { fan, fan.CFrame, fan.CFrame + FAN_HOP } }
+	for _, descendant in ipairs(fan:GetDescendants()) do
+		if descendant:IsA("BasePart") then
+			table.insert(parts, { descendant, descendant.CFrame, descendant.CFrame + FAN_HOP })
+		end
+	end
+	entry.parts = parts
+end
+
+local function moveFan(entry, up)
+	entry.up = up
+	local slot = up and 3 or 2
+	for _, item in ipairs(entry.parts) do
+		table.insert(movedParts, item[1])
+		table.insert(movedCFrames, item[slot])
+	end
+end
+
+-- Rebuilds the list of fans near the camera; fans that are no longer near sit back down.
+local function refreshNearFans(cameraPosition)
+	nearStamp += 1
+	local near = {}
+	for fan, entry in pairs(fans) do
+		if fan.Parent == nil then
+			entry.gone = true
+			fans[fan] = nil
+		elseif (entry.position - cameraPosition).Magnitude < FAN_CHEER_DISTANCE then
+			if not entry.parts or (#entry.parts < 2 and not entry.up) then
+				scanFan(fan, entry) -- (the head may replicate a moment after the tag)
+			end
+			entry.near = nearStamp
+			table.insert(near, entry)
+		end
+	end
+	for _, entry in ipairs(nearFans) do
+		if entry.near ~= nearStamp and entry.up and not entry.gone then
+			moveFan(entry, false)
+		end
+	end
+	nearFans = near
+end
 
 local function animateFans(now)
 	if now < nextFanUpdate then
 		return
 	end
 	nextFanUpdate = now + FAN_UPDATE_INTERVAL
-	local camera = Workspace.CurrentCamera
-	local cameraPosition = camera and camera.CFrame.Position or Vector3.new()
 	table.clear(movedParts)
 	table.clear(movedCFrames)
-	for model, entry in pairs(fans) do
-		if model.Parent == nil then
-			fans[model] = nil
-		else
-			if #entry.parts < 2 then
-				scanFan(model, entry) -- children may replicate a moment after the tag
-			end
-			local first = entry.parts[1]
-			if first and (first[2].Position - cameraPosition).Magnitude < FAN_ANIMATE_DISTANCE then
-				local lift = math.floor(math.max(0, math.sin(now * entry.speed + entry.phase)) * 9) / 10
-				if lift ~= entry.lift then
-					entry.lift = lift
-					for _, pair in ipairs(entry.parts) do
-						table.insert(movedParts, pair[1])
-						table.insert(movedCFrames, pair[2] + Vector3.new(0, lift, 0))
-					end
-				end
+	if now >= nextNearUpdate then
+		nextNearUpdate = now + FAN_NEAR_INTERVAL
+		local camera = Workspace.CurrentCamera
+		refreshNearFans(camera and camera.CFrame.Position or Vector3.new())
+	end
+	for _, entry in ipairs(nearFans) do
+		if not entry.gone then
+			local up = math.sin(now * entry.speed + entry.phase) > FAN_UP_ABOVE
+			if up ~= entry.up then
+				moveFan(entry, up)
 			end
 		end
 	end
@@ -113,6 +155,10 @@ local function animateFans(now)
 		Workspace:BulkMoveTo(movedParts, movedCFrames, Enum.BulkMoveMode.FireCFrameChanged)
 	end
 end
+
+RunService.Heartbeat:Connect(function()
+	animateFans(os.clock())
+end)
 
 ---------------------------------------------------------------------------------------------
 -- Walking fans (game-day parade): the server sets WalkFrom/WalkTo/WalkStart/WalkDuration on
@@ -156,7 +202,6 @@ local function animateWalkers()
 end
 
 RunService.RenderStepped:Connect(function()
-	animateFans(os.clock())
 	animateWalkers()
 	local wave = (math.sin(os.clock() * 4) + 1) / 2 -- 0..1
 	for pad in pairs(buttons) do
@@ -207,8 +252,213 @@ beam.Parent = guideAnchor
 
 local guideRoot = nil -- the character's HumanoidRootPart
 local guidePad = nil -- the button the beam points at
+local guideVia = nil -- (world) where the beam points first on the way there, nil = the button itself
 
-local function findGoalButton()
+---------------------------------------------------------------------------------------------
+-- Waypoints in and around the Team HQ (Config.Layout.HQGuide, campus coordinates): a straight
+-- beam can't be followed through the HQ's walls and floors, so there it first points at a door,
+-- the stairs, a corner of the building or the lobby's opening onto the corridor.
+---------------------------------------------------------------------------------------------
+local GUIDE = Config.Layout.HQGuide
+local CAMPUS = Config.Layout.Areas.campus
+local ROOT_HEIGHT = 3 -- a character's HumanoidRootPart is about this high above its feet
+
+local function inBox(box, p)
+	return p.X >= box.MinX
+		and p.X <= box.MaxX
+		and p.Z >= box.MinZ
+		and p.Z <= box.MaxZ
+		and (box.MinY == nil or (p.Y >= box.MinY and p.Y <= box.MaxY))
+end
+
+-- nil (outside the HQ), "down" / "up" (ground / upper floor) or "roof"
+local function hqLevel(p)
+	for _, box in ipairs(GUIDE.Building) do
+		if inBox(box, p) then
+			if p.Y > GUIDE.RoofY then
+				return "roof"
+			end
+			return p.Y >= GUIDE.UpstairsY and "up" or "down"
+		end
+	end
+	return nil
+end
+
+-- Does the line a-b (seen from above) pass through the HQ block?
+local function crossesBlock(a, b)
+	local block = GUIDE.Block
+	local dx, dz = b.X - a.X, b.Z - a.Z
+	local t0, t1 = 0, 1
+	local function clip(p, q)
+		if p == 0 then
+			return q >= 0
+		end
+		if p < 0 then
+			t0 = math.max(t0, q / p)
+		else
+			t1 = math.min(t1, q / p)
+		end
+		return t0 < t1
+	end
+	return clip(-dx, a.X - block.MinX) and clip(dx, block.MaxX - a.X) and clip(-dz, a.Z - block.MinZ) and clip(dz, block.MaxZ - a.Z)
+end
+
+local CORNERS -- the block's corners (CornerMargin out), in order round it
+do
+	local block, margin = GUIDE.Block, GUIDE.CornerMargin
+	local x0, x1, z0, z1 = block.MinX - margin, block.MaxX + margin, block.MinZ - margin, block.MaxZ + margin
+	CORNERS = { Vector3.new(x0, 0.2, z0), Vector3.new(x1, 0.2, z0), Vector3.new(x1, 0.2, z1), Vector3.new(x0, 0.2, z1) }
+end
+
+-- The shortest way from a to b (both outside) round the HQ block: the first point to walk to
+-- (b itself, or a corner) and the length.
+local function aroundBlock(a, b)
+	if not crossesBlock(a, b) then
+		return b, (b - a).Magnitude
+	end
+	local first, best = b, math.huge
+	for start = 1, 4 do
+		for _, turn in ipairs({ 1, 3 }) do -- (one way or the other round the block)
+			local from, index, length = a, start, 0
+			for _ = 1, 3 do
+				local corner = CORNERS[index]
+				if crossesBlock(from, corner) then
+					break
+				end
+				length += (corner - from).Magnitude
+				if not crossesBlock(corner, b) then
+					length += (b - corner).Magnitude
+					if length < best then
+						first, best = CORNERS[start], length
+					end
+					break
+				end
+				from, index = corner, (index + turn - 1) % 4 + 1
+			end
+		end
+	end
+	if best == math.huge then
+		return b, (b - a).Magnitude
+	end
+	return first, best
+end
+
+-- Inside, goal outside: the door whose way out (to it, then round the block) is shortest.
+local function wayOut(p, goal)
+	local target, best = nil, math.huge
+	for _, door in ipairs(GUIDE.Doors) do
+		local _, outside = aroundBlock(door.Outside, goal)
+		local length = (door.Outside - p).Magnitude + outside
+		if length < best then
+			target, best = door.Outside, length
+		end
+	end
+	return target
+end
+
+-- Outside, goal inside: round the block to the door with the shortest way in, then through it
+-- (once you are as close to the spot inside as the door is).
+local function wayIn(p, goal)
+	local target, best = nil, math.huge
+	for _, door in ipairs(GUIDE.Doors) do
+		local first, outside = aroundBlock(p, door.Outside)
+		local length = outside + (goal - door.Inside).Magnitude
+		if length < best then
+			best = length
+			local atDoor = (door.Inside - p).Magnitude <= (door.Inside - door.Outside).Magnitude + 1
+			target = atDoor and door.Inside or first
+		end
+	end
+	return target
+end
+
+local function usable(stair, built)
+	return stair.Piece == nil or built(stair.Piece)
+end
+
+-- On a stair: the next point toward the goal's floor (nil = not on this stair, or off its bottom).
+local function alongStair(stair, p, up)
+	for _, leg in ipairs(stair.Legs) do
+		if inBox(leg, p) then
+			return up and leg.Up or leg.Down
+		end
+	end
+	return nil
+end
+
+-- Off the stairs: where to step on (up: the bottom, or the door of the stair's room first;
+-- down: the top) for the stair that makes the walk to the goal shortest.
+local function toStairs(p, goal, up, built)
+	local target, best = nil, math.huge
+	for _, stair in ipairs(GUIDE.Stairs) do
+		if usable(stair, built) then
+			local entry, leave = stair.Bottom, stair.Top
+			if not up then
+				entry, leave = leave, entry
+			elseif stair.Room and not inBox(stair.Room, p) then
+				entry = stair.Door
+			end
+			local length = (entry - p).Magnitude + (goal - leave).Magnitude
+			if length < best then
+				target, best = entry, length
+			end
+		end
+	end
+	return target
+end
+
+-- On the ground floor the lobby (with the main entrance) only opens onto the corridor: between
+-- it and the rest of the HQ, the beam leads through that opening (out: just past it into the
+-- corridor; in: along the corridor to the opening, then just past it into the lobby).
+local function viaLobby(p, target)
+	local lobby = GUIDE.Lobby
+	if p.Y >= GUIDE.UpstairsY or target.Y >= GUIDE.UpstairsY or not inBox(Config.Layout.HQ, p) then
+		return target
+	end
+	local inLobby = inBox(lobby, p)
+	if inLobby == inBox(lobby, target) then
+		return target
+	end
+	local x = math.clamp(p.X, lobby.OpenMinX, lobby.OpenMaxX)
+	if inLobby then
+		return Vector3.new(x, 0.2, lobby.MaxZ + 3)
+	end
+	local atOpening = x == p.X and p.Z >= lobby.MaxZ and p.Z <= Config.Layout.HQCorridor.MaxZ
+	return Vector3.new(x, 0.2, atOpening and lobby.MaxZ - 3 or lobby.OpenZ)
+end
+
+-- Where the beam points first (campus coordinates), or nil: straight at the goal.
+-- p = the player's feet, goal = the goal button's spot, built(itemId) = is that step built?
+local function guideWaypoint(p, goal, built)
+	local playerLevel, goalLevel = hqLevel(p), hqLevel(goal)
+	if playerLevel == "roof" or goalLevel == "roof" then
+		return nil
+	elseif not playerLevel then
+		if goalLevel then
+			return wayIn(p, goal)
+		end
+		local first = aroundBlock(p, goal)
+		return first ~= goal and first or nil
+	end
+	local up = goalLevel == "up"
+	local target = nil
+	for _, stair in ipairs(GUIDE.Stairs) do
+		target = target or (usable(stair, built) and alongStair(stair, p, up)) or nil
+	end
+	if not target then
+		if (playerLevel == "up") ~= up then
+			target = toStairs(p, goal, up, built) -- the other floor (or outside, from upstairs)
+		elseif goalLevel then
+			target = goal -- the same floor
+		else
+			target = wayOut(p, goal)
+		end
+	end
+	target = viaLobby(p, target or goal)
+	return target ~= goal and target or nil
+end
+
+local function findGoal()
 	local goal = player:GetAttribute("NextGoal")
 	local plotIndex = player:GetAttribute("PlotIndex")
 	if not goal or not plotIndex then
@@ -217,14 +467,34 @@ local function findGoalButton()
 	local tycoons = Workspace:FindFirstChild("Tycoons")
 	local plot = tycoons and tycoons:FindFirstChild("Plot" .. tostring(plotIndex))
 	local folder = plot and plot:FindFirstChild("Buttons")
-	return folder and folder:FindFirstChild("Buy_" .. tostring(goal))
+	local pad = folder and folder:FindFirstChild("Buy_" .. tostring(goal))
+	return pad, plot, Items.ById[goal]
 end
 
 -- Works out what the beam connects (4 times a second).
 local function updateGuideTargets()
 	local character = player.Character
 	guideRoot = character and character:FindFirstChild("HumanoidRootPart")
-	guidePad = Config.ShowGuideBeam and findGoalButton() or nil
+	guidePad, guideVia = nil, nil
+	if not Config.ShowGuideBeam then
+		return
+	end
+	local pad, plot, item = findGoal()
+	guidePad = pad
+	if not pad or not guideRoot or not item then
+		return
+	end
+	-- the plot's frame, from the button (it stands 0.3 above the item's Button spot)
+	local button = item.Button
+	local origin = pad.CFrame * CFrame.new(-button.X, -button.Y - 0.3, -button.Z)
+	local feet = origin:PointToObjectSpace(guideRoot.CFrame.Position) - CAMPUS - Vector3.new(0, ROOT_HEIGHT, 0)
+	local items = plot:FindFirstChild("Items")
+	local via = guideWaypoint(feet, button - CAMPUS, function(itemId)
+		return items ~= nil and items:FindFirstChild(itemId) ~= nil
+	end)
+	if via then
+		guideVia = origin * (via + CAMPUS + Vector3.new(0, 1, 0))
+	end
 end
 
 -- Moves the beam ends (every frame, cheap: two property writes).
@@ -235,10 +505,16 @@ local function updateGuidePositions()
 		return
 	end
 	local from = root.CFrame.Position + Vector3.new(0, -1.5, 0)
-	local to = pad.CFrame.Position + Vector3.new(0, 1, 0)
+	local to = guideVia or (pad.CFrame.Position + Vector3.new(0, 1, 0))
 	characterAttachment.Position = from
 	targetAttachment.Position = to
-	beam.Enabled = (from - to).Magnitude > GUIDE_HIDE_DISTANCE
+	local gap = to - from
+	if guideVia then
+		beam.Enabled = gap.Magnitude > 2
+	else
+		-- hidden right by the button, but not when it is on another floor above or below you
+		beam.Enabled = Vector3.new(gap.X, 0, gap.Z).Magnitude > GUIDE_HIDE_DISTANCE or math.abs(gap.Y) > GUIDE_SAME_FLOOR
+	end
 end
 
 RunService.RenderStepped:Connect(updateGuidePositions)

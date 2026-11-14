@@ -1894,7 +1894,7 @@ local function runTests()
 	section("Game day")
 	local GameDay = requireNode("ServerScriptService/TycoonServer/GameDay")
 	Config.GameDay.IntervalSeconds = 0.3
-	Config.GameDay.DurationSeconds = 1.2
+	Config.GameDay.DurationSeconds = 3 -- (long enough for the crowd to arrive, a chunk per frame)
 	local fullPlot = PlotManager.GetPlot(alice2)
 	local incomeBefore = alice2:GetAttribute("Income")
 	GameDay.Init(tycoons, PlotManager)
@@ -1904,6 +1904,18 @@ local function runTests()
 	check(tycoons:GetAttribute("GameDayActive") == true and GameDay.IsActive(), "a game day starts on schedule")
 	Config.GameDay.IntervalSeconds = 1000 -- no more game days during the rest of the tests
 	check(alice2:GetAttribute("Income") == incomeBefore * Config.GameDay.IncomeMultiplier, "income is boosted during the game day")
+	for _ = 1, 75 do -- (the fans arrive a chunk per frame: wait until the whole crowd is in)
+		local arriving, inStands = fullPlot.Model:FindFirstChild("GameDayFans"), 0
+		for _, child in ipairs(arriving and arriving:GetChildren() or {}) do
+			if child.Name == "Fan" then
+				inStands += 1
+			end
+		end
+		if inStands >= Config.GameDay.SeatedFans then
+			break
+		end
+		task.wait(0.02)
+	end
 	local crowd = fullPlot.Model:FindFirstChild("GameDayFans")
 	local seated, walkers = 0, 0
 	for _, child in ipairs(crowd and crowd:GetChildren() or {}) do
@@ -1918,7 +1930,7 @@ local function runTests()
 		-- fans sit together in sections (not one here and one there), the lower bowl first
 		local bodies = {}
 		for _, child in ipairs(crowd and crowd:GetChildren() or {}) do
-			local body = child.Name:sub(1, 3) == "Fan" and child:FindFirstChild("Body")
+			local body = child.Name:sub(1, 3) == "Fan" and child:IsA("BasePart") and child
 			if body then
 				table.insert(bodies, body.CFrame.Position)
 			end
@@ -1962,11 +1974,191 @@ local function runTests()
 	check(hankSeated == 0, "no seated fans in a stadium without stands")
 	local gameDayNote = lastNotification(alice2)
 	check(gameDayNote and gameDayNote.message:find("GAME DAY") ~= nil, "owners are told the game day started")
-	task.wait(1.3)
+	for _ = 1, 250 do -- (until the game day is over and its fans have left, a chunk per frame)
+		if not GameDay.IsActive() and fullPlot.Model:FindFirstChild("GameDayFans") == nil then
+			break
+		end
+		task.wait(0.02)
+	end
 	check(tycoons:GetAttribute("GameDayActive") == false and not GameDay.IsActive(), "the game day ends")
 	check(fullPlot.Model:FindFirstChild("GameDayFans") == nil, "the crowd leaves afterwards")
 	check(alice2:GetAttribute("Income") == incomeBefore, "income goes back to normal")
 	Config.GameDay.IntervalSeconds = 1000 -- no more game days during the rest of the tests
+	do
+		-- PERF-3: a seated fan is two instances (its tagged jersey block with the head inside), and
+		-- the crowds arrive and leave a chunk of fans per frame, one stadium after the other. Two
+		-- short game days on two test plots (through a stand-in plot manager).
+		local saved = {
+			SeatedFans = Config.GameDay.SeatedFans,
+			FansPerFrame = Config.GameDay.FansPerFrame,
+			WalkingFans = Config.GameDay.WalkingFans,
+			DurationSeconds = Config.GameDay.DurationSeconds,
+		}
+		Config.GameDay.SeatedFans = 400
+		Config.GameDay.FansPerFrame = 50
+		Config.GameDay.WalkingFans = 0
+		local testPlots = {}
+		for index, z in ipairs({ 3000, -3000 }) do
+			local model = Instance.new("Model")
+			model.Name = "CrowdTestPlot" .. index
+			model.Parent = workspace
+			table.insert(testPlots, {
+				Index = index,
+				Origin = CFrame.new(0, 0.2, z),
+				Model = model,
+				Owner = hank,
+				Palette = Config.TeamColors[index],
+				TeamName = "TEST",
+				Owned = { ["lower_home:1"] = true },
+			})
+		end
+		GameDay.Init(Instance.new("Folder"), {
+			GetPlots = function()
+				return testPlots
+			end,
+			SetGameDay = function() end,
+		})
+		local function seatedCount(plot)
+			local folder = plot.Model:FindFirstChild("GameDayFans")
+			local count = 0
+			for _, child in ipairs(folder and folder:GetChildren() or {}) do
+				if child.Name == "Fan" then
+					count += 1
+				end
+			end
+			return count
+		end
+		local samples, sampling = {}, true
+		task.spawn(function() -- the seated fans of both plots, once per frame
+			while sampling do
+				table.insert(samples, { seatedCount(testPlots[1]), seatedCount(testPlots[2]) })
+				task.wait()
+			end
+		end)
+		local function waitUntil(condition, seconds)
+			local deadline = os.clock() + seconds
+			while not condition() and os.clock() < deadline do
+				task.wait(0.01)
+			end
+		end
+		local function crowdsGone()
+			return testPlots[1].Model:FindFirstChild("GameDayFans") == nil and testPlots[2].Model:FindFirstChild("GameDayFans") == nil
+		end
+		Config.GameDay.IntervalSeconds = 0.05
+		Config.GameDay.DurationSeconds = 1.2
+		GameDay.Start()
+		waitUntil(function()
+			return seatedCount(testPlots[1]) >= 400 and seatedCount(testPlots[2]) >= 400
+		end, 1.1)
+		Config.GameDay.IntervalSeconds = 1000
+		local crowdA = testPlots[1].Model:FindFirstChild("GameDayFans")
+		local fansA, wellFormed, models = 0, 0, 0
+		for _, child in ipairs(crowdA and crowdA:GetChildren() or {}) do
+			if child:IsA("Model") then
+				models += 1
+			elseif child.Name == "Fan" and child:IsA("BasePart") then
+				fansA += 1
+				local inside = child:GetChildren()
+				if
+					#inside == 1
+					and inside[1]:IsA("BasePart")
+					and inside[1].Name == "Head"
+					and inside[1].CFrame.Position.Y > child.CFrame.Position.Y
+					and CollectionServiceMock:HasTag(child, "TycoonFan")
+				then
+					wellFormed += 1
+				end
+			end
+		end
+		check(
+			fansA == 400 and wellFormed == fansA and models == 0 and #crowdA:GetDescendants() == 2 * fansA,
+			("a seated fan is two instances: a tagged jersey block with its head inside, no Model (%d of %d, %d models)"):format(
+				wellFormed,
+				fansA,
+				models
+			)
+		)
+		waitUntil(function() -- the game day ends and the fans leave
+			return not GameDay.IsActive() and crowdsGone()
+		end, 4)
+		task.wait(0.05)
+		sampling = false
+		local most, maxGrowth, maxDrop, growthFrames, bothGrew = { 0, 0 }, 0, 0, 0, false
+		for i = 2, #samples do
+			local grew = 0
+			for index = 1, 2 do
+				local diff = samples[i][index] - samples[i - 1][index]
+				most[index] = math.max(most[index], samples[i][index])
+				if diff > 0 then
+					grew += 1
+					growthFrames += 1
+					maxGrowth = math.max(maxGrowth, diff)
+				else
+					maxDrop = math.max(maxDrop, -diff)
+				end
+			end
+			bothGrew = bothGrew or grew == 2
+		end
+		-- (one chunk per frame; the limits allow for a frame the sampler might miss)
+		check(most[1] == 400 and most[2] == 400, ("both stadiums fill (%d and %d fans)"):format(most[1], most[2]))
+		check(
+			maxGrowth <= 2 * 50 and growthFrames >= 8,
+			("the fans arrive a chunk per frame (at most %d in a frame, over %d frames)"):format(maxGrowth, growthFrames)
+		)
+		check(not bothGrew, "the two stadiums fill one after the other, never in the same frame")
+		check(
+			maxDrop <= 2 * 50 and seatedCount(testPlots[1]) == 0 and seatedCount(testPlots[2]) == 0,
+			("they leave a chunk per frame too (at most %d in a frame)"):format(maxDrop)
+		)
+		check(crowdsGone(), "and the crowd folders are gone afterwards")
+
+		-- a crowd cleared while its fans arrive (plot released) isn't rebuilt, and a game day that
+		-- ends while the fans are still arriving (1 per frame here) leaves no crowd behind
+		Config.GameDay.SeatedFans = 1200
+		Config.GameDay.FansPerFrame = 1
+		Config.GameDay.IntervalSeconds = 0.05
+		Config.GameDay.DurationSeconds = 0.6
+		local cleared = false
+		task.spawn(function()
+			for _ = 1, 2000 do
+				if seatedCount(testPlots[1]) > 0 then
+					GameDay.ClearCrowd(testPlots[1])
+					cleared = true
+					return
+				end
+				task.wait()
+			end
+		end)
+		GameDay.Start()
+		waitUntil(function()
+			return cleared
+		end, 0.6)
+		task.wait(0.05)
+		Config.GameDay.IntervalSeconds = 1000
+		Config.GameDay.FansPerFrame = 50 -- (for the leaving; the arrival keeps its 1 per frame)
+		check(
+			cleared and testPlots[1].Model:FindFirstChild("GameDayFans") == nil,
+			"a crowd cleared while its fans arrive stays gone (the arrival stops)"
+		)
+		waitUntil(function()
+			return not GameDay.IsActive()
+		end, 2)
+		local atEnd = seatedCount(testPlots[2])
+		waitUntil(crowdsGone, 3)
+		check(
+			atEnd < 1200 and crowdsGone(),
+			("a game day that ends while fans arrive (%d of 1200 in) leaves no crowd behind"):format(atEnd)
+		)
+
+		for key, value in pairs(saved) do
+			Config.GameDay[key] = value
+		end
+		Config.GameDay.IntervalSeconds = 1000
+		GameDay.Init(tycoons, PlotManager)
+		for _, plot in ipairs(testPlots) do
+			plot.Model:Destroy()
+		end
+	end
 
 	---------------------------------------------------------------------------------------------
 	-- Client HUD (runs the LocalScript against fake player/attributes; Lune validates GUI property names)
@@ -2431,23 +2623,22 @@ local function runTests()
 	RunServiceMock.RenderStepped:Fire(0.016)
 	task.wait(0.05)
 	check(beam.Parent ~= nil and beam.Enabled == false, "guide hides (and keeps working) when its button is gone")
-	-- a fan in front of the camera bounces
+	-- a fan in front of the camera bounces (a seated fan is its jersey block with the head inside)
 	local fanFolder = Instance.new("Folder")
 	fanFolder.Parent = workspace
-	local fanModel = Instance.new("Model")
-	fanModel.Name = "TestFan"
 	local fanBody = Instance.new("Part")
+	fanBody.Name = "Fan"
 	fanBody.CFrame = CFrame.new(0, 10, 0)
-	fanBody.Parent = fanModel
 	local fanHead = Instance.new("Part")
+	fanHead.Name = "Head"
 	fanHead.CFrame = CFrame.new(0, 12, 0)
-	fanHead.Parent = fanModel
-	fanModel.Parent = fanFolder
-	CollectionServiceMock:AddTag(fanModel, "TycoonFan")
+	fanHead.Parent = fanBody
+	fanBody.Parent = fanFolder
+	CollectionServiceMock:AddTag(fanBody, "TycoonFan")
 	task.wait(0.05)
 	local moved = false
-	for step = 1, 20 do
-		RunServiceMock.RenderStepped:Fire(0.016)
+	for step = 1, 60 do
+		RunServiceMock.Heartbeat:Fire(0.016)
 		task.wait(0.03)
 		if math.abs(fanBody.CFrame.Position.Y - 10) > 0.01 then
 			moved = true
@@ -2477,6 +2668,164 @@ local function runTests()
 	notifyRemote.OnClientEvent:Fire("Built X", "success")
 	task.wait(0.05)
 	check(table.find(playedSounds, "Purchase") ~= nil, "purchase sound plays")
+	do
+		-- PERF-3: only fans near the camera cheer, with a two-state hop driven from Heartbeat (not
+		-- RenderStepped); the head hops with its jersey block; a fan the camera leaves sits down
+		local function makeFan(position)
+			local body = Instance.new("Part")
+			body.Name = "Fan"
+			body.CFrame = CFrame.new(position)
+			local head = Instance.new("Part")
+			head.Name = "Head"
+			head.CFrame = CFrame.new(position + Vector3.new(0, 1.85, 0))
+			head.Parent = body
+			body.Parent = fanFolder
+			CollectionServiceMock:AddTag(body, "TycoonFan")
+			return body, head
+		end
+		local nearBody, nearHead = makeFan(Vector3.new(20, 10, 0))
+		local farBody = makeFan(Vector3.new(0, 10, 900))
+		local function liftOf(part, restY)
+			return part.CFrame.Position.Y - restY
+		end
+		local renderMoved = false
+		for _ = 1, 40 do
+			RunServiceMock.RenderStepped:Fire(0.016)
+			task.wait(0.02)
+			renderMoved = renderMoved or math.abs(liftOf(nearBody, 10)) > 0.01
+		end
+		check(not renderMoved, "fans don't cheer from RenderStepped")
+		local heights, headWith, farMoved = {}, true, false
+		for _ = 1, 80 do
+			RunServiceMock.Heartbeat:Fire(0.016)
+			task.wait(0.02)
+			local lift = liftOf(nearBody, 10)
+			heights[("%.2f"):format(lift)] = true
+			headWith = headWith and math.abs(liftOf(nearHead, 11.85) - lift) < 0.01
+			farMoved = farMoved or math.abs(liftOf(farBody, 10)) > 0.01
+		end
+		local heightList = {}
+		for height in pairs(heights) do
+			table.insert(heightList, height)
+		end
+		table.sort(heightList)
+		check(
+			#heightList == 2 and heightList[1] == "0.00" and headWith,
+			"a near fan hops between its seat and one raised height, its head with it: " .. table.concat(heightList, ", ")
+		)
+		check(not farMoved, "fans far from the camera sit still")
+		-- the camera leaves while the fan is in the air: it sits back down and stays down
+		local wasUp = false
+		for _ = 1, 80 do
+			RunServiceMock.Heartbeat:Fire(0.016)
+			task.wait(0.02)
+			if liftOf(nearBody, 10) > 0.5 then
+				wasUp = true
+				break
+			end
+		end
+		local camera = workspace.CurrentCamera
+		local cameraBefore = camera.CFrame
+		camera.CFrame = CFrame.new(0, 10, 3000)
+		for _ = 1, 40 do -- (past the next refresh of the fans near the camera, every 0.5 s)
+			RunServiceMock.Heartbeat:Fire(0.016)
+			task.wait(0.02)
+		end
+		local stayedDown = true
+		for _ = 1, 30 do
+			RunServiceMock.Heartbeat:Fire(0.016)
+			task.wait(0.02)
+			stayedDown = stayedDown and math.abs(liftOf(nearBody, 10)) < 0.01 and math.abs(liftOf(nearHead, 11.85)) < 0.01
+		end
+		camera.CFrame = cameraBefore
+		check(wasUp and stayedDown, "a fan the camera leaves behind sits back down and stays down")
+	end
+	do
+		-- PJ-2: in and around the Team HQ the guide beam first points where it can be followed
+		-- (a door, the stairs, a corner of the building, the lobby's opening onto the corridor),
+		-- and it stays on when the button is on another floor right above or below
+		local CAMPUS = Config.Layout.Areas.campus
+		local guideOrigin = CFrame.new(400, 0.2, -1500) * CFrame.Angles(0, math.pi, 0) -- (turned like plot 2)
+		local guidePlot = Instance.new("Model")
+		guidePlot.Name = "Plot9"
+		local guideButtons = Instance.new("Folder")
+		guideButtons.Name = "Buttons"
+		guideButtons.Parent = guidePlot
+		local guideItems = Instance.new("Folder")
+		guideItems.Name = "Items"
+		guideItems.Parent = guidePlot
+		guidePlot.Parent = tycoons
+		for _, id in ipairs({ "practice_field:1", "hq_owner:1", "hq_media:1", "hq_weightroom:1", "turf:1" }) do
+			local button = Items.ById[id].Button
+			local pad = Instance.new("Part")
+			pad.Name = "Buy_" .. id
+			pad.CFrame = guideOrigin * CFrame.new(button.X, button.Y + 0.3, button.Z)
+			pad.Parent = guideButtons
+		end
+		local atrium = Instance.new("Model")
+		atrium.Name = "hq_atrium:1"
+		atrium.Parent = guideItems
+		local guideChar = makeCharacter("GuideTester")
+		viewer.Character = guideChar
+		viewer:SetAttribute("PlotIndex", 9)
+		local guideBeam = workspace:FindFirstChild("TycoonGuide", true)
+		local beamEnd = workspace:FindFirstChild("TycoonGuideEnd", true)
+		-- where the beam points (campus coordinates, on the floor) with the player's feet at `feet`
+		local function aim(feet, goal)
+			viewer:SetAttribute("NextGoal", goal)
+			guideChar.HumanoidRootPart.CFrame = guideOrigin * CFrame.new(feet + CAMPUS + Vector3.new(0, 3, 0))
+			task.wait(0.3)
+			RunServiceMock.RenderStepped:Fire(0.016)
+			task.wait(0.02)
+			return guideOrigin:PointToObjectSpace(beamEnd.Position) - CAMPUS - Vector3.new(0, 1, 0), guideBeam.Enabled
+		end
+		local function expect(feet, goal, wanted, message)
+			local point, enabled = aim(feet, goal)
+			check(
+				enabled and (point - wanted).Magnitude < 0.6,
+				("%s (beam at %.1f, %.1f, %.1f)"):format(message, point.X, point.Y, point.Z)
+			)
+		end
+		-- leaving the HQ for the practice fields behind it (the ground floor's back wall has no door)
+		expect(
+			Vector3.new(-100, 0.3, 230),
+			"practice_field:1",
+			Vector3.new(-100, 0.2, 267),
+			"lobby -> practice field: first to the corridor"
+		)
+		expect(Vector3.new(-200, 0.3, 271), "practice_field:1", Vector3.new(-266, 0.2, 271), "then out through the west doors")
+		expect(Vector3.new(-268, 0.3, 271), "practice_field:1", Vector3.new(-266, 0.2, 370), "outside: round the HQ's corner")
+		-- coming back in for a ground-floor room: round the corner, to the door, through it
+		expect(
+			Vector3.new(-130, 0.3, 420),
+			"hq_weightroom:1",
+			Vector3.new(-266, 0.2, 370),
+			"practice field -> weight room: round the corner"
+		)
+		expect(Vector3.new(-265, 0.3, 273), "hq_weightroom:1", Vector3.new(-256, 0.2, 271), "and in through the west doors")
+		-- upstairs buttons: the grand staircase (atrium built), or the west stair tower
+		expect(Vector3.new(-90, 0.3, 215), "hq_media:1", Vector3.new(-61, 0.2, 208.5), "lobby -> upstairs: to the grand staircase")
+		expect(Vector3.new(-54.5, 5, 225), "hq_media:1", Vector3.new(-54.5, 17, 256), "on the staircase: up to the top")
+		expect(Vector3.new(-200, 0.3, 271), "hq_owner:1", Vector3.new(-252, 0.2, 271), "west corridor -> upstairs: into the stair tower")
+		atrium.Parent = nil -- (no grand staircase yet)
+		expect(Vector3.new(-90, 0.3, 215), "hq_media:1", Vector3.new(-90, 0.2, 267), "no grand staircase: lobby -> the corridor first")
+		expect(Vector3.new(-255, 0.3, 270), "hq_media:1", Vector3.new(-258.3, 1.2, 281.4), "in the stair tower: to the first flight")
+		expect(Vector3.new(-258.3, 4.5, 288), "hq_media:1", Vector3.new(-258.3, 8.6, 297.5), "first flight: up to the half landing")
+		expect(Vector3.new(-252.7, 12, 288), "hq_media:1", Vector3.new(-252.7, 17, 278.5), "second flight: up to the top")
+		-- upstairs, for a button outside: down the stairs first
+		expect(Vector3.new(-150, 17.1, 271), "practice_field:1", Vector3.new(-252, 17, 272), "upstairs -> outside: to the stairs down")
+		expect(Vector3.new(-252.7, 12, 288), "practice_field:1", Vector3.new(-252.7, 8.6, 297.5), "second flight: down to the half landing")
+		-- from the corridor to the main entrance: along the corridor to the lobby's opening, through it
+		expect(Vector3.new(30, 0.3, 271), "turf:1", Vector3.new(-64, 0.2, 268), "east corridor -> main entrance: to the lobby's opening")
+		expect(Vector3.new(-80, 0.3, 270), "turf:1", Vector3.new(-80, 0.2, 261), "at the opening: into the lobby")
+		-- straight at buttons away from the HQ; hidden right next to one on the same floor only
+		local _, sameFloor = aim(Vector3.new(5, 0.3, -80), "turf:1")
+		local _, below = aim(Vector3.new(5, -16.7, -80), "turf:1")
+		local _, farAway = aim(Vector3.new(40, 0.3, -80), "turf:1")
+		check(not sameFloor and below and farAway, "the beam hides next to its button, not when it's a floor above or below you")
+		atrium.Parent = guideItems
+		guidePlot:Destroy()
+	end
 end
 
 local ranOk, runError = xpcall(runTests, function(err)
