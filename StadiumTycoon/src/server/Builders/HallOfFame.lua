@@ -751,7 +751,7 @@ local function buildMuseumFloor(ctx)
 		timeline,
 		"Franchise History",
 		"From one borrowed ball in 1950 to the team you run today: every big moment in the franchise's story.",
-		{ LookKey = "season" }
+		{ LookKey = "season", At = Vector3.new(0, 2, 0) } -- (on the board above the gold timeline bar)
 	)
 
 	-- three framed team photos in the east corner of the back wall

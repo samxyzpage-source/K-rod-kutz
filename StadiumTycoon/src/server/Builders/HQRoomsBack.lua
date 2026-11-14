@@ -1500,6 +1500,7 @@ function HQRoomsBack.hq_trainingroom(ctx)
 	box(room, "Cross", -77, 8.25, LINE_Z - 0.36, -73, 9.75, LINE_Z - 0.25, CROSS_RED, Enum.Material.Neon)
 	BuildUtil.Look(bigCross, "Training Room", "Hurt? Sore? Tired? The trainers here patch players up so they're ready for game day.", {
 		Distance = 10,
+		At = Vector3.new(0, 0, -0.45), -- (in front of the red cross, which would hide it)
 	})
 
 	-- Step 2: treatment tables with curtains, taping station, first aid, player status ---------
@@ -1557,6 +1558,7 @@ function HQRoomsBack.hq_trainingroom(ctx)
 	box(treatment, "CabinetCross", IX0 + 1.2, 5.2, 330.6, IX0 + 1.29, 5.8, 332.4, CROSS_RED)
 	BuildUtil.Look(cabinet, "First-Aid Cabinet", "Bandages, ice packs, braces and everything else the trainers need. Safety first!", {
 		Distance = 7,
+		At = Vector3.new(0.75, 1.6, 0), -- (on the cabinet front, above its cross)
 	})
 	-- X-ray light box over the first table
 	local xray = box(treatment, "XRayLightBox", IX0, 5, 296, IX0 + 0.25, 8.6, 300, Color3.fromRGB(210, 230, 245), Enum.Material.Neon)
@@ -1694,6 +1696,7 @@ function HQRoomsBack.hq_trainingroom(ctx)
 		Title = "Recovery Drinks",
 		Info = "After a cold tub or a long rehab session, players refuel with a sports drink from this cooler.",
 		Distance = 8,
+		At = Vector3.new(-1.95, 0, 0), -- (just outside the glass door, so the bottles don't hide it)
 	})
 
 	-- Step 4: rehab gear --------------------------------------------------------------------------
@@ -2312,6 +2315,7 @@ function HQRoomsBack.hq_cafeteria(ctx)
 		Title = "Drinks Cooler",
 		Info = "Sports drinks in every team-approved flavour. Stay hydrated, champ!",
 		Distance = 8,
+		At = Vector3.new(2.05, 0, 0), -- (just outside the glass door)
 	})
 end
 

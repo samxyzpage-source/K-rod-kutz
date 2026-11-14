@@ -2059,7 +2059,7 @@ function M.hq_analytics(ctx)
 		top,
 		"Holo-Field",
 		"A 3D hologram of the field! Analysts replay every play from every angle to find the perfect game plan.",
-		{ Distance = 8 }
+		{ Distance = 8, At = Vector3.new(0.75, 0, 0) } -- (above the hologram plate, which would hide it)
 	)
 end
 

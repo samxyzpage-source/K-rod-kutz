@@ -250,7 +250,8 @@ function Staff.staff_vendors(ctx)
 		BuildUtil.Stage(ctx, index)
 		local feet = spots[index]
 		local torso, at = person(ctx, feet + Vector3.new(2.6, 0, 0), WHITE, SKIN[((index + 1) % #SKIN) + 1], info.Title)
-		BuildUtil.Use(ctx, torso, info.Use, { Object = info.Title, Distance = 8 })
+		-- (no line of sight: the vendor's own apron and arm would hide the prompt from the front)
+		BuildUtil.Use(ctx, torso, info.Use, { Object = info.Title, Distance = 8, LineOfSight = false })
 		cap(ctx, at, info.Color)
 		-- apron stripe
 		BuildUtil.Part(
