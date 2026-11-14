@@ -1604,7 +1604,25 @@ local function runTests()
 	cart:PivotTo(info1.home * CFrame.new(0, 0, 200))
 	info1.lastUsed = -1000
 	local moved = Vehicles.Tidy(os.clock())
-	check(moved >= 1 and (cart.PrimaryPart.CFrame.Position - info1.home.Position).Magnitude < 5, "abandoned carts drive themselves home")
+	check(moved >= 1 and (cart.PrimaryPart.CFrame.Position - info1.home.Position).Magnitude < 5, "abandoned carts are sent home")
+	do
+		-- the README says what really happens to an abandoned cart (it is put back in its bay; it
+		-- doesn't drive there), with the numbers Vehicles.lua uses
+		local source = fs.readFile("src/server/Vehicles.lua")
+		local after, distance = source:match("RETURN_AFTER = (%d+)"), source:match("RETURN_DISTANCE = (%d+)")
+		local row = fs.readFile("README.md"):match("\n| Golf carts |([^\n]*)") or ""
+		check(
+			after ~= nil
+				and distance ~= nil
+				and row:find("drive themselves", 1, true) == nil
+				and row:find(after .. " seconds", 1, true) ~= nil
+				and row:find(distance .. " studs", 1, true) ~= nil,
+			("the README says abandoned carts are put back in their bay (%s s unused, %s studs away)"):format(
+				tostring(after),
+				tostring(distance)
+			)
+		)
+	end
 	cart:Destroy()
 	Vehicles.Tidy(os.clock())
 	local respawned = Vehicles.GetCarts(PlotManager.GetPlot(alice))[1]
@@ -4372,6 +4390,26 @@ local function runTests()
 		check(fieldPaint, "field numbers, the midfield logo and the video boards stay visible from anywhere in the bowl")
 		local gate = guiOf(plotModel(1).Base, "GateSign")
 		check(gate and gate.MaxDistance >= 150, "the plot base's signs get a draw distance too")
+		-- builders are told about it (README "Adding a new piece" and the V5 layout's builder rules),
+		-- with PlotManager's own numbers
+		local perStud, least, most = fs.readFile("src/server/PlotManager.lua")
+			:match("math%.clamp%((%d+) %* math%.min%(a, b%) %+ 0%.5 %* math%.max%(a, b%), (%d+), (%d+)%)")
+		local told = perStud ~= nil
+		for _, doc in ipairs({ "README.md", "docs/V5-LAYOUT.md" }) do
+			local text = fs.readFile(doc)
+			told = told
+				and text:find("FAR_TEXT_PIECES", 1, true) ~= nil
+				and text:find(("%s studs per stud"):format(tostring(perStud)), 1, true) ~= nil
+				and text:find(("%s to %s"):format(tostring(least), tostring(most)), 1, true) ~= nil
+		end
+		check(
+			told,
+			("the README and the V5 layout tell builders about draw distances (%s studs per stud, %s to %s; FAR_TEXT_PIECES)"):format(
+				tostring(perStud),
+				tostring(least),
+				tostring(most)
+			)
+		)
 	end
 
 	section("Server core: collect pads and the vault")
