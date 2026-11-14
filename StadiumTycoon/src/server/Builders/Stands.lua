@@ -964,10 +964,11 @@ local function playersTunnel(ctx, L, name, spec)
 		-- so no slot shows between the wall and row 7)
 		local covered =
 			segBox(ctx, F, "TunnelWallCovered", s * inner, s * cut, 0, coveredTop, openEnd, coveredEnd, spec.wallColor, Enum.Material.Brick)
-		-- a slogan painted on the covered stretch, above the LED strip, for the players walking out
+		-- a slogan painted on the covered stretch for the players walking out: between the LED strip
+		-- and row 6's bridge (y 7.2..11.4)
 		local face = s > 0 and Enum.NormalId.Left or Enum.NormalId.Right
 		local _, slogan = addText(covered, face, spec.slogans[s > 0 and 2 or 1], readable(spec.wallColor, spec.inkColor), 20)
-		slogan.Position = UDim2.new(0.06, 0, 0.1, 0)
+		slogan.Position = UDim2.new(0.06, 0, 0.18, 0)
 		slogan.Size = UDim2.new(0.88, 0, 0.3, 0)
 		local led = segBox(
 			ctx,

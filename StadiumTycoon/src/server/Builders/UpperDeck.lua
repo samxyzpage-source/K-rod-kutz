@@ -83,7 +83,7 @@ local SEAT_HEIGHT = 0.9 -- ...and stay under the 1-stud aisle steps that cover t
 local TOP_STRIP = 1.2 -- the top row's strip (in front of the rear parapet; fans sit up to 2.0 into a row)
 local PARAPET = 0.8 -- the rear parapet takes the back 0.8 studs of the top row
 local RAIL_HEIGHT = 2.8 -- handrails run this high above the stairs' nosing line
-local CLUB_RAIL_HEIGHT = 3 -- (the club's start at the top of the club glass rail)
+local CLUB_RAIL_HEIGHT = 3 -- (a club handrail starts at the top of the club's glass rail)
 local FASCIA_IN = 0.6 -- the front fascia covers offsets start - 0.6 .. start
 -- Corner blocks overlap their straight neighbours a little at the joints. Their horizontal faces
 -- (row tops + bottoms, seat tops, fascia top) sit this much inside the straight blocks' faces, so
@@ -892,8 +892,8 @@ end
 --[[
 	Step "Aisles & Railings" (sides): an accessible-seating bay on the cross-aisle at segment x, right
 	behind its glass rail: two painted wheelchair spaces (look) and two slim companion chairs (seats
-	with a view of the field). Everything stays within 1.9 of the rail, so 2.1 of the 4-deep
-	cross-aisle stays free to walk along behind them.
+	with a view of the field). Everything stays within 1.9 of the cross-aisle's front edge, so 2.1
+	of its 4 studs stay free to walk along behind them.
 ]]
 local function accessibleBay(ctx, seg, U, x)
 	local L = ctx.config.Layout
