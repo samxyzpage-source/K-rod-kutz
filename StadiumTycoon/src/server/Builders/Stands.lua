@@ -965,9 +965,10 @@ local function playersTunnel(ctx, L, name, spec)
 		local covered =
 			segBox(ctx, F, "TunnelWallCovered", s * inner, s * cut, 0, coveredTop, openEnd, coveredEnd, spec.wallColor, Enum.Material.Brick)
 		-- a slogan painted on the covered stretch for the players walking out: between the LED strip
-		-- and row 6's bridge (y 7.2..11.4)
+		-- and row 6's bridge (y 7.2..11.4). The first one is on their left (+along: they face the
+		-- field), so the pair reads left to right on the way out.
 		local face = s > 0 and Enum.NormalId.Left or Enum.NormalId.Right
-		local _, slogan = addText(covered, face, spec.slogans[s > 0 and 2 or 1], readable(spec.wallColor, spec.inkColor), 20)
+		local _, slogan = addText(covered, face, spec.slogans[s > 0 and 1 or 2], readable(spec.wallColor, spec.inkColor), 20)
 		slogan.Position = UDim2.new(0.06, 0, 0.18, 0)
 		slogan.Size = UDim2.new(0.88, 0, 0.3, 0)
 		local led = segBox(
@@ -1122,26 +1123,32 @@ local function playersTunnel(ctx, L, name, spec)
 		{ CanCollide = false }
 	)
 
+	-- a medallion on the runway just inside the mouth, reading toward the field for the players
+	-- running out (a disc lying flat: its +X axis points up, its face's text runs along -along): the
+	-- live team name at home, a grey VISITORS badge on the visitors' side
+	local medallionColor = spec.home and team.Secondary or spec.trimColor
+	local medallion = BuildUtil.Part(ctx, {
+		Name = "TunnelMedallion",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.06, 7, 7),
+		CFrame = F * CFrame.fromMatrix(Vector3.new(0, 0.15, -(mouthBack + 4)), Vector3.new(0, 1, 0), Vector3.new(0, 0, 1)),
+		Color = medallionColor,
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+	})
 	if spec.home then
-		-- a team medallion on the runway just inside the mouth, the live team name reading toward
-		-- the field (a disc lying flat: its +X axis points up, its face's text runs along -along)
-		local medallion = BuildUtil.Part(ctx, {
-			Name = "TunnelMedallion",
-			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(0.06, 7, 7),
-			CFrame = F * CFrame.fromMatrix(Vector3.new(0, 0.15, -(mouthBack + 4)), Vector3.new(0, 1, 0), Vector3.new(0, 0, 1)),
-			Color = team.Secondary,
-			Material = Enum.Material.SmoothPlastic,
-			CanCollide = false,
-		})
 		BuildUtil.LiveText(medallion, Enum.NormalId.Right, "team", {
 			LabelName = "Live_team",
 			Text = displayName(ctx),
-			TextColor3 = readable(team.Secondary, team.Primary),
+			TextColor3 = readable(medallionColor, team.Primary),
 			PixelsPerStud = 20,
 			Font = Enum.Font.GothamBlack,
 		})
+	else
+		addText(medallion, Enum.NormalId.Right, spec.fieldText, readable(medallionColor, spec.wallColor), 20)
+	end
 
+	if spec.home then
 		-- game-day flame cannons in front of both pillars (beside the mouth, not in the way out)
 		for _, s in ipairs({ -1, 1 }) do
 			local box = segBox(

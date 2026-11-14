@@ -22,8 +22,10 @@
 	                   2 Seats                 seat strips (row 3 is the cross-aisle) + 2 TV camera seats
 	                                           at the very top
 	                   3 Aisles & Railings     stair aisles + handrails, the glass front rail with fans'
-	                                           banners hanging over it, a glass rail along the cross-aisle,
-	                                           vomitory railings, trim frames and SECTION signs (look)
+	                                           banners draped over it, a glass rail along the cross-aisle
+	                                           with two accessible-seating bays behind it (look, companion
+	                                           camera seats), vomitory railings, trim frames and SECTION
+	                                           signs (look)
 	                   4 Facade                the rear fascia closing the back of the deck (team colour,
 	                                           live team name outside), the rear parapet (team-colour band,
 	                                           live team name, glass and rail) and an LED ribbon board on
@@ -680,7 +682,8 @@ local function vomitoryShell(ctx, seg, U, v)
 	local climb = (U.trenchOut - U.trenchIn) * U.slope
 	for _, side in ipairs({ -1, 1 }) do
 		local x0, x1 = v + side * half, v + side * (half + WALL)
-		-- (the wall's foot, the stud above the floor, is a team-colour band all the way in)
+		-- (the wall's foot, the stud above the floor, is a team-colour band all the way in; it starts
+		-- 0.05 in front of row 4's riser, which ends inside the wall, so their faces never z-fight)
 		block(
 			ctx,
 			seg,
@@ -689,7 +692,7 @@ local function vomitoryShell(ctx, seg, U, v)
 			x1,
 			U.floorY - 2,
 			U.floorY + 1,
-			U.trenchIn,
+			U.trenchIn - 0.05,
 			U.tunnelOut,
 			ctx.colors.Primary,
 			Enum.Material.Concrete
@@ -891,19 +894,20 @@ end
 
 --[[
 	Step "Aisles & Railings" (sides): an accessible-seating bay on the cross-aisle at segment x, right
-	behind its glass rail: two painted wheelchair spaces (look) and two slim companion chairs (seats
-	with a view of the field). Everything stays within 1.9 of the cross-aisle's front edge, so 2.1
-	of its 4 studs stay free to walk along behind them.
+	behind its glass rail: two painted wheelchair spaces (look) on the side toward the vomitory and two
+	slim companion chairs (seats with a view of the field) beyond them. The chairs stay within 1.6 of
+	the cross-aisle's front edge, so 2.4 of its 4 studs stay free to walk along behind them.
 ]]
 local function accessibleBay(ctx, seg, U, x)
 	local L = ctx.config.Layout
 	local r = Bowl.Row(L, "upper", U.cross)
 	local o0 = r.inner + 0.4 -- (just behind the glass rail)
+	local out = x >= 0 and 1 or -1 -- (away from the vomitory: both bays of a side mirror each other)
 	-- (turned round: the lettering reads upright from the walkway behind)
 	local spaces = BuildUtil.Part(ctx, {
 		Name = "WheelchairSpaces",
 		Size = Vector3.new(6, 0.06, 1.5),
-		CFrame = at(seg, x - 1.6, r.top + 0.03, o0 + 0.75) * TURN,
+		CFrame = at(seg, x - out * 1.6, r.top + 0.03, o0 + 0.75) * TURN,
 		Color = ACCESS_BLUE,
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
@@ -916,26 +920,42 @@ local function accessibleBay(ctx, seg, U, x)
 		"Wheelchair spaces with a great view of the field, right beside the tunnel to the concourse, and seats for friends and family next to them.",
 		{ Distance = 12 }
 	)
-	for _, cx in ipairs({ x + 2.5, x + 4.5 }) do
+	for _, cx in ipairs({ x + out * 2.5, x + out * 4.5 }) do
 		local eye = at(seg, cx, r.top + 4.5, o0 + 0.2).Position
 		BuildUtil.Seat(ctx, {
 			Name = "CompanionSeat",
-			Size = Vector3.new(1.8, 0.8, 1.2),
-			CFrame = at(seg, cx, r.top + 0.4, o0 + 0.6) * TURN,
+			Size = Vector3.new(1.8, 0.8, 1),
+			CFrame = at(seg, cx, r.top + 0.4, o0 + 0.5) * TURN,
 			Color = ctx.colors.Primary,
 			Material = Enum.Material.Fabric,
 			Object = "Companion Seat",
 			Camera = { From = eye, To = Vector3.new(0, 2, L.FieldCenterZ), Fov = 58, Label = "UPPER DECK" },
 		})
-		block(ctx, seg, "CompanionSeatBack", cx - 0.9, cx + 0.9, r.top, r.top + 2.4, o0 + 1.2, o0 + 1.45, CHAIR_DARK, Enum.Material.Metal)
+		-- (a padded back in the seat's colour on a dark metal frame, below the glass rail's cap)
+		block(
+			ctx,
+			seg,
+			"CompanionSeatBack",
+			cx - 0.9,
+			cx + 0.9,
+			r.top + 0.8,
+			r.top + 2.2,
+			o0 + 1,
+			o0 + 1.2,
+			ctx.colors.Primary,
+			Enum.Material.Fabric
+		)
+		block(ctx, seg, "CompanionSeatFrame", cx - 0.8, cx + 0.8, r.top, r.top + 0.8, o0 + 1, o0 + 1.2, CHAIR_DARK, Enum.Material.Metal)
 	end
 end
 
--- Step "Aisles & Railings" (sides): home-made fan banners hanging over the front glass rail, facing
--- the field (above the ribbon board, below the rail's cap: the front row still leans on the rail).
+-- Step "Aisles & Railings" (sides): home-made fan banners draped over the front glass rail, facing
+-- the field (above the ribbon board): each hangs from a fold lying on the rail's cap, in front of the
+-- front row, which still leans on the rail.
 local function fanBanners(ctx, seg, U, texts)
 	local team = ctx.colors
 	local colors = { team.Secondary, WHITE, team.Trim, team.Secondary }
+	local front = U.start - FASCIA_IN - 0.1 -- (the banner hangs 0.03 in front of the cap's face)
 	for index, x in ipairs({ -104, -52, 52, 104 }) do
 		local color = colors[(index - 1) % #colors + 1]
 		local banner = block(
@@ -945,14 +965,28 @@ local function fanBanners(ctx, seg, U, texts)
 			x - 4.5,
 			x + 4.5,
 			U.first + 0.35,
-			U.first + 3.3,
-			U.start - FASCIA_IN - 0.1,
-			U.start - FASCIA_IN + 0.02,
+			U.first + 3.75,
+			front,
+			front + 0.12,
 			color,
 			Enum.Material.Fabric,
 			NO_COLLIDE
 		)
 		write(banner, TOWARD_FIELD, texts[index], readable(color, team.Primary), { PixelsPerStud = 16 })
+		block(
+			ctx,
+			seg,
+			"FanBannerFold",
+			x - 4.5,
+			x + 4.5,
+			U.first + 3.7,
+			U.first + 3.75,
+			front,
+			U.start - 0.2,
+			color,
+			Enum.Material.Fabric,
+			NO_COLLIDE
+		)
 	end
 end
 
