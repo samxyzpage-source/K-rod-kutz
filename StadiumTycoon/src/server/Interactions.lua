@@ -6,8 +6,9 @@
 	  door      swings / slides the door open, closes it again after a few seconds
 	  seat      sits the player down (TV camera seats are handled by Interact.client.lua)
 	  elevator  fades the player's screen and moves them to the other level
-	  use       items (Snacks.lua) are handed out here; mini-games run on the client and send
-	            their result back through the UseResult remote
+	  use       items (Snacks.lua) and coaching gear (Gear.lua) are handed out here and the
+	            coaches' wardrobe changes outfits (Gear.lua); mini-games run on the client and
+	            send their result back through the UseResult remote
 	  look      client only
 
 	Remotes (in ReplicatedStorage.TycoonRemotes):
@@ -25,6 +26,7 @@ local Shared = ReplicatedStorage:WaitForChild("TycoonShared")
 local Format = require(Shared:WaitForChild("Format"))
 local Interact = require(Shared:WaitForChild("Interact"))
 
+local Gear = require(script.Parent.Gear)
 local PlayerData = require(script.Parent.PlayerData)
 local Snacks = require(script.Parent.Snacks)
 
@@ -39,6 +41,9 @@ local GAME_LENGTH = { lift = 12, arcade = 20 }
 -- The fastest anyone can score (per second); higher scores are cut down to this.
 local SCORE_RATE = { lift = 2, arcade = 3, pingpong = 1.6, podium = 100 }
 local REWARD_COOLDOWN = 60 -- seconds between cash rewards for the same activity
+local GEAR_SLACK = 6 -- gear / wardrobe requests from further than a prompt's reach + this are refused
+local GEAR_COOLDOWN = 0.8 -- seconds between two pieces of gear
+local OUTFIT_COOLDOWN = 1.5 -- seconds between two outfit changes
 
 local plotManager = nil
 local franchise = nil
@@ -208,8 +213,47 @@ end
 -- Use: items + mini-game results
 ---------------------------------------------------------------------------------------------
 
+-- Coaching gear and the coaches' wardrobe (Gear.lua): only from a prompt on a plot, for a living
+-- player who stands next to it, and not too often.
+local function gearUse(prompt, player, spec)
+	local host = hostPart(prompt)
+	local plot = host and plotOf(prompt)
+	local _, root = characterParts(player)
+	if not plot or not root then
+		return
+	end
+	local spot = host.CFrame.Position
+	if prompt.Parent:IsA("Attachment") then
+		spot = host.CFrame:PointToWorldSpace(prompt.Parent.Position)
+	end
+	if (root.CFrame.Position - spot).Magnitude > prompt.MaxActivationDistance + GEAR_SLACK then
+		return
+	end
+	local ok, message
+	if spec.Gear then
+		if not cooldownReady(player, "gear", GEAR_COOLDOWN) then
+			return
+		end
+		ok, message = Gear.Give(player, spec.Gear, plot.Palette)
+	else
+		if not cooldownReady(player, "outfit", OUTFIT_COOLDOWN) then
+			return
+		end
+		if spec.ChangeBack then
+			ok, message = Gear.ChangeBack(player)
+		else
+			ok, message = Gear.Wear(player, spec.Outfit, plot)
+		end
+	end
+	notify(player, message, ok and "success" or "info")
+end
+
 local function use(prompt, player)
 	local spec = Interact.Uses[prompt:GetAttribute("Use")]
+	if spec and (spec.Gear or spec.Outfit or spec.ChangeBack) then
+		gearUse(prompt, player, spec)
+		return
+	end
 	if spec and spec.Game then
 		-- the client runs the game (it gets the same trigger); remember that it really started
 		if hostPart(prompt) and plotOf(prompt) then
