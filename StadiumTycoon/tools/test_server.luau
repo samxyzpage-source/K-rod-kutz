@@ -1442,6 +1442,64 @@ local function runTests()
 		check((arrived - expected).Magnitude < 0.01, "the elevator takes you to the other level")
 		alice.Character.HumanoidRootPart.CFrame = CFrame.new(0, 3, 0)
 
+		do
+			-- every text label on a surface has room to draw its text (a label with no width shows nothing)
+			local function faceSize(part, face)
+				local size = part.Size
+				if face == Enum.NormalId.Front or face == Enum.NormalId.Back then
+					return size.X, size.Y
+				elseif face == Enum.NormalId.Left or face == Enum.NormalId.Right then
+					return size.Z, size.Y
+				end
+				return size.X, size.Z
+			end
+			local function boxOf(gui, inst)
+				local parent = inst.Parent
+				local pw, ph
+				if parent == gui then
+					local fw, fh = faceSize(gui.Parent, gui.Face)
+					pw, ph = fw * gui.PixelsPerStud, fh * gui.PixelsPerStud
+				else
+					local _, _, w, h = boxOf(gui, parent)
+					pw, ph = w, h
+				end
+				local size, position = inst.Size, inst.Position
+				return position.X.Scale * pw + position.X.Offset,
+					position.Y.Scale * ph + position.Y.Offset,
+					size.X.Scale * pw + size.X.Offset,
+					size.Y.Scale * ph + size.Y.Offset,
+					pw
+			end
+			local labels, empty, words = 0, {}, {}
+			for _, gui in ipairs(plotModel(1).Items:GetDescendants()) do
+				if gui:IsA("SurfaceGui") and gui.Parent:IsA("BasePart") then
+					for _, label in ipairs(gui:GetDescendants()) do
+						if label:IsA("TextLabel") then
+							labels += 1
+							local x, _, w, h, canvasWidth = boxOf(gui, label)
+							if w <= 0 or h <= 0 then
+								table.insert(empty, gui.Parent.Name .. "/" .. label.Text)
+							end
+							if gui.Parent.Name == "Tier6" then
+								words[label.Text] = { x = x, w = w, canvas = canvasWidth }
+							end
+						end
+					end
+				end
+			end
+			check(labels > 1000 and #empty == 0, ("%d surface labels, none without room: %s"):format(labels, table.concat(empty, ", ")))
+			local game_, film = words.GAME, words.FILM
+			check(
+				game_ ~= nil
+					and film ~= nil
+					and game_.w > 100
+					and game_.x >= 0
+					and game_.x + game_.w < film.x
+					and film.x + film.w <= film.canvas,
+				"the film room riser reads GAME | stairs | FILM"
+			)
+		end
+
 		section("Items, mini-games, live screens")
 		local counter = BuildUtil.Box(fixCtx, "Counter", Vector3.new(4, 3, 2), Vector3.new(-150, 1.5, 220))
 		local hotdogPrompt = BuildUtil.Use(fixCtx, counter, "hotdog")

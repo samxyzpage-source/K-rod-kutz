@@ -1848,11 +1848,13 @@ function HQRoomsBack.hq_filmroom(ctx)
 			PAINT
 		)
 		if k == #FILM_ROWS then
-			-- big GAME / FILM letters on the back riser, either side of the staircase
+			-- big GAME / FILM letters on the back riser, either side of the staircase (the canvas
+			-- runs from the east end, IX1, westward: GAME fills 2 studs from the east wall to 3 short
+			-- of the stairs, FILM the far side)
 			local gui = canvas(tier, Enum.NormalId.Front, 12, nil, 0.4)
 			local h = row.top - SHELL_FLOOR
 			local textColor = textColorOn(step, team)
-			guiText(gui, IX1 - (SX1 + 3), h * 0.15, (SX1 + 3) - (IX1 + 2) - 0.1, h * 0.7, "GAME", textColor, Enum.Font.GothamBlack)
+			guiText(gui, 2, h * 0.15, (IX1 - 2) - (SX1 + 3) - 0.1, h * 0.7, "GAME", textColor, Enum.Font.GothamBlack)
 			guiText(gui, IX1 - (IX0 + 15.5), h * 0.15, 13.5, h * 0.7, "FILM", textColor, Enum.Font.GothamBlack)
 		end
 	end
