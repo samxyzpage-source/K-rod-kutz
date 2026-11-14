@@ -164,6 +164,12 @@ local function ink(background, team)
 	return INK
 end
 
+-- Two colours that are hard to tell apart side by side (close in every channel, whatever the hue).
+local function similar(a, b)
+	local dr, dg, db = a.R - b.R, a.G - b.G, a.B - b.B
+	return dr * dr + dg * dg + db * db < 0.09
+end
+
 -- White or ink, whichever reads better on `background`.
 local function plain(background)
 	if contrast(background, WHITE) >= contrast(background, INK) then
@@ -1041,8 +1047,13 @@ local function familyRestroom(ctx, seg, cx, team)
 	})
 	span(ctx, seg, "RestroomTiles", cx - half + 0.6, cx + half - 0.6, ROOM_WALL_IN, BACK, 30, 30.04, TILE, nil, PAINT)
 	span(ctx, seg, "RestroomBackTiles", cx - half + 0.6, cx + half - 0.6, BACK - 0.1, BACK, 30, 41.3, TILE)
-	span(ctx, seg, "RestroomKickBand", cx + 0.7, cx + half, FRONT - 0.06, FRONT, 30, 32.8, accent(team), nil, PAINT)
-	span(ctx, seg, "RestroomTileStripe", cx - half + 0.6, cx + half - 0.6, BACK - 0.16, BACK - 0.1, 38.2, 38.7, accent(team), nil, PAINT)
+	-- accent tiles like the door, unless the accent is as pale as the tiles (silver, white)
+	local band = accent(team)
+	if similar(band, TILE_WALL) then
+		band = team.Primary
+	end
+	span(ctx, seg, "RestroomKickBand", cx + 0.7, cx + half, FRONT - 0.06, FRONT, 30, 32.8, band, nil, PAINT)
+	span(ctx, seg, "RestroomTileStripe", cx - half + 0.6, cx + half - 0.6, BACK - 0.16, BACK - 0.1, 38.2, 38.7, band, nil, PAINT)
 	span(ctx, seg, "Toilet", cx - 0.6, cx + 0.8, 81.4, BACK, 30, 31.6, PORCELAIN)
 	span(ctx, seg, "SinkCounter", cx + 2.2, cx + half - 0.6, 81.4, BACK, 30, 33, PORCELAIN)
 	span(ctx, seg, "Mirror", cx + 2.4, cx + half - 0.8, 82.8, BACK, 34, 37.6, MIRROR, Enum.Material.Glass, { Reflectance = 0.35 })

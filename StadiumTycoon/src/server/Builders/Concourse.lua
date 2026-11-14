@@ -128,6 +128,7 @@ local MAIN_GATE_HALF = 8 -- 16 wide
 local MAIN_GATE_HEIGHT = 8.8
 local MAIN_TV_KINDS = { "score", "gameday", "summary" }
 local MAIN_DUCT_O = 63.6 -- the air duct runs along the ring here (between the portal mouths and the lane)
+local MAIN_DUCT_D = 1.3 -- its diameter
 local MAIN_NUMBER_INSET = 6 -- painted section numbers: centred this far from a portal's opening edge
 
 --[[
@@ -254,6 +255,12 @@ local function contrast(a, b)
 	return (la + 0.05) / (lb + 0.05)
 end
 
+-- Two colours that are hard to tell apart side by side (close in every channel, whatever the hue).
+local function similar(a, b)
+	local dr, dg, db = a.R - b.R, a.G - b.G, a.B - b.B
+	return dr * dr + dg * dg + db * db < 0.09
+end
+
 -- A team colour that reads well on `background`, else white or ink.
 local function ink(background, team)
 	for _, candidate in ipairs({ team.Trim, team.Secondary, team.Primary }) do
@@ -273,6 +280,15 @@ local function accent(team)
 		return team.Secondary
 	end
 	return team.Trim
+end
+
+-- The bins' lid colour: the team's accent, unless that is as dark as the bins (teal & black).
+local function binLid(team)
+	local trim = accent(team)
+	if similar(trim, BIN_DARK) then
+		return ink(BIN_DARK, team)
+	end
+	return trim
 end
 
 local function teamLabel(ctx)
@@ -653,11 +669,13 @@ local function binPair(ctx, seg, x, floorY, back, lidColor)
 	return body
 end
 
--- A hand sanitiser station: a slim white stand with the dispenser on top (look).
+-- A hand sanitiser station: a slim white stand with the dispenser on top (look). The dispenser is
+-- in the team's accent colour: the wall behind it is Primary.
 local function sanitizer(ctx, seg, x, floorY, back, team)
+	local trim = accent(team)
 	span(ctx, seg, "SanitizerStand", x - 0.5, x + 0.5, back, back + 0.7, floorY, floorY + 3.3, SANITIZER_WHITE)
-	local unit = span(ctx, seg, "SanitizerStation", x - 0.6, x + 0.6, back, back + 1.1, floorY + 3.3, floorY + 4.9, team.Primary)
-	local label = write(unit, OUTWARD, "HAND SANITIZER", ink(team.Primary, team), {
+	local unit = span(ctx, seg, "SanitizerStation", x - 0.6, x + 0.6, back, back + 1.1, floorY + 3.3, floorY + 4.9, trim)
+	local label = write(unit, OUTWARD, "HAND SANITIZER", ink(trim, team), {
 		Top = 0.08,
 		Height = 0.36,
 		Font = Enum.Font.GothamBold,
@@ -719,10 +737,11 @@ local function firstAid(ctx, seg, x, floorY, back)
 	})
 end
 
--- A red fire extinguisher cabinet on a wall (look).
-local function fireCabinet(ctx, seg, x, floorY, back)
-	local cabinet = span(ctx, seg, "FireCabinet", x - 0.8, x + 0.8, back, back + 0.5, floorY + 3, floorY + 6, FIRE_RED)
-	local label = write(cabinet, OUTWARD, "FIRE", WHITE, { Top = 0.06, Height = 0.16, Name = "FireLabel" })
+-- A red fire extinguisher cabinet on a wall (look); a steel one with red letters on a red wall.
+local function fireCabinet(ctx, seg, x, floorY, back, wall)
+	local steel = similar(FIRE_RED, wall)
+	local cabinet = span(ctx, seg, "FireCabinet", x - 0.8, x + 0.8, back, back + 0.5, floorY + 3, floorY + 6, steel and STEEL or FIRE_RED)
+	local label = write(cabinet, OUTWARD, "FIRE", steel and FIRE_RED or WHITE, { Top = 0.06, Height = 0.16, Name = "FireLabel" })
 	decal(label, "", 0.18, 0.3, 0.64, 0.6, FIRE_RED, Color3.fromRGB(150, 24, 28)) -- (the extinguisher behind its window)
 	BuildUtil.Look(cabinet, "Fire Extinguisher", "For emergencies only - like a grill that gets a little TOO excited.", {
 		At = localPoint(ctx, cabinet, seg, x, floorY + 4.2, back + 1.6),
@@ -819,8 +838,9 @@ function Concourse.main_concourse(ctx)
 			PAINT
 		)
 		bandBlock(ctx, seg, "ConcourseCeiling", MC.Inner, MAIN_OUTER_WALL_IN, ceilBottom, ceilTop, CEILING)
-		-- a round air duct under the ceiling along the whole ring, over the portal side (the duct
-		-- pieces meet at the segment joints)
+		-- a round air duct under the ceiling along the whole ring, over the portal side. Every piece
+		-- runs r * tan(22.5) past the 45-degree segment joints: neighbours meet in a mitre on the
+		-- outside of the bend and each flat end hides inside the next piece
 		cyl(
 			ctx,
 			seg,
@@ -828,8 +848,8 @@ function Concourse.main_concourse(ctx)
 			0,
 			ceilBottom - 0.75,
 			MAIN_DUCT_O,
-			seg.len(MAIN_DUCT_O),
-			1.3,
+			seg.len(MAIN_DUCT_O) + MAIN_DUCT_D * math.tan(math.pi / 8),
+			MAIN_DUCT_D,
 			"x",
 			STEEL,
 			Enum.Material.Metal,
@@ -917,7 +937,7 @@ function Concourse.main_concourse(ctx)
 			})
 		end
 		if not seg.straight then
-			fireCabinet(ctx, seg, -17, floorY, MC.Inner + 1)
+			fireCabinet(ctx, seg, -17, floorY, MC.Inner + 1, wallColor)
 		end
 		for _, x in ipairs(seg.portals) do
 			local left, right = lowerSection(L, seg, x - 0.5), lowerSection(L, seg, x + 0.5)
@@ -1100,7 +1120,7 @@ function Concourse.main_concourse(ctx)
 			local x, kind = spot[1], spot[2]
 			local back = MC.Inner + 1
 			if kind == "bins" then
-				binPair(ctx, seg, x, floorY, back, trim)
+				binPair(ctx, seg, x, floorY, back, binLid(team))
 			elseif kind == "sanitizer" then
 				sanitizer(ctx, seg, x, floorY, back, team)
 			elseif kind == "atm" then
@@ -1275,7 +1295,18 @@ local function foodStand(ctx, seg, spec, team)
 	BuildUtil.Use(ctx, counter, spec.use, { Object = spec.title, At = Vector3.new(-4, 2.6, 1.6) })
 	-- a cash register between the order spot and the menu's prompt (its display faces the queue)
 	local till = span(ctx, seg, "CashRegister", cx + 0.4, cx + 1.8, counterIn + 0.3, counterIn + 1.3, 77.7, 78.6, DARK_METAL)
-	decal(write(till, INWARD, "", WHITE, { Name = "TillLabel", Glow = true }), "TAP TO PAY", 0.12, 0.12, 0.76, 0.42, ATM_TEXT, SCREEN)
+	local display = write(till, INWARD, "TAP TO PAY", ATM_TEXT, {
+		Glow = true,
+		Font = Enum.Font.Code,
+		PPS = 32,
+		Left = 0.12,
+		Top = 0.12,
+		Width = 0.76,
+		Height = 0.42,
+		Name = "TillDisplay",
+	})
+	display.BackgroundColor3 = SCREEN
+	display.BackgroundTransparency = 0
 	-- back counter + gear
 	span(ctx, seg, "BackCounter", cx - half + 0.8, cx + half - 0.8, back - 3, back, floorY, 77.4, STEEL, Enum.Material.Metal)
 	standGear(ctx, seg, cx, spec.gear, 77.4, back, team)
@@ -1706,7 +1737,7 @@ function Concourse.upper_concourse(ctx)
 			end
 		end
 		for _, x in ipairs(UPPER_BINS[seg.name] or {}) do
-			binPair(ctx, seg, x, floorY, innerOut, trim)
+			binPair(ctx, seg, x, floorY, innerOut, binLid(team))
 		end
 		for _, x in ipairs(UPPER_TABLES[seg.name] or {}) do
 			cyl(ctx, seg, "StandingTablePost", x, floorY + 1.8, 122.6, 3.6, 0.5, "y", DARK_METAL, Enum.Material.Metal)
