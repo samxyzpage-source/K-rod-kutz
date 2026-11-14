@@ -93,7 +93,8 @@
 	                                           uplink box and an antenna with a beacon
 
 	Flat layers: ring floor top 54 (corners 53.96); carpets 54.05 (corners 54.01); corridor + lounge
-	stripes and rugs 54.08 (corners 54.04).
+	stripes and rugs 54.08 (corners 54.04, but the corners' lounge stripes 54.085: the straight
+	carpets run on over the corner joints).
 	Ceilings 65.3..66 (corners 65.34..65.96) end at the outer wall's inner face (107.2); headers of
 	the glass fronts 80..80.6 run up to 66, so the room ceilings start behind them at 80.6. The roof
 	visors (press box, TV uplink deck) reach out over the club seats' top rows (offsets 75.4..80,
@@ -611,6 +612,7 @@ local function bottleRows(part, face, rows, opts)
 	gui.Face = face
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = 12
+	gui.LightInfluence = 1 -- (a new SurfaceGui glows unless told otherwise)
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.Parent = part
 	local width = (face == Enum.NormalId.Left or face == Enum.NormalId.Right) and part.Size.Z or part.Size.X
@@ -654,6 +656,7 @@ local function picture(part, face, caption, tone)
 	gui.Face = face
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = 20
+	gui.LightInfluence = 1
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.Parent = part
 	local sky = Instance.new("Frame")
@@ -761,7 +764,8 @@ local function bar(ctx, seg, spec, team, index)
 		CanCollide = false,
 	})
 	bottleRows(back, TOWARD_FIELD, { { 3.9, 4.75 }, { 5.02, 5.95 } }, { Spacing = 1.25, Inset = 0.6, Seed = index })
-	local px, po, pt = x1 - 5, 105.15, fy + 3.5
+	-- (po: the cooler, 1.6 wide, ends flush with the back of the marble, clear of the glass shelf)
+	local px, po, pt = x1 - 5, 105, fy + 3.5
 	if spec[3] == "soda" then
 		local tower = span(ctx, seg, "SodaTower", px - 1, px + 1, po - 0.35, po + 0.35, pt, pt + 1.8, BRUSHED, Enum.Material.Metal)
 		span(ctx, seg, "SodaTaps", px - 0.8, px + 0.8, po - 0.55, po - 0.35, pt + 0.8, pt + 1.25, team.Secondary, nil, NO_COLLIDE)
@@ -970,7 +974,10 @@ function M.club_lounge(ctx)
 	-- front of the CLUB floor logos
 	for _, seg in ipairs(segs) do
 		local half = seg.len(WALL_IN) / 2
-		local stripeHalf = seg.len(94.7) / 2
+		-- (+0.11 closes the mitre at the corner joints; a corner's stripe lies on top of the straight
+		-- carpets, which run on over the joints, and of the straight stripes' ends)
+		local stripeHalf = seg.len(94.7) / 2 + 0.11
+		local stripeTop = seg.kind == "corner" and FLOOR + 0.085 or FLOOR + 0.08
 		local pieces, stripes
 		if seg.kind == "side" then
 			pieces = { { -half, -LOUNGE_X + 2 }, { LOUNGE_X - 2, half } }
@@ -1005,7 +1012,7 @@ function M.club_lounge(ctx)
 				94.45,
 				94.95,
 				seg.floor + 0.05,
-				seg.floor + 0.08,
+				stripeTop,
 				team.Primary,
 				Enum.Material.Carpet,
 				PAINT
@@ -1060,11 +1067,12 @@ function M.club_lounge(ctx)
 				Transparency = 0.5,
 				CanCollide = false,
 			})
-			local heat = span(food, seg, "HeatLamps", -15, 15, 87.2, 87.6, fy + 6.6, fy + 6.9, HEAT_LAMP, Enum.Material.Neon, PAINT)
+			local heat = span(food, seg, "HeatLamps", -15.25, 15.25, 87.2, 87.6, fy + 6.6, fy + 6.9, HEAT_LAMP, Enum.Material.Neon, PAINT)
 			BuildUtil.Light(heat, "PointLight", { Name = "HeatGlow", Range = 10, Brightness = 0.8, Color = HEAT_LAMP })
 			-- brushed posts at both ends carry the heat lamps and the sneeze guard; a stack of plates
 			-- at each end
 			for _, s in ipairs({ -1, 1 }) do
+				-- (the lamp bar runs on into the posts)
 				post(food, seg, "HeatLampPost", s * 15.25, 87.4, fy + 3.3, fy + 6.9, 0.25, BRUSHED, Enum.Material.Metal, NO_COLLIDE)
 				post(food, seg, "PlateStack", s * 15.3, 86, fy + 3.3, fy + 3.8, 1.2, WHITE, Enum.Material.SmoothPlastic, NO_COLLIDE)
 			end
@@ -1291,7 +1299,7 @@ function M.club_lounge(ctx)
 				elseif kind == "cup" then
 					post(screens, seg, "TrophyCup", x, 106, base, base + 1.5, size, color, material, NO_COLLIDE)
 				else
-					rod(screens, seg, "TrophyRing", x, base + size / 2 + 0.05, 106, 0.22, size, "o", color, material, NO_COLLIDE)
+					rod(screens, seg, "TrophyRing", x, base + size / 2, 106, 0.22, size, "o", color, material, NO_COLLIDE)
 				end
 			end
 		else
@@ -1757,6 +1765,15 @@ function M.suites(ctx)
 				At = Vector3.new(0, 0.6, 0.9),
 				Distance = 7,
 			})
+			-- what's inside, in brass letters along the top of its front
+			write(miniBar, TOWARD_FIELD, popcorn and "HOT POPCORN" or "COLD SODAS", GOLD, {
+				Name = "MiniBarSign",
+				Font = Enum.Font.GothamBold,
+				Left = 0.12,
+				Width = 0.76,
+				Top = 0.07,
+				Height = 0.17,
+			})
 			-- a glass-door mini fridge full of drinks beside the mini-bar (the owner's suite has its
 			-- popcorn machine there) and a framed jersey on the +x wall, clear of the door's swing
 			if not suite.owner then
@@ -1985,6 +2002,7 @@ function M.pressbox(ctx)
 	plates.Face = Enum.NormalId.Top
 	plates.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	plates.PixelsPerStud = 20
+	plates.LightInfluence = 1 -- (paper name cards, lit like the desk: not glowing)
 	plates.Parent = desk
 	local rowLives = { "score", "record", "season", "gameday", "rating", "titles" }
 	for index, x in ipairs({ -17.5, -10.5, -3.5, 3.5, 10.5, 17.5 }) do
@@ -2099,6 +2117,8 @@ function M.pressbox(ctx)
 			span(room, seg, "LaptopScreen", s * 12.2, s * 13.8, 87.88, 88.0, top, top + 1.05, DARK_METAL, Enum.Material.Metal, NO_COLLIDE)
 		liveScreen(ctx, lid, OUTWARD, s < 0 and "record" or "rating", { PPS = 40, Name = "LaptopStory" })
 		span(room, seg, "StatSheets2", s * 9.1, s * 10.9, 88.25, 88.7, top, top + 0.06, PAPER, nil, PAINT)
+		-- (and a keyboard for the reporter at +-7, whose screen is the desk's monitor)
+		span(room, seg, "Keyboard2", s * 6, s * 8, 88.05, 88.55, top, top + 0.1, CAMERA_BLACK, nil, NO_COLLIDE)
 	end
 	-- TVs hung from the ceiling over the window (above the glass), facing the press row
 	for _, s in ipairs({ -1, 1 }) do
@@ -2736,9 +2756,23 @@ function M.broadcast_booth(ctx)
 	-- steel frame round the big window
 	tripodLegs(studio, seg, -17, 83, fy, fy + 1.5, 1.2)
 	tripodLegs(studio, seg, 15.5, 86.4, fy, fy + 1.5, 1.2)
-	rod(studio, seg, "LightingPipe", 0, fy + 11.05, 87.6, 40, 0.3, "x", DARK_METAL, Enum.Material.Metal, NO_COLLIDE)
+	-- (the pipe is fixed right under the ceiling; the lights hang from it, tipped toward the desk)
+	rod(studio, seg, "LightingPipe", 0, CEIL_BOTTOM - 0.15, 87.6, 40, 0.3, "x", DARK_METAL, Enum.Material.Metal, NO_COLLIDE)
 	for _, x in ipairs({ -8, 0, 8 }) do
-		post(studio, seg, "StageLight", x, 87.6, fy + 9.9, fy + 10.9, 0.7, CAMERA_BLACK, Enum.Material.Metal, NO_COLLIDE)
+		BuildUtil.Part(studio, {
+			Name = "StageLight",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(1, 0.7, 0.7),
+			-- (a cylinder's axis is its local X: turned to hang down from the pipe, then tipped 25
+			-- degrees toward the field)
+			CFrame = at(seg, x, CEIL_BOTTOM - 0.3, 87.6)
+				* CFrame.Angles(-math.rad(25), 0, 0)
+				* CFrame.Angles(0, 0, -math.pi / 2)
+				* CFrame.new(0.5, 0, 0),
+			Color = CAMERA_BLACK,
+			Material = Enum.Material.Metal,
+			CanCollide = false,
+		})
 	end
 	span(studio, seg, "WindowFrame", -inner, inner, FRONT_IN, FRONT_IN + 0.3, GLASS_TOP - 0.3, GLASS_TOP, STEEL, Enum.Material.Metal, PAINT)
 	span(studio, seg, "WindowLedge", -inner, inner, FRONT_IN, FRONT_IN + 0.35, SILL_TOP, SILL_TOP + 0.15, STEEL, Enum.Material.Metal, PAINT)
