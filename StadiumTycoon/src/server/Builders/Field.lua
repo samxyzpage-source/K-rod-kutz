@@ -7,26 +7,34 @@
 	             2 Grass           one solid grass surface inside the gutter (top y = 0.2)
 	             3 Mowing Stripes  darker 5-yard mowing bands laid over the grass
 	  yardlines  1 Sidelines & End Lines   boundary + goal lines
-	             2 Yard Lines              every 5-yard line + the try marks
+	             2 Yard Lines              every 5-yard line + the try marks, and the chain crew's
+	                                       stakes, 10-yard chain and down marker on the visitors' sideline
 	             3 Numbers & Hash Marks    yard numbers, direction arrows, 1-yard hash ticks
 	  endzones   1 End Zone Paint  team paint with a pinstripe border
 	             2 Team Name       the owner's name + two initial medallions per end zone
-	             3 Pylons          4 orange pylons per end zone
-	  goalposts  1 Posts & Padding        footing, padded base post, gooseneck
+	             3 Pylons          4 orange pylons per end zone (team cap + band; the goal-line
+	                               pylons hide a little TV camera)
+	  goalposts  1 Posts & Padding        footing, padded base post (rubber collar, the team's
+	                                      initial on the pad), gooseneck
 	             2 Crossbars & Uprights   crossbar + uprights
 	             3 Wind Ribbons           wavy ribbons on top of the uprights
 	  midfield   1 Logo Ring   a two-colour ring around the 50 (the field shows through it)
 	             2 Team Logo   logo disk, the owner's name, a football and FOOTBALL CLUB
-	  benches    1 Sideline Mats            rubber mats with team borders + coaching-box line
-	             2 Benches                  team benches with helmets and towels
-	             3 Coolers & Medical Tent   drinks table, medical tent, heaters, kicking net, gear
-	             4 Sideline Boards          team boards behind the benches
+	  benches    1 Sideline Mats            rubber mats with team borders, a TEAM AREA stencil and
+	                                        the coaching-box line
+	             2 Benches                  team benches with an end panel, helmets and towels
+	             3 Coolers & Medical Tent   drinks table (sponsor skirt, cooler taps), misting fan,
+	                                        medical tent, heaters, kicking net, gear, the tablet cart
+	                                        and an exercise bike
+	             4 Sideline Boards          team boards behind the benches, framed by posts
 
 	Interactions (BuildUtil.Look / Seat / Use): a drain grate (turf 1), the home sideline
-	(yardlines 1), a pylon per end zone (endzones 3), both goal posts (the east one explains the
-	field goal game), the midfield logo (LookKey "team"), three seat cushions per bench (the west
-	middle one is the SIDELINE CAM seat), the sports drink cooler (use), the kicking net, the
-	medical tent and the home sideline board (LookKey "record").
+	(yardlines 1), the down marker (yardlines 2), a pylon per end zone (endzones 3), both goal
+	posts (the east one explains the field goal game), the midfield logo (LookKey "team"), three
+	seat cushions per bench (the west middle one is the SIDELINE CAM seat), the sports drink cooler
+	(use), the misting fan, the kicking net, the medical tent, the sideline tablets (LookKey
+	"roster:QB"), the exercise bike (a seat; its console explains it) and the home sideline board
+	(LookKey "record").
 
 	Layers (tops, y). The plot slab top is 0; paint bottoms sit on the grass top 0.2. Overlapping
 	flat layers are at least 0.04 apart so they never z-fight, even far away:
@@ -107,6 +115,12 @@ local FOOTBALL_BROWN = Color3.fromRGB(122, 64, 30)
 local NET_WHITE = Color3.fromRGB(235, 235, 235)
 local BAG_GREY = Color3.fromRGB(40, 42, 48)
 local FACEMASK_GREY = Color3.fromRGB(70, 72, 78)
+local CHAIN_GREY = Color3.fromRGB(96, 98, 104)
+local INK_BLACK = Color3.fromRGB(20, 20, 24)
+local SCREEN_DARK = Color3.fromRGB(16, 18, 22)
+local LED_AMBER = Color3.fromRGB(255, 196, 40)
+local LED_CYAN = Color3.fromRGB(90, 220, 255)
+local TENT_FLAP = Color3.fromRGB(24, 64, 150)
 
 ---------------------------------------------------------------------------------------------
 -- Helpers
@@ -438,6 +452,66 @@ function Field.turf(ctx)
 	end
 end
 
+--[[
+	The chain crew's gear on the visitors' sideline (opposite the press box, like the real league):
+	the two stakes with the 10-yard chain between them and the down marker showing "1", on the 35
+	(the video board says 1ST & 10, BALL ON 35). It stands in the strip between the sideline and
+	the buy buttons (z -26..-24) and never collides, so it can't block a button or trap anyone.
+]]
+local CHAIN_Z = -25.4 -- the stakes (the down marker stands nearer the field)
+local DOWN_Z = -24.6
+
+local function chainCrew(ctx, L)
+	local gear = BuildUtil.Child(ctx, "ChainCrew")
+	local rearX = L.GoalLineX - 35 * L.Yard -- the 35-yard line (x 30)
+	local frontX = rearX + 10 * L.Yard -- 10 yards on (x 50)
+	local ghost = { CanCollide = false }
+	for _, x in ipairs({ rearX, frontX }) do
+		BuildUtil.Block(gear, "ChainStake", Vector3.new(0.25, 5.4, 0.25), Vector3.new(x, 0, CHAIN_Z), PYLON_ORANGE, nil, ghost, TURF_TOP)
+		BuildUtil.Block(
+			gear,
+			"ChainPaddle",
+			Vector3.new(1.1, 0.75, 0.12),
+			Vector3.new(x, 0, CHAIN_Z),
+			PYLON_ORANGE,
+			Enum.Material.SmoothPlastic,
+			ghost,
+			TURF_TOP + 5.4
+		)
+	end
+	-- the chain, pulled tight between the stakes at knee height
+	BuildUtil.Box(
+		gear,
+		"Chain",
+		Vector3.new(frontX - rearX, 0.12, 0.12),
+		Vector3.new((rearX + frontX) / 2, TURF_TOP + 0.9, CHAIN_Z),
+		CHAIN_GREY,
+		Enum.Material.Metal,
+		ghost
+	)
+	-- (the down marker's box rides higher than the stake's paddle behind it, so the "1" reads clearly)
+	BuildUtil.Block(gear, "DownMarkerPole", Vector3.new(0.25, 6.4, 0.25), Vector3.new(rearX, 0, DOWN_Z), WHITE, nil, ghost, TURF_TOP)
+	local box = BuildUtil.Block(
+		gear,
+		"DownMarker",
+		Vector3.new(0.95, 0.95, 0.95),
+		Vector3.new(rearX, 0, DOWN_Z),
+		PYLON_ORANGE,
+		Enum.Material.SmoothPlastic,
+		ghost,
+		TURF_TOP + 6.4
+	)
+	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back, Enum.NormalId.Left, Enum.NormalId.Right }) do
+		BuildUtil.SurfaceText(box, face, "1", { LabelName = "DownNumber", TextColor3 = INK_BLACK, PixelsPerStud = 40 })
+	end
+	BuildUtil.Look(
+		box,
+		"Down Marker",
+		"The chain crew carries this marker and the 10-yard chain along the sideline. Get the ball past the far stake for a FIRST DOWN! The number on top shows the down: 1ST & 10.",
+		{ Distance = 9 }
+	)
+end
+
 ---------------------------------------------------------------------------------------------
 -- yardlines: boundary -> 5-yard lines -> numbers, arrows and hash marks
 ---------------------------------------------------------------------------------------------
@@ -479,6 +553,7 @@ function Field.yardlines(ctx)
 	for _, s in ipairs({ -1, 1 }) do
 		paint(ctx, "TryLine", LINE_WIDTH, L.Yard, s * (L.GoalLineX - 2 * L.Yard), centerZ, LINE_THICKNESS, lineColor)
 	end
+	chainCrew(ctx, L)
 
 	-- Step 3: Numbers & Hash Marks ---------------------------------------------------------------
 	BuildUtil.Stage(ctx, 3)
@@ -604,7 +679,8 @@ function Field.endzones(ctx)
 		end
 
 		-- Step 3: Pylons --------------------------------------------------------------------
-		-- where the goal line and the end line meet each sideline
+		-- where the goal line and the end line meet each sideline: team cap + base band, and the
+		-- goal-line pylons carry a tiny TV camera looking along the goal line into the field
 		BuildUtil.Stage(ctx, 3)
 		for pi, px in ipairs({ s * L.GoalLineX, s * (outer + BOUNDARY_WIDTH / 2) }) do
 			for zi, pz in ipairs({ front - 0.4, back + 0.4 }) do
@@ -623,7 +699,7 @@ function Field.endzones(ctx)
 					BuildUtil.Look(
 						pylon,
 						"End Zone Pylon",
-						"Soft orange pylons mark the corners of the end zone. Reach the ball past one and it's a TOUCHDOWN!",
+						"Soft orange pylons mark the corners of the end zone. Reach the ball past one and it's a TOUCHDOWN! The goal-line pylons even hide tiny TV cameras.",
 						{ At = Vector3.new(0, 1.5, 0), Distance = 8 }
 					)
 				end
@@ -637,6 +713,29 @@ function Field.endzones(ctx)
 					PAINT,
 					TURF_TOP + 1.5
 				)
+				BuildUtil.Block(
+					ctx,
+					"PylonBand",
+					Vector3.new(0.7, 0.18, 0.7),
+					Vector3.new(px, 0, pz),
+					team.Trim,
+					Enum.Material.SmoothPlastic,
+					PAINT,
+					TURF_TOP + 0.24
+				)
+				if pi == 1 then
+					-- the pylon cam's lens on the side facing the field
+					local inward = zi == 1 and 1 or -1
+					BuildUtil.Box(
+						ctx,
+						"PylonCamLens",
+						Vector3.new(0.28, 0.28, 0.06),
+						Vector3.new(px, TURF_TOP + 1.12, pz + inward * 0.35),
+						SCREEN_DARK,
+						Enum.Material.Glass,
+						PAINT
+					)
+				end
 			end
 		end
 	end
@@ -702,6 +801,28 @@ function Field.goalposts(ctx)
 			Color = team.Trim,
 			Material = Enum.Material.Fabric,
 		})
+		-- a rubber collar where the post leaves the pad, and the team's initial on the pad's
+		-- field side (on a see-through carrier that touches the round pad)
+		BuildUtil.Cylinder(goal, {
+			Name = "PaddingCap",
+			Position = Vector3.new(baseX, padTop + 0.1, zc),
+			Height = 0.2,
+			Diameter = 1.5,
+			Color = FACEMASK_GREY,
+			Material = Enum.Material.SmoothPlastic,
+		})
+		local logoCentre = Vector3.new(baseX - s * 1.12, TURF_TOP + 2.05, zc)
+		local padLogo = BuildUtil.Part(goal, {
+			Name = "PadLogo",
+			Size = Vector3.new(1.3, 1.7, 0.05),
+			CFrame = CFrame.lookAt(logoCentre, logoCentre - Vector3.new(s, 0, 0)),
+			Transparency = 1,
+			CanCollide = false,
+			CastShadow = false,
+		})
+		padLogo.CanQuery = false -- (it stands in front of the pad's Look prompt)
+		padLogo.CanTouch = false
+		teamText(padLogo, Enum.NormalId.Front, displayName(ctx):sub(1, 1), team.Primary, team, 40, 0.06, 0.04, "PadLogoText", 2)
 
 		-- gooseneck: quarter circle from the top of the pad bending toward the field, then a short arm
 		local radius = CROSSBAR_HEIGHT - padTop
@@ -914,6 +1035,48 @@ local function helmet(ctx, x, y, z, team)
 	)
 end
 
+-- A stationary exercise bike standing on the mat (top at `baseY`), its front at z = frontZ and
+-- the rider facing -Z (the field). The seat is a real seat, and the console explains the bike.
+local function exerciseBike(ctx, x, frontZ, baseY, team)
+	local metal = Enum.Material.Metal
+	BuildUtil.Block(ctx, "BikeBase", Vector3.new(1, 0.3, 3.2), Vector3.new(x, 0, frontZ + 1.7), BAG_GREY, metal, nil, baseY)
+	local console = BuildUtil.Block(
+		ctx,
+		"BikeConsole",
+		Vector3.new(0.5, 3.1, 0.6),
+		Vector3.new(x, 0, frontZ + 0.6),
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		nil,
+		baseY + 0.3
+	)
+	BuildUtil.Cylinder(ctx, {
+		Name = "BikeFlywheel",
+		Axis = "X",
+		Position = Vector3.new(x, baseY + 1.2, frontZ + 1.15),
+		Height = 0.3,
+		Diameter = 1.5,
+		Color = MAT_GREY,
+		Material = metal,
+	})
+	BuildUtil.Box(ctx, "BikeHandlebar", Vector3.new(1.3, 0.18, 0.3), Vector3.new(x, baseY + 3.3, frontZ + 0.75), HEATER_GREY, metal)
+	BuildUtil.Block(ctx, "BikeSeatPost", Vector3.new(0.25, 1.75, 0.25), Vector3.new(x, 0, frontZ + 2.6), MAT_GREY, metal, nil, baseY + 0.3)
+	BuildUtil.Seat(ctx, {
+		Name = "BikeSeat",
+		Size = Vector3.new(0.9, 0.3, 1.1),
+		CFrame = CFrame.new(x, baseY + 2.2, frontZ + 2.6),
+		Color = team.Secondary,
+		Material = Enum.Material.Fabric,
+		Object = "Exercise Bike",
+	})
+	BuildUtil.Look(
+		console,
+		"Sideline Bike",
+		"Players pedal this bike between plays to keep their legs warm and loose. Hop on and spin!",
+		{ At = Vector3.new(0, 1.1, -0.35), Distance = 8 }
+	)
+end
+
 function Field.benches(ctx)
 	local L = ctx.config.Layout
 	local C = ctx.config.Colors
@@ -938,7 +1101,27 @@ function Field.benches(ctx)
 	-- Step 1: Sideline Mats ------------------------------------------------------------------
 	BuildUtil.Stage(ctx, 1)
 	for _, side in ipairs({ -1, 1 }) do
-		paint(ctx, "SidelineMat", MAT_WIDTH, matDepth, side * matX, matZ, matTop - TURF_TOP, MAT_GREY, Enum.Material.Fabric)
+		-- (turned round: Top-face lettering reads upright from the part's +Z side, here the field)
+		local mat = BuildUtil.Part(ctx, {
+			Name = "SidelineMat",
+			Size = Vector3.new(MAT_WIDTH, matTop - TURF_TOP, matDepth),
+			CFrame = CFrame.new(side * matX, (TURF_TOP + matTop) / 2, matZ) * CFrame.Angles(0, math.pi, 0),
+			Color = MAT_GREY,
+			Material = Enum.Material.Fabric,
+			CanCollide = false,
+			CastShadow = false,
+		})
+		-- "TEAM AREA" stencilled on the mat in front of the bench (world x / z -> the face's fractions)
+		local function fx(x)
+			return (side * matX + MAT_WIDTH / 2 - x) / MAT_WIDTH
+		end
+		local function fz(z)
+			return (matZ + matDepth / 2 - z) / matDepth
+		end
+		local stencil = teamText(mat, Enum.NormalId.Top, "TEAM AREA", MAT_GREY, team, 12, 0, 0, "MatStencil", 1)
+		local a, b = fx(side * (BENCH_X - BENCH_LEN / 2 + 1)), fx(side * (BENCH_X + BENCH_LEN / 2 - 1))
+		stencil.Position = UDim2.new(math.min(a, b), 0, fz(areaFront + 2.3), 0)
+		stencil.Size = UDim2.new(math.abs(b - a), 0, fz(areaFront + 0.5) - fz(areaFront + 2.3), 0)
 		-- team border all round (the end strips run between the front and back strips)
 		local edgeThickness = matTop + 0.04 - TURF_TOP
 		for _, ez in ipairs({ areaFront + 0.25, areaBack - 0.25 }) do
@@ -1000,6 +1183,18 @@ function Field.benches(ctx)
 			nil,
 			seatTop + 1.5
 		)
+		-- a team-coloured end panel (armrest) closes off the outer end of the bench (the heater
+		-- stands at the inner end, its glowing grille aimed along the seat)
+		BuildUtil.Block(
+			bench,
+			"BenchEnd",
+			Vector3.new(0.3, seatTop + 0.6 - matTop, 2.3),
+			Vector3.new(bx + s * (BENCH_LEN / 2 + 0.15), 0, seatZ + 0.05),
+			team.Secondary,
+			Enum.Material.SmoothPlastic,
+			nil,
+			matTop
+		)
 		-- three team cushions players can sit on, facing the field (the middle one has the prompt;
 		-- touching any of them seats you). The west bench's middle seat is a TV camera seat.
 		for _, offset in ipairs({ -3.4, 0, 3.4 }) do
@@ -1044,7 +1239,7 @@ function Field.benches(ctx)
 	local drinksX = -46
 	local tableHeight = 2
 	local tableTop = matTop + tableHeight
-	BuildUtil.Block(
+	local drinksTable = BuildUtil.Block(
 		drinks,
 		"Table",
 		Vector3.new(5, tableHeight, 2.2),
@@ -1054,6 +1249,8 @@ function Field.benches(ctx)
 		nil,
 		matTop
 	)
+	-- the table skirt carries the (made-up) drink sponsor's name toward the field
+	teamText(drinksTable, Enum.NormalId.Front, "SPIRAL SPORTS DRINK", team.Primary, team, 30, 0.05, 0.3, "TableSkirtText", 1)
 	for _, s in ipairs({ -1, 1 }) do
 		local cooler = BuildUtil.Cylinder(drinks, {
 			Name = "Cooler",
@@ -1079,6 +1276,16 @@ function Field.benches(ctx)
 			Color = WHITE,
 			Material = Enum.Material.SmoothPlastic,
 		})
+		-- the tap at the bottom of the cooler, over the table's edge
+		BuildUtil.Box(
+			drinks,
+			"CoolerTap",
+			Vector3.new(0.24, 0.24, 0.3),
+			Vector3.new(drinksX + s * 1.2, tableTop + 0.3, seatZ + 0.2 - 0.9),
+			WHITE,
+			Enum.Material.SmoothPlastic,
+			{ CanCollide = false }
+		)
 	end
 	BuildUtil.Cylinder(drinks, {
 		Name = "CupStack",
@@ -1118,6 +1325,43 @@ function Field.benches(ctx)
 		Color = HEATER_GREY,
 		Material = Enum.Material.Metal,
 	})
+	-- a big misting fan behind the table, aimed along the bench (cool air on hot game days)
+	local fanX, fanZ = drinksX - 0.6, areaBack - 2.6
+	BuildUtil.Block(
+		drinks,
+		"FanStand",
+		Vector3.new(1.4, 2.6, 1.2),
+		Vector3.new(fanX, 0, fanZ),
+		HEATER_GREY,
+		Enum.Material.Metal,
+		nil,
+		matTop
+	)
+	local fan = BuildUtil.Cylinder(drinks, {
+		Name = "MistingFan",
+		Axis = "X",
+		Position = Vector3.new(fanX + 0.2, matTop + 4, fanZ),
+		Height = 0.9,
+		Diameter = 3,
+		Color = team.Primary,
+		Material = Enum.Material.SmoothPlastic,
+	})
+	BuildUtil.Cylinder(drinks, {
+		Name = "FanGrille",
+		Axis = "X",
+		Position = Vector3.new(fanX + 0.7, matTop + 4, fanZ),
+		Height = 0.12,
+		Diameter = 2.6,
+		Color = FACEMASK_GREY,
+		Material = Enum.Material.DiamondPlate,
+		CanCollide = false,
+	})
+	BuildUtil.Look(
+		fan,
+		"Misting Fan",
+		"On hot game days this giant fan blows a cool mist along the bench, so the players stay fresh for the fourth quarter.",
+		{ At = Vector3.new(0.75, 0, 0), Distance = 8 }
+	)
 
 	-- kicking net at the far west end: frame, net, braces + a ball on a tee in front of it
 	local net = BuildUtil.Child(ctx, "KickingNet")
@@ -1199,7 +1443,8 @@ function Field.benches(ctx)
 		Material = Enum.Material.SmoothPlastic,
 	})
 
-	-- blue medical tent at the east end
+	-- blue medical tent near the east end (the exercise bike stands beside it; the walk between the
+	-- tent and the gear stays open)
 	local tent = BuildUtil.Child(ctx, "MedicalTent")
 	local tentX, tentZ = 52.5, areaFront + 3.6
 	local tentW, tentD, tentH, roofH = 6, 5.4, 4, 1.6
@@ -1255,6 +1500,25 @@ function Field.benches(ctx)
 		MEDICAL_RED,
 		Enum.Material.SmoothPlastic
 	)
+	-- the zipped door flap beside the cross and a white ridge cap along the roof
+	BuildUtil.Box(
+		tent,
+		"TentFlap",
+		Vector3.new(1.3, tentH - 0.4, 0.08),
+		Vector3.new(tentX - tentW / 2 + 1, matTop + (tentH - 0.4) / 2, tentFrontZ - 0.04),
+		TENT_FLAP,
+		Enum.Material.Fabric,
+		{ CanCollide = false }
+	)
+	BuildUtil.Box(
+		tent,
+		"TentRidge",
+		Vector3.new(0.5, 0.25, tentD + 0.8),
+		Vector3.new(tentX, matTop + tentH + roofH, tentZ),
+		WHITE,
+		Enum.Material.Fabric,
+		{ CanCollide = false }
+	)
 
 	-- equipment trunk and a bag of footballs between the east bench and the tent
 	local gear = BuildUtil.Child(ctx, "Gear")
@@ -1291,6 +1555,60 @@ function Field.benches(ctx)
 			Material = Enum.Material.SmoothPlastic,
 		})
 	end
+
+	-- the sideline tablet cart between the ball bag and the trunk: two tablets on top show the
+	-- starters and the score (players study photos of the last play on them)
+	local cartX, cartZ = gearX + 0.15, areaFront + 4.5
+	local cart = BuildUtil.Block(
+		gear,
+		"TabletCart",
+		Vector3.new(2.5, 2.3, 2.2),
+		Vector3.new(cartX, 0, cartZ),
+		BAG_GREY,
+		Enum.Material.Metal,
+		nil,
+		matTop
+	)
+	BuildUtil.Look(
+		cart,
+		"Sideline Tablets",
+		"After every drive the players crowd round these tablets to see photos of the last play. Your starting quarterback checks them first!",
+		{ LookKey = "roster:QB", At = Vector3.new(0, 1.05, -1.15), Distance = 8 }
+	)
+	BuildUtil.Block(
+		gear,
+		"TabletCartTop",
+		Vector3.new(2.7, 0.2, 2.4),
+		Vector3.new(cartX, 0, cartZ),
+		team.Primary,
+		Enum.Material.SmoothPlastic,
+		nil,
+		matTop + 2.3
+	)
+	for index, spec in ipairs({ { -0.62, "roster", LED_AMBER }, { 0.62, "summary", LED_CYAN } }) do
+		-- leaning back 20 degrees, the screen facing the field
+		local tablet = BuildUtil.Part(gear, {
+			Name = "Tablet",
+			Size = Vector3.new(1.1, 0.8, 0.08),
+			CFrame = CFrame.new(cartX + spec[1], matTop + 2.5 + 0.4, cartZ - 0.3) * CFrame.Angles(math.rad(20), 0, 0),
+			Color = SCREEN_DARK,
+			Material = Enum.Material.SmoothPlastic,
+			CanCollide = false,
+		})
+		BuildUtil.LiveText(tablet, Enum.NormalId.Front, spec[2], {
+			LabelName = "TabletScreen" .. index,
+			Text = spec[2] == "roster" and "STARTERS" or "HOME 0 - AWAY 0",
+			TextColor3 = spec[3],
+			BackgroundColor3 = SCREEN_DARK,
+			BackgroundTransparency = 0,
+			LightInfluence = 0,
+			Font = Enum.Font.GothamBold,
+			PixelsPerStud = 80,
+		})
+	end
+
+	-- an exercise bike at the east end of the mat, beside the tent: players pedal to keep their legs warm
+	exerciseBike(BuildUtil.Child(ctx, "ExerciseBike"), 57.05, areaFront + 1, matTop, team)
 
 	-- sideline heaters at the inner end of both benches, glowing grilles aimed at the bench
 	for _, s in ipairs({ -1, 1 }) do
@@ -1395,6 +1713,19 @@ function Field.benches(ctx)
 				Vector3.new(info.x + fx, 0, boardZ + 0.5),
 				C.Metal,
 				Enum.Material.Metal,
+				nil,
+				matTop
+			)
+		end
+		-- team-coloured posts frame both ends of the board
+		for _, e in ipairs({ -1, 1 }) do
+			BuildUtil.Block(
+				board,
+				"BoardPost",
+				Vector3.new(0.5, boardHeight + 0.4, 0.8), -- (top 6.98: the 7-stud height limit)
+				Vector3.new(info.x + e * (boardWidth / 2 + 0.2), 0, boardZ),
+				team.Primary,
+				Enum.Material.SmoothPlastic,
 				nil,
 				matTop
 			)
