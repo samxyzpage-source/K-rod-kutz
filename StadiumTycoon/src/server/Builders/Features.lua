@@ -1686,8 +1686,21 @@ local function mastAndGirder(ctx, seg, x, C, mastO)
 	})
 	local tieO = 108
 	strut(ctx, "RoofTie", Vector3.new(p.X, ROOF.mastTop - 1.5, p.Z), at(seg, x, girderTopAt(tieO, root) - 0.3, tieO).Position, 0.45, STEEL)
-	-- the girder's rib under the roof deck, from ring beam to ring beam (fans see it from below)
-	segBlock(ctx, seg, "RoofRib", x - 0.5, x + 0.5, ROOF.ribBottom, ROOF.deckBottom, ROOF.inner + 1.6, 165, STEEL_PALE, Enum.Material.Metal)
+	-- the girder's rib under the roof deck, seen by the fans below: it starts beyond the lighting
+	-- catwalk (head room there stays 6 studs) and stops over the back rows, before the facade top
+	segBlock(
+		ctx,
+		seg,
+		"RoofRib",
+		x - 0.5,
+		x + 0.5,
+		ROOF.ribBottom,
+		ROOF.deckBottom,
+		ROOF.walkOut + 0.4,
+		151,
+		STEEL_PALE,
+		Enum.Material.Metal
+	)
 	return mast
 end
 
