@@ -174,6 +174,11 @@ local AMENITIES = {
 		{ 9, "atm" },
 		{ 60, "sanitizer" },
 	},
+	-- corners: a bin on the wall piece at +x (the fire extinguisher hangs on the one at -x)
+	corner_hw = { { 17, "bins" } },
+	corner_vw = { { 17, "bins" } },
+	corner_ve = { { 17, "bins" } },
+	corner_he = { { 17, "bins" } },
 }
 
 -- Upper concourse (Config.Layout.Bowl.UpperConcourse: 116..152, floor 74, ceiling 86)
@@ -199,7 +204,7 @@ local UPPER_MURALS = {
 }
 -- TVs on the inner columns, bins against the inner wall, standing tables in front of it (segment x)
 local UPPER_TVS = { side = { -78, 78 }, ["end"] = { -44, 44 } }
-local UPPER_BINS = { visitor = { -26, 26 }, home = { -26, 26 }, west = { -24 }, east = { -24 } }
+local UPPER_BINS = { visitor = { -26, 26 }, home = { -26, 26 }, west = { -24, 24 }, east = { -24, 24 } }
 local UPPER_TABLES = { visitor = { 0 }, home = { 0 } }
 
 local SECTION_FACTS = {
@@ -1473,16 +1478,28 @@ function Concourse.upper_concourse(ctx)
 		end
 		local outerPieces = wallRun(ctx, seg, "UpperOuterWall", UPPER_OUTER_WALL_IN, UC.Outer, floorY, ceilTop, gates, WALL)
 		if not seg.straight then
-			-- a big painted slogan on the corner walls
+			-- a big painted slogan on the corner walls, in two halves either side of the corner's
+			-- outer column (it stands in front of the wall's middle)
 			muralIndex += 1
-			write(outerPieces[1], INWARD, murals[(muralIndex - 1) % #murals + 1], ink(WALL, team), {
+			local slogan = murals[(muralIndex - 1) % #murals + 1]
+			local cut, best = nil, math.huge
+			for index = 1, #slogan do
+				if slogan:sub(index, index) == " " and math.abs(index - #slogan / 2) < best then
+					cut, best = index, math.abs(index - #slogan / 2)
+				end
+			end
+			local first = write(outerPieces[1], INWARD, cut and slogan:sub(1, cut - 1) or slogan, ink(WALL, team), {
 				Top = 0.3,
 				Height = 0.3,
 				Left = 0.08,
-				Width = 0.84,
+				Width = cut and 0.39 or 0.84,
 				PPS = 8,
 				Name = "Mural",
 			})
+			if cut then
+				first.TextXAlignment = Enum.TextXAlignment.Right
+				addLabel(first, slogan:sub(cut + 1), 0.53, 0.3, 0.39, 0.3).TextXAlignment = Enum.TextXAlignment.Left
+			end
 		else
 			-- a painted team mural on the straights' outer wall
 			local mural = UPPER_MURALS[seg.name]
@@ -1505,7 +1522,7 @@ function Concourse.upper_concourse(ctx)
 				INWARD,
 				mural[3]:format(teamLabel(ctx)),
 				ink(team.Primary, team),
-				{ Top = 0.16, Height = 0.68, Left = 0.04, Width = 0.92 }
+				{ Top = 0.16, Height = 0.68, Left = 0.04, Width = 0.92, Name = "WallMural" }
 			)
 		end
 		-- two rings of columns down to the ground
