@@ -796,6 +796,40 @@ local function runTests()
 					.. table.concat(list, ", ")
 			)
 		end
+
+		-- F2: every parking lamp pole stands on something (its concrete base or the island grass)
+		do
+			local parking = build("parking")
+			local all, poles, floating = partsOf(parking), partsOf(parking, "LampPole"), {}
+			for _, pole in ipairs(poles) do
+				local lo = bounds(pole)
+				local foot = pole.CFrame.Position
+				local standsOn = false
+				for _, other in ipairs(all) do
+					local oLo, oHi = bounds(other)
+					if
+						other ~= pole
+						and math.abs(oHi.Y - lo.Y) < 0.01
+						and foot.X > oLo.X
+						and foot.X < oHi.X
+						and foot.Z > oLo.Z
+						and foot.Z < oHi.Z
+					then
+						standsOn = true
+					end
+				end
+				if not standsOn then
+					table.insert(floating, ("(%.1f, %.1f) bottom %.2f"):format(foot.X, foot.Z, lo.Y))
+				end
+			end
+			check(
+				#poles == 6 and #floating == 0,
+				("the %d parking lamp poles stand on a base or on the island grass, none float %s"):format(
+					#poles,
+					table.concat(floating, ", ")
+				)
+			)
+		end
 	end
 
 	section("Bowl geometry (V5)")
