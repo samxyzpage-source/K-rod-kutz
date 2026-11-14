@@ -755,6 +755,7 @@ end
 function PlotManager.Claim(plot, player, profile)
 	plot.Owner = player
 	plot.Owned = profile.Owned
+	plot.Building = true -- (until the owned steps are rebuilt: a team change waits for it)
 	local chosenPalette, chosenName = nil, nil
 	if teamProvider then
 		chosenPalette, chosenName = teamProvider(player, profile)
@@ -774,7 +775,21 @@ function PlotManager.Claim(plot, player, profile)
 
 	-- take the new owner into their Team HQ first (the HQ building is part of the plot base)
 	local character = player.Character
-	if character then
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid and humanoid.SeatPart then
+		-- they rode a golf cart through the gate: get them out first, or the cart (and anyone
+		-- else in it) would be teleported into the HQ lobby with them
+		local seatWeld = humanoid.SeatPart:FindFirstChild("SeatWeld")
+		if seatWeld then
+			seatWeld:Destroy()
+		end
+		humanoid.Sit = false
+		task.wait()
+		if plot.Owner ~= player then
+			return -- they left in the meantime
+		end
+	end
+	if character and character.Parent then
 		character:PivotTo(plot.Refs.SpawnCFrame)
 	end
 

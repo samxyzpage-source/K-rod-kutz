@@ -2017,6 +2017,42 @@ local function runTests()
 		check(wrongFreed == nil, "a freed plot's base goes back to the plot's own colours: " .. tostring(wrongFreed))
 	end
 
+	section("Server core: claiming from a golf cart")
+	do
+		-- a player who rides a cart through a free gold gate gets out before being taken into the
+		-- HQ (otherwise the cart, welded to them, would come along)
+		local vic = makePlayer("Vic", 6006)
+		PlayerData.Load(vic)
+		local humanoid = vic.Character:FindFirstChildOfClass("Humanoid")
+		local cartSeat = Instance.new("VehicleSeat")
+		cartSeat.CFrame = CFrame.new(0, 2, 0)
+		local seatWeld = Instance.new("Weld")
+		seatWeld.Name = "SeatWeld"
+		seatWeld.Part0 = cartSeat
+		seatWeld.Part1 = vic.Character.HumanoidRootPart
+		seatWeld.Parent = cartSeat
+		cartSeat.Parent = workspace
+		humanoid.SeatPart = cartSeat
+		humanoid.Sit = true
+		touch(claimTrigger(2), vic)
+		task.wait(0.05)
+		local plot2 = PlotManager.GetPlots()[2]
+		check(vic:GetAttribute("PlotIndex") == 2, "a player in a golf cart can still claim a free plot")
+		check(
+			cartSeat:FindFirstChild("SeatWeld") == nil and humanoid.Sit == false,
+			"they are taken out of the cart first (the seat weld is broken)"
+		)
+		check(
+			(vic.Character.HumanoidRootPart.CFrame.Position - plot2.Refs.SpawnCFrame.Position).Magnitude < 0.01
+				and (cartSeat.CFrame.Position - Vector3.new(0, 2, 0)).Magnitude < 0.01,
+			"then they are taken into the HQ and the cart stays at the gate"
+		)
+		cartSeat:Destroy()
+		removePlayer(vic)
+		PlotManager.Release(vic)
+		PlayerData.Release(vic)
+	end
+
 	section("Respawn at plot")
 	local newCharacter = makeCharacter("AliceCharacter2")
 	alice.Character = newCharacter
