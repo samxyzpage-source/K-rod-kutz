@@ -1,9 +1,10 @@
 --[[
 	PlotBase
 	The parts every plot has before anything is bought: the concrete slab, the walkway,
-	the entrance gate (touch it to claim the stadium), the cash vault and the collect pad,
-	plus the roads, team-bus stops and team safe of the campus behind the stadium, and the EMPTY
-	Team HQ building (Builders/HQShell.lua) that every plot starts with.
+	the entrance gate (touch it to claim the stadium), the cash vault and its collect pad,
+	another collect pad on the stadium field, plus the roads, team-bus stops and team safe (a
+	collect pad too) of the campus behind the stadium, and the EMPTY Team HQ building
+	(Builders/HQShell.lua) that every plot starts with.
 ]]
 
 local BuildUtil = require(script.Parent.Parent.BuildUtil)
@@ -70,7 +71,7 @@ end
 -- Returns references used by the PlotManager:
 --   ClaimTrigger, GateSignLabel, GateBackLabel, VaultLabel, CollectPad, SpawnCFrame (world),
 --   BusStopPlaza, BusStopCampus, BusArrivePlaza, BusArriveCampus (world CFrames),
---   CampusCollectPad, CampusVaultLabel
+--   CampusCollectPad, CampusVaultLabel, FieldCollectPad, FieldVaultLabel
 function PlotBase.PlotBase(ctx)
 	local L = ctx.config.Layout
 	local C = ctx.config.Colors
@@ -255,6 +256,33 @@ function PlotBase.PlotBase(ctx)
 		MaxDistance = 80,
 	})
 
+	-- A third collect pad on the stadium field, where every stadium buy button stands: on the
+	-- front sideline, right in front of the visitors' tunnel (it lies on top of the turf layers)
+	local fieldPos = L.FieldCollectPadPosition
+	local fieldPad = BuildUtil.Box(
+		ctx,
+		"FieldCollectPad",
+		Vector3.new(8, 0.4, 8),
+		Vector3.new(fieldPos.X, 0.2, fieldPos.Z),
+		C.CollectPad,
+		Enum.Material.Neon
+	)
+	-- (its labels show from further away than the other pads': the field is big)
+	BuildUtil.Billboard(fieldPad, "STEP HERE TO COLLECT", {
+		LabelName = "FieldCollectHint",
+		Size = UDim2.new(10, 0, 2, 0),
+		StudsOffset = Vector3.new(0, 3, 0),
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		MaxDistance = 160,
+	})
+	local _, fieldVaultLabel = BuildUtil.Billboard(fieldPad, "$0", {
+		LabelName = "FieldVaultAmount",
+		Size = UDim2.new(10, 0, 2.5, 0),
+		StudsOffset = Vector3.new(0, 5.4, 0),
+		TextColor3 = Color3.fromRGB(90, 255, 120),
+		MaxDistance = 160,
+	})
+
 	-- The empty Team HQ building that every plot starts with (rooms are built inside it)
 	local shellModule = script.Parent:FindFirstChild("HQShell")
 	local hqRefs = {}
@@ -320,6 +348,8 @@ function PlotBase.PlotBase(ctx)
 		BusArriveCampus = campus.origin * arriveCampus,
 		CampusCollectPad = campusPad,
 		CampusVaultLabel = campusVaultLabel,
+		FieldCollectPad = fieldPad,
+		FieldVaultLabel = fieldVaultLabel,
 	}
 end
 

@@ -66,13 +66,16 @@ and championships.
 3. Press **Play** (F5).
 4. Walk through a glowing **gold gate** to claim a franchise. You are taken into your empty
    **Team HQ** and asked to **pick your team colours and nickname**.
-5. Step on the glowing **buttons** to build. Green = you can afford it, red = not yet. Each
-   button says which step it is ("Step 2/5: Lockers"). A golden **guide beam** points from
-   you to your next button. Upstairs HQ rooms have their buttons in the upstairs corridor
-   (take the stairs or the elevator). Every stadium button stands on the field.
+5. Step on the glowing **buttons** to build. Green = you can afford it (your cash plus the
+   vault), red = not yet. Each button says which step it is ("Step 2/5: Lockers"). A golden
+   **guide beam** points from you to your next button. Upstairs HQ rooms have their buttons
+   in the upstairs corridor (take the stairs or the elevator). Every stadium button stands
+   on the field.
 6. Your franchise earns money every second. It piles up in the **vault**. Step on a **collect
-   pad** to move it into your cash (standing on it keeps collecting). There is one in the
-   HQ lobby (the Team Safe) and one by the stadium gate.
+   pad** to move it into your cash (standing on it keeps collecting). There are three: in the
+   HQ lobby (the Team Safe), by the gold gate at the front of your plot, and on the stadium
+   field (the front sideline, by the visitors' tunnel). Buy buttons spend the vault too: when
+   your cash is short, touching a button collects the vault first.
 7. Get around on foot, on the **Team Bus** (blue pads: HQ <-> stadium plaza), or in a
    **golf cart** once you build the garage. Sit in the driver's seat and drive with
    W/A/S/D (or the thumbstick on a phone). The plots are huge, so the bus and the carts
@@ -128,7 +131,7 @@ and HQ pieces changed, so progress from earlier versions starts fresh.
 | Gold gate | Touch it to claim an empty franchise (one per player). |
 | Buy buttons | One per piece. It shows the piece, the step ("Step 3/6: End Zones") and the price. After you buy a step, the next step's button appears in the same spot. |
 | Guide beam | A golden beam from your character to the cheapest button you can see. |
-| Vault + collect pads | Income piles up in the vault. Step on a collect pad (HQ lobby or stadium gate) to collect. |
+| Vault + collect pads | Income piles up in the vault. Step on a collect pad (HQ lobby, gold gate or the field's front sideline) to collect it. Buy buttons spend the vault too. |
 | Team Bus | Blue pads at the HQ and in the stadium plaza teleport you between them. |
 | Golf carts | The garage gives you up to 3 carts in your team colours. Abandoned carts drive themselves home. |
 | Day / night | A full day takes 10 minutes. Stadium lights switch on at night. |

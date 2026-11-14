@@ -137,6 +137,9 @@ local function updateVault(plot)
 	if plot.Refs.CampusVaultLabel then
 		plot.Refs.CampusVaultLabel.Text = text -- the campus "team safe" shows the same vault
 	end
+	if plot.Refs.FieldVaultLabel then
+		plot.Refs.FieldVaultLabel.Text = text -- and so does the collect pad on the field
+	end
 end
 
 local function attendance(plot)
@@ -189,11 +192,12 @@ local function applyLights(plot)
 	end
 end
 
+-- Green = the owner can buy it now (buttons spend the vault too, see PlotManager.Purchase).
 local function updateButtonColors(plot)
 	if not plot.Owner then
 		return
 	end
-	local cash = PlayerData.GetCash(plot.Owner)
+	local cash = PlayerData.GetCash(plot.Owner) + math.floor(plot.Vault)
 	for itemId, button in pairs(plot.Buttons) do
 		local item = Items.ById[itemId]
 		button.Color = (cash >= item.Cost) and Config.Colors.ButtonAffordable or Config.Colors.ButtonTooExpensive
@@ -426,6 +430,7 @@ end
 ---------------------------------------------------------------------------------------------
 
 local onButtonTouched -- forward declaration
+local collect -- forward declaration (Vault + collect pads)
 
 local function createButton(plot, item)
 	local pad = Instance.new("Part")
@@ -534,23 +539,27 @@ function PlotManager.Purchase(plot, item)
 		end
 		return false
 	end
+	if PlayerData.GetCash(player) < item.Cost and plot.Vault >= 1 then
+		collect(plot, true) -- buttons spend the vault too: it is collected first
+	end
 	if not PlayerData.TrySpend(player, item.Cost) then
 		if cooldownReady(player, "cash_" .. item.Id, 2) then
-			local cash = PlayerData.GetCash(player)
-			local missing = item.Cost - cash
-			local waiting = math.floor(plot.Vault)
-			if waiting > 0 and cash + waiting >= item.Cost then
-				notify(
-					player,
-					("You need %s more - your VAULT has %s! Step on the green pad to collect it."):format(
-						Format.MoneyExact(missing),
-						Format.MoneyExact(waiting)
-					),
-					"info"
-				)
-			else
-				notify(player, ("You need %s more for %s"):format(Format.MoneyExact(missing), item.Name), "error")
+			local missing = item.Cost - PlayerData.GetCash(player)
+			local income = plot.Income * Config.IncomeMultiplier * incomeBoost
+			local soon = ""
+			if income > 0 then
+				local seconds = math.ceil(missing / income)
+				soon = seconds < 90 and (" (about %d s)"):format(seconds) or (" (about %d min)"):format(math.ceil(seconds / 60))
 			end
+			notify(
+				player,
+				("You need %s more for %s%s. Buttons use your vault too - collect pads: HQ lobby, gold gate, field."):format(
+					Format.MoneyExact(missing),
+					item.Name,
+					soon
+				),
+				"error"
+			)
 		end
 		return false
 	end
@@ -675,7 +684,11 @@ function PlotManager.Claim(plot, player, profile)
 		notify(player, ("Welcome back to your Team HQ! %d of %d steps built."):format(built, #Items.List), "success")
 	else
 		notify(player, "Welcome to your Team HQ! Step on the glowing button to start building.", "success")
-		notify(player, "Your money piles up in the TEAM SAFE - step on the green pad in the lobby to collect it.", "info")
+		notify(
+			player,
+			"Your money piles up in the TEAM SAFE - buy buttons spend it, or step on the green pad in the lobby to collect it.",
+			"info"
+		)
 	end
 
 	-- then rebuild everything they own (a few steps per frame)
@@ -794,8 +807,9 @@ end
 -- Vault + collect pad
 ---------------------------------------------------------------------------------------------
 
--- `silent` = no pop-up (used for the every-second auto-collect while standing on the pad)
-local function collect(plot, silent)
+-- `silent` = no pop-up (used for the every-second auto-collect while standing on the pad, and
+-- when a buy button spends the vault)
+collect = function(plot, silent)
 	local player = plot.Owner
 	local amount = math.floor(plot.Vault)
 	if not player or amount <= 0 then
@@ -821,14 +835,14 @@ local function onCollectTouched(plot, hit)
 	end
 end
 
--- True if the owner is standing on their collect pad right now.
+-- True if the owner is standing on one of their collect pads right now.
 local function ownerIsOnPad(plot)
 	local character = plot.Owner and plot.Owner.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	if not root then
 		return false
 	end
-	for _, pad in ipairs({ plot.Refs.CollectPad, plot.Refs.CampusCollectPad }) do
+	for _, pad in ipairs({ plot.Refs.CollectPad, plot.Refs.CampusCollectPad, plot.Refs.FieldCollectPad }) do
 		local offset = pad.CFrame:PointToObjectSpace(root.CFrame.Position)
 		if math.abs(offset.X) <= 4.5 and math.abs(offset.Z) <= 4.5 and offset.Y > -1 and offset.Y < 8 then
 			return true
@@ -975,8 +989,8 @@ function PlotManager.Init(parentFolder, remote)
 		refs.CollectPad.Touched:Connect(function(hit)
 			onCollectTouched(plot, hit)
 		end)
-		if refs.CampusCollectPad then
-			refs.CampusCollectPad.Touched:Connect(function(hit)
+		for _, pad in ipairs({ refs.CampusCollectPad, refs.FieldCollectPad }) do
+			pad.Touched:Connect(function(hit)
 				onCollectTouched(plot, hit)
 			end)
 		end

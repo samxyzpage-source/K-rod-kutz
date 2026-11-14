@@ -321,6 +321,7 @@ L.GateHalfWidth = 13
 L.WalkwayHalfWidth = 12 -- the walkway from the claim gate to Gate A
 L.VaultPosition = Vector3.new(36, 0, -442)
 L.CollectPadPosition = Vector3.new(22, 0, -442)
+L.FieldCollectPadPosition = Vector3.new(0, 0, -29) -- on the field: the front sideline, by the visitors' tunnel
 L.SpawnPosition = Vector3.new(0, 0, -448) -- just inside the claim gate (refs.GateCFrame); owners respawn in the HQ lobby (L.HQSpawn)
 L.BusStopPlaza = Vector3.new(-26, 0, -375)
 L.BackWalk = { MinX = -12, MaxX = 12, MinZ = L.StadiumBackZ, MaxZ = 292 } -- Gate D -> campus road

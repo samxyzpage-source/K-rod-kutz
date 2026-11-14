@@ -1852,6 +1852,69 @@ local function runTests()
 		check(gate and gate.MaxDistance >= 150, "the plot base's signs get a draw distance too")
 	end
 
+	section("Server core: collect pads and the vault")
+	do
+		-- a third collect pad stands on the field, where every stadium button is
+		local L = Config.Layout
+		local fieldPad = plot1.Refs.FieldCollectPad
+		local expected = (plot1.Origin * CFrame.new(L.FieldCollectPadPosition)).Position
+		check(
+			fieldPad ~= nil and fieldPad:IsDescendantOf(plotModel(1).Base) and math.abs(fieldPad.CFrame.Position.X - expected.X) < 0.01,
+			"a collect pad stands on the field's front sideline, by the visitors' tunnel"
+		)
+		check(
+			fieldPad
+				and math.abs(fieldPad.CFrame.Position.Z - expected.Z) < 0.01
+				and plot1.Origin:PointToObjectSpace(fieldPad.CFrame.Position).Y + fieldPad.Size.Y / 2 > 0.37,
+			"it lies on top of the turf and its painted lines"
+		)
+		task.wait(0.55) -- (collecting has a 0.5 s cooldown)
+		plot1.Vault += 50
+		local cashBeforeField = PlayerData.GetCash(alice)
+		touch(fieldPad, alice)
+		check(PlayerData.GetCash(alice) >= cashBeforeField + 50, "the field pad collects the vault")
+		local fieldLabel = plotModel(1).Base:FindFirstChild("FieldVaultAmount", true)
+		check(fieldLabel ~= nil and fieldLabel.Text:sub(1, 1) == "$", "the field pad shows the vault amount")
+		aliceRoot.CFrame = fieldPad.CFrame * CFrame.new(0, 3, 0)
+		task.wait(0.2)
+		check(plot1.Vault < 1, "standing on the field pad keeps collecting")
+		aliceRoot.CFrame = CFrame.new(0, 3, 0)
+		-- buy buttons spend the vault too
+		local quinn = makePlayer("Quinn", 6002)
+		local quinnProfile = PlayerData.Load(quinn)
+		for stage = 1, 5 do
+			quinnProfile.Owned["hq_lobby:" .. stage] = true
+		end
+		local plot2 = PlotManager.GetPlots()[2]
+		PlotManager.Claim(plot2, quinn, quinnProfile)
+		local office = Items.ById["hq_frontoffice:1"]
+		PlayerData.TrySpend(quinn, PlayerData.GetCash(quinn))
+		plot2.Vault = office.Cost + 5
+		task.wait(0.1)
+		check(
+			button(2, office.Id) and button(2, office.Id).Color == Config.Colors.ButtonAffordable,
+			"buttons are green when cash + vault is enough"
+		)
+		touch(button(2, office.Id), quinn)
+		check(quinnProfile.Owned[office.Id] == true and plot2.Vault < office.Cost, "a button spends the vault when the cash is short")
+		local locker = Items.ById["hq_lockerroom:1"]
+		PlayerData.TrySpend(quinn, PlayerData.GetCash(quinn))
+		plot2.Vault = 0
+		touch(button(2, locker.Id), quinn)
+		local note = lastNotification(quinn)
+		check(
+			not quinnProfile.Owned[locker.Id] and note and note.message:find("need") ~= nil,
+			"still short: told how much more is needed: " .. tostring(note and note.message)
+		)
+		check(
+			note and note.message:find("HQ lobby", 1, true) ~= nil and note.message:find("field", 1, true) ~= nil,
+			"and where the collect pads are"
+		)
+		removePlayer(quinn)
+		PlotManager.Release(quinn)
+		PlayerData.Release(quinn)
+	end
+
 	section("Respawn at plot")
 	local newCharacter = makeCharacter("AliceCharacter2")
 	alice.Character = newCharacter
