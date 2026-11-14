@@ -427,7 +427,9 @@ L.HQGuide = {
 	--     the Hub, and the point to walk to first to get onto the lane: on the way out of the lobby,
 	--     and from the reception side (west of the lane) across it. Elsewhere: the Hub.
 	--   Pockets: the strips behind the Team Wall and the trophy case only open onto the corridor:
-	--     from them the beam leads straight out onto it first
+	--     from them the beam leads straight out onto it first. They stop 2.5 studs short of the lane
+	--     (the turn into it from the corridor starts that far out), so the way in never crosses them
+	--     (that would turn the beam back onto the corridor)
 	--   Doorway: just inside the main entrance, between the plants either side of it: from there, a
 	--     spot beyond the plants (east or west) is reached through its Point
 	Lobby = {
@@ -448,8 +450,8 @@ L.HQGuide = {
 			{ MinX = -71, MaxX = -50, MinZ = 200, MaxZ = 209, Point = Vector3.new(-76, 0.2, 208) }, -- south of the Team Safe
 		},
 		Pockets = {
-			{ MinX = -150, MaxX = -108.5, MinZ = 249.5, MaxZ = 264 }, -- behind the Team Wall
-			{ MinX = -91.5, MaxX = -50, MinZ = 256.3, MaxZ = 264 }, -- behind the trophy case
+			{ MinX = -150, MaxX = -110.5, MinZ = 249.5, MaxZ = 264 }, -- behind the Team Wall
+			{ MinX = -89.5, MaxX = -50, MinZ = 256.3, MaxZ = 264 }, -- behind the trophy case
 		},
 		Doorway = { MinX = -117, MaxX = -83, MinZ = 200, MaxZ = 207.5, Point = Vector3.new(-100, 0.2, 209.5) },
 	},

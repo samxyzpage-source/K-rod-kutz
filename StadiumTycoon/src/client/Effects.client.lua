@@ -475,10 +475,11 @@ end
 -- the corridor to the lane, then just past it into the lobby). Inside the lobby it leads from the
 -- lane down into the lobby's front half through the Hub, in from the doors past the plants beside
 -- them, from the reception side across the lobby by the lane, and out of the strips behind the
--- Team Wall and the trophy case onto the corridor.
+-- Team Wall and the trophy case onto the corridor. (Anywhere on the ground floor: the ground floors
+-- of the two towers at the corridor's ends lead to the lobby by the corridor too.)
 local function viaLobby(p, target)
 	local lobby = GUIDE.Lobby
-	if p.Y >= GUIDE.UpstairsY or target.Y >= GUIDE.UpstairsY or not inBox(Config.Layout.HQ, p) then
+	if target.Y >= GUIDE.UpstairsY or hqLevel(p) ~= "down" then
 		return target
 	end
 	local inLobby, targetInLobby = inBox(lobby, p), inBox(lobby, target)

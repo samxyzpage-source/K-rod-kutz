@@ -6247,6 +6247,21 @@ local function runTests()
 		-- along the corridor to the mezzanine, not across the atrium railing (x -126.2..-74.4, z 264)
 		expect(Vector3.new(-120, 17.1, 266), "turf:1", Vector3.new(-62, 17, 267), "upper corridor -> along it to the mezzanine")
 		expect(Vector3.new(-62, 17.1, 267), "turf:1", Vector3.new(-62, 17, 262), "in front of the mezzanine: onto it")
+		-- ... but a button upstairs is straight along the corridor from there (that leg has no Up point)
+		expect(
+			Vector3.new(-62, 17.1, 267),
+			"hq_media:1",
+			Vector3.new(-25, 17.3, 268),
+			"in front of the mezzanine, button upstairs: straight to it"
+		)
+		-- in through the east portal (the way in from the HQ walk, the Hall of Fame, the garage) for the
+		-- grand staircase: out of the tower and along the corridor to the lobby's lane, not through walls
+		expect(
+			Vector3.new(108, 0.3, 271),
+			"hq_media:1",
+			Vector3.new(-92, 0.2, 268),
+			"east tower -> the stairs: along the corridor to the lane"
+		)
 		atrium.Parent = nil -- (no grand staircase yet)
 		expect(Vector3.new(-90, 0.3, 215), "hq_media:1", Vector3.new(-100, 0.2, 243), "no grand staircase: lobby -> the lane first")
 		expect(Vector3.new(-255, 0.3, 270), "hq_media:1", Vector3.new(-258.3, 1.2, 281.4), "in the stair tower: to the first flight")
@@ -6267,6 +6282,42 @@ local function runTests()
 		-- out of the strips behind the Team Wall and the trophy case: onto the corridor first
 		expect(Vector3.new(-70, 0.3, 260), "turf:1", Vector3.new(-70, 0.2, 267), "behind the trophy case -> out onto the corridor")
 		expect(Vector3.new(-140, 0.3, 255), "turf:1", Vector3.new(-140, 0.2, 267), "behind the Team Wall -> out onto the corridor")
+		-- the turn into the lane starts 2.5 studs before it, and the way in from there never meets
+		-- those strips (the beam would turn back onto the corridor, again and again)
+		do
+			local turnsBack = {}
+			for _, way in ipairs({
+				{ from = Vector3.new(-110.4, 0.3, 268), into = Vector3.new(-108, 0.2, 261) }, -- from the west
+				{ from = Vector3.new(-89.6, 0.3, 268), into = Vector3.new(-92, 0.2, 261) }, -- from the east
+			}) do
+				local first = aim(way.from, "turf:1")
+				if (first - way.into).Magnitude > 0.6 then
+					table.insert(
+						turnsBack,
+						("no turn at (%.1f, %.1f): beam at (%.1f, %.1f)"):format(way.from.X, way.from.Z, first.X, first.Z)
+					)
+				end
+				for _, z in ipairs({ 264.5, 264, 263.5, 263, 262.5 }) do
+					local feet = way.from:Lerp(way.into + Vector3.new(0, 0.1, 0), (way.from.Z - z) / (way.from.Z - way.into.Z))
+					local point = aim(feet, "turf:1")
+					if point.Z > feet.Z then
+						table.insert(turnsBack, ("(%.1f, %.1f): beam at (%.1f, %.1f)"):format(feet.X, feet.Z, point.X, point.Z))
+					end
+				end
+			end
+			check(#turnsBack == 0, "into the lane from the corridor: the beam never turns back " .. table.concat(turnsBack, "; "))
+		end
+		-- the lane's own edges are not behind anything: on to the hub from them
+		expect(Vector3.new(-110, 0.3, 258), "turf:1", Vector3.new(-100, 0.2, 243), "the lane's west edge -> the hub")
+		expect(Vector3.new(-90.5, 0.3, 261), "turf:1", Vector3.new(-100, 0.2, 243), "the lane's east edge -> the hub")
+		-- the towers at the corridor's ends lead to the lobby by the corridor too
+		expect(Vector3.new(108, 0.3, 271), "hq_lobby:1", Vector3.new(-92, 0.2, 268), "east tower -> lobby: along the corridor to the lane")
+		expect(
+			Vector3.new(-256, 0.3, 271),
+			"hq_lobby:1",
+			Vector3.new(-108, 0.2, 268),
+			"stair tower -> lobby: along the corridor to the lane"
+		)
 		-- from the lobby's front half to the corridor: onto the lane first (past the desk, the safe)
 		expect(Vector3.new(-75, 0.3, 212), "hq_weightroom:1", Vector3.new(-100, 0.2, 243), "Team Safe -> corridor: through the hub")
 		expect(Vector3.new(-135, 0.3, 222), "hq_weightroom:1", Vector3.new(-106, 0.2, 223), "reception -> corridor: past the desk")
@@ -6276,6 +6327,14 @@ local function runTests()
 		expect(Vector3.new(110, 0.3, 330), "turf:1", Vector3.new(122, 0.2, 330), "HQ walk -> stadium: out of the HQ's strip first")
 		expect(Vector3.new(110, 0.3, 330), "hq_frontoffice:1", Vector3.new(122, 0.2, 271), "HQ walk -> front office: the east portal")
 		expect(Vector3.new(-130, 0.3, 420), "campus_links:1", Vector3.new(122, 0.2, 370), "practice field -> HQ walk: round the corner")
+		-- (the building counts a stud bigger: a beam that would only graze the elevator tower's corner
+		-- column goes round it too)
+		expect(
+			Vector3.new(122, 0.3, 271),
+			"campus_links:1",
+			Vector3.new(122, 0.2, 230),
+			"east portal -> HQ walk's button: clear of the tower's corner"
+		)
 		-- CLIENT-POLISH (c): up on a skybridge, a goal in the HQ: the "Walk into the HQ" prompt at its end
 		expect(Vector3.new(109, 17.1, 330), "hq_media:1", Vector3.new(109, 17, 288.4), "dome skybridge -> the HQ prompt")
 		expect(Vector3.new(134, 17.1, 271), "hq_media:1", Vector3.new(122.4, 17, 271), "Sky Lounge -> the HQ prompt")
