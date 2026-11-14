@@ -1363,6 +1363,30 @@ local function runTests()
 		end
 		check(tallest > 0 and tallest <= 0.4 + 1e-3, ("the parking lot's curbs are at most 0.4 tall (%.2f)"):format(tallest))
 	end
+	do
+		-- the dome tower's vending machine stands flush in the nook beside the elevator shaft (no
+		-- pocket with a narrow way out that a second player could be shut into)
+		local tower = plotModel(1).Items["campus_links:3"]
+		local function box(name)
+			local part = tower:FindFirstChild(name, true)
+			local p, h = part.CFrame.Position, part.Size / 2
+			return { minX = p.X - h.X, maxX = p.X + h.X, minZ = p.Z - h.Z, maxZ = p.Z + h.Z }
+		end
+		local machine, glass, shaft = box("VendingMachine"), box("DomeTowerGlassWest"), box("DomeTowerElevatorShaftGlass")
+		local gaps = {
+			machine.minX - glass.maxX, -- west glass
+			shaft.minX - machine.maxX, -- elevator shaft
+			shaft.maxZ - machine.maxZ, -- the back wall (the shaft reaches it too)
+		}
+		local closed = machine.maxZ > shaft.minZ and machine.minZ >= shaft.minZ
+		for _, gap in ipairs(gaps) do
+			closed = closed and math.abs(gap) < 0.05
+		end
+		check(
+			closed,
+			("the dome tower's vending machine leaves no narrow pocket (gaps %.2f, %.2f, %.2f)"):format(gaps[1], gaps[2], gaps[3])
+		)
+	end
 
 	section("Draft + roster")
 	do

@@ -1125,8 +1125,11 @@ local function buildDomeBridge(ctx, team)
 			},
 		},
 	}, team)
-	local vending = span(m, "VendingMachine", t.MinX + 1.2, 0.2, 401.2, t.MinX + 3.4, 7.2, 403.8, VENDING_RED, Enum.Material.SmoothPlastic)
-	faceText(vending, Enum.NormalId.Right, {
+	-- the vending machine fills the back of the nook between the west glass and the elevator shaft
+	-- (flush against the glass, the back wall and the shaft, facing the doors), so the nook is a
+	-- shallow alcove open along its whole width instead of a pocket with a narrow way out
+	local vending = span(m, "VendingMachine", t.MinX + 0.6, 0.2, 405.9, 105, 7.2, t.MaxZ - 1, VENDING_RED, Enum.Material.SmoothPlastic)
+	faceText(vending, Enum.NormalId.Front, {
 		{ Text = "ICE COLD", Color = WHITE, Y0 = 0.08, Y1 = 0.2 },
 		{ Text = "SODA", Color = WHITE, Y0 = 0.22, Y1 = 0.45 },
 	}, { LightInfluence = 0 })
@@ -1134,7 +1137,7 @@ local function buildDomeBridge(ctx, team)
 		Object = "Vending Machine",
 		Title = "Vending Machine",
 		Info = "A cold soda for the walk to practice. Press the big button and listen for the clunk!",
-		At = Vector3.new(1.4, -0.5, 0),
+		At = Vector3.new(0, -0.5, -1.6),
 	})
 	local directory = span(m, "DomeTowerDirectory", t.MaxX - 1, 2.6, 401, t.MaxX - 0.7, 7.4, 404, SIGN_DARK, Enum.Material.SmoothPlastic)
 	faceText(directory, Enum.NormalId.Left, {
