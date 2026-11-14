@@ -199,16 +199,37 @@ local function heldTools(player)
 	return list
 end
 
+-- A boost's speed and end time are Humanoid attributes (BoostSpeed, BoostUntil). While the player
+-- rides their hoverboard (Humanoid attribute "Hoverboard", see Hoverboard.lua) a boost leaves
+-- WalkSpeed alone: the board sets it, and gives the boost back when they step off if it is still on.
 local function speedBoost(humanoid, boost)
 	local untilTime = os.clock() + boost.Seconds
 	humanoid:SetAttribute("BoostUntil", untilTime)
-	humanoid.WalkSpeed = boost.Speed
+	humanoid:SetAttribute("BoostSpeed", boost.Speed)
+	if not humanoid:GetAttribute("Hoverboard") then
+		humanoid.WalkSpeed = boost.Speed
+	end
 	task.delay(boost.Seconds, function()
 		if humanoid.Parent and (humanoid:GetAttribute("BoostUntil") or 0) <= os.clock() + 0.05 then
-			humanoid.WalkSpeed = DEFAULT_WALK_SPEED
+			if not humanoid:GetAttribute("Hoverboard") then
+				humanoid.WalkSpeed = DEFAULT_WALK_SPEED
+			end
 			humanoid:SetAttribute("BoostUntil", nil)
+			humanoid:SetAttribute("BoostSpeed", nil)
 		end
 	end)
+end
+
+Snacks.WalkSpeed = DEFAULT_WALK_SPEED -- normal walking speed (a boost ends back at this)
+
+-- The speed of the humanoid's snack boost while it lasts, or nil.
+function Snacks.BoostSpeed(humanoid)
+	local untilTime = humanoid:GetAttribute("BoostUntil")
+	local speed = humanoid:GetAttribute("BoostSpeed")
+	if type(untilTime) == "number" and untilTime > os.clock() and type(speed) == "number" then
+		return speed
+	end
+	return nil
 end
 
 local function cheer(character)

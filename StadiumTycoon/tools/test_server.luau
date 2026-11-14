@@ -1945,6 +1945,639 @@ local function runTests()
 		PlayerData.AddCash(alice, spent)
 	end
 
+	do
+		-- (in a function of its own, so its locals don't count against runTests' limit)
+		local function hoverboardTests()
+			section("Hoverboard")
+			local Hoverboard = requireNode("ServerScriptService/TycoonServer/Hoverboard")
+			local Snacks = requireNode("ServerScriptService/TycoonServer/Snacks")
+			local hb = Config.Hoverboard
+			local gravity = workspace.Gravity
+			-- engine pieces the hoverboard uses (their signals are fired by hand, like elsewhere here)
+			for _, name in ipairs({ "ChildAdded", "ChildRemoved" }) do
+				roblox.implementProperty("Instance", name, function(inst)
+					return instanceSignal(inst, name)
+				end)
+			end
+			roblox.implementProperty("Humanoid", "Died", function(inst)
+				return instanceSignal(inst, "Died")
+			end)
+			roblox.implementMethod("Humanoid", "UnequipTools", function(humanoid)
+				local character = humanoid.Parent
+				local owner = character and Players:GetPlayerFromCharacter(character)
+				for _, child in ipairs(character and character:GetChildren() or {}) do
+					if child:IsA("Tool") then
+						child.Parent = owner and owner.Backpack or nil
+						instanceSignal(character, "ChildRemoved"):Fire(child)
+					end
+				end
+			end)
+			local states, stateChanges = {}, {}
+			roblox.implementMethod("Humanoid", "GetState", function(humanoid)
+				return states[instanceKey(humanoid)] or Enum.HumanoidStateType.Running
+			end)
+			roblox.implementMethod("Humanoid", "ChangeState", function(humanoid, state)
+				table.insert(stateChanges, { humanoid = humanoid, state = state })
+			end)
+			local tracks = {} -- [animator key] = { fake AnimationTracks }
+			local function newTrack(name, playing)
+				local track = { Name = name, IsPlaying = playing, Looped = false }
+				function track:Play()
+					self.IsPlaying = true
+				end
+				function track:Stop()
+					self.IsPlaying = false
+				end
+				return track
+			end
+			roblox.implementMethod("Animator", "GetPlayingAnimationTracks", function(animator)
+				local list = {}
+				for _, track in ipairs(tracks[instanceKey(animator)] or {}) do
+					if track.IsPlaying then
+						table.insert(list, track)
+					end
+				end
+				return list
+			end)
+			roblox.implementMethod("Animator", "LoadAnimation", function(animator, animation)
+				local track = newTrack(animation.Name, false)
+				local key = instanceKey(animator)
+				tracks[key] = tracks[key] or {}
+				table.insert(tracks[key], track)
+				return track
+			end)
+
+			local function boardsIn(container)
+				local list = {}
+				for _, child in ipairs(container and container:GetChildren() or {}) do
+					if child:IsA("Tool") and child:GetAttribute("Hoverboard") == true then
+						table.insert(list, child)
+					end
+				end
+				return list
+			end
+			local function equip(player, tool)
+				tool.Parent = player.Character
+				instanceSignal(player.Character, "ChildAdded"):Fire(tool)
+				task.wait()
+			end
+			local function unequip(player, tool)
+				tool.Parent = player.Backpack
+				instanceSignal(player.Character, "ChildRemoved"):Fire(tool)
+				task.wait()
+			end
+			local function stats(humanoid)
+				return { humanoid.WalkSpeed, humanoid.JumpPower, humanoid.JumpHeight, humanoid.HipHeight }
+			end
+			local function sameStats(a, b)
+				for index = 1, 4 do
+					if math.abs(a[index] - b[index]) > 1e-4 then
+						return false
+					end
+				end
+				return true
+			end
+			local function countNotes(player, pattern, from)
+				local count = 0
+				for index = from or 1, #notifications do
+					local note = notifications[index]
+					if note.player == player and note.message:find(pattern) then
+						count += 1
+					end
+				end
+				return count
+			end
+			local function washedOut(color)
+				local h, s, v = color:ToHSV()
+				return (s < 0.3 and v > 0.55) or (h > 0.1 and h < 0.2 and s > 0.3) -- white / cream or yellow
+			end
+
+			-- every plot owner gets a board from the start; nobody else does
+			local tipDelay = hb.TipDelaySeconds
+			hb.TipDelaySeconds = 0
+			alice.StarterGear = Instance.new("StarterGear")
+			Hoverboard.Init(PlotManager, notifyRemote)
+			task.wait(0.05)
+			local board = boardsIn(alice.Backpack)[1]
+			check(#boardsIn(alice.Backpack) == 1 and board.Name == "Hoverboard", "a plot owner has a Hoverboard tool in the hotbar")
+			check(#boardsIn(alice.StarterGear) == 1, "and one in StarterGear, so a respawn brings it back")
+			check(#boardsIn(bob.Backpack) == 0, "players without a plot don't get one")
+			check(
+				not board.RequiresHandle and not board.CanBeDropped and #board:GetChildren() == 0,
+				"a plain hotbar Tool: nothing in the hand, it can't be dropped"
+			)
+			Hoverboard._reconcile(alice)
+			local stray = board:Clone()
+			stray.Parent = bob.Backpack
+			Hoverboard._reconcile(bob)
+			check(
+				#boardsIn(alice.Backpack) == 1 and #boardsIn(alice.StarterGear) == 1 and #boardsIn(bob.Backpack) == 0,
+				"checking again changes nothing, and a board in a non-owner's hotbar is taken away"
+			)
+
+			-- riding: 3x speed, no normal jump, hovering on a board under the feet
+			local character = alice.Character
+			local humanoid = character:FindFirstChildOfClass("Humanoid")
+			local root = character:FindFirstChild("HumanoidRootPart")
+			local before = stats(humanoid)
+			equip(alice, board)
+			check(
+				Hoverboard.IsRiding(alice) and humanoid:GetAttribute("Hoverboard") == true,
+				"picking the board in the hotbar starts the ride"
+			)
+			check(humanoid.WalkSpeed == hb.Speed and hb.Speed == 3 * before[1], ("3x walking speed (%d)"):format(humanoid.WalkSpeed))
+			check(humanoid.JumpPower == 0 and humanoid.JumpHeight == 0, "the normal jump does nothing while riding")
+			check(math.abs(humanoid.HipHeight - before[4] - hb.HoverHeight) < 1e-4, "the rider floats HoverHeight higher")
+			local deck = board:FindFirstChild("BoardDeck")
+			local joint = deck and deck:FindFirstChild("BoardWeld")
+			check(
+				joint ~= nil and joint.Part0 == root and joint.Part1 == deck and joint:GetAttribute("BaseC0") == joint.C0,
+				"the board is welded under the rider's root part"
+			)
+			local partCount, loose, models, handles, touchers = 0, 0, 0, 0, 0
+			for _, d in ipairs(board:GetDescendants()) do
+				if d:IsA("BasePart") then
+					partCount += 1
+					if d.Parent ~= board or d.CanCollide or not d.Massless or d.Anchored then
+						loose += 1
+					end
+					if d.Name == "Handle" then
+						handles += 1
+					end
+					if d.CanTouch then
+						touchers += 1
+					end
+				elseif d:IsA("Model") then
+					models += 1
+				end
+			end
+			check(
+				partCount >= 7 and loose == 0 and models == 0 and handles == 0,
+				("the board's %d parts sit right in the Tool (no nested Model), don't collide and weigh nothing"):format(partCount)
+			)
+			local skid = board:FindFirstChild("TouchSkid")
+			check(
+				skid ~= nil and skid.Transparency == 1 and skid.CanTouch and touchers == 1,
+				"only the invisible touch skid touches things"
+			)
+			local hitModel = skid:FindFirstAncestorOfClass("Model")
+			check(
+				hitModel == character and Players:GetPlayerFromCharacter(hitModel) == alice,
+				"a touch pad finds the rider from the skid (its first Model ancestor is the character)"
+			)
+			local palette = alicePlot.Palette
+			check(
+				deck.Color == palette.Primary and board.BoardRailLeft.Color == palette.Secondary and board.BoardStripe.Color == palette.Trim,
+				"the board comes in the team colours"
+			)
+			local neon, bigNeon, washed, lamps, brightLamps = 0, 0, 0, 0, 0
+			for _, d in ipairs(board:GetDescendants()) do
+				if d:IsA("BasePart") and d.Material == Enum.Material.Neon then
+					neon += 1
+					local s = d.Size
+					if math.max(s.X * s.Z, s.X * s.Y, s.Y * s.Z) > 8 then
+						bigNeon += 1
+					end
+					if washedOut(d.Color) then
+						washed += 1
+					end
+				elseif d:IsA("Light") then
+					lamps += 1
+					if d.Brightness > 1 or d.Range > 8 then
+						brightLamps += 1
+					end
+				end
+			end
+			check(neon == 1 and bigNeon == 0 and washed == 0, "the only glow is a small underglow in the team colour")
+			check(lamps == 1 and brightLamps == 0, "its light is dim (Brightness at most 1) with a small Range")
+			local glowsOk = true
+			for _, teamPalette in ipairs(Config.TeamColors) do
+				glowsOk = glowsOk and not washedOut(Hoverboard._glowColor(teamPalette.Primary))
+			end
+			check(glowsOk, "no team palette makes a white or yellow glow")
+			check(board:FindFirstChild("BoardTrail", true) ~= nil, "a soft trail follows the board")
+
+			-- on the floor: the deck sits under the soles and clears the floor, the skid reaches just
+			-- below it (flat pads: buy buttons, collect pads, bus stops, kick spots, gates)
+			local soles = root.Size.Y / 2 + before[4] + 2 -- (the test character is R6: 2-stud legs)
+			local hoverY = soles + hb.HoverHeight
+			local deckY = joint.C0.Position.Y
+			local skidY = deckY + skid:FindFirstChildOfClass("Weld").C0.Position.Y
+			local deckTop, deckBottom = hoverY + deckY + deck.Size.Y / 2, hoverY + deckY - deck.Size.Y / 2
+			local skidTop, skidBottom = hoverY + skidY + skid.Size.Y / 2, hoverY + skidY - skid.Size.Y / 2
+			check(
+				math.abs(deckTop - hb.HoverHeight) < 1e-3 and deckBottom >= 0.3,
+				("the board hovers %.2f above the floor, right under the rider's feet"):format(deckBottom)
+			)
+			check(
+				skidBottom < -0.1 and skidBottom > -1 and skidTop <= deckBottom + 1e-3,
+				("the touch skid reaches %.2f below the floor"):format(-skidBottom)
+			)
+
+			-- touch pads still work while riding
+			task.wait(0.15) -- (the vault fills up)
+			local cashBefore = PlayerData.GetCash(alice)
+			local notesNow = #notifications
+			instanceSignal(alicePlot.Refs.CollectPad, "Touched"):Fire(skid)
+			task.wait(0.02)
+			local collected = false
+			for index = notesNow + 1, #notifications do
+				collected = collected or (notifications[index].player == alice and notifications[index].kind == "cash")
+			end
+			check(collected and PlayerData.GetCash(alice) > cashBefore, "a collect pad collects for a rider")
+			local firesBefore = #clientFires
+			instanceSignal(KickGame.GetPads(alicePlot)[1], "Touched"):Fire(skid)
+			task.wait(0.02)
+			local fire = clientFires[#clientFires]
+			check(#clientFires > firesBefore and fire.remote == "KickStart" and fire.player == alice, "a kick spot offers a rider a kick")
+			notesNow = #notifications
+			instanceSignal(claimTrigger(2), "Touched"):Fire(skid)
+			task.wait(0.05)
+			check(countNotes(alice, "already own", notesNow + 1) == 1, "the gold gates know a rider too")
+			instanceSignal(alicePlot.Refs.BusStopPlaza, "Touched"):Fire(skid)
+			task.wait(0.02)
+			local arrive = alicePlot.Refs.BusArriveCampus
+			check(
+				(root.CFrame.Position - arrive.Position).Magnitude < 0.01
+					and (deck.CFrame.Position - (arrive * joint.C0).Position).Magnitude < 0.01,
+				"the team bus takes a rider, board and all"
+			)
+
+			-- snack speed boosts: the board keeps its speed, a boost still running comes back after
+			local smoothieBoost = Snacks.Kinds.Smoothie.Boost
+			local boostSeconds = smoothieBoost.Seconds
+			smoothieBoost.Seconds = 0.5
+			Snacks.Use(Snacks.Build("Smoothie"), alice)
+			check(
+				humanoid.WalkSpeed == hb.Speed and Snacks.BoostSpeed(humanoid) == smoothieBoost.Speed,
+				"a smoothie while riding doesn't change the board's speed"
+			)
+			unequip(alice, board)
+			check(humanoid.WalkSpeed == smoothieBoost.Speed, "stepping off brings the smoothie boost back while it lasts")
+			equip(alice, board)
+			check(humanoid.WalkSpeed == hb.Speed, "back on the board: board speed, not boost speed")
+			task.wait(0.6)
+			check(humanoid.WalkSpeed == hb.Speed and Snacks.BoostSpeed(humanoid) == nil, "a boost running out doesn't end the ride")
+			unequip(alice, board)
+			check(sameStats(stats(humanoid), before), "stepping off puts speed, jump and hover height back exactly")
+			smoothieBoost.Seconds = boostSeconds
+			check(#board:GetChildren() == 0, "the board is taken apart when it is put away")
+
+			-- a second owner: claiming gives the board at once; two riders don't mix
+			local hana = makePlayer("Hana", 7101)
+			hana.StarterGear = Instance.new("StarterGear")
+			hana.PlayerGui = Instance.new("Folder")
+			hana.PlayerGui.Name = "PlayerGui"
+			local hanaProfile = PlayerData.Load(hana)
+			Franchise.OnPlayerLoaded(hana)
+			Players.PlayerAdded:Fire(hana) -- (in the game Main.server.lua runs on this too)
+			task.wait()
+			check(#boardsIn(hana.Backpack) == 0, "no board before claiming a plot")
+			notesNow = #notifications
+			touch(claimTrigger(2), hana)
+			task.wait(0.05)
+			local hanaPlot = PlotManager.GetPlot(hana)
+			local hanaBoard = boardsIn(hana.Backpack)[1]
+			check(
+				hanaPlot ~= nil and #boardsIn(hana.Backpack) == 1 and #boardsIn(hana.StarterGear) == 1,
+				"claiming a plot puts the board in the hotbar at once"
+			)
+			check(countNotes(hana, "HOVERBOARD", notesNow + 1) == 1, "with a tip on how to ride it")
+			local hanaHumanoid = hana.Character:FindFirstChildOfClass("Humanoid")
+			hanaHumanoid.RigType = Enum.HumanoidRigType.R15
+			hanaHumanoid.HipHeight = 2
+			local hanaBefore = stats(hanaHumanoid)
+			equip(hana, hanaBoard)
+			local hanaRoot = hana.Character.HumanoidRootPart
+			local hanaSoles = hanaRoot.Size.Y / 2 + hanaBefore[4] -- (R15: HipHeight reaches the root's bottom)
+			local hanaDeckTop = hanaBoard.BoardDeck.BoardWeld.C0.Position.Y + hanaBoard.BoardDeck.Size.Y / 2
+			check(math.abs(hanaSoles + hanaDeckTop) < 1e-3, "an R15 rider's board sits right under their feet too")
+			instanceSignal(button(2, "hq_lobby:1"), "Touched"):Fire(hanaBoard.TouchSkid)
+			task.wait(0.05)
+			check(hanaProfile.Owned["hq_lobby:1"] == true, "a buy button builds for a rider")
+			equip(alice, board)
+			check(
+				Hoverboard.IsRiding(alice)
+					and Hoverboard.IsRiding(hana)
+					and board.BoardDeck.Color == alicePlot.Palette.Primary
+					and hanaBoard.BoardDeck.Color == hanaPlot.Palette.Primary
+					and alicePlot.Palette ~= hanaPlot.Palette,
+				"two riders at once, each board in its own team's colours"
+			)
+			unequip(hana, hanaBoard)
+			check(
+				not Hoverboard.IsRiding(hana) and sameStats(stats(hanaHumanoid), hanaBefore) and humanoid.WalkSpeed == hb.Speed,
+				"one rider stepping off leaves the other one riding"
+			)
+			equip(hana, hanaBoard)
+			local newPalette = Config.TeamColors[5]
+			PlotManager.ApplyTeam(hana, newPalette, "HOVERS")
+			for _ = 1, 40 do
+				if hanaBoard.BoardDeck.Color == newPalette.Primary then
+					break
+				end
+				task.wait(0.05)
+			end
+			check(
+				hanaBoard.BoardDeck.Color == newPalette.Primary and hanaBoard.BoardRailLeft.Color == newPalette.Secondary,
+				"new team colours repaint a board in use"
+			)
+			unequip(hana, hanaBoard)
+			unequip(alice, board)
+
+			-- the client: Hana is the local player
+			local function dress(dressed)
+				local dressedHumanoid = dressed:FindFirstChildOfClass("Humanoid")
+				local animate = Instance.new("LocalScript")
+				animate.Name = "Animate"
+				animate.Enabled = true -- (Lune has no default for it)
+				local idle = Instance.new("StringValue")
+				idle.Name = "idle"
+				idle.Parent = animate
+				local animation = Instance.new("Animation")
+				animation.Name = "IdleAnimation"
+				animation.Parent = idle
+				animate.Parent = dressed
+				local animator = Instance.new("Animator")
+				animator.Parent = dressedHumanoid
+				tracks[instanceKey(animator)] = { newTrack("walk", true) }
+				dressedHumanoid.FloorMaterial = Enum.Material.Plastic
+				dressed.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new()
+				return dressedHumanoid, animate, animator
+			end
+			local _, animate, animator = dress(hana.Character)
+			local bindings, touchCalls = {}, {}
+			local bindBefore = ContextActionServiceMock.BindActionAtPriority
+			function ContextActionServiceMock:BindActionAtPriority(name, handler, touchButton, priority, ...)
+				bindings[name] = { touchButton = touchButton, priority = priority, keys = { ... } }
+				return bindBefore(self, name, handler, touchButton, priority, ...)
+			end
+			function ContextActionServiceMock:SetTitle(name, title)
+				touchCalls[name .. ":title"] = title
+			end
+			function ContextActionServiceMock:SetPosition(name, position)
+				touchCalls[name .. ":position"] = position
+			end
+			function ContextActionServiceMock:GetButton()
+				return nil
+			end
+			local savedLocal = Players.LocalPlayer
+			Players.LocalPlayer = hana
+			local okClient, clientErr = pcall(runScript, "StarterPlayer/StarterPlayerScripts/TycoonClient/Hoverboard")
+			Players.LocalPlayer = savedLocal
+			check(okClient, "Hoverboard client script runs: " .. tostring(clientErr))
+			local ui = hana.PlayerGui:FindFirstChild("HoverboardUI")
+			local chargeBar = ui and ui:FindFirstChild("ChargeBar", true)
+			local ACTION = "TycoonHoverboardJump"
+			local function frame()
+				RunServiceMock.RenderStepped:Fire(1 / 60)
+				task.wait()
+			end
+			local function press(inputState)
+				local handler = boundActions[ACTION]
+				return handler and handler(ACTION, inputState, { KeyCode = Enum.KeyCode.Space })
+			end
+			local function hasKey(list, key)
+				for _, item in ipairs(list) do
+					if item == key then
+						return true
+					end
+				end
+				return false
+			end
+			frame()
+			check(ui ~= nil and boundActions[ACTION] == nil and not chargeBar.Visible, "on foot: no jump binding, no charge bar")
+			equip(hana, hanaBoard)
+			frame()
+			local binding = bindings[ACTION]
+			check(
+				boundActions[ACTION] ~= nil and binding.touchButton == true,
+				"riding binds the charged jump (a JUMP button on touch screens)"
+			)
+			check(
+				binding.priority > Enum.ContextActionPriority.Medium.Value and binding.priority < Enum.ContextActionPriority.High.Value,
+				"above the normal jump, below the kick meter and the mini-games"
+			)
+			check(hasKey(binding.keys, Enum.KeyCode.Space) and hasKey(binding.keys, Enum.KeyCode.ButtonA), "on Space and gamepad A")
+			local playing = animator:GetPlayingAnimationTracks()
+			local idleTrack = playing[1]
+			check(
+				animate.Enabled == false
+					and #playing == 1
+					and idleTrack.Name == "IdleAnimation"
+					and idleTrack.Priority == Enum.AnimationPriority.Action,
+				"the walk / run animations stop: the rider stands on the board"
+			)
+			-- every board on screen bobs and leans a little
+			equip(alice, board)
+			local aliceBase = board.BoardDeck.BoardWeld:GetAttribute("BaseC0")
+			local hanaJoint = hanaBoard.BoardDeck.BoardWeld
+			local hanaBase = hanaJoint:GetAttribute("BaseC0")
+			for _ = 1, 3 do
+				frame()
+			end
+			for _ = 1, 20 do
+				hanaRoot.CFrame = hanaRoot.CFrame * CFrame.Angles(0, math.rad(4), 0) -- (turning left)
+				frame()
+			end
+			local hanaOffset = hanaBase:ToObjectSpace(hanaJoint.C0)
+			local aliceOffset = aliceBase:ToObjectSpace(board.BoardDeck.BoardWeld.C0)
+			local pitch, _, roll = hanaOffset:ToEulerAnglesXYZ()
+			check(
+				hanaOffset.Position.Magnitude > 0 and hanaOffset.Position.Magnitude <= 0.08 and aliceOffset.Position.Magnitude > 0,
+				"the boards bob gently (the local rider's and the others')"
+			)
+			check(
+				roll > math.rad(1) and roll <= math.rad(7.01) and math.abs(pitch) <= math.rad(4.01),
+				("and lean a little into a turn (%.1f degrees)"):format(math.deg(roll))
+			)
+			unequip(alice, board)
+
+			-- the charged jump
+			local key = instanceKey(hanaHumanoid)
+			local changes = #stateChanges
+			check(
+				press(Enum.UserInputState.Begin) == Enum.ContextActionResult.Sink and chargeBar.Visible,
+				"holding jump shows the charge bar"
+			)
+			check(press(Enum.UserInputState.End) == Enum.ContextActionResult.Sink, "the normal jump never fires as well (sunk)")
+			local tapPower = hanaHumanoid.JumpPower
+			check(
+				#stateChanges == changes + 1
+					and stateChanges[#stateChanges].state == Enum.HumanoidStateType.Jumping
+					and math.abs(tapPower ^ 2 / (2 * gravity) - hb.MinJumpHeight) < 0.01,
+				("a quick tap is a normal jump (%.1f studs)"):format(tapPower ^ 2 / (2 * gravity))
+			)
+			check(not chargeBar.Visible, "letting go hides the bar")
+			states[key] = Enum.HumanoidStateType.Jumping
+			hanaRoot.AssemblyLinearVelocity = Vector3.new(0, tapPower - 3, 0)
+			frame()
+			check(
+				hanaHumanoid.JumpPower == 0 and math.abs(hanaRoot.AssemblyLinearVelocity.Y - (tapPower - 3)) < 1e-3,
+				"once in the air the normal jump is off again (and a jump that left at its speed is left alone)"
+			)
+			hanaHumanoid.FloorMaterial = Enum.Material.Air
+			press(Enum.UserInputState.Begin)
+			press(Enum.UserInputState.End)
+			check(#stateChanges == changes + 1, "no jumping again in the air")
+			states[key] = Enum.HumanoidStateType.Running
+			hanaHumanoid.FloorMaterial = Enum.Material.Plastic
+			local chargeSeconds = hb.ChargeSeconds
+			hb.ChargeSeconds = 0.4 -- (a quicker full charge for the test)
+			press(Enum.UserInputState.Begin)
+			task.wait(0.5)
+			frame()
+			check(
+				math.abs(chargeBar.Fill.Size.X.Scale - 1) < 1e-6 and chargeBar.Label.Text:find("x10") ~= nil,
+				"holding fills the bar up to MAX JUMP x10: " .. chargeBar.Label.Text
+			)
+			press(Enum.UserInputState.End)
+			local fullPower = hanaHumanoid.JumpPower
+			check(
+				math.abs(fullPower ^ 2 / (2 * gravity) - hb.MinJumpHeight * hb.MaxJumpMultiplier) < 0.05,
+				("a full charge jumps 10x as high (%.1f studs)"):format(fullPower ^ 2 / (2 * gravity))
+			)
+			states[key] = Enum.HumanoidStateType.Jumping
+			hanaRoot.AssemblyLinearVelocity = Vector3.new(4, 0, 0) -- (as if the engine's jump went missing)
+			frame()
+			local launched = hanaRoot.AssemblyLinearVelocity
+			check(
+				launched.Y > fullPower * 0.8 and launched.Y <= fullPower and launched.X == 4 and hanaHumanoid.JumpPower == 0,
+				("the jump leaves at its full speed (%.0f of %.0f)"):format(launched.Y, fullPower)
+			)
+			states[key] = Enum.HumanoidStateType.Running
+			press(Enum.UserInputState.Begin)
+			task.wait(0.25)
+			press(Enum.UserInputState.End)
+			local partHeight = hanaHumanoid.JumpPower ^ 2 / (2 * gravity)
+			check(
+				partHeight > hb.MinJumpHeight * 1.5 and partHeight < hb.MinJumpHeight * 9.5,
+				("a shorter hold jumps less high (%.1fx)"):format(partHeight / hb.MinJumpHeight)
+			)
+			states[key] = Enum.HumanoidStateType.Jumping
+			frame()
+			states[key] = Enum.HumanoidStateType.Running
+			hb.ChargeSeconds = chargeSeconds
+			changes = #stateChanges
+			press(Enum.UserInputState.Begin)
+			press(Enum.UserInputState.Cancel)
+			check(not chargeBar.Visible and #stateChanges == changes and hanaHumanoid.JumpPower == 0, "a cancelled press doesn't jump")
+
+			-- stepping off, touch screens, sitting down
+			unequip(hana, hanaBoard)
+			frame()
+			check(
+				boundActions[ACTION] == nil and animate.Enabled and not idleTrack.IsPlaying,
+				"stepping off unbinds the jump and brings the animations back"
+			)
+			UserInputServiceMock.TouchEnabled = true
+			equip(hana, hanaBoard)
+			frame()
+			UserInputServiceMock.TouchEnabled = false
+			check(
+				touchCalls[ACTION .. ":title"] == "JUMP" and touchCalls[ACTION .. ":position"] ~= nil,
+				"on touch screens the JUMP button takes the normal jump button's place"
+			)
+			press(Enum.UserInputState.Begin)
+			pcall(function()
+				hanaHumanoid.SeatPart = Instance.new("Seat")
+			end)
+			instanceSignal(hanaHumanoid, "PropSeatPart"):Fire()
+			frame()
+			task.wait()
+			check(
+				hanaBoard.Parent == hana.Backpack
+					and not Hoverboard.IsRiding(hana)
+					and boundActions[ACTION] == nil
+					and not chargeBar.Visible,
+				"sitting down puts the board away (and drops a charge)"
+			)
+			check(sameStats(stats(hanaHumanoid), hanaBefore), "with speed, jump and hover height back exactly")
+			equip(hana, hanaBoard)
+			check(hanaBoard.Parent == hana.Backpack and not Hoverboard.IsRiding(hana), "a board picked while sitting goes straight back")
+
+			-- respawns: the StarterGear copy comes back once; riding works on the new character
+			local function respawn(name)
+				local old = hana.Character
+				local fresh = makeCharacter(name)
+				local freshHumanoid = dress(fresh)
+				hana.Character = fresh
+				old:Destroy()
+				for _, child in ipairs(hana.Backpack:GetChildren()) do
+					child:Destroy()
+				end
+				boardsIn(hana.StarterGear)[1]:Clone().Parent = hana.Backpack -- (what Roblox does)
+				hana.CharacterAdded:Fire(fresh)
+				task.wait(0.05)
+				frame()
+				return fresh, freshHumanoid
+			end
+			local tipsBefore = countNotes(hana, "HOVERBOARD")
+			local fresh, freshHumanoid = respawn("HanaCharacter2")
+			check(#boardsIn(hana.Backpack) == 1 and boundActions[ACTION] == nil, "after a respawn the board is back in the hotbar, once")
+			local freshBoard = boardsIn(hana.Backpack)[1]
+			equip(hana, freshBoard)
+			frame()
+			check(
+				Hoverboard.IsRiding(hana) and boundActions[ACTION] ~= nil and freshHumanoid.WalkSpeed == hb.Speed,
+				"and riding works on the new character"
+			)
+			press(Enum.UserInputState.Begin)
+			freshHumanoid.Health = 0
+			instanceSignal(freshHumanoid, "Died"):Fire()
+			task.wait()
+			frame()
+			check(
+				not chargeBar.Visible and boundActions[ACTION] == nil and not Hoverboard.IsRiding(hana),
+				"dying while charging a jump: no bar, no binding, no ride"
+			)
+			fresh, freshHumanoid = respawn("HanaCharacter3")
+			freshBoard = boardsIn(hana.Backpack)[1]
+			local freshBefore = stats(freshHumanoid)
+			equip(hana, freshBoard)
+			freshBoard.Parent = workspace
+			instanceSignal(fresh, "ChildRemoved"):Fire(freshBoard)
+			task.wait()
+			check(
+				freshBoard.Parent == hana.Backpack and not Hoverboard.IsRiding(hana) and sameStats(stats(freshHumanoid), freshBefore),
+				"a dropped board ends the ride and goes back into the hotbar"
+			)
+			equip(hana, freshBoard)
+			freshBoard:Destroy()
+			instanceSignal(fresh, "ChildRemoved"):Fire(freshBoard)
+			task.wait()
+			check(not Hoverboard.IsRiding(hana) and sameStats(stats(freshHumanoid), freshBefore), "a destroyed board ends the ride")
+			task.wait(1.3)
+			check(#boardsIn(hana.Backpack) == 1, "and a new one is put in the hotbar")
+			check(countNotes(hana, "HOVERBOARD") == tipsBefore, "the tip isn't repeated")
+
+			-- releasing the plot takes the board away (riding or not)
+			equip(hana, boardsIn(hana.Backpack)[1])
+			check(Hoverboard.IsRiding(hana), "riding when the plot is released")
+			PlotManager.Release(hana)
+			task.wait(0.05)
+			check(
+				#boardsIn(hana.Backpack) == 0
+					and #boardsIn(hana.StarterGear) == 0
+					and #boardsIn(hana.Character) == 0
+					and not Hoverboard.IsRiding(hana)
+					and sameStats(stats(freshHumanoid), freshBefore),
+				"releasing the plot ends the ride and takes the board away"
+			)
+			removePlayer(hana)
+			Players.PlayerRemoving:Fire(hana)
+			PlayerData.Release(hana)
+			hana.Character = nil -- (the client script stays connected: leave it nobody to follow)
+			frame()
+
+			ContextActionServiceMock.BindActionAtPriority = bindBefore
+			hb.TipDelaySeconds = tipDelay
+			check(not Hoverboard.IsRiding(alice) and sameStats(stats(humanoid), before), "Alice is back on foot")
+			root.CFrame = CFrame.new(0, 3, 0)
+		end
+		hoverboardTests()
+	end
+
 	section("Field goals")
 	do
 		check(KickGame.Judge(25, 0, 0.7) == true, "a straight 25-yard kick with enough power is good")

@@ -19,6 +19,7 @@ local Franchise = require(script.Parent.Franchise)
 local KickGame = require(script.Parent.KickGame)
 local Interactions = require(script.Parent.Interactions)
 local LiveScreens = require(script.Parent.LiveScreens)
+local Hoverboard = require(script.Parent.Hoverboard)
 
 -- Remote used to show messages on players' screens
 local remotes = Instance.new("Folder")
@@ -41,6 +42,7 @@ KickGame.Init(PlotManager, remotes, notifyRemote, Franchise)
 Interactions.Init(PlotManager, remotes, notifyRemote, Franchise)
 require(script.Parent.Gear).Init(PlotManager) -- the coaches' gear + wardrobe (team colours, respawns, leaving)
 LiveScreens.Init(PlotManager)
+Hoverboard.Init(PlotManager, notifyRemote) -- every owner's hoverboard (hotbar): 3x speed, charged jump
 GameDay.SetMatchMaker(Franchise.DecideGame) -- the result is decided at kick-off...
 GameDay.OnEnded(Franchise.FinishGame) -- ...and counts (prize, record, season week) at the final whistle
 Vehicles.OnDrive(Franchise.RecordDrive)
