@@ -1058,12 +1058,20 @@ local function runTests()
 				table.insert(structure, part) -- (the gate halls' lobby ceilings)
 			end
 			local signs = partsOf(escalators, "WayfindingSign")
-			-- a part of `list` whose top (or bottom) face is at height y over the point `at`
-			local function meets(list, at, y, face)
+			-- a part of `list` whose top (or bottom) face is at height y over the point `at` (`solid`: a
+			-- collidable one, so a trim or light that ends at the same height doesn't hide the support)
+			local function meets(list, at, y, face, solid)
 				for _, other in ipairs(list) do
 					local lo, hi = bounds(other)
 					local h = face == "top" and hi.Y or lo.Y
-					if math.abs(h - y) < 0.01 and at.X > lo.X and at.X < hi.X and at.Z > lo.Z and at.Z < hi.Z then
+					if
+						(other.CanCollide or not solid)
+						and math.abs(h - y) < 0.01
+						and at.X > lo.X
+						and at.X < hi.X
+						and at.Z > lo.Z
+						and at.Z < hi.Z
+					then
 						return other
 					end
 				end
@@ -1076,11 +1084,11 @@ local function runTests()
 					local at = rod.CFrame.Position
 					local base, sign
 					if name == "SignPost" then
-						base, sign = meets(structure, at, lo.Y, "top"), meets(signs, at, hi.Y, "bottom")
+						base, sign = meets(structure, at, lo.Y, "top", true), meets(signs, at, hi.Y, "bottom")
 					else
-						base, sign = meets(structure, at, hi.Y, "bottom"), meets(signs, at, lo.Y, "top")
+						base, sign = meets(structure, at, hi.Y, "bottom", true), meets(signs, at, lo.Y, "top")
 					end
-					if base and base.CanCollide and sign then
+					if base and sign then
 						held[sign] = (held[sign] or 0) + 1
 					else
 						table.insert(loose, ("%s (%.1f, %.1f, %.1f)"):format(name, at.X, at.Y, at.Z))
@@ -1967,7 +1975,14 @@ local function runTests()
 		-- 0.4 / 0.63, 0.24 / 0.54)
 		local MINIMUM = { CornerRampExitPanel = 0.7, ConcourseEntryDoor = 0.5, ElevatorDoor = 0.5, ElevatorCallPanel = 0.4 }
 		local least, short = {}, {}
-		for _, root in ipairs({ plotModel(1).Items["escalators:2"], plotModel(1).Items["escalators:3"], plotModel(1).Base }) do
+		local roots = { plotModel(1).Base } -- (the HQ building)
+		for _, stepId in ipairs(Items.PieceById.escalators.StageIds) do
+			local step = plotModel(1).Items:FindFirstChild(stepId) -- (corner ramps and elevators, whichever step)
+			if step then
+				table.insert(roots, step)
+			end
+		end
+		for _, root in ipairs(roots) do
 			for _, gui in ipairs(root:GetDescendants()) do
 				local part = gui.Parent
 				local name = part and part.Name or ""
