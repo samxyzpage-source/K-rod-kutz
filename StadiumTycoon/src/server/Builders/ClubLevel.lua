@@ -26,7 +26,8 @@
 	bars against the outer wall (offset 104.15..107.2, clear of the lane), screens on the walls.
 
 	  club_lounge      1 Lounge Floor & Bars   the ring floor slab (all 8 segments, top y 54) with a
-	                                           skirt at offset 84 (down to the main concourse) and an
+	                                           non-collidable skirt at offset 84 (down to the main
+	                                           concourse: nobody gets shut in on its roof) and an
 	                                           outer girder, the outer wall (offset 107.2..108) with
 	                                           16-wide escalator openings + lit GATE signs (look) on the
 	                                           gate axes, lounge carpets, ceilings + light strips over
@@ -676,6 +677,8 @@ function M.club_lounge(ctx)
 		local k = seg.sink
 		local half = seg.len(RING_OUT) / 2
 		span(shell, seg, "ClubRingFloor", -half, half, RING_IN, RING_OUT, SLAB_BOTTOM + k, FLOOR - k, FLOOR_COLOR, Enum.Material.Concrete)
+		-- (the skirt doesn't collide: anyone on the main concourse's roof when the floor goes in
+		-- walks out under it and drops to the ground; nothing outside it can be stood on)
 		local skirtHalf = seg.len(SKIRT_OUT) / 2
 		span(
 			shell,
@@ -688,7 +691,8 @@ function M.club_lounge(ctx)
 			SKIRT_BOTTOM,
 			SLAB_BOTTOM + k,
 			STRUCTURE,
-			Enum.Material.Concrete
+			Enum.Material.Concrete,
+			NO_COLLIDE
 		)
 		-- the outer girder (open on the gate axes, where the escalators come up from below)
 		local gaps = seg.gate and { { -GATE_HALF - 1, GATE_HALF + 1 } } or {}
