@@ -6338,6 +6338,15 @@ local function runTests()
 		-- GUIDE-BLOCK-STRIPS: from the strips beside the HQ (the covered HQ walk...) out and round
 		expect(Vector3.new(110, 0.3, 330), "turf:1", Vector3.new(122, 0.2, 330), "HQ walk -> stadium: out of the HQ's strip first")
 		expect(Vector3.new(110, 0.3, 330), "hq_frontoffice:1", Vector3.new(122, 0.2, 271), "HQ walk -> front office: the east portal")
+		-- ... coming down beside the elevator tower, in through the portal only once lined up with it (not
+		-- across the tower's glass beside it)
+		expect(
+			Vector3.new(120.4, 0.3, 279),
+			"hq_frontoffice:1",
+			Vector3.new(122, 0.2, 271),
+			"beside the tower: on to the front of the portal"
+		)
+		expect(Vector3.new(122, 0.3, 274.5), "hq_frontoffice:1", Vector3.new(108, 0.2, 271), "in front of the portal: in through it")
 		expect(Vector3.new(-130, 0.3, 420), "campus_links:1", Vector3.new(122, 0.2, 370), "practice field -> HQ walk: round the corner")
 		-- (the building counts a stud bigger: a beam that would only graze the elevator tower's corner
 		-- column goes round it too)

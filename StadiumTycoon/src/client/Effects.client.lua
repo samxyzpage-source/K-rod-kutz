@@ -405,7 +405,8 @@ local function wayOut(p, goal)
 end
 
 -- Outside, goal inside: round the block to the door with the shortest way in, then through it
--- (once you are as close to the spot inside as the door is).
+-- (once you stand in front of it: lined up with it, at most 2.5 studs short of the spot outside it,
+-- so the beam never cuts across the wall or glass beside a door when you come along the wall).
 local function wayIn(p, goal)
 	local target, best = nil, math.huge
 	for _, door in ipairs(GUIDE.Doors) do
@@ -413,7 +414,9 @@ local function wayIn(p, goal)
 		local length = outside + (goal - door.Inside).Magnitude
 		if length < best then
 			best = length
-			local atDoor = (door.Inside - p).Magnitude <= (door.Inside - door.Outside).Magnitude + 1
+			local axis = (door.Inside - door.Outside).Unit
+			local along = (p - door.Outside):Dot(axis)
+			local atDoor = along >= -2.5 and (p - door.Outside - axis * along).Magnitude <= 4
 			target = atDoor and door.Inside or first
 		end
 	end
