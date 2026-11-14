@@ -8,27 +8,33 @@
 	                   1 Club Rows             hollow raked concrete rows (2-stud slabs)
 	                   2 Padded Seats          a padded cushion + backrest strip on every row (team colours)
 	                                           + front-row TV camera seats at the foot of 4 aisles
-	                   3 Aisles & Glass Rails  stair aisles (1-stud steps, a landing on the top row) and a
-	                                           glass rail along the front edge
+	                   3 Aisles & Glass Rails  stair aisles (1-stud steps, a landing on the top row) with a
+	                                           handrail each, and a glass rail with a metal drink ledge
+	                                           along the front edge
 	                   4 Club Signs            "CLUB LEVEL" fascia boards (live team name) and lit section
-	                                           plaques at the foot of the main aisles (look)
+	                                           plaques at the foot of the main aisles and the corner aisles
+	                                           (look)
 	  upper_home     the home side (+Z) of the upper deck: 18 rows (offsets 80..152, tops 70..104)
 	  upper_visitor  the visitor side (-Z), the same
 	                   1 Upper Rows            raked rows on raker beams + columns, the front fascia, two
-	                                           vomitories (open trench + lit tunnel) and stairs (elevator)
-	                                           between the club seats and the upper deck
+	                                           vomitories (open trench with a team-colour base + lit tunnel)
+	                                           and stairs (elevator) between the club seats and the upper deck
 	                   2 Seats                 seat strips (row 3 is the cross-aisle) + 2 TV camera seats
 	                                           at the very top
-	                   3 Aisles & Railings     stair aisles + handrails, the glass front rail, vomitory
-	                                           railings and SECTION signs (look)
+	                   3 Aisles & Railings     stair aisles + handrails, the glass front rail with fans'
+	                                           banners draped over it, a glass rail along the cross-aisle
+	                                           with two accessible-seating bays behind it (look, companion
+	                                           camera seats), vomitory railings, trim frames and SECTION
+	                                           signs (look)
 	                   4 Facade                the rear fascia closing the back of the deck (team colour,
 	                                           live team name outside), the rear parapet (team-colour band,
 	                                           live team name, glass and rail) and an LED ribbon board on
 	                                           the front fascia
 	  upper_ends     both ends (step 1, with a vomitory each) and the 4 corners (step 2); 3 Seats (+ a TV
 	                 camera seat on each end); 4 Aisles & Railings (ramped aisles with painted step
-	                 nosings, glass front rails, vomitory railings + signs, rear fascias + parapets, ribbon
-	                 boards)
+	                 nosings and handrails, glass front rails, vomitory railings + frames + signs, rear
+	                 fascias + parapets, ribbon boards, and the RING OF HONOR on the corner fascias: the
+	                 franchise's made-up legends, look)
 
 	SEGMENT SPACE: everything is built per bowl segment (Bowl.Segment) in a frame on the turf outline
 	(offset 0) in the middle of the segment: x runs along the segment, y is up and o = offset (distance
@@ -79,6 +85,7 @@ local SEAT_HEIGHT = 0.9 -- ...and stay under the 1-stud aisle steps that cover t
 local TOP_STRIP = 1.2 -- the top row's strip (in front of the rear parapet; fans sit up to 2.0 into a row)
 local PARAPET = 0.8 -- the rear parapet takes the back 0.8 studs of the top row
 local RAIL_HEIGHT = 2.8 -- handrails run this high above the stairs' nosing line
+local CLUB_RAIL_HEIGHT = 3 -- (a club handrail starts at the top of the club's glass rail)
 local FASCIA_IN = 0.6 -- the front fascia covers offsets start - 0.6 .. start
 -- Corner blocks overlap their straight neighbours a little at the joints. Their horizontal faces
 -- (row tops + bottoms, seat tops, fascia top) sit this much inside the straight blocks' faces, so
@@ -94,6 +101,7 @@ local ROW_LIGHT = Color3.fromRGB(158, 158, 163)
 local ROW_DARK = Color3.fromRGB(136, 136, 142)
 local CLUB_LIGHT = Color3.fromRGB(174, 168, 160)
 local CLUB_DARK = Color3.fromRGB(152, 146, 139)
+local CLUB_CARPET = Color3.fromRGB(72, 76, 90) -- the club aisles' carpeted steps
 local STRUCTURE = Color3.fromRGB(122, 123, 130)
 local WALL_COLOR = Color3.fromRGB(178, 178, 182)
 local FLOOR_COLOR = Color3.fromRGB(198, 194, 184)
@@ -106,6 +114,8 @@ local NOSING = Color3.fromRGB(255, 206, 46)
 local LAMP = Color3.fromRGB(255, 246, 228)
 local RAMP_COLOR = Color3.fromRGB(184, 180, 170)
 local LIGHT_COLOR = Color3.fromRGB(255, 238, 210)
+local ACCESS_BLUE = Color3.fromRGB(28, 92, 178) -- painted wheelchair spaces
+local CHAIR_DARK = Color3.fromRGB(52, 54, 62)
 
 local NO_COLLIDE = { CanCollide = false }
 local GLASS = { Transparency = 0.45 }
@@ -125,6 +135,27 @@ local CLUB_FACTS = {
 	"Club seats sit between the lower bowl and the upper deck: close to the action AND high enough to see every play.",
 	"Club members get in early to watch the warm-ups from the best seats in the house.",
 	"Chilly game? The heated club lounge with its buffet is right behind the top row.",
+}
+
+-- The Ring of Honor on the upper deck's corner fascias (in Bowl.Corners order): the franchise's
+-- made-up legends, two per corner, with a line for their look card.
+local RING_OF_HONOR = {
+	corner_vw = {
+		{ "12  ROCKET RAMIREZ", "#12 Rocket Ramirez, the quarterback who threw a touchdown in 41 games in a row" },
+		{ "88  BOLT McGEE", "#88 Bolt McGee, a receiver so fast the cameras couldn't keep up" },
+	},
+	corner_ve = {
+		{ "99  TANK OKORO", "#99 Tank Okoro, who once sacked the quarterback 5 times in one game" },
+		{ "22  FLASH FONTAINE", "#22 Flash Fontaine, the running back with the famous spin move" },
+	},
+	corner_hw = {
+		{ "54  MOOSE CALLOWAY", "#54 Moose Calloway, the linebacker who never missed a tackle (well, almost never)" },
+		{ "74  BRICK HOLLOWAY", "#74 Brick Holloway, who protected the quarterback for 15 seasons" },
+	},
+	corner_he = {
+		{ "3  ZIGGY QUILLFEATHER", "#3 Ziggy Quillfeather, the kicker who made a 64-yard field goal in a snowstorm" },
+		{ "24  DASH DELGADO", "#24 Dash Delgado, the cornerback who caught 3 interceptions in one championship game" },
+	},
 }
 
 ---------------------------------------------------------------------------------------------
@@ -247,7 +278,8 @@ end
 	Labels side by side along a long band (a fascia board or a parapet). entries = list of
 	{ text = "...", live = <LiveText kind or nil> }: every entry gets an equal slot. Live entries are
 	screens (dark or team-colour background filled in, LightInfluence 0).
-	opts: color, background, inset (fraction of a slot left empty at both ends), height (fraction)
+	opts: color, background, inset (fraction of a slot left empty at both ends), height (fraction),
+	glow (default true: static text glows too; false = painted text, lit like the band)
 ]]
 local function bandLabels(part, face, entries, opts)
 	local count = #entries
@@ -268,7 +300,13 @@ local function bandLabels(part, face, entries, opts)
 			})
 			label = liveLabel
 		else
-			label = write(part, face, entry.text, opts.color, { Name = part.Name .. "Text" .. index, Glow = true, PixelsPerStud = 10 })
+			label = write(
+				part,
+				face,
+				entry.text,
+				opts.color,
+				{ Name = part.Name .. "Text" .. index, Glow = opts.glow ~= false, PixelsPerStud = 10 }
+			)
 		end
 		local slot = 1 / count
 		label.Position = UDim2.new((index - 1 + inset) * slot, 0, (1 - height) / 2, 0)
@@ -393,12 +431,15 @@ end
 	Stair aisles: a light concrete step on the back half of every row the aisle runs through (1 stud
 	up, 2 deep), so walking up goes row top -> step -> next row top. The steps cover the seat strips
 	inside the aisle. topLanding adds a step on the top row too (club: it covers the top row's seats
-	where the aisle meets the club ring floor). Returns rowsOf, order (see aisleRows).
+	where the aisle meets the club ring floor). carpet = true lays the club's carpet on the steps
+	instead of bare concrete. Returns rowsOf, order (see aisleRows).
 ]]
-local function stairAisles(ctx, seg, tierName, topLanding)
+local function stairAisles(ctx, seg, tierName, topLanding, carpet)
 	local L = ctx.config.Layout
 	local C = ctx.config.Colors
 	local tier = L.Bowl.Tiers[tierName]
+	local color = carpet and CLUB_CARPET or C.Walkway
+	local material = carpet and Enum.Material.Carpet or Enum.Material.Concrete
 	local half = L.Bowl.AisleWidth / 2
 	local rowsOf, order = aisleRows(L, seg, tierName)
 	for _, x in ipairs(order) do
@@ -417,8 +458,8 @@ local function stairAisles(ctx, seg, tierName, topLanding)
 					r.top + STEP,
 					r.inner + L.Bowl.Depth / 2,
 					r.outer,
-					C.Walkway,
-					Enum.Material.Concrete
+					color,
+					material
 				)
 			end
 		end
@@ -480,22 +521,32 @@ local function rampAisles(ctx, seg, U)
 	end
 end
 
--- Metal handrails beside the full-height upper aisles (on the side away from the segment's middle),
--- from row 4 (above the cross-aisle, which stays free to walk along) to the top row.
+-- Metal handrails beside the upper aisles that reach the top row (on the side away from the
+-- segment's middle), from row 4 (above the cross-aisle, which stays free to walk along), or from the
+-- aisle's first row for the short aisles near the ends of the sides, to the top row.
 local function handrails(ctx, seg, U, rowsOf, order)
 	local L = ctx.config.Layout
 	local C = ctx.config.Colors
 	local half = L.Bowl.AisleWidth / 2
-	local oA, oB = U.trenchIn + 0.5, U.finish - U.depth - 0.4
+	local oB = U.finish - U.depth - 0.4
 	local function railY(o)
 		return nosingY(L, "upper", o) + RAIL_HEIGHT
 	end
 	for _, x in ipairs(order) do
 		local rows = rowsOf[x]
-		if rows[1] and rows[U.rows] then
+		if rows[U.rows] then
+			local first = 1
+			while not rows[first] do
+				first += 1
+			end
+			local oA = math.max(U.trenchIn, Bowl.Row(L, "upper", first).inner) + 0.5
 			local rx = x + (x >= 0 and 1 or -1) * (half + 0.05)
 			-- (split at the concourse's inner edge: see rampAisles)
-			for _, piece in ipairs({ { oA, U.concourseIn }, { U.concourseIn, oB } }) do
+			local pieces = { { oA, U.concourseIn }, { U.concourseIn, oB } }
+			if oA >= U.concourseIn then
+				pieces = { { oA, oB } }
+			end
+			for _, piece in ipairs(pieces) do
 				incline(
 					ctx,
 					seg,
@@ -631,7 +682,21 @@ local function vomitoryShell(ctx, seg, U, v)
 	local climb = (U.trenchOut - U.trenchIn) * U.slope
 	for _, side in ipairs({ -1, 1 }) do
 		local x0, x1 = v + side * half, v + side * (half + WALL)
-		block(ctx, seg, "VomitoryWall", x0, x1, U.floorY - 2, U.floorY + 1, U.trenchIn, U.tunnelOut, WALL_COLOR, Enum.Material.Concrete)
+		-- (the wall's foot, the stud above the floor, is a team-colour band all the way in; it starts
+		-- 0.05 in front of row 4's riser, which ends inside the wall, so their faces never z-fight)
+		block(
+			ctx,
+			seg,
+			"VomitoryWall",
+			x0,
+			x1,
+			U.floorY - 2,
+			U.floorY + 1,
+			U.trenchIn - 0.05,
+			U.tunnelOut,
+			ctx.colors.Primary,
+			Enum.Material.Concrete
+		)
 		wedgeUp(ctx, seg, "VomitoryWallTop", x0, x1, U.trenchIn, U.trenchOut, U.floorY + 1, climb, WALL_COLOR)
 		block(ctx, seg, "TunnelWall", x0, x1, U.floorY + 1, U.tunnelTop, U.trenchOut, U.tunnelOut, WALL_COLOR, Enum.Material.Concrete)
 	end
@@ -645,7 +710,7 @@ local function vomitoryShell(ctx, seg, U, v)
 		U.tunnelTop + ROW_T,
 		U.trenchOut - 0.5,
 		U.trenchOut,
-		FASCIA_COLOR,
+		ctx.colors.Primary,
 		Enum.Material.Concrete
 	)
 	local lamp = block(
@@ -721,6 +786,26 @@ local function vomitoryFinish(ctx, seg, U, v, title, fact)
 	)
 	write(sign, TOWARD_FIELD, title, WHITE, { Glow = true })
 	BuildUtil.Look(sign, "Upper Deck - " .. title:sub(1, 1) .. title:sub(2):lower(), fact, { At = Vector3.new(0, -5.5, 0) })
+	-- a trim frame round the tunnel mouth: down both walls and under the header (paint-thin)
+	local trim = ctx.colors.Trim
+	for _, side in ipairs({ -1, 1 }) do
+		local x0, x1 = v + side * (half - 0.15), v + side * half
+		block(ctx, seg, "VomitoryTrim", x0, x1, U.floorY, U.tunnelTop - 2, U.trenchOut - 0.8, U.trenchOut, trim, nil, NO_COLLIDE)
+	end
+	block(
+		ctx,
+		seg,
+		"VomitoryTrim",
+		v - half,
+		v + half,
+		U.tunnelTop - 2.4,
+		U.tunnelTop - 2,
+		U.trenchOut - 0.8,
+		U.trenchOut,
+		trim,
+		nil,
+		NO_COLLIDE
+	)
 end
 
 -- Step "Seats": a seat strip at the back of every row but the cross-aisle (cut at the vomitories);
@@ -805,6 +890,198 @@ local function frontRail(ctx, seg, U, withCap)
 			Enum.Material.Metal
 		)
 	end
+end
+
+--[[
+	Step "Aisles & Railings" (sides): an accessible-seating bay on the cross-aisle at segment x, right
+	behind its glass rail: two painted wheelchair spaces (look) on the side toward the vomitory and two
+	slim companion chairs (seats with a view of the field) beyond them. The chairs stay within 1.6 of
+	the cross-aisle's front edge, so 2.4 of its 4 studs stay free to walk along behind them.
+]]
+local function accessibleBay(ctx, seg, U, x)
+	local L = ctx.config.Layout
+	local r = Bowl.Row(L, "upper", U.cross)
+	local o0 = r.inner + 0.4 -- (just behind the glass rail)
+	local out = x >= 0 and 1 or -1 -- (away from the vomitory: both bays of a side mirror each other)
+	-- (turned round: the lettering reads upright from the walkway behind)
+	local spaces = BuildUtil.Part(ctx, {
+		Name = "WheelchairSpaces",
+		Size = Vector3.new(6, 0.06, 1.5),
+		CFrame = at(seg, x - out * 1.6, r.top + 0.03, o0 + 0.75) * TURN,
+		Color = ACCESS_BLUE,
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		CastShadow = false,
+	})
+	write(spaces, Enum.NormalId.Top, "WHEELCHAIR SPACES", WHITE, { PixelsPerStud = 24 })
+	BuildUtil.Look(
+		spaces,
+		"Accessible Seating",
+		"Wheelchair spaces with a great view of the field, right beside the tunnel to the concourse, and seats for friends and family next to them.",
+		{ Distance = 12 }
+	)
+	for _, cx in ipairs({ x + out * 2.5, x + out * 4.5 }) do
+		local eye = at(seg, cx, r.top + 4.5, o0 + 0.2).Position
+		BuildUtil.Seat(ctx, {
+			Name = "CompanionSeat",
+			Size = Vector3.new(1.8, 0.8, 1),
+			CFrame = at(seg, cx, r.top + 0.4, o0 + 0.5) * TURN,
+			Color = ctx.colors.Primary,
+			Material = Enum.Material.Fabric,
+			Object = "Companion Seat",
+			Camera = { From = eye, To = Vector3.new(0, 2, L.FieldCenterZ), Fov = 58, Label = "UPPER DECK" },
+		})
+		-- (a padded back in the seat's colour on a dark metal frame, below the glass rail's cap)
+		block(
+			ctx,
+			seg,
+			"CompanionSeatBack",
+			cx - 0.9,
+			cx + 0.9,
+			r.top + 0.8,
+			r.top + 2.2,
+			o0 + 1,
+			o0 + 1.2,
+			ctx.colors.Primary,
+			Enum.Material.Fabric
+		)
+		block(ctx, seg, "CompanionSeatFrame", cx - 0.8, cx + 0.8, r.top, r.top + 0.8, o0 + 1, o0 + 1.2, CHAIR_DARK, Enum.Material.Metal)
+	end
+end
+
+-- Step "Aisles & Railings" (sides): home-made fan banners draped over the front glass rail, facing
+-- the field (above the ribbon board): each hangs from a fold lying on the rail's cap, in front of the
+-- front row, which still leans on the rail.
+local function fanBanners(ctx, seg, U, texts)
+	local team = ctx.colors
+	local colors = { team.Secondary, WHITE, team.Trim, team.Secondary }
+	local front = U.start - FASCIA_IN - 0.1 -- (the banner hangs 0.03 in front of the cap's face)
+	for index, x in ipairs({ -104, -52, 52, 104 }) do
+		local color = colors[(index - 1) % #colors + 1]
+		local banner = block(
+			ctx,
+			seg,
+			"FanBanner",
+			x - 4.5,
+			x + 4.5,
+			U.first + 0.35,
+			U.first + 3.75,
+			front,
+			front + 0.12,
+			color,
+			Enum.Material.Fabric,
+			NO_COLLIDE
+		)
+		write(banner, TOWARD_FIELD, texts[index], readable(color, team.Primary), { PixelsPerStud = 16 })
+		block(
+			ctx,
+			seg,
+			"FanBannerFold",
+			x - 4.5,
+			x + 4.5,
+			U.first + 3.7,
+			U.first + 3.75,
+			front,
+			U.start - 0.2,
+			color,
+			Enum.Material.Fabric,
+			NO_COLLIDE
+		)
+	end
+end
+
+-- Step "Aisles & Railings" (sides): a glass rail with a metal cap along the front edge of the
+-- cross-aisle (upper row 3), open where the aisles come up from rows 1-2.
+local function crossAisleRail(ctx, seg, U, rowsOf, order)
+	local L = ctx.config.Layout
+	local C = ctx.config.Colors
+	local r = Bowl.Row(L, "upper", U.cross)
+	local gaps = {}
+	for _, x in ipairs(order) do
+		if rowsOf[x][U.cross - 1] or rowsOf[x][U.cross] then
+			table.insert(gaps, x)
+		end
+	end
+	for _, piece in ipairs(spans(lengthAt(seg, r.inner), gaps, L.Bowl.AisleWidth / 2 + 0.1)) do
+		if piece[2] - piece[1] > 1 then
+			block(
+				ctx,
+				seg,
+				"CrossAisleGlass",
+				piece[1],
+				piece[2],
+				r.top,
+				r.top + 2.4,
+				r.inner + 0.05,
+				r.inner + 0.3,
+				C.Glass,
+				Enum.Material.Glass,
+				GLASS
+			)
+			block(
+				ctx,
+				seg,
+				"CrossAisleRailCap",
+				piece[1],
+				piece[2],
+				r.top + 2.4,
+				r.top + 2.7,
+				r.inner,
+				r.inner + 0.35,
+				C.Metal,
+				Enum.Material.Metal
+			)
+		end
+	end
+end
+
+-- Step "Aisles & Railings" (corners): the RING OF HONOR on the front fascia, a team-colour band with
+-- the franchise's two legends of this corner (look card: their stories and your championships).
+local function ringOfHonor(ctx, seg, U, legends)
+	local team = ctx.colors
+	local length = lengthAt(seg, U.start) - 8
+	local band = block(
+		ctx,
+		seg,
+		"RingOfHonor",
+		-length / 2,
+		length / 2,
+		U.fasciaBottom + 0.3,
+		U.first - 0.3,
+		U.start - FASCIA_IN - 0.25,
+		U.start - FASCIA_IN - 0.05,
+		team.Primary,
+		nil,
+		NO_COLLIDE
+	)
+	local ink = readable(team.Primary, team.Trim)
+	bandLabels(
+		band,
+		TOWARD_FIELD,
+		{ { text = legends[1][1] }, { text = "RING OF HONOR" }, { text = legends[2][1] } },
+		{ color = ink, background = team.Primary, inset = 0.05, height = 0.7, glow = false }
+	)
+	-- painted pinstripes along its top and bottom edges
+	local gui = band:FindFirstChildOfClass("SurfaceGui")
+	for index, y in ipairs({ 0.03, 0.89 }) do
+		local stripe = Instance.new("Frame")
+		stripe.Name = "Pinstripe" .. index
+		stripe.BorderSizePixel = 0
+		stripe.BackgroundColor3 = ink
+		stripe.Position = UDim2.new(0.01, 0, y, 0)
+		stripe.Size = UDim2.new(0.98, 0, 0.08, 0)
+		stripe.Parent = gui
+	end
+	BuildUtil.Look(
+		band,
+		"Ring of Honor",
+		("The legends of the franchise: %s, and %s. Their numbers are retired, so nobody wears them again!"):format(
+			legends[1][2],
+			legends[2][2]
+		),
+		{ LookKey = "titles", Distance = 16 }
+	)
+	return band
 end
 
 --[[
@@ -1052,6 +1329,7 @@ local function clubCameraSeat(ctx, seg, x)
 	})
 end
 
+-- The glass rail along the front of the club seats, with a metal drink ledge on top.
 local function clubGlass(ctx, seg)
 	local L = ctx.config.Layout
 	local C = ctx.config.Colors
@@ -1071,6 +1349,43 @@ local function clubGlass(ctx, seg)
 		Enum.Material.Glass,
 		GLASS
 	)
+	block(
+		ctx,
+		seg,
+		"ClubDrinkLedge",
+		-length / 2,
+		length / 2,
+		tier.FirstHeight + 3.4 + seg.sink,
+		tier.FirstHeight + 3.7 - seg.sink,
+		tier.StartOffset - 0.05,
+		tier.StartOffset + 0.55,
+		C.Metal,
+		Enum.Material.Metal
+	)
+end
+
+-- A metal handrail up every club aisle (on the side away from the segment's middle): from the top
+-- of the glass rail at the front to the top row, with a post at its top end.
+local function clubRails(ctx, seg, rowsOf, order)
+	local L = ctx.config.Layout
+	local C = ctx.config.Colors
+	local tier = L.Bowl.Tiers.club
+	local half = L.Bowl.AisleWidth / 2
+	local oA = tier.StartOffset + 0.6
+	local oB = Bowl.Row(L, "club", tier.Rows).inner - 0.2
+	local function railY(o)
+		return nosingY(L, "club", o) + CLUB_RAIL_HEIGHT
+	end
+	for _, x in ipairs(order) do
+		local rows = rowsOf[x]
+		if rows[1] and rows[tier.Rows] then
+			local rx = x + (x >= 0 and 1 or -1) * (half + 0.05)
+			incline(ctx, seg, "ClubHandrail", rx - 0.125, rx + 0.125, oA, railY(oA), oB, railY(oB), 0.28, C.Metal, Enum.Material.Metal)
+			local o = oB - 0.3
+			local base = Bowl.Row(L, "club", math.floor((o - tier.StartOffset) / L.Bowl.Depth) + 1).top
+			block(ctx, seg, "ClubHandrailPost", rx - 0.125, rx + 0.125, base, railY(o), o - 0.125, o + 0.125, C.Metal, Enum.Material.Metal)
+		end
+	end
 end
 
 -- Club Signs: a "CLUB LEVEL" board on the front of the first row (live team name on the long ones)
@@ -1116,11 +1431,10 @@ local function clubSigns(ctx, seg, factIndex)
 		entries,
 		{ color = readable(team.Primary, team.Trim), background = team.Primary, inset = 0.12, height = 0.9 }
 	)
-	if seg.kind == "corner" then
-		return factIndex
-	end
 	local half = L.Bowl.AisleWidth / 2
-	for _, x in ipairs({ -L.Bowl.AisleFirst, L.Bowl.AisleFirst }) do
+	-- (the corners have one aisle, in their middle)
+	local plaques = seg.kind == "corner" and { 0 } or { -L.Bowl.AisleFirst, L.Bowl.AisleFirst }
+	for _, x in ipairs(plaques) do
 		local a, b = clubSections(L, seg.name, x)
 		local title = ("SECTIONS %d-%d"):format(a, b)
 		local plaque = block(
@@ -1175,8 +1489,9 @@ function M.club_seats(ctx)
 	-- 3 AISLES & GLASS RAILS
 	BuildUtil.Stage(ctx, 3)
 	for _, seg in ipairs(segs) do
-		stairAisles(ctx, seg, "club", true)
+		local rowsOf, order = stairAisles(ctx, seg, "club", true, true)
 		clubGlass(ctx, seg)
+		clubRails(ctx, seg, rowsOf, order)
 	end
 
 	-- 4 CLUB SIGNS
@@ -1188,7 +1503,7 @@ function M.club_seats(ctx)
 end
 
 -- upper_home / upper_visitor: one straight side of the upper deck.
-local function upperSide(ctx, name, firstFact)
+local function upperSide(ctx, name, firstFact, banners)
 	local L = ctx.config.Layout
 	local U = upperGeometry(L)
 	local seg = segment(L, name)
@@ -1216,6 +1531,12 @@ local function upperSide(ctx, name, firstFact)
 	local rowsOf, order = stairAisles(ctx, seg, "upper", false)
 	handrails(ctx, seg, U, rowsOf, order)
 	frontRail(ctx, seg, U, true)
+	crossAisleRail(ctx, seg, U, rowsOf, order)
+	fanBanners(ctx, seg, U, banners(name0))
+	-- (between each vomitory and the next aisle out)
+	for _, x in ipairs({ -64, 64 }) do
+		accessibleBay(ctx, seg, U, x)
+	end
 	for index, v in ipairs(voms) do
 		vomitoryFinish(ctx, seg, U, v, vomitoryTitle(name, index), UPPER_FACTS[firstFact + index - 1])
 	end
@@ -1249,11 +1570,15 @@ local function upperSide(ctx, name, firstFact)
 end
 
 function M.upper_home(ctx)
-	upperSide(ctx, "home", 1)
+	upperSide(ctx, "home", 1, function(team)
+		return { "GO " .. team .. "!", "DEFENSE!", "HI MOM!", "WE ARE LOUD!" }
+	end)
 end
 
 function M.upper_visitor(ctx)
-	upperSide(ctx, "visitor", 3)
+	upperSide(ctx, "visitor", 3, function(team)
+		return { "#1 FANS", "MAKE SOME NOISE!", "GO " .. team .. "!", "TOUCHDOWN TIME!" }
+	end)
 end
 
 function M.upper_ends(ctx)
@@ -1298,9 +1623,13 @@ function M.upper_ends(ctx)
 	BuildUtil.Stage(ctx, 4)
 	for _, seg in ipairs(all) do
 		rampAisles(ctx, seg, U)
+		handrails(ctx, seg, U, aisleRows(L, seg, "upper"))
 		frontRail(ctx, seg, U, false)
 		local teamLabel = seg.kind == "end" and { { text = name0, live = "team" } } or nil
 		parapet(ctx, seg, U, false, teamLabel, teamLabel)
+	end
+	for _, seg in ipairs(corners) do
+		ringOfHonor(ctx, seg, U, RING_OF_HONOR[seg.name])
 	end
 	for index, seg in ipairs(ends) do
 		for vIndex, v in ipairs(Bowl.Vomitories(seg.kind)) do
