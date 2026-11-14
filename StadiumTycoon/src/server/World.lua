@@ -11,6 +11,7 @@ local World = {}
 
 World.PlotY = 0.2 -- height of every plot's slab top (= the street's top)
 local PLOT_Y = World.PlotY
+local SIGN_MAX_DISTANCE = 300 -- the welcome sign's text stops drawing farther away (it is too small to read there)
 
 -- Plot origins: plots sit in two rows facing a central street that runs along X.
 -- Odd plots are on the +Z side, even plots on the -Z side; every plot's front (-Z local) faces the street.
@@ -60,6 +61,7 @@ local function addSurfaceText(part, face, text, textColor, backgroundColor)
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = 25
 	gui.LightInfluence = 0
+	gui.MaxDistance = SIGN_MAX_DISTANCE
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.new(1, 0, 1, 0)
 	label.BackgroundColor3 = backgroundColor

@@ -1441,6 +1441,24 @@ local function runTests()
 			)
 		)
 	end
+	do
+		-- far-off text stops drawing: the street's welcome sign and the golf carts' number plates
+		local limits = {}
+		for _, gui in ipairs(workspace.World:FindFirstChild("WelcomeSign"):GetChildren()) do
+			if gui:IsA("SurfaceGui") then
+				table.insert(limits, gui.MaxDistance)
+			end
+		end
+		for _, info in pairs(Vehicles.GetCarts(PlotManager.GetPlot(alice))) do
+			local plate = info.model:FindFirstChild("NumberPlate")
+			table.insert(limits, plate and plate:FindFirstChildOfClass("SurfaceGui").MaxDistance or 0)
+		end
+		local limited = #limits == 5
+		for _, limit in ipairs(limits) do
+			limited = limited and limit > 0 and limit <= 300
+		end
+		check(limited, "the welcome sign and the cart number plates have a draw distance (" .. table.concat(limits, ", ") .. ")")
+	end
 
 	section("Draft + roster")
 	do
