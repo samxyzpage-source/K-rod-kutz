@@ -76,7 +76,7 @@ vomitories ("tunnels into the seats") to their sections.
 | UpperDeck.lua (new) | club_seats, upper_home, upper_visitor, upper_ends | club rows, upper rows, their aisles/railings/glass rails, upper-deck vomitories through the rows, the upper deck's rear fascia ("Facade" steps) |
 | Concourse.lua (new) | main_concourse, upper_concourse | concourse floors, columns, walls, ceilings, section portals, vomitory portals on the concourse side, upper-concourse food stands + restrooms |
 | ConcourseShops.lua (new) | concourse_food, concourse_restrooms, concourse_merch | food stands, bars, restrooms, pro shop + kiosks on the main concourse (outer side) |
-| StadiumRooms.lua (rewrite) | home_lockerroom, visitor_lockerroom | locker rooms in the event level under the home / visitor stands + the players' tunnels to them |
+| StadiumRooms.lua (rewrite) | home_lockerroom, visitor_lockerroom, coach_lockerroom | locker rooms in the event level under the home / visitor stands + the players' tunnels to them; the coaches' locker room (lockers, whistles, clipboards, headsets, a wardrobe of team outfits) down its own tunnel off the home players' tunnel |
 | ClubLevel.lua (replaces PressLevel.lua) | club_lounge, suites, pressbox, broadcast_booth | everything in the club ring |
 | Exterior.lua (new) | gates, escalators, facade | the facade + gates + entry halls, escalators/ramps/elevators between levels, wayfinding |
 | Features.lua (rewrite) | scoreboard, jumbotron, lights, canopy | east (scoreboard) and west (jumbotron) end-zone video boards above the upper deck, 4 light towers at `L.LightTowerPositions`, the roof canopy |

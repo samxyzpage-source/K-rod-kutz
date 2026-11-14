@@ -369,15 +369,16 @@ local function scoreBugText(seat)
 	local team = model and model:GetAttribute("TeamName") or "HOME"
 	local home = model and model:GetAttribute("HomeScore") or 0
 	local away = model and model:GetAttribute("AwayScore") or 0
-	local tycoons = Workspace:FindFirstChild("Tycoons")
+	-- this plot's own game day (GameDay.lua keeps it on the plot model; the owner starts it)
 	local status = ""
-	if tycoons then
-		local now = Workspace:GetServerTimeNow()
-		if tycoons:GetAttribute("GameDayActive") then
-			status = "GAME DAY  " .. clock((tycoons:GetAttribute("GameDayEndsAt") or now) - now)
-		elseif tycoons:GetAttribute("NextGameDayAt") then
-			status = "NEXT GAME " .. clock(tycoons:GetAttribute("NextGameDayAt") - now)
-		end
+	local gameStatus = model and model:GetAttribute("GameDayStatus")
+	local now = Workspace:GetServerTimeNow()
+	if gameStatus == "active" then
+		status = "GAME DAY  " .. clock((model:GetAttribute("GameDayEndsAt") or now) - now)
+	elseif gameStatus == "cooldown" then
+		status = "NEXT GAME " .. clock((model:GetAttribute("NextGameReadyAt") or now) - now)
+	elseif gameStatus == "ready" then
+		status = "READY FOR KICK-OFF"
 	end
 	return ("%s  %d   -   %d  VISITORS      %s"):format(team, home, away, status)
 end

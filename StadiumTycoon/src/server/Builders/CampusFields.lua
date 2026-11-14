@@ -2086,7 +2086,7 @@ function CampusFields.indoor_dome(ctx)
 	BuildUtil.Look(
 		sbFrame,
 		"Practice Scoreboard",
-		"Shows the countdown to your next game day. Practice hard - the next game is coming!",
+		"Shows when your next game day is ready - then press START GAME to kick off. Practice hard!",
 		{ At = Vector3.new(2.5, 4.5 - (sbY0 + sbY1) / 2, 0), LookKey = "season", Distance = 8 }
 	)
 	local screenDark = Color3.fromRGB(16, 18, 24)

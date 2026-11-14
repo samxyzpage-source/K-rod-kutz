@@ -103,7 +103,8 @@ end
 	  record    "RECORD 12-5"                     season    "SEASON 3 - WEEK 4/8 - 3-1"
 	  titles    "CHAMPIONSHIPS: 2"                rating    "TEAM RATING 84"
 	  summary   team / score / record / season on 4 lines
-	  gameday   "GAME DAY! 0:42 LEFT" or "NEXT GAME IN 2:15"
+	  gameday   "GAME DAY! 0:42 LEFT", "READY - PRESS START GAME", "NEXT GAME IN 2:15" or
+	            "BUILD THE GOAL POSTS" (the owner starts each game day, see GameDay.lua)
 	  roster    the starters, one per line ("QB  M. BROOKS  82")
 	  arcade    "HIGH SCORE 37 - ALICE"           pingpong  "LONGEST RALLY 12 - ALICE"
 	  owner     "OWNER: ALICE"

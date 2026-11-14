@@ -2229,7 +2229,7 @@ function HQRoomsBack.hq_cafeteria(ctx)
 			BuildUtil.Look(
 				display,
 				"Cafeteria TV",
-				"Counts down to the next game day. When it hits zero, the fans pour in and income doubles!",
+				"Shows when your next game day is ready. Press START GAME and the fans pour in - income doubles while it lasts!",
 				{
 					LookKey = "season",
 					Distance = 9,

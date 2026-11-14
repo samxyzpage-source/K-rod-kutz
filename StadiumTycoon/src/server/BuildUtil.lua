@@ -487,7 +487,9 @@ end
 
 --[[
 	A "use" action (Interact.Uses): use = "lift" | "arcade" | "pingpong" | "podium" (mini-games)
-	or "tray" | "smoothie" | "hotdog" | "popcorn" | "soda" | "sportsdrink" | "foamfinger" (items).
+	or "tray" | "smoothie" | "hotdog" | "popcorn" | "soda" | "sportsdrink" | "foamfinger" (items)
+	or "whistle" | "clipboard" (coaching gear) or "coachpolo" | "hoodie" | "jersey" | "changeback"
+	(outfits, Gear.lua).
 	opts: Action (button text; default from Interact.Uses), Object, Title, Info, Distance, At,
 	      LineOfSight (see Prompt),
 	      Camera = { From = Vector3, To = Vector3, Fov = number } (local; podium / arcade view)

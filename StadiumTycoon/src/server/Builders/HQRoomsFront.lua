@@ -1032,7 +1032,7 @@ function HQRoomsFront.hq_lobby(ctx)
 	BuildUtil.Look(
 		clock,
 		"Lobby Clock",
-		"It's always football o'clock at Team HQ! Game days kick off every few minutes - the countdown on the Team Wall shows when.",
+		"It's always football o'clock at Team HQ! You choose when a game day kicks off: press START GAME once the field is ready.",
 		{ Distance = 10 }
 	)
 	BuildUtil.Look(
