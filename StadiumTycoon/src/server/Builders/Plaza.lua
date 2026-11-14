@@ -106,6 +106,7 @@ local TERRACOTTA = Color3.fromRGB(176, 92, 58)
 local FLOWER_PINK = Color3.fromRGB(226, 84, 140)
 local FLOWER_RED = Color3.fromRGB(214, 52, 60)
 local FLOWER_PURPLE = Color3.fromRGB(150, 90, 200)
+local FLOWER_GOLD = Color3.fromRGB(246, 186, 52)
 local BRONZE = Color3.fromRGB(160, 110, 62)
 
 local CAR_COLORS = {
@@ -809,9 +810,9 @@ function Plaza.ticketbooth(ctx)
 	)
 	sign(serving, { Enum.NormalId.Right }, "NOW SERVING  07", SCREEN, team, { TextColor3 = OPEN_RED, Glow = true, InsetY = 0.12 })
 
-	-- two self-serve ticket kiosks south of the queue, facing the walkway: a team-colour pedestal,
-	-- a tilted touch screen and a lit header
-	for index, z in ipairs({ southZ - 3.6, southZ - 7 }) do
+	-- two self-serve ticket kiosks south of the queue, facing the walkway (a walkable 2.6 apart): a
+	-- team-colour pedestal, a tilted touch screen and a TICKETS header
+	for index, z in ipairs({ southZ - 3.4, southZ - 8.2 }) do
 		local x = queueX + 3
 		BuildUtil.Block(ctx, "Kiosk", Vector3.new(1.4, 4.4, 2.2), Vector3.new(x, 0, z), team.Primary, Enum.Material.SmoothPlastic)
 		local touch = BuildUtil.Part(ctx, {
@@ -2519,8 +2520,8 @@ function Plaza.teamstore(ctx)
 	local doorMinZ, doorMaxZ = cz - 3.5, cz + 3.5
 	local paneHeight = glassTop - floorTop
 	local glassProps = { Transparency = 0.45 }
-	for _, range in ipairs({ { openMinZ, doorMinZ }, { doorMaxZ, openMaxZ } }) do
-		BuildUtil.Box(
+	for index, range in ipairs({ { openMinZ, doorMinZ }, { doorMaxZ, openMaxZ } }) do
+		local pane = BuildUtil.Box(
 			storefront,
 			"Window",
 			Vector3.new(0.3, paneHeight, range[2] - range[1]),
@@ -2529,6 +2530,16 @@ function Plaza.teamstore(ctx)
 			Enum.Material.Glass,
 			glassProps
 		)
+		-- shop-window lettering along the bottom of the pane (under the displays)
+		local _, lettering = BuildUtil.SurfaceText(pane, Enum.NormalId.Left, index == 1 and "JERSEYS - CAPS" or "FOAM FINGERS", {
+			LabelName = "WindowLettering",
+			TextColor3 = WHITE,
+			Font = Enum.Font.GothamBold,
+			PixelsPerStud = 30,
+			TextStrokeTransparency = 0.5,
+		})
+		lettering.Position = UDim2.new(0.08, 0, 0.86, 0)
+		lettering.Size = UDim2.new(0.84, 0, 0.08, 0)
 	end
 	-- sliding glass doors (press E; they close again by themselves): they slide open behind the
 	-- window panes, just inside the glass line
@@ -2925,6 +2936,41 @@ function Plaza.teamstore(ctx)
 		Enum.Material.Glass,
 		{ Reflectance = 0.3 }
 	)
+	-- the jersey printing station in the back corner: a counter with a heat press, lid open
+	local press = BuildUtil.Block(
+		interior,
+		"PrintCounter",
+		Vector3.new(3.2, 3, 1.8),
+		Vector3.new(backX - 3.9, 0, northZ - 1.9),
+		C.Wood,
+		Enum.Material.WoodPlanks,
+		nil,
+		floorTop
+	)
+	BuildUtil.Block(
+		interior,
+		"HeatPress",
+		Vector3.new(1.6, 0.5, 1.2),
+		Vector3.new(backX - 3.9, 0, northZ - 2),
+		DARK_METAL,
+		Enum.Material.Metal,
+		nil,
+		floorTop + 3
+	)
+	BuildUtil.Part(interior, {
+		Name = "HeatPressLid",
+		Size = Vector3.new(1.6, 0.25, 1.2),
+		CFrame = CFrame.new(backX - 3.9, floorTop + 4.05, northZ - 1.55) * CFrame.Angles(math.rad(50), 0, 0),
+		Color = CHROME,
+		Material = Enum.Material.Metal,
+	})
+	BuildUtil.Look(
+		press,
+		"Jersey Printing",
+		"Pick a name and a number and the heat press prints them on your jersey in a minute. The most popular name?",
+		{ LookKey = "owner", At = Vector3.new(0, 0.4, -1.3), Distance = 8 }
+	)
+
 	-- NEW SEASON GEAR hangs over the display table, facing the doors
 	local hanging = BuildUtil.Box(
 		interior,
@@ -3056,7 +3102,7 @@ function Plaza.trophy(ctx)
 	for _, dx in ipairs({ -7, 7 }) do
 		parkBench(ctx, "PlazaBench", CFrame.new(cx + dx, 0, cz + MONUMENT.HalfSize + 2.5), 5, 0, C.Wood)
 	end
-	local flowers = { FLOWER_PINK, team.Secondary, FLOWER_PURPLE, FLOWER_RED }
+	local flowers = { FLOWER_PINK, FLOWER_GOLD, FLOWER_PURPLE, FLOWER_RED }
 	for i, corner in ipairs({ { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } }) do
 		local d = MONUMENT.HalfSize + 1.5
 		flowerPot(ctx, "TrophyPlanter", cx + corner[1] * d, cz + corner[2] * d, 0, 3, 1.4, STONE_LIGHT, flowers[i])

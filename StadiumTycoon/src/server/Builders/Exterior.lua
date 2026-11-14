@@ -22,11 +22,12 @@
 	              team stripe along the outer parapet, a HALFWAY UP! plaque on the landing)
 	              3 Elevators (a glass elevator per gate hall; a call panel with the level number
 	              beside every door)  4 Wayfinding Signs
-	  facade      1 Lower Facade (+ a dark granite plinth along the base, steel canopies over the
-	              service exits, poster cases with the season and the next game beside every gate)
+	  facade      1 Lower Facade (+ a dark granite plinth along the base (not behind the corner
+	              ramps), steel canopies with lamps over the service exits, boards of made-up sponsors
+	              between the masts, poster cases with the season and the next game beside every gate)
 	              2 Glass Curtain Walls  3 Upper Facade & Fins
 	              4 Banners & Night Lights (+ two tall player / team banners on the glass beside
-	              every gate)
+	              every gate, team-colour LED ribbons up the gate towers)
 
 	THE GATE HALL (the same on all four gate axes: A front/visitor, B west, C east, D back/home),
 	segment x |x| < 14 between the hall walls (14..15), offsets 84.2..152:
@@ -1881,6 +1882,23 @@ local function posterCase(ctx, seg, x0, x1, headline, live, placeholder, team)
 	return case
 end
 
+-- Boards of made-up sponsors on the stone base, between the masts: { name, tagline, colour }.
+local SPONSORS = {
+	{ "BLITZ COLA", "THE TASTE OF VICTORY", Color3.fromRGB(196, 30, 40) },
+	{ "SPIRAL SPORTS DRINK", "STAY IN THE GAME", Color3.fromRGB(30, 110, 200) },
+	{ "TOUCHBACK TIRES", "GRIP LIKE A LINEMAN", Color3.fromRGB(36, 36, 42) },
+	{ "END ZONE EXPRESS", "WE DELIVER - EVERY DOWN", Color3.fromRGB(110, 60, 170) },
+	{ "HAIL MARY HONEY", "SWEET LONG SHOTS", Color3.fromRGB(236, 160, 40) },
+	{ "TOUCHDOWN TACOS", "SIX POINTS OF FLAVOR", Color3.fromRGB(40, 140, 80) },
+}
+local function sponsorBoard(ctx, seg, x, sponsor)
+	local color = sponsor[3]
+	local board = box(ctx, seg, "SponsorBoard", x - 6, x + 6, 3, 10, F.out - 0.05, F.out + 0.25, color)
+	local text = contrast(color, WHITE) >= contrast(color, INK) and WHITE or INK
+	local name = write(board, OUTWARD, sponsor[1], text, { Top = 0.14, Height = 0.44 })
+	addLine(name, sponsor[2], 0.66, 0.18, Enum.Font.GothamBold)
+end
+
 -- A tall banner on the curtain glass beside a gate, between two fins (x0..x1), below the sight line
 -- of the outside escalator F3.
 local function glassBanner(ctx, seg, x0, x1, color)
@@ -1939,6 +1957,7 @@ function M.facade(ctx)
 	-- 1 LOWER FACADE: stone base + cap with the service exits, the cornerstone ---------------------
 	BuildUtil.Stage(ctx, 1)
 	local base = BuildUtil.Child(ctx, "LowerFacade")
+	local sponsorIndex = 0
 	for _, seg in ipairs(segs) do
 		local k = sink(seg)
 		local baseCuts = gateCut(seg)
@@ -1952,13 +1971,23 @@ function M.facade(ctx)
 			box(base, seg, "FacadeCap", r[1], r[2], F.baseTop - k, F.capTop - k, F.capIn, F.capOut, STONE_DARK, Enum.Material.Limestone)
 		end
 		-- a dark granite plinth along the foot of the base (it stops short of the service doors,
-		-- whose leaves swing out past it)
+		-- whose leaves swing out past it, and leaves out the stretch behind a corner ramp, so the
+		-- 2.4-wide gap between the facade and the ramp's base stays as wide)
 		local plinthCuts = gateCut(seg)
 		if seg.kind ~= "corner" then
 			table.insert(plinthCuts, { SERVICE.x0 - 0.4, SERVICE.x1 + 0.4 })
+		else
+			local s = rampSide(seg)
+			table.insert(plinthCuts, { math.min(s * 20, s * 80), math.max(s * 20, s * 80) })
 		end
 		for _, r in ipairs(facadeRuns(seg, F.out + 0.3, plinthCuts)) do
 			box(base, seg, "FacadePlinth", r[1], r[2], 0, 1.6 - k, F.out - 0.1, F.out + 0.3, PLINTH_STONE, Enum.Material.Granite)
+		end
+		-- sponsor boards between the masts (corners: on the side away from the ramp)
+		local boards = seg.kind == "side" and { -120, 120 } or seg.kind == "end" and { -100, 100 } or { -44 * rampSide(seg) }
+		for _, x in ipairs(boards) do
+			sponsorIndex += 1
+			sponsorBoard(base, seg, x, SPONSORS[(sponsorIndex - 1) % #SPONSORS + 1])
 		end
 		if GATE_INFO[seg.name] then
 			-- poster cases beside the gate: the season so far and the next game day
@@ -2251,10 +2280,28 @@ function M.facade(ctx)
 				)
 			end
 		end
-		-- the player banner and the team's cheer on the glass beside every gate
+		-- the player banner and the team's cheer on the glass beside every gate, and an LED ribbon up
+		-- the front of each gate tower (stopping under the team-name sign)
 		local gate = GATE_INFO[seg.name]
 		if gate then
 			gateBanners(lights, seg, gate, team)
+			local ribbonTop = gate.letter == "A" and 87 or 89
+			for _, s in ipairs({ -1, 1 }) do
+				box(
+					lights,
+					seg,
+					"TowerLED",
+					s * 15.6,
+					s * 16.4,
+					PYLON_TOP + 1,
+					ribbonTop,
+					PYLON_FRONT,
+					PYLON_FRONT + 0.12,
+					ledColor(team),
+					Enum.Material.Neon,
+					PAINT
+				)
+			end
 		end
 	end
 end
