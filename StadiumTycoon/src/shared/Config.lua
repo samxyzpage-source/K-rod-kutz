@@ -384,8 +384,10 @@ local function guideLeg(minX, maxX, minZ, maxZ, minY, maxY, up, down)
 end
 -- Guide-beam waypoints in and around the Team HQ (Effects.client.lua). A straight beam can't be
 -- followed through the HQ's walls and floors, so it first points at a door, a corner of the
--- building, the lobby's opening onto the corridor or the stairs. Points stand on the floor; the
--- MinY/MaxY of a box are FEET heights. (Real positions from Builders/HQShell.lua + HQRoomsUpperFront.lua.)
+-- building, the lobby's lane onto the corridor or the stairs. Points stand on the floor; the
+-- MinY/MaxY of a box are FEET heights. (Real positions from Builders/HQShell.lua, the lobby's
+-- furniture in HQRoomsFront.lua, the grand staircase in HQRoomsUpperFront.lua and the skybridges in
+-- CampusLinks.lua: tools/test_server.luau walks the lobby's legs through the real built parts.)
 L.HQGuide = {
 	-- inside the HQ: the main block (L.HQ) and its two towers
 	Building = {

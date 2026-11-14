@@ -6022,8 +6022,8 @@ local function runTests()
 	end
 	do
 		-- PJ-2: in and around the Team HQ the guide beam first points where it can be followed
-		-- (a door, the stairs, a corner of the building, the lobby's opening onto the corridor),
-		-- and it stays on when the button is on another floor right above or below
+		-- (a door, the stairs, a corner of the building, the lobby's lane onto the corridor, a
+		-- skybridge's HQ door), and it stays on when the button is on another floor right above or below
 		local CAMPUS = Config.Layout.Areas.campus
 		local guideOrigin = CFrame.new(400, 0.2, -1500) * CFrame.Angles(0, math.pi, 0) -- (turned like plot 2)
 		local guidePlot = Instance.new("Model")
