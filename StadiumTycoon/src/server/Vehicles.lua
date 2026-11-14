@@ -198,6 +198,7 @@ function Vehicles.BuildCart(at, palette, number)
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = 40
 	gui.MaxDistance = 120 -- (a 2-stud plate can't be read from farther away: stop drawing it)
+	gui.LightInfluence = 1 -- (painted on the plate: lit like it, no glow at night)
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.new(1, 0, 1, 0)
 	label.BackgroundTransparency = 1

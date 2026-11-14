@@ -123,6 +123,7 @@ local function drawPlay(sheet)
 	gui.Face = Enum.NormalId.Front
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	gui.PixelsPerStud = 60
+	gui.LightInfluence = 1 -- (ink on paper: lit like the sheet, it doesn't glow at night)
 	gui.Parent = sheet
 	for index, line in ipairs({
 		{ "PLAY 23", MARKER_RED, 0.04, 0.18 },
@@ -693,6 +694,7 @@ local function buildParts(state, spec)
 				gui.Face = Enum.NormalId.Back
 				gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 				gui.PixelsPerStud = 50
+				gui.LightInfluence = 1 -- (printed on the shirt: lit like the fabric)
 				gui.Parent = panel
 				local isBack = side[1] == "JerseyBack"
 				if isBack then
