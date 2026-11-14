@@ -14,6 +14,7 @@
 	  * parts stay inside the plot bounds
 	  * buy buttons are not buried inside parts that can exist while the button is visible
 	  * the walkway and players' tunnel stay walkable
+	  * the event level (the ground between the bowl and the facade) has no sealed areas
 	and writes parts.json for tools/preview/shoot.js to render.
 ]]
 
@@ -503,6 +504,109 @@ for _, corridor in ipairs(corridors) do
 		for _, entry in ipairs(list) do
 			if not (corridor.ignore and corridor.ignore[id]) and isSolid(entry) and overlaps(corridor.box, entry.box) then
 				addWarning(("%s is blocked by %s/%s"):format(corridor.name, id, entry.part.Name))
+			end
+		end
+	end
+end
+
+-- No sealed rooms on the event level: every walkable ground spot between the lower bowl and the
+-- facade (offsets 60..156) must lead back to the plaza on foot, since players can drop in from the
+-- bridges and ramps above. A flood fill over 1-stud ground cells from the plaza in front of Gate A.
+-- A collidable part (door leaves open) blocks a cell where it fills some of the body's height
+-- (0.3..5.2) above it, unless it is a low thing on the ground to step or jump onto (bottom <= 2, top
+-- <= 6.5). Parts grow by 0.5 so a 2-wide player needs a 2-stud gap.
+do
+	local GX0, GZ0, NX, NZ = -330, -250, 660, 560 -- plot x -330..330, z -250..310
+	local free = table.create(NX * NZ, true)
+	for _, list in pairs(partsByItem) do
+		for _, entry in ipairs(list) do
+			local part, b = entry.part, entry.box
+			if
+				part.CanCollide
+				and part:GetAttribute("Leaf") == nil
+				and b.minY < 5.7
+				and b.maxY > -0.2
+				and b.maxX > GX0
+				and b.minX < GX0 + NX
+				and b.maxZ > GZ0
+				and b.minZ < GZ0 + NZ
+			then
+				local px, py, pz, r00, r01, r02, r10, r11, r12, r20, r21, r22 = part.CFrame:GetComponents()
+				local half = { part.Size.X / 2 + 0.5, part.Size.Y / 2 + 0.5, part.Size.Z / 2 + 0.5 }
+				local rise = { r10, r11, r12 } -- (how fast each local axis climbs along a vertical line)
+				for ix = math.max(0, math.ceil(b.minX - GX0 - 1)), math.min(NX - 1, math.floor(b.maxX - GX0)) do
+					for iz = math.max(0, math.ceil(b.minZ - GZ0 - 1)), math.min(NZ - 1, math.floor(b.maxZ - GZ0)) do
+						-- the stretch [lo, hi] of the vertical line through the cell's centre inside the part
+						local dx, dz = GX0 + ix + 0.5 - px, GZ0 + iz + 0.5 - pz
+						local along = { r00 * dx + r20 * dz, r01 * dx + r21 * dz, r02 * dx + r22 * dz }
+						local lo, hi = -math.huge, math.huge
+						for k = 1, 3 do
+							if math.abs(rise[k]) < 1e-9 then
+								if math.abs(along[k]) > half[k] then
+									lo, hi = 1, 0
+								end
+							else
+								local a, c = (-half[k] - along[k]) / rise[k], (half[k] - along[k]) / rise[k]
+								lo, hi = math.max(lo, math.min(a, c)), math.min(hi, math.max(a, c))
+							end
+						end
+						lo, hi = lo + py, hi + py
+						if lo <= hi and hi > 0.3 and lo < 5.2 and not (lo <= 2 and hi <= 6.5) then
+							free[iz * NX + ix + 1] = false
+						end
+					end
+				end
+			end
+		end
+	end
+	local function flood(start, mark, value)
+		local queue, head, count = { start }, 1, 0
+		mark[start] = value
+		while head <= #queue do
+			local cell = queue[head]
+			head += 1
+			count += 1
+			local ix = (cell - 1) % NX
+			for _, n in ipairs({ ix > 0 and cell - 1, ix < NX - 1 and cell + 1, cell - NX, cell + NX }) do
+				if n and n >= 1 and n <= NX * NZ and free[n] and mark[n] == nil then
+					mark[n] = value
+					table.insert(queue, n)
+				end
+			end
+		end
+		return count
+	end
+	-- (the field counts as a way out too: its stands and players' tunnels lead back to the plaza,
+	-- which the Items order keeps true - see the bowl tests in tools/test_server.luau)
+	local reached = {}
+	for _, start in ipairs({ Vector3.new(0, 0, L.StadiumFrontZ - 20), Vector3.new(0, 0, L.FieldCenterZ) }) do
+		local cell = math.floor(start.Z - GZ0) * NX + math.floor(start.X - GX0) + 1
+		if not free[cell] then
+			addError(("event level check: the start cell at (%g, %g) is blocked"):format(start.X, start.Z))
+		elseif reached[cell] == nil then
+			flood(cell, reached, 0)
+		end
+	end
+	local hx, minZ, maxZ = L.SurfaceHalfX, L.SurfaceMinZ, L.SurfaceMaxZ
+	local function offset(x, z)
+		local dx = math.abs(x) - hx
+		local dz = math.max(minZ - z, z - maxZ)
+		return math.max(dx, dz, (dx + dz) / math.sqrt(2))
+	end
+	local component = 0
+	for iz = 0, NZ - 1 do
+		for ix = 0, NX - 1 do
+			local cell = iz * NX + ix + 1
+			local x, z = GX0 + ix + 0.5, GZ0 + iz + 0.5
+			local o = offset(x, z)
+			if free[cell] and reached[cell] == nil and o >= 60 and o <= L.Bowl.Facade.Inner + 4 then
+				component += 1
+				local size = flood(cell, reached, component)
+				if size >= 400 then
+					addWarning(
+						("event level: %d stud2 of ground around (%.0f, %.0f) has no walkable way back to the plaza"):format(size, x, z)
+					)
+				end
 			end
 		end
 	end
