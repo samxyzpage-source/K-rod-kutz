@@ -723,6 +723,9 @@ local function runTests()
 			)
 			return cf.Position - e, cf.Position + e
 		end
+		local function boxesOverlap(aLo, aHi, bLo, bHi)
+			return aLo.X < bHi.X and aHi.X > bLo.X and aLo.Y < bHi.Y and aHi.Y > bLo.Y and aLo.Z < bHi.Z and aHi.Z > bLo.Z
+		end
 		-- true if the straight line a -> b passes through the part's box
 		local function crosses(part, a, b)
 			local p0 = part.CFrame:PointToObjectSpace(a)
@@ -762,6 +765,34 @@ local function runTests()
 			end
 			table.sort(list)
 			return list
+		end
+		-- the faces of a part that carry text: { { text, normal (world), centre (world) } }
+		local FACE_AXIS = {
+			Right = Vector3.new(1, 0, 0),
+			Left = Vector3.new(-1, 0, 0),
+			Top = Vector3.new(0, 1, 0),
+			Bottom = Vector3.new(0, -1, 0),
+			Back = Vector3.new(0, 0, 1),
+			Front = Vector3.new(0, 0, -1),
+		}
+		local function letteredFaces(part)
+			local faces = {}
+			for _, gui in ipairs(part:GetChildren()) do
+				if gui:IsA("SurfaceGui") then
+					for _, label in ipairs(gui:GetDescendants()) do
+						if label:IsA("TextLabel") and label.Text ~= "" then
+							local axis = FACE_AXIS[gui.Face.Name]
+							table.insert(faces, {
+								text = label.Text,
+								normal = part.CFrame:VectorToWorldSpace(axis),
+								centre = part.CFrame:PointToWorldSpace(axis * part.Size / 2),
+							})
+							break
+						end
+					end
+				end
+			end
+			return faces
 		end
 
 		-- F1: the interview room's PRESS ROOM panel and ON AIR light (on the lobby's east wall) are in
@@ -828,6 +859,42 @@ local function runTests()
 					#poles,
 					table.concat(floating, ", ")
 				)
+			)
+		end
+
+		-- F3: nothing of the team bench area stands in front of the home field wall's ads, screens and
+		-- section plaques, and the plaques still mark the home sections 113..119
+		do
+			local wall = build("lower_home")
+			local bench = partsOf(build("benches"))
+			local panels, covered, plaques = 0, {}, {}
+			for _, panel in ipairs(partsOf(wall)) do
+				if panel.Name == "AdBoard" or panel.Name == "WallScreen" or panel.Name == "SectionSign" then
+					panels += 1
+					local lo, hi = bounds(panel)
+					-- the space between the panel and the field (the home wall faces -Z)
+					local zoneLo, zoneHi = Vector3.new(lo.X, lo.Y, lo.Z - 15), Vector3.new(hi.X, hi.Y, lo.Z)
+					for _, part in ipairs(bench) do
+						local bLo, bHi = bounds(part)
+						if boxesOverlap(zoneLo, zoneHi, bLo, bHi) then
+							covered[("%s x %.0f..%.0f (%s)"):format(panel.Name, lo.X, hi.X, part.Name)] = true
+						end
+					end
+					if panel.Name == "SectionSign" then
+						local face = letteredFaces(panel)[1]
+						table.insert(plaques, face and face.text or "?")
+					end
+				end
+			end
+			local list = keysOf(covered)
+			table.sort(plaques)
+			check(
+				panels > 10 and #list == 0,
+				"no bench, board or tent stands in front of a home field-wall panel " .. table.concat(list, ", ")
+			)
+			check(
+				table.concat(plaques, ",") == "SEC 113,SEC 114,SEC 115,SEC 116,SEC 117,SEC 118,SEC 119",
+				"the home field wall's plaques mark sections 113..119: " .. table.concat(plaques, ",")
 			)
 		end
 	end
