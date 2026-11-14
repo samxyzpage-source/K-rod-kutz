@@ -115,6 +115,7 @@ Config.KickGame = {
 	PowerMax = 0.95,
 	MeterSeconds = 1.6, -- how long one sweep of the aim / power meter takes
 	MinMeterSeconds = 0.8, -- a kick sent back faster than this after the offer is ignored (no bots)
+	MeterTimeoutSeconds = 15, -- an open meter closes by itself after this long (the offer stays live as long)
 	RewardCooldownSeconds = 60, -- good kicks pay at most once per minute (the rest are practice)
 	RewardIncomeSecondsPerYard = 0.25, -- reward = yards * 8 + base income * yards * this
 	Spots = {

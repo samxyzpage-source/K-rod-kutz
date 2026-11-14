@@ -172,8 +172,16 @@ local function onPadTouched(plot, index, hit)
 		return
 	end
 	lastKick[player] = now
+	-- Stepping back onto the spot that is already offered (a jump landing, a shuffle) keeps the
+	-- offer time while its meter can still be open: a fresh time would make the kick that is
+	-- already on its way look instant (MinMeterSeconds) and it would be dropped.
+	local live = pending[player] == index
+		and offeredAt[player] ~= nil
+		and now - offeredAt[player] <= Config.KickGame.MeterTimeoutSeconds + 1
+	if not live then
+		offeredAt[player] = now
+	end
 	pending[player] = index
-	offeredAt[player] = now
 	local spot = Config.KickGame.Spots[index]
 	kickStart:FireClient(player, index, spot.Yards, spot.Name)
 end

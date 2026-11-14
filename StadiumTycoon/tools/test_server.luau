@@ -1255,6 +1255,42 @@ local function runTests()
 		Config.KickGame.CooldownSeconds = 3
 		Config.KickGame.MinMeterSeconds = 0.8
 	end
+	do
+		-- Space locks the aim and (in a real game) jumps: the landing touches the spot again after the
+		-- touch cooldown, while the meter is still open. With the real cooldown and meter minimum the
+		-- kick locked right after that landing must still be judged.
+		local k = Config.KickGame
+		local pads = KickGame.GetPads(alicePlot)
+		alice.Character.HumanoidRootPart.CFrame = pads[2].CFrame * CFrame.new(0, 3, 0)
+		local cooldown = k.CooldownSeconds
+		k.CooldownSeconds = 0 -- (only skips what is left of the cooldown from the kicks above)
+		local firesBefore = #clientFires
+		touch(pads[2], alice)
+		k.CooldownSeconds = cooldown
+		local offered = #clientFires == firesBefore + 1 and clientFires[#clientFires].remote == "KickStart"
+		touch(pads[2], alice) -- shuffling on the spot inside the cooldown changes nothing
+		local quiet = #clientFires == firesBefore + 1
+		task.wait(cooldown + 0.1)
+		touch(pads[2], alice) -- the jump lands: the client ignores the new KickStart (its meter is open)
+		local reoffered = #clientFires == firesBefore + 2
+		task.wait(0.1)
+		local notesBefore = #notifications
+		KickGame._onAttempt(alice, 2, 0, 1)
+		local judged = false
+		for index = notesBefore + 1, #notifications do
+			if notifications[index].player == alice and notifications[index].message:find("IT'S GOOD") then
+				judged = true
+			end
+		end
+		check(offered and quiet and reoffered, "a touch inside the cooldown is ignored, the landing after it re-offers the spot")
+		check(
+			judged,
+			("a kick locked 0.1s after landing back on the spot still counts (%gs cooldown, %gs meter minimum)"):format(
+				cooldown,
+				k.MinMeterSeconds
+			)
+		)
+	end
 
 	section("Staff + game-day results")
 	do
@@ -2153,9 +2189,11 @@ local function runTests()
 			task.wait(0.03)
 		end
 		task.wait(0.1)
-		UserInputServiceMock.InputBegan:Fire({ KeyCode = Enum.KeyCode.Space }, false)
+		local kickAction = boundActions.TycoonKickMeter
+		local spaceResult = kickAction and kickAction("TycoonKickMeter", Enum.UserInputState.Begin, { KeyCode = Enum.KeyCode.Space })
 		task.wait(0.2)
 		check(meter:FindFirstChild("Instruction", true).Text:find("POWER") ~= nil, "space locks the aim, then power")
+		check(spaceResult == Enum.ContextActionResult.Sink, "the open meter sinks Space / E / A (no jump back onto the kick spot)")
 		instanceSignal(meter:FindFirstChild("Kick", true), "Activated"):Fire()
 		task.wait(0.05)
 		check(
@@ -2168,7 +2206,7 @@ local function runTests()
 		viewer.Character.HumanoidRootPart.CFrame = CFrame.new(500, 3, 500)
 		RunServiceMock.RenderStepped:Fire(0.016)
 		task.wait(0.05)
-		check(not meter.Enabled, "walking away closes the meter")
+		check(not meter.Enabled and boundActions.TycoonKickMeter == nil, "walking away closes the meter (and gives the keys back)")
 		viewer.Character.HumanoidRootPart.CFrame = CFrame.new(0, 3, 0)
 	end
 
