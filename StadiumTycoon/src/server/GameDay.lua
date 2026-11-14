@@ -389,23 +389,29 @@ GameDay._planPlays = planPlays
 local function endGameDay(plot, game)
 	local state = stateOf(plot)
 	local owner = plot.Owner
+	local now = serverNow()
 	local cooldown = math.max(0, settings.CooldownSeconds or 0)
 	state.Active = false
 	state.EndsAt = nil
 	state.Crowd = nil -- (it leaves below)
-	state.ReadyAt = serverNow() + cooldown
+	state.ReadyAt = now + cooldown
+	for userId, readyAt in pairs(readyAtByUser) do
+		if readyAt <= now then
+			readyAtByUser[userId] = nil
+		end
+	end
 	if owner then
 		readyAtByUser[owner.UserId] = state.ReadyAt
 	end
+	plotManager.SetGameDay(plot, false, 1)
 	plotManager.SetScore(plot, game.Home, game.Away)
+	refresh(plot)
 	for _, hook in ipairs(endedHooks) do
 		local ok, err = pcall(hook, plot, game)
 		if not ok then
 			warn("[GameDay] end hook failed: " .. tostring(err))
 		end
 	end
-	plotManager.SetGameDay(plot, false, 1)
-	refresh(plot)
 	if cooldown > 0 then
 		notify(owner, ("Game over! Your next game is ready in %s."):format(clock(cooldown)), "info")
 	else

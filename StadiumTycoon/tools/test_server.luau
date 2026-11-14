@@ -3510,6 +3510,28 @@ local function runTests()
 		)
 		check(model1:GetAttribute("GameDayActive") == false and model1:GetAttribute("GameDayStatus") == nil, "the freed plot stays quiet")
 
+		-- coming back: the franchise is rebuilt over several frames; no kick-off until it's done
+		Config.BuildFrameBudget = 0 -- (one step per frame)
+		hank.Parent = Players
+		table.insert(Players.list, hank)
+		local fromRejoin = #notifications + 1
+		task.spawn(PlotManager.Claim, hankPlot, hank, hankProfile)
+		local okRebuild, whyRebuild = GameDay.RequestStart(hank)
+		check(
+			hankPlot.Building and model1:GetAttribute("GameDayStatus") == "building" and not okRebuild,
+			"while a returning owner's franchise is rebuilt, the game waits: " .. tostring(whyRebuild)
+		)
+		check(
+			waitUntil(function()
+				return not hankPlot.Building and model1:GetAttribute("GameDayStatus") == "ready"
+			end, 2),
+			"then it's ready"
+		)
+		check(not said(hank, fromRejoin, "press START GAME"), "(a returning owner isn't told again that the game is ready)")
+		Config.BuildFrameBudget = math.huge
+		removePlayer(hank)
+		PlotManager.Release(hank)
+
 		-- back to how the later tests expect plot 1: hank owns it, nothing built
 		for stage = 1, 3 do
 			hankProfile.Owned["goalposts:" .. stage] = nil
