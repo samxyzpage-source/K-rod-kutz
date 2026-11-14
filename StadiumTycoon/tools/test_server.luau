@@ -3356,6 +3356,16 @@ local function runTests()
 		)
 		task.wait(0.1)
 		check((crowdOf(hankPlot)) == 0, "no seated fans in a stadium without stands")
+		-- new team colours in the middle of the game: the plot is rebuilt, the game goes on
+		check(PlotManager.ApplyTeam(hank, Config.TeamColors[2], "TESTGD"), "(new team colours during the game)")
+		task.wait(0.05)
+		check(
+			not hankPlot.Building
+				and GameDay.IsActive(hankPlot)
+				and model1:GetAttribute("GameDayStatus") == "active"
+				and hank:GetAttribute("Income") == hankIncome * Config.GameDay.IncomeMultiplier,
+			"a team change during the game day doesn't stop it (or its boost)"
+		)
 
 		-- the first game ends: the result stays on the board, the cooldown starts
 		local fromEnd = #notifications + 1
@@ -3384,6 +3394,9 @@ local function runTests()
 		local okRest, whyRest = GameDay.RequestStart(alice2)
 		check(not okRest and tostring(whyRest):find("ready in") ~= nil, "no new game during the cooldown: " .. tostring(whyRest))
 		Config.GameDay.CooldownSeconds = 2.5 -- (the second game's cooldown: time to leave and come back during it)
+		-- (the plot is "being rebuilt" (e.g. new team colours) while this cooldown runs out: see below)
+		local fromReady = #notifications + 1
+		fullPlot.Building = true
 		sampling = false
 		local rising, last = true, { 0, 0 }
 		for _, sample in ipairs(samples) do
@@ -3412,10 +3425,8 @@ local function runTests()
 			"the crowd leaves afterwards"
 		)
 
-		-- the cooldown runs out (here while the plot is being rebuilt, e.g. for new team colours):
-		-- once the game can really start, the owner is told and START GAME comes back
-		local fromReady = #notifications + 1
-		fullPlot.Building = true
+		-- the cooldown runs out while the plot is being rebuilt: once the game can really start, the
+		-- owner is told and START GAME comes back
 		check(
 			waitUntil(function()
 				return model2:GetAttribute("GameDayStatus") == "building"
