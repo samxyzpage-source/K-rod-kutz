@@ -14,7 +14,9 @@
 	  * parts stay inside the plot bounds
 	  * buy buttons are not buried inside parts that can exist while the button is visible
 	  * the walkway and players' tunnel stay walkable
+	  * nothing collidable taller than 0.4 stands on a road or path golf carts use
 	  * the event level (the ground between the bowl and the facade) has no sealed areas
+	  * the HQ shell's team colours carry their palette roles (a team change repaints them)
 	and writes parts.json for tools/preview/shoot.js to render.
 ]]
 
@@ -492,8 +494,7 @@ corridor(
 	{ MinX = L.CampusRoad.MinX + 1, MaxX = L.CampusRoad.MaxX - 1, MinZ = L.CampusRoad.MinZ, MaxZ = L.CampusRoad.MaxZ },
 	1,
 	0,
-	"campus",
-	{ PlotBase = true }
+	"campus"
 )
 corridor("HQ entrance", L.HQEntranceWalk, 1, 0, "campus")
 corridor("HQ corridor", L.HQCorridor, 1, 0, "campus")
@@ -504,6 +505,64 @@ for _, corridor in ipairs(corridors) do
 		for _, entry in ipairs(list) do
 			if not (corridor.ignore and corridor.ignore[id]) and isSolid(entry) and overlaps(corridor.box, entry.box) then
 				addWarning(("%s is blocked by %s/%s"):format(corridor.name, id, entry.part.Name))
+			end
+		end
+	end
+end
+
+-- Golf carts roll over anything up to 0.4 tall (docs/V5-LAYOUT.md), so no collidable part may stand
+-- on a road or path between 0.4 and a cart's height (7): the rectangles are PlotBase's own flush
+-- strips (the service roads round the stadium, the cart road, the campus + back roads, the plaza
+-- walkway and the back walk). Gate turnstiles, the claim gate and signs over the roads don't collide.
+do
+	local roadNames = {
+		FrontServiceRoad = "front service road",
+		WestServiceRoad = "west service road",
+		EastServiceRoad = "east service road",
+		CartRoad = "cart road",
+		CampusRoad = "campus road",
+		BackRoad = "back road",
+		Walkway = "plaza walkway",
+		BackWalk = "back walk (Gate D -> campus road)",
+	}
+	local roads, found = {}, {}
+	for _, entry in ipairs(partsByItem.PlotBase or {}) do
+		local name = roadNames[entry.part.Name]
+		if name then
+			found[entry.part.Name] = true
+			table.insert(roads, { name = name, box = entry.box })
+		end
+	end
+	if okBase then
+		for partName in pairs(roadNames) do
+			if not found[partName] then
+				addError("cart road check: PlotBase has no road strip named " .. partName)
+			end
+		end
+	end
+	for _, road in ipairs(roads) do
+		local r = road.box
+		for id, list in pairs(partsByItem) do
+			for _, entry in ipairs(list) do
+				local b = entry.box
+				if
+					entry.part.CanCollide
+					and b.maxY > 0.41
+					and b.minY < 7
+					and b.minX < r.maxX - 0.05
+					and b.maxX > r.minX + 0.05
+					and b.minZ < r.maxZ - 0.05
+					and b.maxZ > r.minZ + 0.05
+				then
+					addWarning(
+						("%s: %s/%s stands in the way of golf carts (top %.2f; carts roll over 0.4)"):format(
+							road.name,
+							id,
+							entry.part.Name,
+							b.maxY
+						)
+					)
+				end
 			end
 		end
 	end
