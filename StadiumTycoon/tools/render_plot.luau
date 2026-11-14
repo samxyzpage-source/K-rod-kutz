@@ -16,7 +16,8 @@
 	  * the walkway and players' tunnel stay walkable
 	  * nothing collidable taller than 0.4 stands on a road or path golf carts use
 	  * the event level (the ground between the bowl and the facade) has no sealed areas
-	  * the HQ shell's team colours carry their palette roles (a team change repaints them)
+	  * the plot base's team colours (gate, vault, bus stops, border, HQ shell) carry their palette
+	    roles (a team change repaints them) and team-coloured text stays readable in every palette
 	and writes parts.json for tools/preview/shoot.js to render.
 ]]
 
@@ -844,7 +845,8 @@ for _, e in ipairs(elevatorTargets) do
 end
 
 ---------------------------------------------------------------------------------------------
--- Team colours: a team change repaints the always-present HQ shell in place by palette role
+-- Team colours: a team change repaints the always-present plot base (gate, vault, bus stops,
+-- border, HQ shell...) in place by palette role
 -- (PlotManager.ApplyTeam: TeamRole on parts, TeamTextRole / TeamBackRole on text and panels).
 -- Build it in every palette: whatever changes with the palette must carry the role whose colour it
 -- has in every build, and text on or in team colours must stay readable (contrast 3) in all of them.
@@ -858,8 +860,7 @@ do
 		if not ok then
 			addError(("PlotBase failed with palette %d: %s"):format(index, tostring(err)))
 		end
-		local hq = holder:FindFirstChild("HQShell", true)
-		builds[index] = hq and hq:GetDescendants() or {}
+		builds[index] = holder:GetDescendants()
 	end
 	local function same(a, b)
 		return math.abs(a.R - b.R) < 0.002 and math.abs(a.G - b.G) < 0.002 and math.abs(a.B - b.B) < 0.002
@@ -902,7 +903,7 @@ do
 		end
 	end
 	if not sameTree then
-		addError("the HQ shell must build the same instances in every team palette (the team colour check compares them)")
+		addError("the plot base must build the same instances in every team palette (the team colour check compares them)")
 	else
 		local channels = {
 			{ "BasePart", "Color", "TeamRole" },

@@ -197,7 +197,8 @@ local function ride(prompt, player)
 		transitionRemote:FireClient(player, prompt:GetAttribute("Label") or "")
 	end
 	task.wait(RIDE_FADE_SECONDS)
-	if character.Parent == nil or player.Character ~= character then
+	-- (sat down during the fade, e.g. in a golf cart: moving them would drag the seat along)
+	if character.Parent == nil or player.Character ~= character or humanoid.SeatPart then
 		return
 	end
 	character:PivotTo(target * CFrame.new(0, 3, 0))

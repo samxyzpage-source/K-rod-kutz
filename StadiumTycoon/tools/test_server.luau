@@ -2561,7 +2561,7 @@ local function runTests()
 		check(
 			base1:FindFirstChild("BorderFront", true):GetAttribute("TeamRole") == "Primary"
 				and base1:FindFirstChild("GateBeam", true):GetAttribute("TeamRole") == "Secondary"
-				and gateSign:GetAttribute("TeamTextRole") == "Trim"
+				and gateSign:GetAttribute("TeamTextRole") == nil -- (white text reads on every Primary)
 				and gateSign:GetAttribute("TeamBackRole") == "Primary",
 			"the plot base's team-coloured parts and signs say which team colour they use"
 		)

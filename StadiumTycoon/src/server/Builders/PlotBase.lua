@@ -237,22 +237,23 @@ function PlotBase.PlotBase(ctx)
 		),
 		"Secondary"
 	)
+	-- white text: readable on every palette's Primary (a palette's Trim isn't, e.g. red on royal blue)
+	local gateInk = Color3.fromRGB(245, 245, 245)
 	local _, gateSign = BuildUtil.SurfaceText(beam, Enum.NormalId.Front, "CLAIM THIS STADIUM", {
 		LabelName = "GateSign",
-		TextColor3 = team.Trim,
+		TextColor3 = gateInk,
 		BackgroundColor3 = team.Primary,
 		BackgroundTransparency = 0,
 		PixelsPerStud = 25,
 	})
 	local _, gateBack = BuildUtil.SurfaceText(beam, Enum.NormalId.Back, "GRIDIRON STADIUM", {
 		LabelName = "GateBackSign",
-		TextColor3 = team.Trim,
+		TextColor3 = gateInk,
 		BackgroundColor3 = team.Primary,
 		BackgroundTransparency = 0,
 		PixelsPerStud = 25,
 	})
 	for _, label in ipairs({ gateSign, gateBack }) do
-		label:SetAttribute("TeamTextRole", "Trim")
 		label:SetAttribute("TeamBackRole", "Primary")
 	end
 
