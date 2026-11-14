@@ -31,50 +31,69 @@
 	                                           outer girder, the outer wall (offset 107.2..108) with
 	                                           16-wide escalator openings + lit GATE signs (look) on the
 	                                           gate axes, lounge carpets, ceilings + light strips over
-	                                           the ends, corners and side lounges, 8 bars (soda /
-	                                           sports drink / smoothie)
-	                   2 Buffet                buffet islands in both end lounges (tray + hot dogs),
-	                                           popcorn carts, food stations in the corners
+	                                           the ends, corners and side lounges, a dark wood wainscot
+	                                           along the outer wall, a team-colour carpet stripe along
+	                                           the lane's inner edge, 8 bars (soda / sports drink /
+	                                           smoothie: the name on the counter, sodas + juices on a
+	                                           glass shelf on the back bar, a tap tower, cooler or
+	                                           blender on the counter)
+	                   2 Buffet                buffet islands in both end lounges (tray + hot dogs) with
+	                                           heat lamp posts + plate stacks, popcorn carts, food
+	                                           stations in the corners
 	                   3 Lounge Seating        drink rails with stools along the front (one CLUB LOUNGE
 	                                           CAM stool per end + corner), sofas, armchairs, coffee
 	                                           tables, rugs, standing high-top tables, painted CLUB
-	                                           floor logos
+	                                           floor logos, potted plants by the end escalators
 	                   4 Club Screens          live screens over the bars and above the buffets, CLUB
-	                                           signs, a wall of fame (look) and trophy cases (look)
+	                                           signs, a wall of fame + a Fan of the Game wall (look) and
+	                                           trophy cases (look) with balls, cups and rings inside
 	  suites           1 Suite Corridor        corridor ceiling, room-row ceilings, carpet with a team
-	                                           stripe, the corridor wall (door openings), light strips,
-	                                           wood panelling, overhead wayfinding signs, SUITE LEVEL
-	                                           panels + photo walls (look)
+	                                           stripe, the corridor wall (door openings) with a framed
+	                                           photo beside every suite's sign, light strips, wood
+	                                           panelling, overhead wayfinding signs, SUITE LEVEL panels
+	                                           + photo walls (look)
 	                   2 Glass Fronts          glass fronts (team header with the name), end walls,
 	                                           dividers and a door per suite
 	                   3 Suite Interiors       carpet, stadium chairs at the glass (one SUITE CAM seat),
-	                     & Signs               sofa, live score TV, mini-bar (soda / popcorn), a cove
-	                                           light per block (a PointLight over every suite), number
-	                                           sign (look); the Owner's Suite + Legends Suite get
-	                                           extras (owner's chair, popcorn machine, signed-ball case)
+	                     & Signs               sofa on a team rug, live score TV on a walnut media wall,
+	                                           mini-bar (soda / popcorn) + glass-door mini fridge, a
+	                                           framed jersey in the suite's theme, a cove light per
+	                                           block (a PointLight over every suite), number sign
+	                                           (look); the Owner's Suite + Legends Suite get extras
+	                                           (owner's chair, popcorn machine, golden football (look),
+	                                           signed-ball case with balls on a shelf)
 	  pressbox         1 Press Box Shell       walls, glass front, ceiling, lights, sliding glass double
-	                                           door, signs
+	                                           door, signs, framed press photos on the corridor side,
+	                                           an aisle runner, a framed front page (look)
 	                   2 Press Row             desk with 6 PRESS BOX CAM seats + live monitors +
-	                                           nameplates, PA microphone, a second row on two risers
-	                                           either side of a centre aisle from the door, stat
-	                                           boards, game clock, coffee & soda bar, cooler, copier,
+	                                           nameplates + keyboards, radio headsets, cups, PA
+	                                           microphone, a second row on two risers either side of a
+	                                           centre aisle from the door (laptops, stat sheets), TVs
+	                                           hung over the window, stat boards, game clock, coffee &
+	                                           soda bar with a chalkboard menu, cooler, copier,
 	                                           credentials
 	                   3 Coaches' Booths       home + visiting coaches' booths (|x| 29.3..44): glass,
-	                                           doors, desks with camera seats, headsets, binoculars,
-	                                           live depth chart, play sheet
+	                                           doors, a framed photo outside, desks with camera seats,
+	                                           headsets, binoculars, sideline phone (look), playbook
+	                                           tablet, drink, live depth chart, play sheet
 	                   4 Roof & TV Cameras     a team-colour roof visor over the club seats' top row with
 	                                           a PRESS BOX sign, three TV cameras (look) and antennas
-	  broadcast_booth  1 Booth                 walls, ceiling, lights, double door, sill + header,
-	                                           producer's desk, live monitor wall, equipment rack
-	                   2 Glass & Cameras       glass, commentators' desk with 3 TV BROADCAST seats, desk
-	                                           monitors, microphones, field + studio cameras, ON AIR
-	                                           light, softbox studio lights, telestrator (look), stats
-	                                           desk, guest couch
+	  broadcast_booth  1 Booth                 walls, ceiling, lights, double door, sill + header, framed
+	                                           photos + an ON AIR sign on the corridor side, producer's
+	                                           desk with a mixing console, live monitor wall, equipment
+	                                           rack with status lights, the show's rundown (look),
+	                                           soundproofing panels
+	                   2 Glass & Cameras       glass in a steel frame, commentators' desk with 3 TV
+	                                           BROADCAST seats, desk monitors, microphones, headsets,
+	                                           coffee, spotting boards (look), field + studio cameras on
+	                                           tripods, ON AIR light, softbox studio lights, a lighting
+	                                           pipe with stage lights, telestrator (look), stats desk,
+	                                           guest couch
 	                   3 Satellite Dish        an uplink deck over the club seats with the dish (look),
 	                                           uplink box and an antenna with a beacon
 
-	Flat layers: ring floor top 54 (corners 53.96); carpets 54.05 (corners 54.01); corridor stripe +
-	rugs 54.08 (corners 54.04).
+	Flat layers: ring floor top 54 (corners 53.96); carpets 54.05 (corners 54.01); corridor + lounge
+	stripes and rugs 54.08 (corners 54.04).
 	Ceilings 65.3..66 (corners 65.34..65.96) end at the outer wall's inner face (107.2); headers of
 	the glass fronts 80..80.6 run up to 66, so the room ceilings start behind them at 80.6. The roof
 	visors (press box, TV uplink deck) reach out over the club seats' top rows (offsets 75.4..80,
@@ -171,6 +190,30 @@ local POPCORN_RED = Color3.fromRGB(200, 30, 36)
 local GOLD = Color3.fromRGB(255, 190, 40)
 local GLASS_TINT = Color3.fromRGB(160, 210, 240)
 local SIGN_DARK = Color3.fromRGB(20, 24, 34)
+local FOLIAGE = Color3.fromRGB(62, 118, 64)
+local PLANTER = Color3.fromRGB(44, 46, 52)
+local FOOTBALL = Color3.fromRGB(128, 74, 42)
+local SMOOTHIE_PINK = Color3.fromRGB(236, 118, 150)
+local FRIDGE_GLASS = Color3.fromRGB(34, 52, 62)
+local LED_GREEN = Color3.fromRGB(60, 220, 110)
+local LED_BLUE = Color3.fromRGB(70, 150, 255)
+-- soda + juice bottles on the back bars and in the suites' mini fridges (no alcohol anywhere)
+local BOTTLE_COLORS = {
+	Color3.fromRGB(116, 58, 30), -- cola
+	Color3.fromRGB(255, 140, 30), -- orange soda
+	Color3.fromRGB(126, 204, 62), -- lime
+	Color3.fromRGB(226, 58, 70), -- cherry
+	Color3.fromRGB(78, 168, 232), -- blue sports drink
+	Color3.fromRGB(246, 206, 84), -- lemonade
+	Color3.fromRGB(150, 84, 170), -- grape juice
+}
+-- the "photos" in the suite corridor's frames (backgrounds behind the captions)
+local PHOTO_TONES = {
+	Color3.fromRGB(56, 108, 64), -- a sunny field
+	Color3.fromRGB(66, 92, 138), -- an evening sky
+	Color3.fromRGB(116, 82, 58), -- an old sepia print
+	Color3.fromRGB(44, 48, 60), -- a night game
+}
 
 ---------------------------------------------------------------------------------------------
 -- Colour + text helpers
@@ -531,6 +574,116 @@ local function tvCamera(ctx, seg, x, o, baseY, dir, postH, extra)
 	return body
 end
 
+-- A thin rod between two segment points a and b ({ x, y, o }), not collidable.
+local function strut(ctx, seg, name, a, b, diameter, color)
+	local p0 = at(seg, a[1], a[2], a[3]).Position
+	local p1 = at(seg, b[1], b[2], b[3]).Position
+	return BuildUtil.Part(ctx, {
+		Name = name,
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new((p1 - p0).Magnitude, diameter, diameter),
+		-- (a cylinder's axis is its local X)
+		CFrame = CFrame.lookAt((p0 + p1) / 2, p1) * CFrame.Angles(0, math.pi / 2, 0),
+		Color = color,
+		Material = Enum.Material.Metal,
+		CanCollide = false,
+	})
+end
+
+-- Three tripod legs splayed out from a camera's post at (x, o): from `hipY` down to the floor.
+local function tripodLegs(ctx, seg, x, o, floorY, hipY, spread)
+	for _, angle in ipairs({ math.pi / 2, math.pi * 7 / 6, math.pi * 11 / 6 }) do
+		local foot = { x + spread * math.cos(angle), floorY + 0.06, o + spread * math.sin(angle) }
+		strut(ctx, seg, "TripodLeg", { x, hipY, o }, foot, 0.14, DARK_METAL)
+	end
+end
+
+--[[
+	Rows of soda and juice bottles drawn on one face of a part (a back bar, a fridge door):
+	rows = { { bottom, top }, ... } in studs above the part's bottom, a bottle every opts.Spacing
+	studs, opts.Inset studs in from each end. opts.Panel = the colour of a door panel behind them
+	(inset by opts.Inset; nil = none), opts.Seed shuffles the colours. Ordinary lit paint (no glow);
+	the shelves are real parts.
+]]
+local function bottleRows(part, face, rows, opts)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "BottlesGui"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 12
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.Parent = part
+	local width = (face == Enum.NormalId.Left or face == Enum.NormalId.Right) and part.Size.Z or part.Size.X
+	local height = part.Size.Y
+	local inset = opts.Inset
+	if opts.Panel then
+		local panel = Instance.new("Frame")
+		panel.Name = "DoorPanel"
+		panel.BorderSizePixel = 0
+		panel.BackgroundColor3 = opts.Panel
+		panel.Position = UDim2.new(inset / width, 0, inset / height, 0)
+		panel.Size = UDim2.new(1 - 2 * inset / width, 0, 1 - 2 * inset / height, 0)
+		panel.Parent = gui
+	end
+	local count = math.max(1, math.floor((width - 2 * inset) / opts.Spacing))
+	local step = (width - 2 * inset) / count
+	local bottleWidth = math.min(step * 0.55, 0.42)
+	for r, row in ipairs(rows) do
+		for index = 1, count do
+			local bottle = Instance.new("Frame")
+			bottle.Name = "Bottle"
+			bottle.BorderSizePixel = 0
+			bottle.ZIndex = 2
+			bottle.BackgroundColor3 = BOTTLE_COLORS[(index * 3 + r * 5 + (opts.Seed or 0)) % #BOTTLE_COLORS + 1]
+			-- every third one is a short can
+			local tall = (row[2] - row[1]) * ((index + r) % 3 == 0 and 0.62 or 1)
+			local x = inset + (index - 0.5) * step
+			bottle.Size = UDim2.new(bottleWidth / width, 0, tall / height, 0)
+			bottle.Position = UDim2.new((x - bottleWidth / 2) / width, 0, (height - row[1] - tall) / height, 0)
+			bottle.Parent = gui
+		end
+	end
+	return gui
+end
+
+-- A framed "photo" on one face of a part (the part is the frame): a picture of a stadium (sky in
+-- `tone` over a green field) with a caption along its bottom. Ordinary lit paint (no glow).
+local function picture(part, face, caption, tone)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "PictureGui"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 20
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	gui.Parent = part
+	local sky = Instance.new("Frame")
+	sky.Name = "Picture"
+	sky.BorderSizePixel = 0
+	sky.BackgroundColor3 = tone
+	sky.Position = UDim2.new(0.07, 0, 0.09, 0)
+	sky.Size = UDim2.new(0.86, 0, 0.82, 0)
+	sky.Parent = gui
+	local field = Instance.new("Frame")
+	field.Name = "Field"
+	field.BorderSizePixel = 0
+	field.BackgroundColor3 = Color3.fromRGB(70, 132, 74)
+	field.Position = UDim2.new(0, 0, 0.58, 0)
+	field.Size = UDim2.new(1, 0, 0.42, 0)
+	field.Parent = sky
+	local label = Instance.new("TextLabel")
+	label.Name = "Caption"
+	label.BackgroundTransparency = 1
+	label.Position = UDim2.new(0.05, 0, 0.66, 0)
+	label.Size = UDim2.new(0.9, 0, 0.26, 0)
+	label.Font = Enum.Font.GothamBold
+	label.Text = caption
+	label.TextColor3 = WHITE
+	label.TextScaled = true
+	label.ZIndex = 2
+	label.Parent = sky
+	return gui
+end
+
 ---------------------------------------------------------------------------------------------
 -- CLUB LOUNGE
 ---------------------------------------------------------------------------------------------
@@ -587,14 +740,39 @@ local BARS = {
 	},
 }
 
-local function bar(ctx, seg, spec, team)
+--[[
+	A bar against the outer wall: a walnut counter with the bar's name on its front (facing the lane),
+	a marble top (the drinks prompt in its middle), a back bar with rows of sodas and juices on a
+	glass shelf over a team-colour glow strip, and a drinks prop on the counter 5 studs in from its
+	+x end, clear of the prompt: a soda tap tower, a sports drink cooler or a smoothie blender.
+	`index` shuffles the bottle colours from bar to bar.
+]]
+local function bar(ctx, seg, spec, team, index)
 	local x0, x1 = spec[1], spec[2]
 	local fy = seg.floor
-	span(ctx, seg, "BarCounter", x0, x1, BAR_FRONT + 0.15, 105.6, fy, fy + 3.2, WALNUT, Enum.Material.Wood)
+	local counter = span(ctx, seg, "BarCounter", x0, x1, BAR_FRONT + 0.15, 105.6, fy, fy + 3.2, WALNUT, Enum.Material.Wood)
+	-- (the name goes on the counter: the back bar's lower half hides behind it)
+	write(counter, TOWARD_FIELD, spec[4], ink(WALNUT, team), { Top = 0.2, Height = 0.5, Left = 0.12, Width = 0.76 })
 	local top = span(ctx, seg, "BarTop", x0 - 0.2, x1 + 0.2, BAR_FRONT, 105.8, fy + 3.2, fy + 3.5, MARBLE, Enum.Material.Marble)
 	local back = span(ctx, seg, "BackBar", x0, x1, 106.3, WALL_IN, fy, fy + 6.2, DARK_WOOD, Enum.Material.Wood)
-	write(back, TOWARD_FIELD, spec[4], ink(DARK_WOOD, team), { Top = 0.62, Height = 0.3, Left = 0.1, Width = 0.8, Glow = true })
 	span(ctx, seg, "BarGlow", x0 + 0.4, x1 - 0.4, 106.15, 106.3, fy + 3.7, fy + 3.85, team.Secondary, Enum.Material.Neon, PAINT)
+	span(ctx, seg, "BackBarShelf", x0 + 0.4, x1 - 0.4, 105.85, 106.3, fy + 4.9, fy + 5.02, GLASS_TINT, Enum.Material.Glass, {
+		Transparency = 0.3,
+		CanCollide = false,
+	})
+	bottleRows(back, TOWARD_FIELD, { { 3.9, 4.75 }, { 5.02, 5.95 } }, { Spacing = 1.25, Inset = 0.6, Seed = index })
+	local px, po, pt = x1 - 5, 105.15, fy + 3.5
+	if spec[3] == "soda" then
+		local tower = span(ctx, seg, "SodaTower", px - 1, px + 1, po - 0.35, po + 0.35, pt, pt + 1.8, BRUSHED, Enum.Material.Metal)
+		span(ctx, seg, "SodaTaps", px - 0.8, px + 0.8, po - 0.55, po - 0.35, pt + 0.8, pt + 1.25, team.Secondary, nil, NO_COLLIDE)
+		write(tower, TOWARD_FIELD, "COLA  ORANGE  LIME", INK, { Top = 0.06, Height = 0.22, Font = Enum.Font.GothamBold })
+	elseif spec[3] == "sportsdrink" then
+		post(ctx, seg, "DrinkCooler", px, po, pt, pt + 2, 1.6, COOLER_ORANGE, Enum.Material.SmoothPlastic)
+		post(ctx, seg, "CupStack", px - 1.5, po, pt, pt + 1.3, 0.5, WHITE, Enum.Material.SmoothPlastic, NO_COLLIDE)
+	else
+		span(ctx, seg, "BlenderBase", px - 0.55, px + 0.55, po - 0.45, po + 0.45, pt, pt + 0.6, DARK_METAL, Enum.Material.Metal)
+		post(ctx, seg, "BlenderJug", px, po, pt + 0.6, pt + 2, 0.8, SMOOTHIE_PINK, Enum.Material.Glass, { Transparency = 0.15 })
+	end
 	BuildUtil.Use(ctx, top, spec[3], {
 		Object = spec[5],
 		Title = spec[5],
@@ -787,11 +965,61 @@ function M.club_lounge(ctx)
 		end
 	end
 
+	-- a dark wood wainscot along the outer wall (it meets the suite corridor's panelling at +-132)
+	-- and a team-colour stripe in the carpet along the inner edge of the walking lane (96..104), in
+	-- front of the CLUB floor logos
+	for _, seg in ipairs(segs) do
+		local half = seg.len(WALL_IN) / 2
+		local stripeHalf = seg.len(94.7) / 2
+		local pieces, stripes
+		if seg.kind == "side" then
+			pieces = { { -half, -LOUNGE_X + 2 }, { LOUNGE_X - 2, half } }
+			stripes = { { -stripeHalf, -LOUNGE_X }, { LOUNGE_X, stripeHalf } }
+		else
+			pieces = runs(-half, half, seg.gate and { { -GATE_HALF, GATE_HALF } } or {})
+			stripes = { { -stripeHalf, stripeHalf } }
+		end
+		for _, piece in ipairs(pieces) do
+			span(
+				lounge,
+				seg,
+				"Wainscot",
+				piece[1],
+				piece[2],
+				WALL_IN - 0.15,
+				WALL_IN,
+				seg.floor,
+				seg.floor + 3.6,
+				DARK_WOOD,
+				Enum.Material.Wood,
+				PAINT
+			)
+		end
+		for _, piece in ipairs(stripes) do
+			span(
+				lounge,
+				seg,
+				"LoungeStripe",
+				piece[1],
+				piece[2],
+				94.45,
+				94.95,
+				seg.floor + 0.05,
+				seg.floor + 0.08,
+				team.Primary,
+				Enum.Material.Carpet,
+				PAINT
+			)
+		end
+	end
+
 	-- bars against the outer wall
 	local bars = BuildUtil.Child(ctx, "Bars")
+	local barCount = 0
 	for _, seg in ipairs(segs) do
 		for _, spec in ipairs(BARS[seg.name] or {}) do
-			bar(bars, seg, spec, team)
+			barCount += 1
+			bar(bars, seg, spec, team, barCount)
 		end
 	end
 
@@ -834,6 +1062,12 @@ function M.club_lounge(ctx)
 			})
 			local heat = span(food, seg, "HeatLamps", -15, 15, 87.2, 87.6, fy + 6.6, fy + 6.9, HEAT_LAMP, Enum.Material.Neon, PAINT)
 			BuildUtil.Light(heat, "PointLight", { Name = "HeatGlow", Range = 10, Brightness = 0.8, Color = HEAT_LAMP })
+			-- brushed posts at both ends carry the heat lamps and the sneeze guard; a stack of plates
+			-- at each end
+			for _, s in ipairs({ -1, 1 }) do
+				post(food, seg, "HeatLampPost", s * 15.25, 87.4, fy + 3.3, fy + 6.9, 0.25, BRUSHED, Enum.Material.Metal, NO_COLLIDE)
+				post(food, seg, "PlateStack", s * 15.3, 86, fy + 3.3, fy + 3.8, 1.2, WHITE, Enum.Material.SmoothPlastic, NO_COLLIDE)
+			end
 			BuildUtil.Use(ctx, top, "tray", {
 				Object = "Club Buffet",
 				Title = "Club Buffet",
@@ -916,6 +1150,18 @@ function M.club_lounge(ctx)
 				-- standing high-tops fill the far ends of the lounge (clear of the aisle at 78)
 				highTop(seating, seg, s * 84, 86.5)
 				highTop(seating, seg, s * 92, 91)
+				-- potted plants either side of the escalators (between the opening and the bars,
+				-- behind the walking lane; the leaves don't collide)
+				local px = s * 11
+				post(seating, seg, "Planter", px, 105.6, seg.floor, seg.floor + 1.8, 1.8, PLANTER, Enum.Material.Slate)
+				BuildUtil.Ball(seating, {
+					Name = "PlantLeaves",
+					Position = at(seg, px, seg.floor + 3.3, 105.6).Position,
+					Diameter = 3,
+					Color = FOLIAGE,
+					Material = Enum.Material.Grass,
+					CanCollide = false,
+				})
 			end
 			local welcome =
 				span(seating, seg, "ClubFloorLogo", -10, 10, 96.5, 103.5, seg.floor, seg.floor + 0.08, team.Primary, Enum.Material.Carpet, {
@@ -963,6 +1209,13 @@ function M.club_lounge(ctx)
 		corner_ve = { "Championship Rings", "A case of shiny championship rings. Win a title and yours goes here!", "titles" },
 		corner_he = { "Golden Helmet", "A gold-painted helmet from the team's first ever game.", "team" },
 	}
+	-- what stands in each trophy case: { "ball" | "cup" | "ring", size, colour } either side of its middle
+	local caseTrophies = {
+		corner_hw = { { "ball", 0.9, FOOTBALL }, { "ball", 0.9, FOOTBALL } },
+		corner_vw = { { "cup", 1, GOLD }, { "ball", 0.8, GOLD } },
+		corner_ve = { { "ring", 0.8, GOLD }, { "ring", 0.8, GOLD } },
+		corner_he = { { "ball", 1.4, GOLD }, { "ball", 0.9, FOOTBALL } },
+	}
 	for _, seg in ipairs(segs) do
 		local fy = seg.floor
 		if seg.kind == "end" then
@@ -994,6 +1247,23 @@ function M.club_lounge(ctx)
 				"Photos of every big moment in club history: the first game, the first win... and the first title (still waiting?).",
 				{ LookKey = "titles", Distance = 8 }
 			)
+			-- its twin at the other end of the lounge
+			local fans =
+				span(screens, seg, "FanWall", -100, -84, WALL_IN - 0.2, WALL_IN, fy + 2.2, fy + 9.4, WALNUT, Enum.Material.Wood, PAINT)
+			write(fans, TOWARD_FIELD, "FAN OF THE GAME", GOLD, { Top = 0.06, Height = 0.16, Font = Enum.Font.GothamBold })
+			write(fans, TOWARD_FIELD, "THIS WEEK'S LOUDEST CLUB MEMBER\nCOULD BE YOU!", CREAM, {
+				Name = "FanLines",
+				Top = 0.32,
+				Height = 0.4,
+				Font = Enum.Font.Gotham,
+				Wrap = true,
+			})
+			BuildUtil.Look(
+				fans,
+				"Fan of the Game",
+				"Every game day the loudest club member gets their photo up here. Cheer loud enough and it could be you!",
+				{ Distance = 8 }
+			)
 		elseif seg.kind == "corner" then
 			local tv = span(screens, seg, "BarScreen", -12, 12, WALL_IN - 0.3, WALL_IN, fy + 6.8, fy + 10.6, SCREEN, nil, NO_COLLIDE)
 			liveScreen(ctx, tv, TOWARD_FIELD, cornerLive[seg.name])
@@ -1002,7 +1272,28 @@ function M.club_lounge(ctx)
 				Transparency = 0.45,
 			})
 			span(screens, seg, "TrophyShelf", 26.3, 33.7, 105, 107, fy + 3, fy + 3.2, GOLD, Enum.Material.Metal, PAINT)
-			BuildUtil.Look(case, info[1], info[2], { LookKey = info[3], Distance = 8 })
+			-- (the prompt sits on the glass front: the trophies inside would hide the case's middle)
+			BuildUtil.Look(case, info[1], info[2], { LookKey = info[3], Distance = 8, At = Vector3.new(0, 0.4, 1.25) })
+			-- what's on the shelf (either side of the middle, where the case's prompt is)
+			for index, item in ipairs(caseTrophies[seg.name]) do
+				local kind, size, color = item[1], item[2], item[3]
+				local x, base = index == 1 and 27.9 or 32.1, fy + 3.2
+				local material = color == FOOTBALL and Enum.Material.Leather or Enum.Material.Metal
+				if kind == "ball" then
+					BuildUtil.Ball(screens, {
+						Name = "Trophy",
+						Position = at(seg, x, base + size / 2, 106).Position,
+						Diameter = size,
+						Color = color,
+						Material = material,
+						CanCollide = false,
+					})
+				elseif kind == "cup" then
+					post(screens, seg, "TrophyCup", x, 106, base, base + 1.5, size, color, material, NO_COLLIDE)
+				else
+					rod(screens, seg, "TrophyRing", x, base + size / 2 + 0.05, 106, 0.22, size, "o", color, material, NO_COLLIDE)
+				end
+			end
 		else
 			for _, s in ipairs({ -1, 1 }) do
 				local tv = span(
@@ -1047,6 +1338,42 @@ local SUITE_INFO = {
 	{ "Coaches' Club Suite", "Retired coaches watch the game here and shout plays at the TV." },
 	{ "Mascot Suite", "The team mascot naps here at half-time. Shh!" },
 	{ "Super Fan Suite", "Face paint, foam fingers and the loudest fans in the building. Bring earplugs!" },
+}
+
+-- The framed jersey on each suite's wall (by suite number), in the suite's own theme.
+local SUITE_JERSEYS = {
+	"HALL OF FAME\n#10",
+	"ROOKIE\n#99",
+	"LEGEND\n#12",
+	"OWNER\n#1",
+	"FAMILY\n#4",
+	"PARTNER\n#50",
+	"KICKER\n#3",
+	"GRILL MASTER\n#88",
+	"CHAMPS\n#1",
+	"VISITOR\n#0",
+	"ALUMNI\n#21",
+	"COACH\n#00",
+	"MASCOT\n#7",
+	"SUPER FAN\n#12",
+}
+
+-- Captions of the framed photos on the corridor wall, one beside every suite's number sign.
+local CORRIDOR_PHOTOS = {
+	"OPENING DAY",
+	"FIRST TOUCHDOWN",
+	"THE GOAL-LINE STAND",
+	"TITLE PARADE",
+	"ROOKIE DEBUT",
+	"THE 60-YARD FIELD GOAL",
+	"THE SNOW GAME",
+	"TAILGATE PARTY",
+	"THE ONE-HANDED CATCH",
+	"OVERTIME WINNER",
+	"HOMECOMING",
+	"THE BIG COMEBACK",
+	"MASCOT DANCE-OFF",
+	"FIRST SELL-OUT",
 }
 
 -- The suites of one side: list of { s, a, b (block), xa, xb (interior), big } sorted by world x.
@@ -1155,6 +1482,28 @@ function M.suites(ctx)
 				return p[1] < q[1]
 			end)
 			backWall(c, seg, "CorridorWall", blockSpec[1], blockSpec[2], fy, doors, WALL_LIGHT)
+		end
+		-- a framed photo on the corridor wall beside every suite's number sign (which hangs at
+		-- d0 - 4.4 .. d0 - 0.8, in step 3), out in the free stretch toward the suite's -x wall
+		for _, suite in ipairs(suitesOf[seg.name]) do
+			local x0, x1 = suite.xa + 1, suiteDoorway(suite) - 5.4
+			local half = math.min(x1 - x0, suite.big and 9 or 5.6) / 2
+			local xc = (x0 + x1) / 2
+			local photo = span(
+				c,
+				seg,
+				"CorridorPhoto",
+				xc - half,
+				xc + half,
+				BACK_OUT,
+				BACK_OUT + 0.12,
+				fy + 4.4,
+				fy + 8.2,
+				WALNUT,
+				Enum.Material.Wood,
+				NO_COLLIDE
+			)
+			picture(photo, OUTWARD, CORRIDOR_PHOTOS[suite.n], PHOTO_TONES[suite.n % #PHOTO_TONES + 1])
 		end
 		-- wood panelling along the outer wall + SUITE LEVEL panels either side of the escalators
 		for _, s in ipairs({ -1, 1 }) do
@@ -1392,8 +1741,11 @@ function M.suites(ctx)
 				Object = "Sofa",
 				Material = suite.owner and Enum.Material.Leather or Enum.Material.Fabric,
 			})
-			local tv = span(c, seg, "SuiteTV", xa, xa + 0.3, 84.6, 89.8, fy + 3.6, fy + 6.6, SCREEN)
+			-- (the TV hangs on a walnut media wall; a team rug under the sofa)
+			span(c, seg, "MediaWall", xa, xa + 0.12, 83.2, 91.2, fy, fy + 8.6, WALNUT, Enum.Material.Wood, PAINT)
+			local tv = span(c, seg, "SuiteTV", xa + 0.12, xa + 0.42, 84.6, 89.8, fy + 3.6, fy + 6.6, SCREEN)
 			liveScreen(ctx, tv, Enum.NormalId.Right, "score", { PPS = 30 })
+			span(c, seg, "SuiteRug", xa + 0.8, xa + 9.2, 85.8, 91.6, fy + 0.05, fy + 0.08, team.Primary, Enum.Material.Carpet, PAINT)
 			local popcorn = suite.n % 3 == 2 and not suite.owner
 			local miniBar = span(c, seg, "MiniBar", xa + 0.2, xa + 5.2, 93.5, BACK_IN, fy, fy + 3.4, DARK_WOOD, Enum.Material.Wood)
 			BuildUtil.Use(ctx, miniBar, popcorn and "popcorn" or "soda", {
@@ -1401,7 +1753,31 @@ function M.suites(ctx)
 				Title = popcorn and "Suite Popcorn Bar" or "Suite Mini-Bar",
 				Info = popcorn and "Fresh, buttery popcorn - free for suite guests!"
 					or "Ice-cold sodas in a mini fridge. Cheers to the home team!",
+				-- (on its front: the mini fridge beside it would hide its middle from the door)
+				At = Vector3.new(0, 0.6, 0.9),
 				Distance = 7,
+			})
+			-- a glass-door mini fridge full of drinks beside the mini-bar (the owner's suite has its
+			-- popcorn machine there) and a framed jersey on the +x wall, clear of the door's swing
+			if not suite.owner then
+				local fx = xa + 5.4
+				local fridge = span(c, seg, "MiniFridge", fx, fx + 1.5, 93.7, BACK_IN, fy, fy + 3, BRUSHED, Enum.Material.Metal)
+				bottleRows(fridge, TOWARD_FIELD, { { 0.5, 1.25 }, { 1.6, 2.35 } }, {
+					Spacing = 0.42,
+					Inset = 0.12,
+					Seed = suite.n,
+					Panel = FRIDGE_GLASS,
+				})
+			end
+			local jersey = span(c, seg, "FramedJersey", xb - 0.12, xb, 82.2, 86.8, fy + 3.6, fy + 8.2, DARK_WOOD, Enum.Material.Wood, PAINT)
+			write(jersey, Enum.NormalId.Left, SUITE_JERSEYS[suite.n], ink(team.Primary, team), {
+				Name = "Jersey",
+				Background = team.Primary,
+				Left = 0.1,
+				Width = 0.8,
+				Top = 0.08,
+				Height = 0.84,
+				Wrap = true,
 			})
 			if suite.big then
 				span(c, seg, "CoffeeTable", xa + 2.6, xa + 7, 86.4, 87.8, fy, fy + 1.3, WALNUT, Enum.Material.Wood)
@@ -1424,6 +1800,19 @@ function M.suites(ctx)
 						Info = "The owner's personal popcorn machine. Extra butter!",
 						Distance = 6,
 					})
+					local goldBall = BuildUtil.Ball(c, {
+						Name = "GoldenFootball",
+						Position = at(seg, xa + 4.8, fy + 1.75, 87.1).Position,
+						Diameter = 0.9,
+						Color = GOLD,
+						Material = Enum.Material.Metal,
+					})
+					BuildUtil.Look(
+						goldBall,
+						"Golden Football",
+						"A gold-painted game ball from the stadium's very first sell-out. Only the owner is allowed to polish it!",
+						{ LookKey = "owner", Distance = 7 }
+					)
 				else
 					chair(c, seg, xm + 8, 84, fy, "field", WALNUT, {
 						Width = 3,
@@ -1445,6 +1834,18 @@ function M.suites(ctx)
 						"Every football in here was signed by a team captain. The oldest one is older than your grandpa!",
 						{ LookKey = "roster:QB", Distance = 7 }
 					)
+					-- two of the signed balls on a shelf, either side of the case's middle (its prompt)
+					span(c, seg, "BallShelf", xa + 7.3, xa + 10.7, 93.9, 95, fy + 2.2, fy + 2.35, WALNUT, Enum.Material.Wood, PAINT)
+					for _, dx in ipairs({ 7.95, 10.05 }) do
+						BuildUtil.Ball(c, {
+							Name = "SignedBall",
+							Position = at(seg, xa + dx, fy + 2.75, 94.7).Position,
+							Diameter = 0.8,
+							Color = FOOTBALL,
+							Material = Enum.Material.Leather,
+							CanCollide = false,
+						})
+					end
 				end
 			end
 		end
@@ -1520,6 +1921,25 @@ function M.pressbox(ctx)
 		Info = "Reporters only! Well... and team owners. The rule up here: NO CHEERING in the press box!",
 	})
 	doorText(door, { "PRESS", "BOX" }, ink(team.Primary, team), team.Primary)
+	-- framed press photos either side of the door, facing the corridor (the first thing fans see
+	-- coming up the Gate D escalators)
+	for index, s in ipairs({ -1, 1 }) do
+		local photo = span(
+			shell,
+			seg,
+			"PressPhoto",
+			s * 8.5,
+			s * 16.5,
+			BACK_OUT,
+			BACK_OUT + 0.12,
+			fy + 3.4,
+			fy + 7.2,
+			WALNUT,
+			Enum.Material.Wood,
+			NO_COLLIDE
+		)
+		picture(photo, OUTWARD, index == 1 and "OPENING DAY PRESS CONFERENCE" or "THE WINNING HEADLINE", PHOTO_TONES[index + 1])
+	end
 	local rules = span(shell, seg, "PressRules", -inner, -inner + 0.15, 84.5, 89.5, fy + 3.4, fy + 7.4, CREAM, nil, PAINT)
 	write(rules, Enum.NormalId.Right, "PRESS BOX RULES\n1. NO CHEERING\n2. NO AUTOGRAPHS\n3. SNACKS ARE FREE", INK, {
 		Font = Enum.Font.GothamBold,
@@ -1532,6 +1952,24 @@ function M.pressbox(ctx)
 		"Press Box Rules",
 		"Real press boxes have a famous rule: no cheering! Reporters have to stay calm... even after a 99-yard touchdown.",
 		{ Distance = 8 }
+	)
+	-- a team-colour runner from the door down the centre aisle (between the front-row chairs at
+	-- +-3.5), and a framed front page over the copier on the +x wall
+	span(shell, seg, "AisleRunner", -2.4, 2.4, 83.4, BACK_IN, fy + 0.05, fy + 0.08, team.Primary, Enum.Material.Carpet, PAINT)
+	span(shell, seg, "FrontPageFrame", inner - 0.12, inner, 88.6, 93.4, fy + 4.2, fy + 8.2, DARK_WOOD, Enum.Material.Wood, PAINT)
+	local frontPage = span(shell, seg, "FrontPage", inner - 0.16, inner - 0.12, 88.85, 93.15, fy + 4.45, fy + 7.95, PAPER, nil, PAINT)
+	write(frontPage, Enum.NormalId.Left, "THE PIGSKIN GAZETTE", INK, { Top = 0.05, Height = 0.14, Font = Enum.Font.Garamond })
+	write(frontPage, Enum.NormalId.Left, name .. "\nWIN THE OPENER!", INK, {
+		Name = "Headline",
+		Top = 0.24,
+		Height = 0.4,
+		Wrap = true,
+	})
+	BuildUtil.Look(
+		frontPage,
+		"Framed Front Page",
+		"The newspaper from the team's very first win, framed by the reporters who wrote it. Their record since then:",
+		{ LookKey = "record", Distance = 8 }
 	)
 
 	-------------------------------------------------------------------------------------------
@@ -1644,6 +2082,40 @@ function M.pressbox(ctx)
 		"Every reporter needs a pass to get in. Today's list has 24 newspapers, radio shows and TV crews - all here to cover your team!",
 		{ LookKey = "team", Distance = 7 }
 	)
+	-- the reporters' kit: a keyboard in front of every monitor (between it and the nameplates),
+	-- radio headsets, cups, laptops and stat sheets on the second row
+	for _, x in ipairs({ -17.5, -10.5, -3.5, 3.5, 10.5, 17.5 }) do
+		span(room, seg, "Keyboard", x - 1.1, x + 1.1, 81.9, 82.42, fy + 2.9, fy + 3, CAMERA_BLACK, nil, NO_COLLIDE)
+	end
+	for _, x in ipairs({ -3.5, 17.5 }) do -- (KICKOFF RADIO and BLITZ TV)
+		span(room, seg, "Headset", x + 1.3, x + 2.1, 81.85, 82.4, fy + 2.9, fy + 3.15, CAMERA_BLACK, nil, NO_COLLIDE)
+	end
+	post(room, seg, "CoffeeCup", -15.3, 82, fy + 2.9, fy + 3.4, 0.45, WHITE, Enum.Material.SmoothPlastic, NO_COLLIDE)
+	post(room, seg, "SodaCup", 13.4, 82.1, fy + 2.9, fy + 3.5, 0.45, team.Secondary, Enum.Material.SmoothPlastic, NO_COLLIDE)
+	for _, s in ipairs({ -1, 1 }) do
+		local top = riserTop + 2.9
+		span(room, seg, "LaptopBase", s * 12.2, s * 13.8, 88.0, 88.75, top, top + 0.08, BRUSHED, Enum.Material.Metal, NO_COLLIDE)
+		local lid =
+			span(room, seg, "LaptopScreen", s * 12.2, s * 13.8, 87.88, 88.0, top, top + 1.05, DARK_METAL, Enum.Material.Metal, NO_COLLIDE)
+		liveScreen(ctx, lid, OUTWARD, s < 0 and "record" or "rating", { PPS = 40, Name = "LaptopStory" })
+		span(room, seg, "StatSheets2", s * 9.1, s * 10.9, 88.25, 88.7, top, top + 0.06, PAPER, nil, PAINT)
+	end
+	-- TVs hung from the ceiling over the window (above the glass), facing the press row
+	for _, s in ipairs({ -1, 1 }) do
+		local x = s * 16.5
+		local tv = span(room, seg, "CeilingTV", x - 2.2, x + 2.2, 81, 81.3, fy + 9.5, fy + 10.9, SCREEN, nil, NO_COLLIDE)
+		liveScreen(ctx, tv, OUTWARD, s < 0 and "score" or "gameday", { PPS = 30 })
+		span(room, seg, "TVMount", x - 0.25, x + 0.25, 81.05, 81.25, fy + 10.9, CEIL_BOTTOM, DARK_METAL, Enum.Material.Metal, NO_COLLIDE)
+	end
+	-- a chalkboard menu over the coffee bar
+	local menu = span(room, seg, "CoffeeMenu", -inner, -inner + 0.12, 90.6, 94.2, fy + 5.8, fy + 8.4, SIGN_DARK, nil, PAINT)
+	write(menu, Enum.NormalId.Right, "COFFEE  -  HOT COCOA\nSODA  -  SPORTS DRINKS\nALL FREE FOR THE PRESS!", CREAM, {
+		Name = "MenuText",
+		Font = Enum.Font.GothamBold,
+		Wrap = true,
+		Top = 0.1,
+		Height = 0.8,
+	})
 
 	-------------------------------------------------------------------------------------------
 	-- 3 COACHES' BOOTHS
@@ -1665,6 +2137,22 @@ function M.pressbox(ctx)
 		local boothLintel = backWall(c, seg, "BoothBackWall", a, b, fy, { { d0, d1 } }, accent)
 		local title = homeBooth and "HOME COACHES" or "VISITING COACHES"
 		write(boothLintel, OUTWARD, title, ink(accent, team), { Top = 0.14, Height = 0.72, Glow = true })
+		-- a framed photo on the corridor side, beside the door
+		local wallPhoto = span(
+			c,
+			seg,
+			"BoothPhoto",
+			d0 - 5.5,
+			d0 - 1,
+			BACK_OUT,
+			BACK_OUT + 0.12,
+			fy + 3.4,
+			fy + 7.2,
+			WALNUT,
+			Enum.Material.Wood,
+			NO_COLLIDE
+		)
+		picture(wallPhoto, OUTWARD, homeBooth and "THE GAME-WINNING PLAY CALL" or "VISITORS WELCOME", PHOTO_TONES[homeBooth and 4 or 3])
 		local boothHeader = glassFront(c, seg, a, b, fy, accent, homeBooth and team.Secondary or DARK_METAL)
 		write(boothHeader, TOWARD_FIELD, "COACHES", ink(homeBooth and team.Secondary or DARK_METAL, team), { Top = 0.14, Height = 0.72 })
 		span(c, seg, "BoothCeiling", a, b, FRONT_IN, BACK_OUT, CEIL_BOTTOM, CEIL_TOP, CEILING)
@@ -1730,6 +2218,50 @@ function M.pressbox(ctx)
 			homeBooth and "Spotters zoom in to see who made the play. Right now they're watching your quarterback:"
 				or "The spotter checks every tackle. Today's star on your defense:",
 			{ LookKey = homeBooth and "roster:QB" or "roster:DEF", Distance = 6 }
+		)
+		-- the sideline phone (look), a playbook tablet and a sports drink on the desk
+		local phone = span(
+			c,
+			seg,
+			"SidelinePhone",
+			mid + 4.6,
+			mid + 5.8,
+			81.3,
+			82.2,
+			fy + 2.9,
+			fy + 3.2,
+			homeBooth and team.Primary or DARK_METAL,
+			nil,
+			NO_COLLIDE
+		)
+		span(c, seg, "PhoneHandset", mid + 4.7, mid + 5.7, 81.4, 81.7, fy + 3.2, fy + 3.42, CAMERA_BLACK, nil, NO_COLLIDE)
+		BuildUtil.Look(
+			phone,
+			"Sideline Phone",
+			homeBooth and "A direct line down to the sideline. When it rings, the head coach is about to change the play!"
+				or "The visitors' sideline phone. It rings a lot when they're losing...",
+			-- (on the half of its top behind the handset, facing the coaches)
+			{ Distance = 6, At = Vector3.new(0, 0.18, -0.3) }
+		)
+		-- (turned: its Top face reads from the coaches' side)
+		local tablet = span(c, seg, "Tablet", mid - 6.1, mid - 5.1, 81.5, 82.3, fy + 2.9, fy + 2.96, CAMERA_BLACK, nil, {
+			CanCollide = false,
+			Turned = true,
+		})
+		write(tablet, Enum.NormalId.Top, "PLAYBOOK", SCREEN_WHITE, { Name = "TabletScreen", Background = SCREEN, Glow = true, PPS = 40 })
+		-- (a short can, out of the line to the headsets from the far end of the desk)
+		post(
+			c,
+			seg,
+			"DrinkCan",
+			mid - 4.4,
+			82.5,
+			fy + 2.9,
+			fy + 3.45,
+			0.35,
+			homeBooth and team.Secondary or COOLER_ORANGE,
+			Enum.Material.Metal,
+			NO_COLLIDE
 		)
 		-- live depth chart on the passage wall, play sheet on the outer wall
 		local passageFace = s > 0 and Enum.NormalId.Right or Enum.NormalId.Left
@@ -1910,6 +2442,25 @@ function M.broadcast_booth(ctx)
 		Info = "Quiet please - we're live! This is where the game is called for millions of TV viewers.",
 	})
 	doorText(door, { "BROADCAST", "BOOTH" }, WHITE, ON_AIR_RED)
+	-- framed photos of famous broadcasts either side of the door, facing the corridor (where fans
+	-- come up the Gate A escalators)
+	for index, s in ipairs({ -1, 1 }) do
+		local photo = span(
+			shell,
+			seg,
+			"BroadcastPhoto",
+			s * 8.5,
+			s * 14.5,
+			BACK_OUT,
+			BACK_OUT + 0.12,
+			fy + 3.4,
+			fy + 7.2,
+			WALNUT,
+			Enum.Material.Wood,
+			NO_COLLIDE
+		)
+		picture(photo, OUTWARD, index == 1 and "OUR FIRST LIVE BROADCAST" or "THE MILLION-VIEWER GAME", PHOTO_TONES[index == 1 and 4 or 2])
+	end
 	-- the control room at the back: monitor wall either side of the door, producer's desk, rack
 	local wallLeft = span(shell, seg, "MonitorWall", -20, -6, BACK_IN - 0.3, BACK_IN, fy + 2.2, fy + 8.4, SCREEN)
 	liveScreen(ctx, wallLeft, TOWARD_FIELD, "summary", { PPS = 20 })
@@ -1935,6 +2486,90 @@ function M.broadcast_booth(ctx)
 		"Blinking boxes that send the game to TV trucks outside. There are more cables in here than plays in the playbook!",
 		{ Distance = 7 }
 	)
+	-- rows of status lights on the rack (above and below its middle, where its prompt is)
+	for _, row in ipairs({ { 1.4, LED_GREEN }, { 2.2, LED_BLUE }, { 4.7, LED_GREEN }, { 5.4, ON_AIR_RED } }) do
+		span(
+			shell,
+			seg,
+			"RackLights",
+			inner - 1.66,
+			inner - 1.6,
+			88.5,
+			92.5,
+			fy + row[1],
+			fy + row[1] + 0.1,
+			row[2],
+			Enum.Material.Neon,
+			PAINT
+		)
+	end
+	-- the producer's mixing desk: a sloped console (rising toward the window) with a fader panel and
+	-- a row of lit buttons, on the desk's +x half (its prompt is at the -x end)
+	local consoleCFrame = at(seg, -10.6, fy + 3.2, 90.45)
+	BuildUtil.Wedge(shell, {
+		Name = "MixingConsole",
+		Size = Vector3.new(4.2, 0.6, 1.4),
+		CFrame = consoleCFrame,
+		Color = CAMERA_BLACK,
+		Material = Enum.Material.SmoothPlastic,
+	})
+	local slope = consoleCFrame * CFrame.Angles(-math.atan2(0.6, 1.4), 0, 0)
+	BuildUtil.Part(shell, {
+		Name = "Faders",
+		Size = Vector3.new(3.8, 0.06, 0.8),
+		CFrame = slope * CFrame.new(0, 0.03, -0.2),
+		Color = BRUSHED,
+		Material = Enum.Material.Metal,
+		CanCollide = false,
+	})
+	BuildUtil.Part(shell, {
+		Name = "ConsoleButtons",
+		Size = Vector3.new(3.8, 0.06, 0.18),
+		CFrame = slope * CFrame.new(0, 0.04, 0.55),
+		Color = LED_GREEN,
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+	})
+	-- the show's rundown on the +x wall, and an ON AIR sign over the door out in the corridor
+	local rundown = span(shell, seg, "RundownBoard", inner - 0.12, inner, 82.8, 87.4, fy + 3.6, fy + 7.6, WHITE, nil, PAINT)
+	write(rundown, Enum.NormalId.Left, "TODAY'S RUNDOWN", ON_AIR_RED, { Top = 0.06, Height = 0.14, Font = Enum.Font.GothamBold })
+	write(rundown, Enum.NormalId.Left, "PREGAME SHOW\nKICKOFF\nHALFTIME HIGHLIGHTS\nPOSTGAME INTERVIEWS", INK, {
+		Name = "RundownLines",
+		Top = 0.26,
+		Height = 0.66,
+		Font = Enum.Font.Gotham,
+		Wrap = true,
+	})
+	BuildUtil.Look(
+		rundown,
+		"Show Rundown",
+		"Every second of the broadcast is planned on this board, from the pregame show to the last interview. Today's show is about:",
+		{ LookKey = "team", Distance = 8 }
+	)
+	local onAirOut = span(shell, seg, "OnAirSign", 15.5, 19.5, BACK_OUT, BACK_OUT + 0.4, fy + 8.7, fy + 10.3, SCREEN, nil, NO_COLLIDE)
+	write(onAirOut, OUTWARD, "ON AIR", ON_AIR_RED, { Glow = true, Top = 0.15, Height = 0.7 })
+	-- soundproofing panels on the side walls, round the telestrator, the rundown and the rack
+	for _, panel in ipairs({
+		{ -inner, -inner + 0.15, 81.2, 85.2, 3, 10.4 },
+		{ -inner, -inner + 0.15, 85.6, 91, 7.6, 10.4 },
+		{ inner - 0.15, inner, 82.8, 87.4, 8, 10.4 },
+		{ inner - 0.15, inner, 88, 93, 6.6, 10.4 },
+	}) do
+		span(
+			shell,
+			seg,
+			"AcousticPanel",
+			panel[1],
+			panel[2],
+			panel[3],
+			panel[4],
+			fy + panel[5],
+			fy + panel[6],
+			CARPET,
+			Enum.Material.Fabric,
+			PAINT
+		)
+	end
 
 	-------------------------------------------------------------------------------------------
 	-- 2 GLASS & CAMERAS
@@ -2065,6 +2700,48 @@ function M.broadcast_booth(ctx)
 		Name = "GuestCouch",
 		Object = "Guest Couch",
 	})
+	-- the commentators' kit: foam heads on the side microphones, a headset at every seat, coffee
+	-- and two spotting boards with the rosters (look)
+	for _, x in ipairs({ -6, 6 }) do
+		BuildUtil.Ball(studio, {
+			Name = "MicrophoneHead",
+			Position = at(seg, x, fy + 4.15, 84).Position,
+			Diameter = 0.45,
+			Color = CAMERA_BLACK,
+			Material = Enum.Material.Fabric,
+		})
+	end
+	for _, x in ipairs({ -6, 0, 6 }) do
+		span(studio, seg, "Headset", x + 0.7, x + 1.5, 83.9, 84.45, fy + 2.9, fy + 3.12, CAMERA_BLACK, nil, NO_COLLIDE)
+	end
+	for _, s in ipairs({ -1, 1 }) do
+		post(studio, seg, "CoffeeCup", s * 5, 83.3, fy + 2.9, fy + 3.4, 0.45, WHITE, Enum.Material.SmoothPlastic, NO_COLLIDE)
+		-- (turned: its Top face reads from the commentators' side)
+		local board = span(studio, seg, "SpottingBoard", s * 7.6, s * 8.9, 83.1, 84.5, fy + 2.9, fy + 2.94, PAPER, nil, {
+			CanCollide = false,
+			CastShadow = false,
+			Turned = true,
+		})
+		write(board, Enum.NormalId.Top, s < 0 and "HOME\nROSTER" or "VISITORS\nROSTER", INK, { Name = "Roster", Wrap = true, PPS = 40 })
+		if s < 0 then
+			BuildUtil.Look(
+				board,
+				"Spotting Board",
+				"Every player's name and number on one big card, so the play-by-play voice never misses a tackle. The starting quarterback:",
+				{ LookKey = "roster:QB", Distance = 6 }
+			)
+		end
+	end
+	-- the cameras' tripod legs, a lighting pipe under the ceiling with three stage lights, and a
+	-- steel frame round the big window
+	tripodLegs(studio, seg, -17, 83, fy, fy + 1.5, 1.2)
+	tripodLegs(studio, seg, 15.5, 86.4, fy, fy + 1.5, 1.2)
+	rod(studio, seg, "LightingPipe", 0, fy + 11.05, 87.6, 40, 0.3, "x", DARK_METAL, Enum.Material.Metal, NO_COLLIDE)
+	for _, x in ipairs({ -8, 0, 8 }) do
+		post(studio, seg, "StageLight", x, 87.6, fy + 9.9, fy + 10.9, 0.7, CAMERA_BLACK, Enum.Material.Metal, NO_COLLIDE)
+	end
+	span(studio, seg, "WindowFrame", -inner, inner, FRONT_IN, FRONT_IN + 0.3, GLASS_TOP - 0.3, GLASS_TOP, STEEL, Enum.Material.Metal, PAINT)
+	span(studio, seg, "WindowLedge", -inner, inner, FRONT_IN, FRONT_IN + 0.35, SILL_TOP, SILL_TOP + 0.15, STEEL, Enum.Material.Metal, PAINT)
 
 	-------------------------------------------------------------------------------------------
 	-- 3 SATELLITE DISH
