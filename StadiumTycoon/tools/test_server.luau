@@ -1915,6 +1915,53 @@ local function runTests()
 		PlayerData.Release(quinn)
 	end
 
+	section("Server core: the guide beam's button")
+	do
+		-- the beam points at the cheapest button in the part of the plot the owner is in (unless one
+		-- elsewhere is much cheaper), so it doesn't send them across the plot for every step
+		local rita = makePlayer("Rita", 6003)
+		local ritaProfile = PlayerData.Load(rita)
+		for _, pieceId in ipairs({ "hq_lobby", "hq_frontoffice", "hq_lockerroom" }) do
+			for _, stepId in ipairs(Items.PieceById[pieceId].StageIds) do
+				ritaProfile.Owned[stepId] = true
+			end
+		end
+		local plot2 = PlotManager.GetPlots()[2]
+		local guide = Config.GuideGoal
+		local recheck, factor = guide.RecheckSeconds, guide.ZoneCostFactor
+		guide.RecheckSeconds = 0.1
+		PlotManager.Claim(plot2, rita, ritaProfile)
+		check(
+			rita:GetAttribute("NextGoal") == "hq_coaches:1" and Items.ById["practice_field:1"].Cost < Items.ById["hq_coaches:1"].Cost,
+			"in the HQ the beam points at the HQ's cheapest button, not a cheaper one outside: " .. tostring(rita:GetAttribute("NextGoal"))
+		)
+		local ritaRoot = rita.Character.HumanoidRootPart
+		local campus = plot2.Origin * CFrame.new(Config.Layout.Areas.campus)
+		task.wait(2.2) -- (until the guide's check loop runs at the test interval)
+		ritaRoot.CFrame = campus * CFrame.new(-130, 3, 410) -- out on the practice fields
+		local frames = 0
+		while plot2.GoalChallenger == nil and frames < 200 do
+			task.wait()
+			frames += 1
+		end
+		check(
+			plot2.GoalChallenger == "practice_field:1" and rita:GetAttribute("NextGoal") == "hq_coaches:1",
+			"another button has to win two checks in a row before the beam moves (no flicker)"
+		)
+		task.wait(0.35)
+		check(rita:GetAttribute("NextGoal") == "practice_field:1", "out on the campus it moves to the campus's cheapest button")
+		ritaRoot.CFrame = campus * CFrame.new(-100, 3, 230) -- back in the HQ lobby
+		task.wait(0.35)
+		check(rita:GetAttribute("NextGoal") == "hq_coaches:1", "and back in the HQ to the HQ's")
+		guide.ZoneCostFactor = 1.1
+		task.wait(0.35)
+		check(rita:GetAttribute("NextGoal") == "practice_field:1", "unless a button elsewhere is much cheaper")
+		guide.RecheckSeconds, guide.ZoneCostFactor = recheck, factor
+		removePlayer(rita)
+		PlotManager.Release(rita)
+		PlayerData.Release(rita)
+	end
+
 	section("Respawn at plot")
 	local newCharacter = makeCharacter("AliceCharacter2")
 	alice.Character = newCharacter

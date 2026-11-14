@@ -68,9 +68,10 @@ and championships.
    **Team HQ** and asked to **pick your team colours and nickname**.
 5. Step on the glowing **buttons** to build. Green = you can afford it (your cash plus the
    vault), red = not yet. Each button says which step it is ("Step 2/5: Lockers"). A golden
-   **guide beam** points from you to your next button. Upstairs HQ rooms have their buttons
-   in the upstairs corridor (take the stairs or the elevator). Every stadium button stands
-   on the field.
+   **guide beam** points from you to your next button: the cheapest one in the part of your
+   plot you are in, unless one elsewhere is much cheaper. Upstairs HQ rooms have their
+   buttons in the upstairs corridor (take the stairs or the elevator). Every stadium button
+   stands on the field.
 6. Your franchise earns money every second. It piles up in the **vault**. Step on a **collect
    pad** to move it into your cash (standing on it keeps collecting). There are three: in the
    HQ lobby (the Team Safe), by the gold gate at the front of your plot, and on the stadium
@@ -130,7 +131,7 @@ and HQ pieces changed, so progress from earlier versions starts fresh.
 | --- | --- |
 | Gold gate | Touch it to claim an empty franchise (one per player). |
 | Buy buttons | One per piece. It shows the piece, the step ("Step 3/6: End Zones") and the price. After you buy a step, the next step's button appears in the same spot. |
-| Guide beam | A golden beam from your character to the cheapest button you can see. |
+| Guide beam | A golden beam from your character to your next button, anywhere on your plot: the cheapest one in the part of the plot you are in (the HQ building, the campus, the stadium, the plaza or the fan zone), or the cheapest one anywhere when that costs less than 40% of it. It re-checks every 2 seconds and only moves to another button when that one wins twice in a row (`Config.GuideGoal`). |
 | Vault + collect pads | Income piles up in the vault. Step on a collect pad (HQ lobby, gold gate or the field's front sideline) to collect it. Buy buttons spend the vault too. |
 | Team Bus | Blue pads at the HQ and in the stadium plaza teleport you between them. |
 | Golf carts | The garage gives you up to 3 carts in your team colours. Abandoned carts drive themselves home. |

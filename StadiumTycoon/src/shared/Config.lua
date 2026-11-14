@@ -37,6 +37,11 @@ Config.BuildAnimation = true
 Config.BuildFrameBudget = 0.008
 Config.RespawnAtPlot = true -- owners respawn at their own stadium
 Config.ShowGuideBeam = true -- a glowing beam points to your next buy button
+-- The beam's button: the cheapest one in the part of the plot you are in (the HQ building, the
+-- campus outdoors, the stadium, the plaza or the fan zone) while it costs at most ZoneCostFactor
+-- times the cheapest one anywhere; otherwise that one. Re-checked every RecheckSeconds; the beam
+-- only moves to another button when that one wins two checks in a row.
+Config.GuideGoal = { RecheckSeconds = 2, ZoneCostFactor = 2.5 }
 
 -- Game days: every IntervalSeconds a game day starts for everyone. Fans walk in, fill the
 -- stands you've built, and income is multiplied for DurationSeconds.

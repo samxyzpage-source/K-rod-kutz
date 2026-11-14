@@ -7,7 +7,9 @@
 	  PlotIndex   number of the plot the player owns (nil = none yet)
 	  Income      cash per second the player's stadium earns
 	  Built       how many stadium pieces the player owns
-	  NextGoal    item id of the cheapest buy button showing (the client draws a guide beam to it)
+	  NextGoal    item id of the buy button to go for next: the cheapest one in the part of the plot
+	              the owner is in, unless one elsewhere is much cheaper (Config.GuideGoal; the
+	              client draws a guide beam to it)
 
 	The Tycoons folder gets a "FreePlots" attribute (how many plots nobody owns) for the HUD.
 ]]
@@ -497,6 +499,76 @@ local function createButton(plot, item)
 	plot.Buttons[item.Id] = pad
 end
 
+-- Which part of the plot a plot-local position is in, for the guide beam: "hq" (the HQ building,
+-- both floors; its shell sticks out a little past Layout.HQ), "campus" (outdoors behind the
+-- stadium), "plaza", "fanzone" or "stadium".
+local function guideZone(position)
+	local L = Config.Layout
+	local campus, hq = L.Areas.campus, L.HQ
+	if
+		position.X >= campus.X + hq.MinX - 12
+		and position.X <= campus.X + hq.MaxX + 18
+		and position.Z >= campus.Z + hq.MinZ - 12
+		and position.Z <= campus.Z + hq.MaxZ + 12
+	then
+		return "hq"
+	elseif position.Z > L.StadiumBackZ then
+		return "campus"
+	elseif position.Z < L.StadiumFrontZ then
+		return "plaza"
+	elseif position.X > L.StadiumHalfX + 5 then
+		return "fanzone"
+	end
+	return "stadium"
+end
+
+local function cheaper(item, other)
+	return other == nil or item.Cost < other.Cost or (item.Cost == other.Cost and item.Order < other.Order)
+end
+
+-- The button the guide beam should point at: the cheapest one in the part of the plot the owner
+-- is in, while it costs at most Config.GuideGoal.ZoneCostFactor x the cheapest one anywhere
+-- (then that one), so the beam doesn't send them across the plot for every step.
+local function pickGoal(plot)
+	local character = plot.Owner.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local zone = root and guideZone(plot.Origin:PointToObjectSpace(root.CFrame.Position))
+	local cheapest, cheapestHere = nil, nil
+	for itemId in pairs(plot.Buttons) do
+		local item = Items.ById[itemId]
+		if cheaper(item, cheapest) then
+			cheapest = item
+		end
+		if zone and guideZone(item.Button) == zone and cheaper(item, cheapestHere) then
+			cheapestHere = item
+		end
+	end
+	if cheapestHere and cheapestHere.Cost <= cheapest.Cost * Config.GuideGoal.ZoneCostFactor then
+		return cheapestHere.Id
+	end
+	return cheapest and cheapest.Id
+end
+
+-- Points the guide beam (the owner's NextGoal attribute) at pickGoal's button. While the current
+-- button still shows, another one has to win two checks in a row (so the beam doesn't flicker
+-- while the owner walks along the edge of a zone).
+local function updateGoal(plot)
+	local owner = plot.Owner
+	if not owner then
+		return
+	end
+	local pick = pickGoal(plot)
+	local current = owner:GetAttribute("NextGoal")
+	if pick ~= current and current ~= nil and plot.Buttons[current] and plot.GoalChallenger ~= pick then
+		plot.GoalChallenger = pick -- first win: check again before moving the beam
+		return
+	end
+	plot.GoalChallenger = nil
+	if pick ~= current then
+		owner:SetAttribute("NextGoal", pick)
+	end
+end
+
 -- Shows exactly the buttons for pieces that are unlocked but not yet owned.
 -- Returns the list of items whose buttons just appeared.
 local function refreshButtons(plot)
@@ -513,17 +585,7 @@ local function refreshButtons(plot)
 		end
 	end
 	updateButtonColors(plot)
-
-	-- the cheapest button showing is the player's "next goal" (guide beam)
-	if plot.Owner then
-		local goal = nil
-		for itemId in pairs(plot.Buttons) do
-			if goal == nil or Items.ById[itemId].Cost < Items.ById[goal].Cost then
-				goal = itemId
-			end
-		end
-		plot.Owner:SetAttribute("NextGoal", goal)
-	end
+	updateGoal(plot) -- the player's "next goal" (guide beam)
 	return added
 end
 
@@ -768,6 +830,7 @@ function PlotManager.Release(player)
 	plot.BuildToken += 1 -- stops a (re)build that is still running
 	plot.Building = false
 	plot.PendingTeam = nil
+	plot.GoalChallenger = nil
 	plot.ItemsFolder:ClearAllChildren()
 	plot.ItemModels = {}
 	for _, button in pairs(plot.Buttons) do
@@ -976,6 +1039,7 @@ function PlotManager.Init(parentFolder, remote)
 			AwayScore = 0,
 			JumbotronStep = 0,
 			JumbotronHoldUntil = 0,
+			GoalChallenger = nil, -- a button that beat the guide beam's one once (see updateGoal)
 			Building = false, -- true while the owned steps are being (re)built over several frames
 			BuildToken = 0, -- changes when a new build starts or the plot is released
 			PendingTeam = nil, -- { Palette, TeamName } asked for while a build was running
@@ -1043,6 +1107,19 @@ function PlotManager.Start()
 						updateVault(plot)
 					end
 					updateButtonColors(plot)
+				end
+			end
+		end
+	end)
+
+	-- the guide beam follows the owner around the plot (see updateGoal)
+	task.spawn(function()
+		while true do
+			task.wait(Config.GuideGoal.RecheckSeconds)
+			for _, plot in ipairs(plots) do
+				local ok, err = pcall(updateGoal, plot)
+				if not ok then
+					warn("[PlotManager] guide goal: " .. tostring(err))
 				end
 			end
 		end
