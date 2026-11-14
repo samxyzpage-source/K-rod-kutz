@@ -96,6 +96,21 @@ Config.OwnerBonus = {
 	StudioTestCash = 1000000000, -- $1,000,000,000 per click
 }
 
+-- Hoverboard: every franchise owner gets one in their hotbar as soon as they claim (see
+-- Hoverboard.lua and Hoverboard.client.lua). Pick it to ride, put it away to walk. While riding,
+-- the jump is charged: a quick tap is a normal jump, holding jump charges it, up to
+-- MaxJumpMultiplier times as high after ChargeSeconds.
+Config.Hoverboard = {
+	Enabled = true,
+	Speed = 48, -- WalkSpeed while riding: 3x walking (16)
+	HoverHeight = 0.8, -- the rider floats this much higher than on foot, the board under their feet
+	MinJumpHeight = 7.2, -- studs: a quick tap is a normal jump
+	MaxJumpMultiplier = 10, -- a full charge jumps this many times as high (72 studs)
+	ChargeSeconds = 1.2, -- holding jump this long gives the full charge
+	TapSeconds = 0.15, -- a press shorter than this is a normal jump (the charge starts after it)
+	TipDelaySeconds = 8, -- the "You got a HOVERBOARD!" tip pops up this long after claiming
+}
+
 -- Draft + roster: draft players from the Front Office's draft board.
 Config.Draft = {
 	Positions = { "QB", "RB", "WR", "OL", "DEF", "K" },
