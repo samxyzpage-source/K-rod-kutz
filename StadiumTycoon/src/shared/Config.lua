@@ -407,15 +407,50 @@ L.HQGuide = {
 		{ MinX = 118, MaxX = 142, MinZ = 212, MaxZ = 281, MinY = 15, MaxY = 20, Door = Vector3.new(122.4, 17, 271) }, -- link, Sky Lounge, Hall of Fame bridge + tower
 		{ MinX = 100, MaxX = 120, MinZ = 284, MaxZ = 409.5, MinY = 15, MaxY = 20, Door = Vector3.new(109, 17, 288.4) }, -- Dome & Garage bridge + tower
 	},
-	-- the doors to the outside, a spot just inside and just outside each (the back wall has none)
+	-- the doors to the outside, a spot just inside and just outside each (the back wall has none);
+	-- inside, the beam points at the spot inside first (so it never cuts through the glass beside a
+	-- door), then through the door
 	Doors = {
-		{ Inside = Vector3.new(-100, 0.2, 205), Outside = Vector3.new(-100, 0.2, 194) }, -- main entrance
+		{ Inside = Vector3.new(-100, 0.2, 208), Outside = Vector3.new(-100, 0.2, 194) }, -- main entrance (inside: clear of the plants by the doors)
 		{ Inside = Vector3.new(-256, 0.2, 271), Outside = Vector3.new(-266, 0.2, 271) }, -- west doors (stair tower)
 		{ Inside = Vector3.new(108, 0.2, 271), Outside = Vector3.new(122, 0.2, 271) }, -- east tower's open portal
 	},
-	-- the lobby (with the main entrance) opens onto the corridor between OpenMinX and OpenMaxX
-	-- (clear of the grand staircase); OpenZ is the corridor in front of that opening
-	Lobby = { MinX = -150, MaxX = -50, MinZ = 190, MaxZ = 264, OpenMinX = -145, OpenMaxX = -64, OpenZ = 268 },
+	-- The lobby (with the main entrance; its furniture is Builders/HQRoomsFront.lua, hq_lobby). It is
+	-- open to the corridor all along, but the Team Wall (to x -111) and the trophy case (from x -86)
+	-- leave one clear lane from the corridor into its front half: the beam leads through that lane,
+	-- between OpenMinX and OpenMaxX (OpenZ: the corridor in front of it), and through the Hub on it.
+	--   FrontZ: north of this, a spot in the front half (the entrance, the desk, the lounge, the
+	--     stairs) is reached through the Hub
+	--   ToLane: FEET boxes (the first one you stand in counts) where furniture stands between you and
+	--     the Hub, and the point to walk to first to get onto the lane: on the way out of the lobby,
+	--     and from the reception side (west of the lane) across it. Elsewhere: the Hub.
+	--   Pockets: the strips behind the Team Wall and the trophy case only open onto the corridor:
+	--     from them the beam leads straight out onto it first
+	--   Doorway: just inside the main entrance, between the plants either side of it: from there, a
+	--     spot beyond the plants (east or west) is reached through its Point
+	Lobby = {
+		MinX = -150,
+		MaxX = -50,
+		MinZ = 190,
+		MaxZ = 264,
+		OpenMinX = -108,
+		OpenMaxX = -92,
+		OpenZ = 268,
+		Hub = Vector3.new(-100, 0.2, 243), -- in front of the Team Wall, on the runner
+		FrontZ = 245.5,
+		ToLane = { -- (the reception desk is x -136.6..-115.4, z 229.4..239.3; the HQ directory x -114..-108.5, z 216)
+			{ MinX = -150, MaxX = -136.6, MinZ = 229.4, MaxZ = 240, Point = Vector3.new(-138, 0.2, 242.5) }, -- beside the desk's west wing
+			{ MinX = -136.6, MaxX = -115.4, MinZ = 229.4, MaxZ = 240, Point = Vector3.new(-126, 0.2, 242) }, -- behind the desk
+			{ MinX = -150, MaxX = -108, MinZ = 215.6, MaxZ = 240, Point = Vector3.new(-106, 0.2, 223) }, -- in front of the desk, beside it
+			{ MinX = -150, MaxX = -108, MinZ = 200, MaxZ = 215.6, Point = Vector3.new(-106, 0.2, 212) }, -- the doors, the waiting sofa
+			{ MinX = -71, MaxX = -50, MinZ = 200, MaxZ = 209, Point = Vector3.new(-76, 0.2, 208) }, -- south of the Team Safe
+		},
+		Pockets = {
+			{ MinX = -150, MaxX = -108.5, MinZ = 249.5, MaxZ = 264 }, -- behind the Team Wall
+			{ MinX = -91.5, MaxX = -50, MinZ = 256.3, MaxZ = 264 }, -- behind the trophy case
+		},
+		Doorway = { MinX = -117, MaxX = -83, MinZ = 200, MaxZ = 207.5, Point = Vector3.new(-100, 0.2, 209.5) },
+	},
 	-- stairs, in legs from the bottom up: standing in a leg's box, walk to its Up point (going up)
 	-- or Down point (going down), each inside the next leg or off the stairs (never inside its own
 	-- box, so nobody ends up standing on a hidden waypoint; nil = already there). Bottom / Top: where
@@ -424,12 +459,15 @@ L.HQGuide = {
 	Stairs = {
 		{ -- the grand staircase in the atrium (the Grand Atrium's first step)
 			Piece = "hq_atrium:1",
-			Bottom = Vector3.new(-61, 0.2, 208.5), -- beside the newel posts (between the safe and the stairs)
-			Top = Vector3.new(-62, 17, 262), -- on the east mezzanine, by the upper corridor
+			Bottom = Vector3.new(-69, 0.2, 207), -- in front of the stairs, past the Team Safe (x -69..-63, z 209..215)
+			Top = Vector3.new(-62, 17, 267), -- on the upper corridor in front of the east mezzanine (clear of the atrium railing)
 			Legs = {
-				guideLeg(-63, -50.3, 206, 211.6, -1, 4, Vector3.new(-54.5, 1.5, 212.5), nil), -- the foot
+				guideLeg(-71, -50.3, 205.6, 208.4, -1, 4, Vector3.new(-54.5, 0.2, 209), Vector3.new(-76, 0.2, 208)), -- in front of the foot, along the Team Safe
+				guideLeg(-63, -58.8, 208.4, 211.6, -1, 4, Vector3.new(-57, 0.2, 208.6), Vector3.new(-56, 0.2, 207)), -- the foot beside the west newel post
+				guideLeg(-58.8, -50.3, 208.4, 211.6, -1, 4, Vector3.new(-54.5, 1.5, 212.5), Vector3.new(-56, 0.2, 207)), -- the foot, between the newel posts
 				guideLeg(-58.7, -50.3, 211.6, 253, 0.9, 18, Vector3.new(-54.5, 17, 256), Vector3.new(-54.5, 0.2, 209)), -- flights
 				guideLeg(-74.4, -50.3, 253, 264, 14, 19, Vector3.new(-62, 17, 267), Vector3.new(-54.5, 15, 251)), -- mezzanine
+				guideLeg(-74.4, -50.3, 264, 269, 14, 19, nil, Vector3.new(-62, 17, 262)), -- the corridor in front of it
 			},
 		},
 		{ -- the west stair tower's switchback stairs (always there)
@@ -438,6 +476,7 @@ L.HQGuide = {
 			Bottom = Vector3.new(-258.3, 1.2, 281.4), -- the first step
 			Top = Vector3.new(-252, 17, 272), -- the upper landing, by the doorway onto the corridor
 			Legs = {
+				guideLeg(-261.5, -250, 273.5, 280.6, -1, 0.9, Vector3.new(-258.3, 1.2, 281.4), Vector3.new(-256, 0.2, 271)), -- the ground floor at its foot: to the doors
 				guideLeg(-261.5, -255.5, 280.6, 295, 0.9, 9.5, Vector3.new(-258.3, 8.6, 297.5), Vector3.new(-258.3, 0.2, 278.5)), -- first flight
 				guideLeg(-261.5, -255.5, 295, 300.5, 7, 10.5, Vector3.new(-252.7, 8.6, 297.5), Vector3.new(-258.3, 7, 293)), -- half landing W
 				guideLeg(-255.5, -250, 295, 300.5, 7, 10.5, Vector3.new(-252.7, 10, 292), Vector3.new(-258.3, 8.6, 297.5)), -- half landing E

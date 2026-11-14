@@ -388,14 +388,17 @@ local function aroundBlock(a, b)
 	return first, best
 end
 
--- Inside, goal outside: the door whose way out (to it, then round the block) is shortest.
+-- Inside, goal outside: the door whose way out (to it, then round the block) is shortest; first
+-- the spot just inside it, then (a little before you get there) through it.
 local function wayOut(p, goal)
 	local target, best = nil, math.huge
 	for _, door in ipairs(GUIDE.Doors) do
 		local _, outside = aroundBlock(door.Outside, goal)
 		local length = (door.Outside - p).Magnitude + outside
 		if length < best then
-			target, best = door.Outside, length
+			best = length
+			local atDoor = (door.Outside - p).Magnitude <= (door.Outside - door.Inside).Magnitude + 2
+			target = atDoor and door.Outside or door.Inside
 		end
 	end
 	return target
@@ -421,11 +424,15 @@ local function usable(stair, built)
 	return stair.Piece == nil or built(stair.Piece)
 end
 
--- On a stair: the next point toward the goal's floor (nil = not on this stair, or off its bottom).
+-- On a stair: the next point toward the goal's floor (nil = not on this stair, or already off it
+-- at that end).
 local function alongStair(stair, p, up)
 	for _, leg in ipairs(stair.Legs) do
 		if inBox(leg, p) then
-			return up and leg.Up or leg.Down
+			if up then
+				return leg.Up
+			end
+			return leg.Down
 		end
 	end
 	return nil
@@ -452,24 +459,55 @@ local function toStairs(p, goal, up, built)
 	return target
 end
 
--- On the ground floor the lobby (with the main entrance) only opens onto the corridor: between
--- it and the rest of the HQ, the beam leads through that opening (out: just past it into the
--- corridor; in: along the corridor to the opening, then just past it into the lobby).
+-- In the lobby off its lane: where to walk first to get onto the lane (Config: Lobby.ToLane).
+local function toLane(lobby, p)
+	for _, way in ipairs(lobby.ToLane) do
+		if inBox(way, p) then
+			return way.Point
+		end
+	end
+	return lobby.Hub
+end
+
+-- On the ground floor the lobby (with the main entrance) only opens onto the corridor, and its
+-- furniture leaves one clear lane between the two: between the lobby and the rest of the HQ the
+-- beam leads through that lane (out: onto the lane, then just past it into the corridor; in: along
+-- the corridor to the lane, then just past it into the lobby). Inside the lobby it leads from the
+-- lane down into the lobby's front half through the Hub, in from the doors past the plants beside
+-- them, from the reception side across the lobby by the lane, and out of the strips behind the
+-- Team Wall and the trophy case onto the corridor.
 local function viaLobby(p, target)
 	local lobby = GUIDE.Lobby
 	if p.Y >= GUIDE.UpstairsY or target.Y >= GUIDE.UpstairsY or not inBox(Config.Layout.HQ, p) then
 		return target
 	end
-	local inLobby = inBox(lobby, p)
-	if inLobby == inBox(lobby, target) then
+	local inLobby, targetInLobby = inBox(lobby, p), inBox(lobby, target)
+	if inLobby then
+		for _, pocket in ipairs(lobby.Pockets) do
+			if inBox(pocket, p) and not inBox(pocket, target) then
+				return Vector3.new(p.X, 0.2, lobby.MaxZ + 3)
+			end
+		end
+		if targetInLobby then
+			if p.Z > lobby.FrontZ and target.Z < lobby.FrontZ then
+				return lobby.Hub
+			elseif inBox(lobby.Doorway, p) and (target.X < lobby.Doorway.MinX or target.X > lobby.Doorway.MaxX) then
+				return lobby.Doorway.Point
+			elseif p.X < lobby.OpenMinX and target.X >= lobby.OpenMinX then
+				return toLane(lobby, p)
+			end
+			return target
+		elseif p.X >= lobby.OpenMinX and p.X <= lobby.OpenMaxX then
+			return Vector3.new(p.X, 0.2, lobby.MaxZ + 3)
+		end
+		return toLane(lobby, p)
+	elseif not targetInLobby then
 		return target
 	end
+	-- (the turn into the lane comes a little before its edge, so the beam never hides there)
 	local x = math.clamp(p.X, lobby.OpenMinX, lobby.OpenMaxX)
-	if inLobby then
-		return Vector3.new(x, 0.2, lobby.MaxZ + 3)
-	end
-	local atOpening = x == p.X and p.Z >= lobby.MaxZ and p.Z <= Config.Layout.HQCorridor.MaxZ
-	return Vector3.new(x, 0.2, atOpening and lobby.MaxZ - 3 or lobby.OpenZ)
+	local atLane = math.abs(x - p.X) < 2.5 and p.Z >= lobby.MaxZ and p.Z <= Config.Layout.HQCorridor.MaxZ
+	return Vector3.new(x, 0.2, atLane and lobby.MaxZ - 3 or lobby.OpenZ)
 end
 
 -- Where the beam points first (campus coordinates), or nil: straight at the goal.
