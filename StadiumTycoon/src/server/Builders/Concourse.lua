@@ -673,7 +673,8 @@ end
 -- An ATM (look): a steel cabinet with a lit screen, a keypad and a cash slot.
 local function atm(ctx, seg, x, floorY, back, gate)
 	local body = span(ctx, seg, "ATM", x - 1.3, x + 1.3, back, back + 1.8, floorY, floorY + 6, ATM_GREY, Enum.Material.Metal)
-	local header = write(body, OUTWARD, "ATM", WHITE, { Top = 0.02, Height = 0.1, Name = "ATMLabel" })
+	local header = write(body, OUTWARD, "FIRST DOWN BANK", WHITE, { Top = 0.02, Height = 0.05, Name = "ATMLabel" })
+	addLabel(header, "ATM", 0.05, 0.07, 0.9, 0.07)
 	addLabel(header, "1  2  3\n4  5  6\n7  8  9", 0.25, 0.5, 0.5, 0.18, Enum.Font.Code)
 	decal(header, "CASH", 0.2, 0.74, 0.6, 0.07, WHITE, INK)
 	local screen = span(ctx, seg, "ATMScreen", x - 0.95, x + 0.95, back + 1.8, back + 1.9, floorY + 3.5, floorY + 5.1, SCREEN)
@@ -681,7 +682,7 @@ local function atm(ctx, seg, x, floorY, back, gate)
 	BuildUtil.Look(
 		body,
 		"ATM",
-		("Gate %s cash machine. Everything here runs on your franchise's money - the ATM just likes to say hello."):format(gate),
+		("The First Down Bank cash machine at Gate %s. Their motto: we never fumble your money!"):format(gate),
 		{ At = localPoint(ctx, body, seg, x, floorY + 3.2, back + 2.7) }
 	)
 end
@@ -1695,11 +1696,12 @@ function Concourse.upper_concourse(ctx)
 		for index, x in ipairs(UPPER_TVS[seg.kind] or {}) do
 			tvIndex += 1
 			local live = MAIN_TV_KINDS[(tvIndex - 1) % #MAIN_TV_KINDS + 1]
-			local tv = span(ctx, seg, "ConcourseTV", x - 3.3, x + 3.3, innerOut + 2.4, innerOut + 3, floorY + 4.6, floorY + 8.4, SCREEN)
+			-- (its bottom stays above head height: it sticks out from the column into the walkway)
+			local tv = span(ctx, seg, "ConcourseTV", x - 3.3, x + 3.3, innerOut + 2.4, innerOut + 3, floorY + 5.4, floorY + 9, SCREEN)
 			liveScreen(tv, OUTWARD, live, LIVE_PLACEHOLDER[live])
 			if index == 1 then
 				BuildUtil.Look(tv, "Upper Deck TV", "Can't see the far end zone from up here? This TV shows every play up close.", {
-					At = Vector3.new(0, -2.6, -1.4),
+					At = Vector3.new(0, -3, -1.4),
 				})
 			end
 		end

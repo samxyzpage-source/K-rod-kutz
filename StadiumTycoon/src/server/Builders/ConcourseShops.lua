@@ -23,8 +23,8 @@
 	    1 Hot Dog Stands     roller grills, giant hot dog icons, ketchup + mustard on the counter
 	                         (Use hotdog); a condiment station (look) across the lane from every hot
 	                         dog stand, against the portal wall on Concourse.lua's "food" spots
-	    2 Pizza & Nachos     brick pizza ovens, a pizza on the counter, a stack of pizza boxes,
-	                         pizza-slice icons (Use tray)
+	    2 Pizza & Nachos     brick pizza ovens, a pizza and a tray of nachos on the counter, a stack
+	                         of pizza boxes, pizza-slice icons (Use tray)
 	    3 Drink Bars         soda fountains + drink fridges, a bar counter with 3 stools (cushion
 	                         on a post; the first is a "CONCOURSE BAR TV" camera seat) and a stack
 	                         of team cups, live screens (Use soda / sportsdrink)
@@ -56,7 +56,8 @@
 	                         foam finger bin (Use foamfinger) under a shelf of footballs, checkout
 	                         counter (Look) with a card reader, a shopping bag and mini helmets on
 	                         the wall behind it, window mannequins, a signed game ball in a glass
-	                         case (Look), a live "starting lineup" screen, lit ceiling panels
+	                         case (Look), felt pennants on the side walls, a live "starting
+	                         lineup" screen, lit ceiling panels
 	    2 Jersey Kiosks      4 kiosks beside the gates: canopy, counter with a till and a football,
 	                         jerseys (Look roster:WR / RB / DEF / K)
 	    3 Foam Finger Carts  8 carts with umbrellas, a giant foam finger (Use foamfinger) and a stack
@@ -742,6 +743,10 @@ local function counterExtras(ctx, seg, style, x1, counterIn, team)
 	if style.gear == "roller" then
 		cyl(ctx, seg, "SauceBottle", x1 - 1, 34.3, o, 1.2, 0.45, "y", KETCHUP)
 		cyl(ctx, seg, "SauceBottle", x1 - 1.6, 34.3, o, 1.2, 0.45, "y", MUSTARD)
+	elseif style.gear == "oven" then
+		-- a tray of nachos under a mound of melty cheese
+		span(ctx, seg, "NachoTray", x1 - 2.4, x1 - 0.8, o - 0.55, o + 0.55, 33.7, 33.9, INK)
+		cyl(ctx, seg, "NachoCheese", x1 - 1.6, 34.05, o, 0.3, 1.2, "y", CHEESE)
 	elseif style.gear == "fountain" then
 		cyl(ctx, seg, "CupStack", x1 - 1.2, 34.6, o, 1.8, 0.8, "y", team.Primary)
 	elseif style.gear == "smoker" then
@@ -1246,6 +1251,22 @@ local function proShop(ctx, seg, cx, team)
 	span(ctx, seg, "HelmetShelf", x(18.6), x(21.7), 82, 82.9, 36.4, 36.6, STEEL, Enum.Material.Metal)
 	for index, u in ipairs({ 19.4, 20.9 }) do
 		ball(ctx, seg, "MiniHelmet", x(u), 37.2, 82.3, 1.2, index == 1 and team.Primary or accent(team))
+	end
+
+	-- a big felt pennant on each (dark) side wall, pointing at the storefront (two wedges: upper and
+	-- lower half, meeting at y 38.6; the pole edge at offset 81.6, the tip at 78.6)
+	for _, u in ipairs({ -21.84, 21.84 }) do
+		for _, flip in ipairs({ false, true }) do
+			BuildUtil.Wedge(ctx, {
+				Name = "Pennant",
+				Size = Vector3.new(0.12, 0.8, 3),
+				CFrame = at(seg, x(u), flip and 38.2 or 39, 80.1)
+					* CFrame.Angles(0, math.pi, 0)
+					* (flip and CFrame.Angles(0, 0, math.pi) or CFrame.new()),
+				Color = ink(STAND_DARK, team),
+				Material = Enum.Material.Fabric,
+			})
+		end
 	end
 
 	-- a shelf of footballs over the foam finger bin
