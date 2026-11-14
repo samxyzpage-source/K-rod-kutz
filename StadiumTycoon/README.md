@@ -313,8 +313,10 @@ These tools are optional. You only need them to edit the code outside Studio.
     roads (flat enough for golf carts), players' tunnels, concourse lanes, HQ corridors on both
     floors, broken (NaN) positions, plus every prompt, door, seat, elevator (it must land on a
     floor with head room) and live screen. It also checks that nothing collidable stands on a
-    road or path golf carts use, that no walled-in area under the stands has no way out, and that
-    the plot base's team colours carry their palette roles (and stay readable in every palette).
+    road or path golf carts use, that every walkable ground spot of the event level (offsets
+    60..156 from the turf, between the lower bowl and the facade) leads back to the plaza or the
+    field on foot, and that the plot base's team colours carry their palette roles (and stay
+    readable in every palette).
     Add `crowd` as a third argument to also seat a crowd.
   * `node tools/preview/shoot.js tools/out/parts.json tools/out` renders it to PNG images
     (run `npm install` in `tools/preview` first; needs Playwright + Chromium). `--prompts` marks
