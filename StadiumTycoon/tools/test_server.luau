@@ -2440,6 +2440,13 @@ local function runTests()
 			states[key] = Enum.HumanoidStateType.Jumping
 			hanaRoot.AssemblyLinearVelocity = Vector3.new(4, 0, 0) -- (as if the engine's jump went missing)
 			frame()
+			check(
+				hanaHumanoid.JumpPower == fullPower and hanaRoot.AssemblyLinearVelocity.Y == 0,
+				"the jump setting stays up until the engine had a physics step to start the jump"
+			)
+			RunServiceMock.Heartbeat:Fire(1 / 60)
+			RunServiceMock.Heartbeat:Fire(1 / 60)
+			frame()
 			local launched = hanaRoot.AssemblyLinearVelocity
 			check(
 				launched.Y > fullPower * 0.8 and launched.Y <= fullPower and launched.X == 4 and hanaHumanoid.JumpPower == 0,

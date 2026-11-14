@@ -12,13 +12,14 @@ In front of it you build a **real NFL-style stadium for 72,000 fans**: a lower b
 level and an upper deck, a **main concourse** with a food court, restrooms and a pro shop, an
 **upper concourse**, **tunnels into the seats**, four **gates** with **escalators, ramps and
 elevators**, a club lounge, luxury suites, a press box and a TV booth, **home and visitor locker
-rooms built in under the stands** with players' tunnels onto the field, two end-zone video
+rooms built in under the stands** with players' tunnels onto the field, a **coaches' locker
+room** off the home tunnel, two end-zone video
 boards, light towers and a roof. A **tailgate fan zone** sits beside it. The last piece is a
 giant championship trophy.
 
 Nothing appears in one click. Every piece is built in **2 to 6 steps**. For example, the
 practice field goes grass, then yard lines, then end zones, then goal posts, then fence and
-sideline, then bleachers. That makes **252 build steps** in 68 pieces.
+sideline, then bleachers. That makes **256 build steps** in 69 pieces.
 
 Everything is **walk-in and interactive**. Rooms have doors that open, chairs and couches you
 can sit on, and "Press E to look" prompts (tap on a phone) on interesting things. You can lift
@@ -58,7 +59,7 @@ and championships.
 | 4 | Much bigger plots. You start inside an empty **Team HQ** with 12 rooms to build. Every piece is built in 2-6 steps (177 steps). New: drivable **golf carts**, a **Hall of Fame & Museum**, a **tailgate fan zone**, cafeteria, player lounge, interview room, coaches' offices, equipment room and meeting room. Team features: **team picker, Owner's Bonus, quests, draft + roster, training, hired staff, field goal challenge, seasons + playoffs + titles**, and a leaderboard |
 | 4.1 | Walk-in, interactive rooms: doors, elevators, seats with TV camera views, "Press E to look" descriptions (lockers show your players' names), lift weights, arcade, ping-pong, press conferences, snacks and drinks to carry, live screens with your score, record and season |
 | 5 | A **real NFL-style stadium**: three decks for 72,000 (lower bowl, club level, upper deck), main + upper concourses with a food court, restrooms and a pro shop, tunnels into the seats, 4 gates with escalators, ramps and elevators, a club lounge, suites, press box and TV booth on the club level, locker rooms built in under the stands, two video boards and a roof. The **Team HQ is one two-storey building** with a grand atrium and 8 new upstairs rooms, joined to the campus by walkways and skybridges. Golf carts roll over kerbs and paths. 2 huge plots per server. 68 pieces, 252 steps |
-| 5.1 | A **hoverboard** for every owner (hotbar; 3x speed; hold jump to charge a jump up to 10x higher). **Softer room lighting** (dimmer, whiter lamps; soft-glowing light panels). A collect pad on the field, buy buttons that use the vault, a smarter guide beam that leads through the HQ's doors and stairs, the HQ and plot base repaint with your team colours, field-level lights at night, exit doors from the area under the stands, golf-cart and field-goal fixes, and a smoother rejoin for big franchises |
+| 6 | A **hoverboard** for every owner from the start (pick it in the hotbar: 3x speed; hold jump to charge a jump up to 10x higher). **START GAME**: you choose when your game day starts (every franchise has its own game days; the next one is ready 2 and a half minutes after the final whistle). A **coaches' locker room** down its own tunnel off the home players' tunnel, with whistles, clipboards and team outfits to change into. **Softer room lighting** (dimmer, whiter lamps; soft-glowing light panels). A collect pad on the field, buy buttons that use the vault, a smarter guide beam that leads through the HQ's doors and stairs, the HQ and plot base repaint with your team colours, field-level lights at night, exit doors from the area under the stands, golf-cart and field-goal fixes, and a smoother rejoin for big franchises. 69 pieces, 256 steps |
 
 ## Play it in Roblox Studio
 
@@ -78,7 +79,8 @@ and championships.
    HQ lobby (the Team Safe), by the gold gate at the front of your plot, and on the stadium
    field (the front sideline, by the visitors' tunnel). Buy buttons spend the vault too: when
    your cash is short, touching a button collects the vault first.
-7. Get around on foot, on the **Team Bus** (blue pads: HQ <-> stadium plaza), or in a
+7. Get around on your **hoverboard** (you get it the moment you claim: pick it in the hotbar
+   with its number key, a click or a tap), on foot, on the **Team Bus** (blue pads: HQ <-> stadium plaza), or in a
    **golf cart** once you build the garage. Sit in the driver's seat and drive with
    W/A/S/D (or the thumbstick on a phone). The plots are huge, so the bus and the carts
    save a lot of walking.
@@ -93,14 +95,18 @@ and press **Start**. Each player can claim a different franchise (2 plots per se
 **GET $1B TEST CASH** and gives $1,000,000,000 every click, with no wait
 (`Config.OwnerBonus.StudioTestMode`). It only works in Studio: a published game always uses the
 normal Owner's Bonus. You can also set `Config.IncomeMultiplier = 50` in
-`ReplicatedStorage > TycoonShared > Config`, and `Config.GameDay.IntervalSeconds = 30` to see a
-game day sooner. Put those two back before publishing.
+`ReplicatedStorage > TycoonShared > Config`, and `Config.GameDay.CooldownSeconds = 10` to play
+game days back to back. Put those two back before publishing.
 
 **Rooms too bright or too dark?** Every built step goes through one lighting pass
 (`BuildUtil.TuneLighting`): lamps in rooms and indoor halls are dimmed and made whiter, and white
 Neon light panels glow softly. Change the numbers in `Config.Lighting` (for example
 `Room.Brightness`) to make rooms brighter or darker. Outdoor lights and the stadium's flood lights
 aren't changed by it.
+
+**Hoverboard settings:** `Config.Hoverboard` sets the riding speed (48 = 3x walking), the hover
+height, the normal jump height (7.2), the 10x multiplier, the charge time (1.2 s), the tap window
+and the tip delay. `Enabled = false` turns the hoverboard off.
 
 ### Before you publish: set the server size
 
@@ -150,8 +156,10 @@ and HQ pieces changed, so progress from earlier versions starts fresh.
 
 | Thing | How it works |
 | --- | --- |
+| Hoverboard | You get one in your hotbar as soon as you claim your franchise, and you keep it when you respawn. Pick it (number key, click or tap) to ride at 3x walking speed on a board in your team colours. Pick it again, or pick something else, to walk. **Charged jump:** hold jump (Space, gamepad A, or the JUMP button on a phone) and let go. A quick tap is a normal jump. Holding longer jumps higher, up to 10 times as high after about a second, and a bar above the hotbar shows the charge. You can only jump from the ground. Buy buttons, collect pads, the Team Bus, kick spots and the gold gates still work while you ride. Sitting down (seats, golf carts, TV camera seats) puts the board away. Smoothies and sports drinks don't slow the board down, and a boost that is still running comes back when you step off. |
 | Stadium tour | Walk in through Gate A (or B, C, D), scan your ticket at a turnstile and ride the escalators or elevators up to the **main concourse** (food court, restrooms, pro shop), the **club level** (club lounge, luxury suites, press box, TV booth) and the **upper concourse**. Section portals and tunnels lead from the concourses into the seats. Corner ramps go from the ground up to the main concourse. Wayfinding signs show the way to every level and section. |
-| Locker rooms | The home and visitor locker rooms are built in under the stands. Walk down the players' tunnel from the field, open the lockers (they show your players' names) and visit the coach's office. |
+| Locker rooms | The home and visitor locker rooms are built in under the stands. Walk down the players' tunnel from the field, open the lockers (they show your players' names) and visit the coach's office. A door marked COACHES in the home tunnel leads to the coaches' locker room. |
+| Coaches' locker room | A door marked COACHES in the home players' tunnel opens onto the coaches' own tunnel, which leads to their locker room under the home stands. Inside: six coaches' lockers with name plates, polos, caps, headsets, clipboards and tablets (press E: they show your starters and record), the headset charging station, the coaches' board with today's starters and the playbook library. Grab a **whistle** from the whistle rack, then click or tap (gamepad: trigger) to blow it: TWEEEET! pops up over your head for everyone nearby. Grab a **clipboard** to draw up a play. At the wardrobe, put on the **Head Coach Polo** (cap, headset and a whistle on a lanyard), the **Sideline Hoodie** or the **Team Jersey** (your name and number on the back), all in your team colours. **Change back** at the YOUR CLOTHES cubby puts your own clothes back on, and so does respawning. Visitors can try the outfits too. |
 | Team HQ | Two floors: take the grand staircase in the atrium, the stairs or the elevator to the upstairs rooms. Covered walkways and skybridges link the HQ to the Hall of Fame, the dome and the garage. |
 | Press E to look | Prompts on interesting objects (tap them on a phone) show a short description. Some show live info from your team: lockers show your players' names, trophy cases show your championships, the Draft Board shows the next pick's price. Prompts on solid objects only show when you can see the object (not through walls or floors). |
 | Doors | Rooms have doors: press E to open them. Most close again by themselves. |
@@ -161,7 +169,7 @@ and HQ pieces changed, so progress from earlier versions starts fresh.
 | Lounge | Arcade "Pigskin Catch" (catch falling footballs) and ping-pong rallies. High scores show on the machines. |
 | Interview room | Take the podium and answer a reporter. Each press conference adds team hype: +1 rating in your next game day (up to +3). |
 | Snacks | Hot dogs, popcorn, sodas, sports drinks and food trays from the concourse food court and the club lounge, smoothies at the juice bar, a lunch tray or a smoothie in the cafeteria, snacks from the vendors and food trucks, and foam fingers at the pro shop carts or the team store. Click to eat or drink; smoothies and sports drinks make you faster for a bit. |
-| Live screens | Screens and boards everywhere show your team name, the score, your record, the season, your starters and the game-day countdown. |
+| Live screens | Screens and boards everywhere show your team name, the score, your record, the season, your starters and your game day: READY - PRESS START GAME, the time left in the game, or when the next game is ready. |
 
 ### Running the team
 
@@ -174,14 +182,14 @@ and HQ pieces changed, so progress from earlier versions starts fresh.
 | Training | Finish the **Weight Room** to train your weakest starter (+1 to +3 rating, +1 more with a Training Room). |
 | Staff | Hire a coaching staff and a medical staff (they appear on the practice field and raise your team rating) and food vendors for the plaza. |
 | Field goals | When the goal posts are finished, three kick spots appear on your field (25, 40 and 55 yards). Step on one, stop the aim needle in the green, then stop the power bar past the gold line (Space, E, gamepad A or the KICK button; they don't make you jump while the meter is open). Good kicks pay. |
-| Game days | Every 4 minutes fans walk in and fill the stands you built, income is doubled for 60 seconds, and your team plays. Your team rating against the opponent decides the odds. The score goes up on your scoreboard. |
+| Game days | **You choose when the game starts.** Once your field's goal posts are built, a big green **START GAME** button appears at the top of your screen. Click or tap it, press G, or press Y on a gamepad (you need to be at your own franchise). Fans walk in and fill the stands you built, your income is doubled for 60 seconds and your team plays. The score goes up play by play on your scoreboard, the jumbotron, your screens and the top of your screen, and your team rating against the opponent decides who wins. After the final whistle the top of the screen counts down to your next game (2 and a half minutes). Every franchise has its own game days, so two owners can play whenever they like. |
 | Seasons | Every game day is one week. Win 5 of 8 to make the playoffs: a semifinal, then the championship game. Titles pay a big prize. |
 | Leaderboard | The player list shows Wins, Rating and Titles. |
 
 Team colours: navy & orange, crimson & gold, forest & silver, purple & black, teal & black,
 royal & white. All team names are made up, so no real league teams, logos or trademarks are used.
 
-### The build order (68 pieces, 252 steps)
+### The build order (69 pieces, 256 steps)
 
 **Team HQ:** Lobby & Reception (first step free) -> Front Office -> Locker Room ->
 Coaches' Offices
@@ -194,7 +202,8 @@ HQ's upper floor) -> Coaching Staff -> Medical & Training Staff
 Goal Posts -> Ticket Booth -> Midfield Logo -> Concession Stand -> Food Vendors ->
 Player Lounge (HQ) -> Owner's Suite (HQ upstairs)
 
-**Lower bowl:** Home Side -> Home Locker Room -> Interview Room (HQ) -> Visitor Side ->
+**Lower bowl:** Home Side -> Home Locker Room -> Interview Room (HQ) -> Coaches' Locker Room ->
+Visitor Side ->
 Media Studio (HQ) -> Parking Lot -> End Zones -> Nutrition Kitchen (HQ) -> Corners (the lower bowl
 closes; until the escalators are built the visitors' players' tunnel is the way onto the field)
 
@@ -231,12 +240,14 @@ StadiumTycoon/
     PlotManager.lua              claiming, buttons, step-by-step purchases, vault, bus, scoreboard
     PlayerData.lua               DataStore loading/saving with session locking
     Franchise.lua                team picker, Owner's Bonus, quests, draft, training, seasons
-    Interactions.lua             doors, seats, elevators, snacks, mini-game results (the "Interact" prompts)
+    Interactions.lua             doors, seats, elevators, snacks, coaching gear + outfits, mini-game results (the "Interact" prompts)
     Snacks.lua                   hot dogs, smoothies, trays, foam fingers... (Tools built from parts)
+    Gear.lua                     the coaches' whistle + clipboard (Tools built from parts) and the wardrobe outfits
+    Hoverboard.lua               the hoverboard: every owner's board Tool, the board under your feet, speed and hover while riding
     LiveScreens.lua              keeps every live screen up to date
     KickGame.lua                 the field goal challenge (server side)
     Vehicles.lua                 golf carts
-    GameDay.lua                  game day schedule, income boost, crowds
+    GameDay.lua                  game days: the START GAME request, the game play by play, income boost, crowds
     Crowd.lua                    game-day fans: seated fans (filled section by section) + walking fans
     Bowl.lua                     the stadium bowl's shape: rows, segments, aisles, tunnels, fan seats
     BuildUtil.lua                helpers for parts, text, lights and build steps
@@ -258,18 +269,19 @@ StadiumTycoon/
       UpperDeck.lua              club seats and the upper deck, with tunnels (vomitories) into the seats
       Concourse.lua              main + upper concourses, section portals, upper food stands + restrooms
       ConcourseShops.lua         food court, restrooms, pro shop + merch carts on the main concourse
-      StadiumRooms.lua           home + visitor locker rooms under the stands
+      StadiumRooms.lua           home + visitor locker rooms and the coaches' locker room under the stands
       ClubLevel.lua              club lounge, luxury suites, press box, TV broadcast booth
       Exterior.lua               gates, entry halls, escalators, corner ramps, elevators, facade
       Features.lua               video boards, light towers, roof
       Plaza.lua                  ticket booth, concessions, parking, team store, trophy
   src/client/   -> StarterPlayer.StarterPlayerScripts.TycoonClient
-    HUD.client.lua               cash / income / progress / game day / save status / pop-ups
+    HUD.client.lua               cash / income / progress / game day + START GAME button / save status / pop-ups
     Franchise.client.lua         team picker, bonus button, quests, roster + draft + training
     KickGame.client.lua          the field goal aim + power meter
     Drive.client.lua             golf cart driving
     Interact.client.lua          look cards, TV camera seats, mini-games, elevator fades
     Effects.client.lua           pulsing buttons, guide beam, sounds, cheering fans
+    Hoverboard.client.lua        the hoverboard's charged jump (Space / A / JUMP button), charge bar, standing pose and board bob
   tools/                         offline checks (see below)
   docs/                          preview pictures, V5-LAYOUT.md (the stadium + HQ plan)
 ```
@@ -309,7 +321,7 @@ These tools are optional. You only need them to edit the code outside Studio.
     every interaction, `--noroof` hides roofs and `--cam=x,y,z:tx,ty,tz` renders any close-up.
     The README pictures use the views `v5_aerial`, `v5_bowl`, `v5_concourse`, `v5_pressbox`,
     `v5_club`, `v5_lockers`, `v5_atrium`, `v5_back` and `v5_hq` (and `v5_field` with a crowd).
-  * `lune run tools/test_server.luau` runs about 500 checks of the server logic and the client
+  * `lune run tools/test_server.luau` runs about 715 checks of the server logic and the client
     scripts against a fake Roblox engine. It covers:
     * claiming (also from a golf cart), step-by-step buying, the vault, the three collect pads
       and auto-collect, buttons that spend the vault, and the guide beam's choice of button
@@ -321,8 +333,18 @@ These tools are optional. You only need them to edit the code outside Studio.
     * look cards, TV camera seats and all four mini-games on the client
     * saving and rejoining, session locks, temporary errors, bad or newer save data, and
       Studio without API access
-    * game days and crowds
-    * the HUD, team screens, kick meter, guide beam and cheering fans
+    * game days: START GAME requests and their checks (owner, at the franchise, goal posts,
+      cooldown, rebuilds, rate limit), two owners at once, the score play by play, seasons, team
+      changes and leaving mid-game, rejoining during a cooldown, and the crowds
+    * the HUD (the game-day line, the START GAME button and its G / gamepad-Y keys), team
+      screens, kick meter, guide beam and cheering fans
+    * the hoverboard: one board per owner (and one in StarterGear), the riding speed, the hover
+      and the normal jump switched off, the board's parts, colours and glow, touch pads while
+      riding, snack boosts, two riders, new team colours, sitting down, dropping, destroying,
+      dying, respawning and releasing the plot; and on the client the charged jump, the charge
+      bar, the key and touch bindings, the paused walk animation and the board's bob
+    * the coaches' locker room: its rooms under the stands, the whistle and the clipboard, and
+      the wardrobe (outfits on and off exactly, respawns, visitors, team colours)
   * `lune run tools/inspect_place.luau build/StadiumTycoon.rbxlx` checks the built place file.
 * **StyLua** (`stylua src tools`) formats the code and **selene** (`selene src`) lints it.
 

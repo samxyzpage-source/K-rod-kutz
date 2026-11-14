@@ -30,6 +30,7 @@ local JUMP_ACTION = "TycoonHoverboardJump"
 -- meter and the mini-games (High), which still get Space / A while they are open
 local JUMP_PRIORITY = Enum.ContextActionPriority.Medium.Value + 500
 local LAUNCH_TIMEOUT = 0.5 -- a charged jump that hasn't left the ground by then is given up
+local LAUNCH_STEPS = 2 -- physics steps the engine gets to start a jump before its speed is checked
 local DARK = Color3.fromRGB(18, 22, 30)
 local GREEN = Color3.fromRGB(70, 210, 110)
 local GOLD = Color3.fromRGB(255, 196, 37)
@@ -150,6 +151,7 @@ local function startLaunch(humanoid, root, height)
 		root = root,
 		speed = speed,
 		started = os.clock(),
+		steps = 0, -- physics steps since (RunService.Heartbeat)
 		usePower = usePower,
 		before = usePower and humanoid.JumpPower or humanoid.JumpHeight,
 	}
@@ -164,8 +166,11 @@ local function startLaunch(humanoid, root, height)
 	humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
 end
 
--- The frames after a charged jump: once it is in the air, make sure it left at the right speed,
--- then put the jump setting back (unless the server changed it in the meantime).
+-- The frames after a charged jump. The engine starts the jump in a physics step after
+-- ChangeState, with the jump setting of that moment, so the setting stays up until the jump has
+-- really started (the character rises, falls, or is in the air after a couple of physics steps).
+-- Then make sure it left at the right speed and put the jump setting back (unless the server
+-- changed it in the meantime).
 local function updateLaunch()
 	local record = launch
 	if not record then
@@ -175,7 +180,9 @@ local function updateLaunch()
 	local elapsed = os.clock() - record.started
 	local state = humanoid.Parent and humanoid:GetState()
 	local airborne = state == Enum.HumanoidStateType.Jumping or state == Enum.HumanoidStateType.Freefall
-	if not airborne and humanoid.Parent and elapsed < LAUNCH_TIMEOUT then
+	local rising = root.Parent ~= nil and root.AssemblyLinearVelocity.Y > record.speed * 0.5
+	local started = rising or state == Enum.HumanoidStateType.Freefall or (airborne and record.steps >= LAUNCH_STEPS)
+	if not started and humanoid.Parent and elapsed < LAUNCH_TIMEOUT then
 		return -- (the jump starts in the next physics step)
 	end
 	launch = nil
@@ -384,6 +391,13 @@ local function update(dt)
 	end
 	animateBoards(dt)
 end
+
+-- (counts physics steps for a charged jump on its way, see updateLaunch)
+RunService.Heartbeat:Connect(function()
+	if launch then
+		launch.steps += 1
+	end
+end)
 
 RunService.RenderStepped:Connect(function(dt)
 	local ok, err = pcall(update, dt)
