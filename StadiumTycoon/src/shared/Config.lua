@@ -32,6 +32,9 @@ Config.DayLengthSeconds = 600 -- seconds for a full 24 hour day
 Config.NightStartsAt = 18 -- ClockTime when stadium lights switch on
 Config.NightEndsAt = 6.5 -- ClockTime when stadium lights switch off
 Config.BuildAnimation = true
+-- A returning owner's franchise (and every team change) is rebuilt a few steps per frame: the
+-- server spends at most this many seconds per frame on it, so nobody's game stalls.
+Config.BuildFrameBudget = 0.008
 Config.RespawnAtPlot = true -- owners respawn at their own stadium
 Config.ShowGuideBeam = true -- a glowing beam points to your next buy button
 

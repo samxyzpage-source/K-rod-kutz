@@ -33,6 +33,7 @@ local purchaseHooks = {} -- fn(player, plot, item) after a step is bought
 local collectHooks = {} -- fn(player, amount) after vault money is collected
 local teamHooks = {} -- fn(plot) after a plot's team colours / name change
 local builtHooks = {} -- fn(plot, item, model) after ANY step is built (incl. rebuilds)
+local rebuiltHooks = {} -- fn(plot) after a whole plot was (re)built (claim or team change)
 local teamProvider = nil -- fn(player, profile) -> palette, teamName (Franchise.lua)
 local PlayerData = require(script.Parent.PlayerData)
 local World = require(script.Parent.World)
@@ -325,6 +326,53 @@ local function buildItem(plot, item, animate)
 	end
 end
 
+-- Builds every owned step of a plot, a few steps per frame: a returning owner's franchise is
+-- thousands of parts, and building it in one frame would stall the server and flood every
+-- client. Once this frame's Config.BuildFrameBudget is used up it waits for the next frame.
+-- `swap` = the steps already have models (a team change): each step's new model is built
+-- first and its old one destroyed right after, so the plot never exists twice and nobody
+-- standing on a floor falls through. plot.Building is true while it runs (purchases wait).
+-- A newer build or Release changes plot.BuildToken, which stops this one.
+-- Returns true when every step was built.
+local function buildOwnedSteps(plot, swap)
+	local owner = plot.Owner
+	plot.BuildToken += 1
+	local token = plot.BuildToken
+	plot.Building = true
+	local sliceStart = os.clock()
+	for _, item in ipairs(Items.List) do
+		if plot.Owned[item.Id] then
+			if os.clock() - sliceStart > Config.BuildFrameBudget then
+				task.wait()
+				if plot.BuildToken ~= token or plot.Owner ~= owner then
+					return false -- the owner left (the plot was released) while it was being built
+				end
+				sliceStart = os.clock()
+			end
+			local old = swap and plot.ItemModels[item.Id] or nil
+			buildItem(plot, item, false)
+			if old and old ~= plot.ItemModels[item.Id] then
+				old:Destroy()
+			end
+		end
+	end
+	plot.Building = false
+	return true
+end
+
+-- After a whole plot was (re)built: run the hooks (e.g. live screens refresh once), then apply
+-- a team change that was asked for while the build was running.
+local function finishBuild(plot)
+	for _, hook in ipairs(rebuiltHooks) do
+		task.spawn(hook, plot)
+	end
+	local pending = plot.PendingTeam
+	plot.PendingTeam = nil
+	if pending and plot.Owner then
+		PlotManager.ApplyTeam(plot.Owner, pending.Palette, pending.TeamName)
+	end
+end
+
 ---------------------------------------------------------------------------------------------
 -- Buttons
 ---------------------------------------------------------------------------------------------
@@ -429,6 +477,13 @@ end
 function PlotManager.Purchase(plot, item)
 	local player = plot.Owner
 	if not player or plot.Owned[item.Id] or not Items.IsUnlocked(item, plot.Owned) then
+		return false
+	end
+	if plot.Building then
+		-- the whole franchise is still being rebuilt (just claimed, or new team colours)
+		if cooldownReady(player, "building", 2) then
+			notify(player, "Hold on - your franchise is still being built. Try again in a moment!", "info")
+		end
 		return false
 	end
 	if not PlayerData.TrySpend(player, item.Cost) then
@@ -556,20 +611,12 @@ function PlotManager.Claim(plot, player, profile)
 	plotByPlayer[player] = plot
 	setGateClaimed(plot, player)
 	publishPlot(plot)
-
-	for _, item in ipairs(Items.List) do
-		if plot.Owned[item.Id] then
-			buildItem(plot, item, false)
-		end
-	end
-	recalcIncome(plot)
-	refreshButtons(plot)
 	updateVault(plot)
 	player:SetAttribute("PlotIndex", plot.Index)
 
 	updateFreePlots()
 
-	-- take the new owner into their Team HQ
+	-- take the new owner into their Team HQ first (the HQ building is part of the plot base)
 	local character = player.Character
 	if character then
 		character:PivotTo(plot.Refs.SpawnCFrame)
@@ -582,7 +629,16 @@ function PlotManager.Claim(plot, player, profile)
 		notify(player, "Welcome to your Team HQ! Step on the glowing button to start building.", "success")
 		notify(player, "Your money piles up in the TEAM SAFE - step on the green pad in the lobby to collect it.", "info")
 	end
+
+	-- then rebuild everything they own (a few steps per frame)
+	if not buildOwnedSteps(plot, false) then
+		return -- they left before it was finished
+	end
+	recalcIncome(plot)
+	refreshButtons(plot)
+	updateVault(plot)
 	GameDay.OnPlotClaimed(plot)
+	finishBuild(plot)
 end
 
 local function onClaimTouched(plot, hit)
@@ -648,6 +704,9 @@ function PlotManager.Release(player)
 	plot.Vault = 0
 	plot.TeamName = ""
 	plot.Palette = plot.BasePalette
+	plot.BuildToken += 1 -- stops a (re)build that is still running
+	plot.Building = false
+	plot.PendingTeam = nil
 	plot.ItemsFolder:ClearAllChildren()
 	plot.ItemModels = {}
 	for _, button in pairs(plot.Buttons) do
@@ -854,6 +913,9 @@ function PlotManager.Init(parentFolder, remote)
 			AwayScore = 0,
 			JumbotronStep = 0,
 			JumbotronHoldUntil = 0,
+			Building = false, -- true while the owned steps are being (re)built over several frames
+			BuildToken = 0, -- changes when a new build starts or the plot is released
+			PendingTeam = nil, -- { Palette, TeamName } asked for while a build was running
 		}
 		plots[index] = plot
 		model.Parent = parentFolder
@@ -1001,7 +1063,9 @@ function PlotManager.GetBaseIncome(player)
 	return plot and plot.Income * Config.IncomeMultiplier or 0
 end
 
--- Re-colours / re-names a player's whole franchise (rebuilds every owned step).
+-- Re-colours / re-names a player's whole franchise: every owned step is rebuilt in the
+-- background, a few steps per frame, swapping each step's model for its new one.
+-- Returns true when the change was made (or will be, once a running build is done).
 function PlotManager.ApplyTeam(player, palette, teamName)
 	local plot = plotByPlayer[player]
 	if not plot then
@@ -1009,31 +1073,29 @@ function PlotManager.ApplyTeam(player, palette, teamName)
 	end
 	palette = palette or plot.Palette
 	teamName = teamName or plot.TeamName
+	if plot.Building then
+		-- the plot is still being (re)built: repaint it as soon as that is done
+		plot.PendingTeam = { Palette = palette, TeamName = teamName }
+		return true
+	end
 	if palette == plot.Palette and teamName == plot.TeamName then
 		return false -- nothing changes, so don't rebuild
 	end
 	plot.Palette = palette
 	plot.TeamName = teamName
-	-- Build the new pieces into a fresh folder BEFORE removing the old one, so clients receive
-	-- the new floors first (nobody standing in the stands or the press box falls through).
-	local oldFolder = plot.ItemsFolder
-	local newFolder = Instance.new("Folder")
-	newFolder.Name = "Items"
-	newFolder.Parent = plot.Model
-	plot.ItemsFolder = newFolder
-	plot.ItemModels = {}
-	for _, item in ipairs(Items.List) do
-		if plot.Owned[item.Id] then
-			buildItem(plot, item, false)
-		end
-	end
-	oldFolder:Destroy()
 	setGateClaimed(plot, player)
 	updateScoreboard(plot)
-	applyLights(plot)
-	for _, hook in ipairs(teamHooks) do
-		task.spawn(hook, plot)
-	end
+	task.spawn(function()
+		if not buildOwnedSteps(plot, true) then
+			return -- the owner left
+		end
+		updateScoreboard(plot)
+		applyLights(plot)
+		for _, hook in ipairs(teamHooks) do
+			task.spawn(hook, plot)
+		end
+		finishBuild(plot)
+	end)
 	return true
 end
 
@@ -1046,6 +1108,12 @@ end
 -- fn(plot) runs after ApplyTeam re-coloured a plot (e.g. to repaint the golf carts).
 function PlotManager.OnTeamApplied(fn)
 	table.insert(teamHooks, fn)
+end
+
+-- fn(plot) runs after a whole plot was (re)built over several frames (a claim or a team
+-- change). While that build runs, plot.Building is true.
+function PlotManager.OnRebuilt(fn)
+	table.insert(rebuiltHooks, fn)
 end
 
 -- fn(plot) is called when a plot is released (its owner left).

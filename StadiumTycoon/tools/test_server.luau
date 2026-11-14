@@ -627,6 +627,7 @@ local Items = requireNode("ReplicatedStorage/TycoonShared/Items")
 Config.IncomeTickSeconds = 0.05
 Config.IncomeMultiplier = 20
 Config.AutosaveSeconds = 0.3
+Config.BuildFrameBudget = math.huge -- whole plots are built at once here (one section tests the spread-out build)
 
 local PlayerData = requireNode("ServerScriptService/TycoonServer/PlayerData")
 local PlotManager = requireNode("ServerScriptService/TycoonServer/PlotManager")
@@ -1722,6 +1723,94 @@ local function runTests()
 	local campusLabel = plotModel(1).Base:FindFirstChild("CampusVaultAmount", true)
 	check(campusLabel ~= nil and campusLabel.Text:sub(1, 1) == "$", "the team safe shows the vault amount")
 	aliceRoot.CFrame = CFrame.new(0, 3, 0)
+
+	section("Server core: rebuilding a whole plot over several frames")
+	do
+		-- a returning owner's franchise (and every team change) is built a few steps per frame
+		local pat = makePlayer("Pat", 6001)
+		local patProfile = PlayerData.Load(pat)
+		local steps = 0
+		for _, item in ipairs(Items.List) do
+			if item.PieceId == "hq_lobby" or item.PieceId == "hq_frontoffice" then
+				patProfile.Owned[item.Id] = true
+				steps += 1
+			end
+		end
+		local plot2 = PlotManager.GetPlots()[2]
+		local items2 = plotModel(2).Items
+		Config.BuildFrameBudget = 0 -- (one step per frame)
+		task.spawn(PlotManager.Claim, plot2, pat, patProfile)
+		check(
+			plot2.Building and countChildren(items2) < steps,
+			("a returning owner's steps are built over several frames (%d of %d in the first one)"):format(countChildren(items2), steps)
+		)
+		check(
+			(pat.Character.HumanoidRootPart.CFrame.Position - plot2.Refs.SpawnCFrame.Position).Magnitude < 0.01,
+			"the owner is taken into the HQ before the rebuild"
+		)
+		check(countChildren(plotModel(2).Buttons) == 0, "the buy buttons wait for the rebuild")
+		check(
+			PlotManager.ApplyTeam(pat, Config.TeamColors[4], "TESTERS") and plot2.Palette ~= Config.TeamColors[4],
+			"a team change asked for during the rebuild waits for it"
+		)
+		local frames, midText = 0, nil
+		while plot2.Palette ~= Config.TeamColors[4] and frames < 300 do
+			local lobby2 = items2:FindFirstChild("hq_lobby:2")
+			local countdown = lobby2 and lobby2:FindFirstChild("Live_gameday", true)
+			if countdown and plot2.Building and midText == nil then
+				midText = countdown.Text
+			end
+			task.wait()
+			frames += 1
+		end
+		check(midText == "NEXT GAME SOON", "live screens aren't refreshed step by step during a rebuild: " .. tostring(midText))
+		check(
+			countChildren(items2) == steps and plotModel(2).Buttons:FindFirstChild("Buy_hq_lockerroom:1") ~= nil,
+			"then every owned step is there and the buttons appear"
+		)
+		check(plot2.Palette == Config.TeamColors[4] and plot2.TeamName == "TESTERS", "and the waiting team change is applied")
+		local most = 0
+		frames = 0
+		while plot2.Building and frames < 300 do
+			most = math.max(most, countChildren(items2))
+			task.wait()
+			frames += 1
+		end
+		local itemFolders = 0
+		for _, child in ipairs(plotModel(2):GetChildren()) do
+			if child.Name == "Items" then
+				itemFolders += 1
+			end
+		end
+		check(
+			not plot2.Building and countChildren(items2) == steps and most <= steps and itemFolders == 1,
+			("a team change swaps the steps one by one: the plot never exists twice (at most %d models)"):format(most)
+		)
+		local lobby2 = items2:FindFirstChild("hq_lobby:2")
+		local countdown = lobby2 and lobby2:FindFirstChild("Live_gameday", true)
+		check(countdown and countdown.Text == "GAME DAY SOON", "the live screens are refreshed once at the end")
+		-- purchases wait while a team change rebuilds the plot
+		local lockerItem = Items.ById["hq_lockerroom:1"]
+		PlayerData.AddCash(pat, lockerItem.Cost + 100)
+		check(PlotManager.ApplyTeam(pat, Config.TeamColors[5], "SECOND") and plot2.Building, "a team change rebuilds in the background")
+		check(
+			not PlotManager.Purchase(plot2, lockerItem) and not patProfile.Owned[lockerItem.Id],
+			"nothing can be bought while the plot is being rebuilt"
+		)
+		check(lastNotification(pat).message:find("being built") ~= nil, "the owner is told to wait a moment")
+		-- the owner leaves in the middle of the rebuild: it stops, nothing is built into the freed plot
+		removePlayer(pat)
+		PlotManager.Release(pat)
+		for _ = 1, 5 do
+			task.wait()
+		end
+		check(
+			countChildren(items2) == 0 and plot2.Owner == nil and not plot2.Building,
+			"an owner who leaves mid-rebuild stops it (the freed plot stays empty)"
+		)
+		PlayerData.Release(pat)
+		Config.BuildFrameBudget = math.huge
+	end
 
 	section("Respawn at plot")
 	local newCharacter = makeCharacter("AliceCharacter2")
