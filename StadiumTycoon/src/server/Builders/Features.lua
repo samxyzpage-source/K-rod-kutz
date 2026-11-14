@@ -76,6 +76,8 @@ local CABINET_GREY = Color3.fromRGB(104, 110, 118)
 local SPEAKER_GREY = Color3.fromRGB(38, 38, 44)
 local CONE_GREY = Color3.fromRGB(70, 70, 78)
 local WARM_WHITE = Color3.fromRGB(255, 243, 214)
+local LAMP_SOFT = Color3.fromRGB(184, 180, 172) -- the control room's ceiling lamps (a soft glow)
+local LAMP_NEUTRAL = Color3.fromRGB(255, 249, 238) -- ...and their light
 local ROOF_WHITE = Color3.fromRGB(232, 235, 240)
 local CEILING_WHITE = Color3.fromRGB(226, 228, 232)
 local FLOOR_DARK = Color3.fromRGB(64, 66, 74)
@@ -1219,11 +1221,13 @@ function M.jumbotron(ctx)
 			roomTop - 0.4,
 			z - 0.6,
 			z + 0.6,
-			WARM_WHITE,
+			LAMP_SOFT,
 			Enum.Material.Neon,
 			GLOW
 		)
-		BuildUtil.Light(lamp, "PointLight", { Name = "RoomLight", Range = 16, Brightness = 1.2, Color = WARM_WHITE })
+		-- (a walk-in room in an outdoor piece, so BuildUtil.TuneLighting leaves it alone: its lamps
+		-- are toned like the room lamps there, softer and whiter)
+		BuildUtil.Light(lamp, "PointLight", { Name = "RoomLight", Range = 16, Brightness = 0.65, Color = LAMP_NEUTRAL })
 	end
 	local doorSign = span(
 		ctx,
