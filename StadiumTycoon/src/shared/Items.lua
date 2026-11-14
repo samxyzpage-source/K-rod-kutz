@@ -346,6 +346,17 @@ local PIECES = {
 		"campus"
 	),
 	piece(
+		"coach_lockerroom",
+		"Coaches' Locker Room",
+		{ "Coaches' Tunnel & Walls", "Coaches' Lockers & Gear", "Whistles & Headsets", "Wardrobe & Mirrors" },
+		58000,
+		135,
+		{ "home_lockerroom" },
+		-- (west of the bench area, on the coaches' side of the field: their tunnel branches off the
+		-- home players' tunnel to the west)
+		Vector3.new(-63, 0, BACK_LINE_Z)
+	),
+	piece(
 		"lower_visitor",
 		"Lower Bowl: Visitor Side",
 		{ "Raker Beams & Rows", "Seats", "Aisles & Railings", "Field Wall & Players' Tunnel" },

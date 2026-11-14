@@ -2632,6 +2632,758 @@ local function runTests()
 		fixtures:Destroy()
 	end
 
+	do
+		-- The Coaches' Locker Room: the piece, its rooms under the home stands (each piece built in
+		-- plot-local coordinates), then its gear and wardrobe on Alice's finished plot (Gear.lua,
+		-- through the real prompts). (A function of its own: runTests is near Luau's local limit.)
+		section("Coaches' locker room")
+		local function coachRoomTests()
+			local Color3 = roblox.Color3
+			local Gear = requireNode("ServerScriptService/TycoonServer/Gear")
+			local Builders = requireNode("ServerScriptService/TycoonServer/Builders")
+			local Snacks = requireNode("ServerScriptService/TycoonServer/Snacks")
+			local L = Config.Layout
+			Gear.Init(PlotManager)
+			local tweets = 0
+			roblox.implementMethod("Sound", "Play", function(sound)
+				if sound.Name == "Tweet" then
+					tweets += 1
+				end
+			end)
+
+			-- the piece --------------------------------------------------------------------------
+			local piece = Items.PieceById.coach_lockerroom
+			local home = Items.PieceById.home_lockerroom
+			check(
+				piece ~= nil
+					and #piece.Stages == 4
+					and #piece.Requires == 1
+					and piece.Requires[1] == "home_lockerroom"
+					and piece.Area == "stadium"
+					and L.Zones.coach_lockerroom ~= nil,
+				"the Coaches' Locker Room: 4 steps, after the home locker room, in the stadium, with a zone"
+			)
+			check(
+				piece.Order > home.Order and piece.Cost > home.Cost,
+				"it comes after the home locker room in the build order and costs more"
+			)
+			check(
+				piece.Button.Y == 0 and piece.Button.Z == 89 and math.abs(piece.Button.X) > 58,
+				"its button stands on the field's back line, clear of the team benches (|x| < 58)"
+			)
+			local unhandled = {}
+			for use, spec in pairs(Interact.Uses) do
+				local handled = spec.Game ~= nil
+					or (spec.Tool ~= nil and Snacks.Kinds[spec.Tool] ~= nil)
+					or (spec.Gear ~= nil and Gear.Kinds[spec.Gear] ~= nil)
+					or (spec.Outfit ~= nil and Gear.Outfits[spec.Outfit] ~= nil)
+					or spec.ChangeBack == true
+				if not handled then
+					table.insert(unhandled, use)
+				end
+			end
+			check(
+				#unhandled == 0,
+				"every use action is a client mini-game or something the server hands out (snack, gear, outfit) "
+					.. table.concat(unhandled, ", ")
+			)
+
+			-- the rooms (plot-local) -------------------------------------------------------------
+			local function buildPiece(pieceId, onlyStage)
+				local model = Instance.new("Model")
+				model.Name = pieceId
+				Builders[pieceId](BuildUtil.NewContext(CFrame.new(), model, Config.TeamColors[1], "TEST", Config, onlyStage))
+				BuildUtil.PruneEmpty(model)
+				return model
+			end
+			local function partsIn(model)
+				local list = {}
+				for _, d in ipairs(model:GetDescendants()) do
+					if d:IsA("BasePart") then
+						table.insert(list, d)
+					end
+				end
+				return list
+			end
+			-- what a player bumps into (door leaves count as open)
+			local function solid(list)
+				local out = {}
+				for _, part in ipairs(list) do
+					if part.CanCollide and part.Transparency < 1 and part:GetAttribute("Leaf") == nil then
+						table.insert(out, part)
+					end
+				end
+				return out
+			end
+			local function inside(part, point)
+				local o = part.CFrame:PointToObjectSpace(point)
+				local h = part.Size / 2
+				return math.abs(o.X) < h.X and math.abs(o.Y) < h.Y and math.abs(o.Z) < h.Z
+			end
+			local function corners(part)
+				local list = { part.CFrame.Position }
+				local h = part.Size / 2 - Vector3.new(0.02, 0.02, 0.02)
+				for _, sx in ipairs({ -1, 1 }) do
+					for _, sy in ipairs({ -1, 1 }) do
+						for _, sz in ipairs({ -1, 1 }) do
+							table.insert(list, part.CFrame:PointToWorldSpace(Vector3.new(sx * h.X, sy * h.Y, sz * h.Z)))
+						end
+					end
+				end
+				return list
+			end
+			local coach, homeRoom, bowl = buildPiece("coach_lockerroom"), buildPiece("home_lockerroom"), buildPiece("lower_home")
+			local coachParts = partsIn(coach)
+			local steps = {}
+			for step = 1, 4 do
+				steps[step] = #partsIn(buildPiece("coach_lockerroom", step))
+			end
+			check(
+				steps[1] > 0 and steps[2] > 0 and steps[3] > 0 and steps[4] > 0 and #coachParts <= 170,
+				("every step builds something (%d / %d / %d / %d parts; %d in all, a room's budget is 170)"):format(
+					steps[1],
+					steps[2],
+					steps[3],
+					steps[4],
+					#coachParts
+				)
+			)
+			local minX, maxX, minY, maxY, minZ = math.huge, -math.huge, math.huge, -math.huge, math.huge
+			for _, part in ipairs(coachParts) do
+				for _, point in ipairs(corners(part)) do
+					minX, maxX = math.min(minX, point.X), math.max(maxX, point.X)
+					minY, maxY = math.min(minY, point.Y), math.max(maxY, point.Y)
+					minZ = math.min(minZ, point.Z)
+				end
+			end
+			check(
+				maxY < 12.5 and minY > -0.05 and minZ > 122.9 and minX > -76.5 and maxX < -9.8,
+				("the coaches' rooms stay on the event level under the lower rows (top %.1f), between row 7 (z 123), the raker column at x -78 and the home corridor"):format(
+					maxY
+				)
+			)
+			local clashes = {}
+			local others = solid(partsIn(bowl))
+			for _, part in ipairs(solid(partsIn(homeRoom))) do
+				table.insert(others, part)
+			end
+			for _, part in ipairs(coachParts) do
+				for _, point in ipairs(corners(part)) do
+					for _, other in ipairs(others) do
+						if inside(other, point) then
+							clashes[part.Name .. " in " .. other.Name] = true
+						end
+					end
+				end
+			end
+			for _, other in ipairs(others) do
+				for _, point in ipairs(corners(other)) do
+					for _, part in ipairs(solid(coachParts)) do
+						if inside(part, point) then
+							clashes[other.Name .. " in " .. part.Name] = true
+						end
+					end
+				end
+			end
+			local clashList = {}
+			for key in pairs(clashes) do
+				table.insert(clashList, key)
+			end
+			check(
+				#clashList == 0,
+				"nothing of the coaches' rooms runs into the bowl or the home locker room " .. table.concat(clashList, ", ")
+			)
+
+			-- the door in the home corridor's wall, and the way through it
+			local doors = {}
+			for _, d in ipairs(coach:GetDescendants()) do
+				if d:IsA("Model") and d:GetAttribute("Leaves") then
+					doors[d.Name] = d
+				end
+			end
+			local leaf = doors.CoachesDoor and doors.CoachesDoor:FindFirstChild("DoorLeaf")
+			local entryLeaf = doors.EntranceDoors and doors.EntranceDoors:FindFirstChild("DoorLeaf")
+			check(
+				leaf ~= nil
+					and math.abs(leaf.CFrame.Position.X + 10.4) < 0.01
+					and leaf.CFrame.Position.Z > 130.6
+					and leaf.CFrame.Position.Z < 135.4
+					and leaf.CFrame.LookVector.X < -0.99
+					and entryLeaf ~= nil
+					and entryLeaf.CFrame.LookVector.X < -0.99,
+				"the COACHES door stands in the home corridor's west wall and swings into the coaches' tunnel; the room's doors swing in"
+			)
+			local homeWalls = solid(partsIn(homeRoom))
+			local function homeWallAt(point)
+				for _, part in ipairs(homeWalls) do
+					if inside(part, point) then
+						return true
+					end
+				end
+				return false
+			end
+			local open = true
+			for _, point in ipairs(corners(leaf)) do
+				open = open and not homeWallAt(point)
+			end
+			check(
+				open
+					and homeWallAt(Vector3.new(-10.4, 3, 130.3))
+					and homeWallAt(Vector3.new(-10.4, 3, 135.7))
+					and homeWallAt(Vector3.new(-10.4, 10, 133)),
+				"the home corridor's west wall has a door-sized opening there (wall on both sides and above)"
+			)
+			local function walk(route, blockers)
+				local hits = {}
+				for i = 1, #route - 1 do
+					local a, b = route[i], route[i + 1]
+					local count = math.ceil((b - a).Magnitude / 0.5)
+					for k = 0, count do
+						local p = a + (b - a) * (k / count)
+						for _, y in ipairs({ 1, 3, 5 }) do
+							for _, side in ipairs({ -0.8, 0, 0.8 }) do
+								local point = Vector3.new(p.X, y, p.Z + side)
+								for _, part in ipairs(blockers) do
+									if inside(part, point) then
+										hits[part.Name] = true
+									end
+								end
+							end
+						end
+					end
+				end
+				local list = {}
+				for name in pairs(hits) do
+					table.insert(list, name)
+				end
+				return list
+			end
+			local withoutCoaches = solid(partsIn(bowl))
+			for _, part in ipairs(homeWalls) do
+				table.insert(withoutCoaches, part)
+			end
+			local leadsOut = walk(
+				{ Vector3.new(0, 0, 133), Vector3.new(-10.4, 0, 133), Vector3.new(-30, 0, 131), Vector3.new(-55, 0, 131) },
+				withoutCoaches
+			)
+			check(
+				#leadsOut == 0,
+				"before the coaches' room is built, the doorway leads out under the stands (no dead end) " .. table.concat(leadsOut, ", ")
+			)
+			local after = solid(coachParts)
+			for _, part in ipairs(withoutCoaches) do
+				table.insert(after, part)
+			end
+			local route = walk({
+				Vector3.new(0, 0, 131),
+				Vector3.new(-10.4, 0, 133),
+				Vector3.new(-46.6, 0, 133),
+				Vector3.new(-52, 0, 133),
+				Vector3.new(-60, 0, 140),
+			}, after)
+			check(
+				#route == 0,
+				"from the players' tunnel through the COACHES door, down the coaches' tunnel and into the room "
+					.. table.concat(route, ", ")
+			)
+
+			-- what's inside
+			local uses, doorPrompts, looks, seats, live = {}, 0, 0, 0, {}
+			local glare, lights = {}, 0
+			for _, d in ipairs(coach:GetDescendants()) do
+				if d:IsA("ProximityPrompt") then
+					local kind = d:GetAttribute("Kind")
+					if kind == "use" then
+						uses[d:GetAttribute("Use")] = (uses[d:GetAttribute("Use")] or 0) + 1
+					elseif kind == "door" then
+						doorPrompts += 1
+					elseif kind == "look" then
+						looks += 1
+					end
+				elseif d:IsA("Seat") then
+					seats += 1
+				elseif d:IsA("TextLabel") and d:GetAttribute("Live") ~= nil then
+					live[d:GetAttribute("Live")] = true
+				elseif d:IsA("Light") then
+					lights += 1
+					if d.Brightness > 1 or d.Range > 16 or math.min(d.Color.R, d.Color.G, d.Color.B) < 0.9 then
+						table.insert(glare, d.Parent.Name .. " light")
+					end
+				elseif d:IsA("BasePart") and d.Material == Enum.Material.Neon then
+					table.insert(glare, d.Name .. " (Neon)")
+				elseif d:IsA("SurfaceGui") and d.LightInfluence == 0 then
+					local c = d.Parent.Color
+					if c.R + c.G + c.B > 0.3 then
+						table.insert(glare, d.Parent.Name .. " glows on a light face")
+					end
+				end
+			end
+			check(
+				uses.whistle == 1
+					and uses.clipboard == 1
+					and uses.coachpolo == 1
+					and uses.hoodie == 1
+					and uses.jersey == 1
+					and uses.changeback == 1,
+				"a whistle rack, clipboards, three outfits and YOUR CLOTHES to use"
+			)
+			check(
+				doorPrompts == 2 and looks >= 10 and seats >= 4 and live.team and live.roster and live.gameday,
+				("walk-in: 2 doors, %d look cards, %d seats, live team / starters / kick-off screens"):format(looks, seats)
+			)
+			check(
+				lights >= 8 and #glare == 0,
+				("%d soft neutral lights (brightness <= 1, range <= 16), no Neon, only dark screens glow %s"):format(
+					lights,
+					table.concat(glare, ", ")
+				)
+			)
+			local pants = {}
+			for _, part in ipairs(coachParts) do
+				if part.Name == "FormPants" then
+					table.insert(pants, part)
+				end
+			end
+			table.sort(pants, function(a, b)
+				return a.CFrame.Position.X < b.CFrame.Position.X
+			end)
+			local palette1 = Config.TeamColors[1]
+			local _, _, poloLegs = Gear.OutfitColors("CoachPolo", palette1)
+			local _, _, hoodieLegs = Gear.OutfitColors("SidelineHoodie", palette1)
+			local _, _, jerseyLegs = Gear.OutfitColors("TeamJersey", palette1)
+			check(
+				#pants == 3 and pants[1].Color == poloLegs and pants[2].Color == hoodieLegs and pants[3].Color == jerseyLegs,
+				"the dress forms (polo, hoodie, jersey from west to east) wear the outfits you get"
+			)
+
+			-- the gear and the wardrobe on Alice's plot -------------------------------------------
+			local function promptFor(use)
+				for step = 1, 4 do
+					local model = plotModel(1).Items:FindFirstChild("coach_lockerroom:" .. step)
+					for _, d in ipairs(model and model:GetDescendants() or {}) do
+						if d:IsA("ProximityPrompt") and d:GetAttribute("Use") == use then
+							return d
+						end
+					end
+				end
+				return nil
+			end
+			local function spotOf(prompt)
+				local host = prompt.Parent
+				if host:IsA("Attachment") then
+					return host.Parent.CFrame:PointToWorldSpace(host.Position)
+				end
+				return host.CFrame.Position
+			end
+			local function trigger(prompt, who)
+				ProximityPromptServiceMock.PromptTriggered:Fire(prompt, who)
+				task.wait(0.03)
+			end
+			local function goTo(who, prompt, offset)
+				who.Character:PivotTo(CFrame.new(spotOf(prompt) + (offset or Vector3.new())))
+				Interactions._resetCooldowns(who)
+			end
+			local whistlePrompt, clipboardPrompt = promptFor("whistle"), promptFor("clipboard")
+			local poloPrompt, hoodiePrompt, jerseyPrompt, backPrompt =
+				promptFor("coachpolo"), promptFor("hoodie"), promptFor("jersey"), promptFor("changeback")
+			check(
+				whistlePrompt
+					and clipboardPrompt
+					and poloPrompt
+					and hoodiePrompt
+					and jerseyPrompt
+					and backPrompt
+					and whistlePrompt.ActionText == "Grab a whistle"
+					and poloPrompt.ActionText == "Put it on"
+					and backPrompt.ActionText == "Change back",
+				"the built room's gear and wardrobe prompts are ready"
+			)
+
+			-- a character with clothes, body colours, a hat, layered clothing and hair
+			local SKIN = Color3.fromRGB(234, 184, 146)
+			local function dressable(name)
+				local character = makeCharacter(name)
+				local root = character.HumanoidRootPart
+				local function limb(partName, size, x, y)
+					local part = character:FindFirstChild(partName) or Instance.new("Part")
+					part.Name = partName
+					part.Size = size
+					part.CFrame = root.CFrame * CFrame.new(x, y, 0)
+					part.Color = SKIN
+					part.Parent = character
+					return part
+				end
+				local head = limb("Head", Vector3.new(1.2, 1.2, 1.2), 0, 2.2)
+				local hatSpot = Instance.new("Attachment")
+				hatSpot.Name = "HatAttachment"
+				hatSpot.Position = Vector3.new(0, 0.6, 0)
+				hatSpot.Parent = head
+				limb("UpperTorso", Vector3.new(2, 1.6, 1), 0, 0.8)
+				limb("LowerTorso", Vector3.new(2, 0.4, 1), 0, -0.2)
+				for _, side in ipairs({ { "Left", -1 }, { "Right", 1 } }) do
+					local s, x = side[1], side[2]
+					limb(s .. "UpperArm", Vector3.new(1, 1.2, 1), 1.5 * x, 0.8)
+					limb(s .. "LowerArm", Vector3.new(1, 1.1, 1), 1.5 * x, -0.35)
+					limb(s .. "Hand", Vector3.new(1, 0.3, 1), 1.5 * x, -1.05)
+					limb(s .. "UpperLeg", Vector3.new(1, 1.2, 1), 0.5 * x, -1)
+					limb(s .. "LowerLeg", Vector3.new(1, 1.2, 1), 0.5 * x, -2.2)
+					limb(s .. "Foot", Vector3.new(1, 0.3, 1), 0.5 * x, -2.95)
+				end
+				local kit = { colors = Instance.new("BodyColors") }
+				for _, field in ipairs({ "HeadColor3", "TorsoColor3", "LeftArmColor3", "RightArmColor3", "LeftLegColor3", "RightLegColor3" }) do
+					kit.colors[field] = SKIN
+				end
+				kit.colors.Parent = character
+				for key, className in pairs({ shirt = "Shirt", pants = "Pants", tee = "ShirtGraphic" }) do
+					kit[key] = Instance.new(className)
+					kit[key].Parent = character
+				end
+				for key, spec in pairs({
+					hat = { Enum.AccessoryType.Hat, 0 },
+					jacket = { Enum.AccessoryType.Jacket, 0.25, true },
+					hair = { Enum.AccessoryType.Hair, 0 },
+				}) do
+					local accessory = Instance.new("Accessory")
+					accessory.Name = key
+					accessory.AccessoryType = spec[1]
+					local handle = Instance.new("Part")
+					handle.Name = "Handle"
+					handle.Transparency = spec[2]
+					handle.CFrame = head.CFrame
+					handle.Parent = accessory
+					if spec[3] then
+						Instance.new("WrapLayer").Parent = handle
+					end
+					accessory.Parent = character
+					kit[key] = handle
+				end
+				return character, kit
+			end
+
+			-- the owner tries the outfits on
+			local walker, bobWalker = alice.Character, bob.Character
+			local palette = alicePlot.Palette
+			local coachChar, kit = dressable("AliceCoach")
+			alice.Character = coachChar
+			local colorsBefore = {}
+			for _, part in ipairs(coachChar:GetChildren()) do
+				if part:IsA("BasePart") then
+					colorsBefore[part] = part.Color
+				end
+			end
+			goTo(alice, poloPrompt)
+			trigger(poloPrompt, alice)
+			local outfitColors, folder = coachChar:FindFirstChild("CoachOutfitColors"), coachChar:FindFirstChild("CoachOutfit")
+			local _, _, khaki = Gear.OutfitColors("CoachPolo", palette)
+			check(
+				Gear.Wearing(alice) == "CoachPolo" and lastNotification(alice).message:find("Head Coach Polo") ~= nil,
+				"the wardrobe dresses you in the Head Coach Polo: " .. lastNotification(alice).message
+			)
+			check(
+				kit.shirt.Parent == nil and kit.pants.Parent == nil and kit.tee.Parent == nil and kit.colors.Parent == nil,
+				"your shirt, pants, T-shirt and body colours are put away"
+			)
+			check(
+				outfitColors ~= nil
+					and outfitColors.TorsoColor3 == palette.Primary
+					and coachChar.UpperTorso.Color == palette.Primary
+					and coachChar.LowerTorso.Color == palette.Primary
+					and coachChar.LeftUpperArm.Color == SKIN
+					and coachChar.RightUpperLeg.Color == khaki
+					and coachChar.LeftFoot.Color == khaki,
+				"a polo in the team colour (short sleeves: your arms show) with khakis"
+			)
+			local names, loose = {}, {}
+			for _, part in ipairs(folder and folder:GetChildren() or {}) do
+				names[part.Name] = (names[part.Name] or 0) + 1
+				local weld = part:FindFirstChildOfClass("Weld")
+				local attached = weld ~= nil
+					and weld.Part1 == part
+					and weld.Part0 ~= nil
+					and weld.Part0.Parent == coachChar
+					and ((weld.Part0.CFrame * weld.C0).Position - part.CFrame.Position).Magnitude < 1e-3
+				if not attached or part.CanCollide or part.CanTouch or part.CanQuery or not part.Massless or part.Anchored then
+					table.insert(loose, part.Name)
+				end
+			end
+			check(
+				names.CapCrown == 1
+					and names.CapBrim == 1
+					and names.HeadsetBand == 1
+					and names.EarCup == 2
+					and names.Mic == 1
+					and names.Lanyard == 2
+					and names.LanyardWhistle == 1
+					and names.Sleeve == 2,
+				"short team sleeves, a cap, a headset with a microphone and a whistle on a lanyard"
+			)
+			check(
+				#loose == 0 and folder.CapCrown.CFrame.Position.Y > coachChar.Head.CFrame.Position.Y + 0.3,
+				"the outfit's parts sit on the body (welded, non-collidable, massless, untouchable) " .. table.concat(loose, ", ")
+			)
+			check(
+				kit.hat.Transparency == 1 and kit.jacket.Transparency == 1 and kit.hair.Transparency == 0,
+				"your hat hides under the cap and layered clothing under the outfit (your hair stays)"
+			)
+			goTo(alice, poloPrompt)
+			trigger(poloPrompt, alice)
+			check(lastNotification(alice).message:find("already wearing") ~= nil, "putting on the same outfit again just says so")
+			alice.Character:PivotTo(CFrame.new(spotOf(hoodiePrompt)))
+			trigger(hoodiePrompt, alice)
+			check(Gear.Wearing(alice) == "CoachPolo", "outfit changes are rate limited")
+			goTo(alice, hoodiePrompt)
+			trigger(hoodiePrompt, alice)
+			folder = coachChar:FindFirstChild("CoachOutfit")
+			local folders = 0
+			for _, child in ipairs(coachChar:GetChildren()) do
+				if child.Name == "CoachOutfit" then
+					folders += 1
+				end
+			end
+			check(
+				Gear.Wearing(alice) == "SidelineHoodie"
+					and folders == 1
+					and folder:FindFirstChild("Hood") ~= nil
+					and folder:FindFirstChild("HeadsetBand") ~= nil
+					and folder:FindFirstChild("CapCrown") == nil,
+				"switching to the Sideline Hoodie swaps the parts (hood + headset, no cap)"
+			)
+			check(
+				coachChar.LeftUpperArm.Color == palette.Primary
+					and coachChar.LeftUpperLeg.Color == hoodieLegs
+					and kit.shirt.Parent == nil
+					and kit.hat.Transparency == 1,
+				"long team sleeves and track pants; your own clothes stay put away, the hat stays under the hood"
+			)
+			goTo(alice, jerseyPrompt)
+			trigger(jerseyPrompt, alice)
+			folder = coachChar:FindFirstChild("CoachOutfit")
+			local back = folder and folder:FindFirstChild("JerseyBack")
+			local nameLabel = back and back:FindFirstChild("JerseyName", true)
+			local numberLabel = back and back:FindFirstChild("JerseyNumber", true)
+			check(
+				Gear.Wearing(alice) == "TeamJersey"
+					and nameLabel ~= nil
+					and nameLabel.Text == "ALICE"
+					and numberLabel.Text == tostring(alice.UserId % 98 + 1),
+				"the Team Jersey has your name and number on the back"
+			)
+			check(kit.hat.Transparency == 0 and kit.jacket.Transparency == 1, "no cap or hood with the jersey: your hat shows again")
+
+			-- team colours: a change on the wardrobe's plot recolours it, another plot's doesn't
+			local newPalette = Config.TeamColors[1]
+			Gear._onTeamApplied(PlotManager.GetPlots()[2])
+			check(coachChar.UpperTorso.Color == palette.Primary, "another plot's team change leaves the outfit alone")
+			alicePlot.Palette = newPalette
+			Gear._onTeamApplied(alicePlot)
+			folder = coachChar:FindFirstChild("CoachOutfit")
+			check(
+				coachChar.UpperTorso.Color == newPalette.Primary
+					and coachChar:FindFirstChild("CoachOutfitColors").TorsoColor3 == newPalette.Primary
+					and folder.JerseyBack.Color == newPalette.Primary
+					and coachChar.LeftUpperLeg.Color == newPalette.Secondary,
+				"a team colour change recolours the jersey you wear"
+			)
+			alicePlot.Palette = palette
+			Gear._onTeamApplied(alicePlot)
+			check(coachChar.UpperTorso.Color == palette.Primary, "...and back again")
+
+			-- change back: exactly as before
+			goTo(alice, backPrompt)
+			trigger(backPrompt, alice)
+			local same = true
+			for part, color in pairs(colorsBefore) do
+				if part.Parent ~= coachChar or part.Color ~= color then
+					same = false
+				end
+			end
+			check(
+				Gear.Wearing(alice) == nil
+					and kit.shirt.Parent == coachChar
+					and kit.pants.Parent == coachChar
+					and kit.tee.Parent == coachChar
+					and kit.colors.Parent == coachChar
+					and lastNotification(alice).message:find("own clothes") ~= nil,
+				"Change back: your own shirt, pants, T-shirt and body colours come back"
+			)
+			check(
+				same
+					and kit.colors.TorsoColor3 == SKIN
+					and kit.colors.LeftLegColor3 == SKIN
+					and coachChar:FindFirstChild("CoachOutfitColors") == nil
+					and coachChar:FindFirstChild("CoachOutfit") == nil,
+				"...with every body colour exactly as before and nothing of the outfit left"
+			)
+			check(
+				kit.hat.Transparency == 0 and kit.jacket.Transparency == 0.25 and kit.hair.Transparency == 0,
+				"...and hidden accessories exactly as they were"
+			)
+			goTo(alice, backPrompt)
+			trigger(backPrompt, alice)
+			check(lastNotification(alice).message:find("already wearing your own") ~= nil, "changing back twice is harmless")
+
+			-- a respawn starts in your own clothes
+			goTo(alice, poloPrompt)
+			trigger(poloPrompt, alice)
+			local respawned, freshKit = dressable("AliceRespawned")
+			coachChar.Parent = nil
+			alice.Character = respawned
+			alice.CharacterAdded:Fire(respawned)
+			task.wait(0.15) -- (PlotManager takes the owner home first)
+			check(
+				Gear.Wearing(alice) == nil and respawned:FindFirstChild("CoachOutfit") == nil and freshKit.shirt.Parent == respawned,
+				"a respawn starts in your own clothes"
+			)
+			goTo(alice, backPrompt)
+			trigger(backPrompt, alice)
+			check(
+				lastNotification(alice).message:find("already wearing your own") ~= nil
+					and freshKit.shirt.Parent == respawned
+					and freshKit.colors.Parent == respawned,
+				"...and Change back leaves the new character alone"
+			)
+
+			-- a visitor: outfits on someone else's plot, gone with the character that wore them
+			local bobChar, bobKit = dressable("BobCoach")
+			bob.Character = bobChar
+			goTo(bob, hoodiePrompt)
+			trigger(hoodiePrompt, bob)
+			check(Gear.Wearing(bob) == "SidelineHoodie" and bobKit.shirt.Parent == nil, "a visitor can change in the owner's wardrobe")
+			local bobNext = dressable("BobNext")
+			bob.Character = bobNext -- (a new character, without CharacterAdded being seen)
+			check(Gear.Wearing(bob) == nil, "an outfit belongs to the character that put it on")
+			goTo(bob, poloPrompt, Vector3.new(0, 0, -40))
+			trigger(poloPrompt, bob)
+			check(Gear.Wearing(bob) == nil, "the wardrobe ignores players who are far away")
+			goTo(bob, poloPrompt)
+			bobNext:FindFirstChildOfClass("Humanoid").Health = 0
+			trigger(poloPrompt, bob)
+			check(Gear.Wearing(bob) == nil, "...and players who aren't alive")
+			bobNext:FindFirstChildOfClass("Humanoid").Health = 100
+			local plain = makeCharacter("BobPlain") -- (no clothes, no body colours)
+			local footColor = plain.LeftFoot.Color
+			bob.Character = plain
+			goTo(bob, jerseyPrompt)
+			trigger(jerseyPrompt, bob)
+			check(
+				Gear.Wearing(bob) == "TeamJersey" and plain.LeftFoot.Color == palette.Secondary,
+				"a character without clothes or body colours can change too"
+			)
+			goTo(bob, backPrompt)
+			trigger(backPrompt, bob)
+			check(
+				Gear.Wearing(bob) == nil and plain.LeftFoot.Color == footColor and plain:FindFirstChildOfClass("BodyColors") == nil,
+				"...and back, leaving no body colours behind"
+			)
+			local ghost = { Name = "Ghost", DisplayName = "Ghost", UserId = 4242, Character = dressable("GhostCoach") }
+			Gear.Wear(ghost, "CoachPolo", alicePlot)
+			local woreIt = Gear.Wearing(ghost) == "CoachPolo"
+			Players.PlayerRemoving:Fire(ghost)
+			task.wait(0.03)
+			check(woreIt and Gear.Wearing(ghost) == nil, "a player who leaves is forgotten")
+
+			-- the whistle and the clipboard
+			Gear.BubbleSeconds = 0.15
+			local gearChar = dressable("BobGear")
+			bob.Character = gearChar
+			goTo(bob, whistlePrompt)
+			trigger(whistlePrompt, bob)
+			local whistle = bob.Backpack:FindFirstChild("Whistle")
+			local lanyardColored, welded = false, true
+			for _, part in ipairs(whistle and whistle:GetChildren() or {}) do
+				if part:IsA("BasePart") then
+					lanyardColored = lanyardColored or part.Color == palette.Secondary
+					welded = welded and not part.Anchored and (part.Name == "Handle" or part:FindFirstChildOfClass("WeldConstraint") ~= nil)
+				end
+			end
+			check(
+				whistle ~= nil
+					and whistle:IsA("Tool")
+					and whistle:GetAttribute("Gear") == "Whistle"
+					and whistle:FindFirstChild("Handle") ~= nil,
+				"the whistle rack hands out a Whistle (a Tool built from parts)"
+			)
+			local tweet = whistle and whistle.Handle:FindFirstChild("Tweet")
+			check(
+				welded and lanyardColored and tweet ~= nil and tweet.SoundId:sub(1, 11) == "rbxasset://",
+				"welded, on a lanyard in the plot's team colour, with a tweet that ships with Roblox"
+			)
+			goTo(bob, whistlePrompt)
+			trigger(whistlePrompt, bob)
+			local whistles = 0
+			for _, tool in ipairs(bob.Backpack:GetChildren()) do
+				if tool.Name == "Whistle" then
+					whistles += 1
+				end
+			end
+			check(whistles == 1 and lastNotification(bob).message:find("already have") ~= nil, "one whistle at a time")
+			whistle.Parent = gearChar
+			instanceSignal(whistle, "Activated"):Fire()
+			task.wait(0.03)
+			local head = gearChar.Head
+			local bubble = head:FindFirstChild("WhistleBubble")
+			local text = bubble and bubble:FindFirstChild("Text", true)
+			check(
+				bubble ~= nil
+					and bubble:IsA("BillboardGui")
+					and bubble.AlwaysOnTop
+					and text ~= nil
+					and text.Text == "TWEEEET!"
+					and tweets == 1,
+				"blowing it: TWEEEET! over your head (everyone sees it) and a tweet"
+			)
+			instanceSignal(whistle, "Activated"):Fire()
+			task.wait(0.03)
+			check(head:FindFirstChild("WhistleBubble") == bubble and tweets == 1, "the whistle has a short cooldown")
+			task.wait(0.25)
+			check(head:FindFirstChild("WhistleBubble") == nil, "the bubble pops after a moment")
+			whistle:SetAttribute("LastUse", 0)
+			instanceSignal(whistle, "Activated"):Fire()
+			task.wait(0.03)
+			check(head:FindFirstChild("WhistleBubble") ~= nil and tweets == 2, "...and it blows again after the cooldown")
+			goTo(bob, clipboardPrompt)
+			trigger(clipboardPrompt, bob)
+			local clipboard = bob.Backpack:FindFirstChild("Clipboard")
+			check(clipboard ~= nil and clipboard:GetAttribute("Gear") == "Clipboard", "the gear table hands out a Clipboard")
+			clipboard.Parent = gearChar
+			local plays = {}
+			for _ = 1, 2 do
+				clipboard:SetAttribute("LastUse", 0)
+				instanceSignal(clipboard, "Activated"):Fire()
+				task.wait(0.03)
+				local play = head:FindFirstChild("PlayBubble")
+				local label = play and play:FindFirstChild("Text", true)
+				table.insert(plays, label and label.Text or "?")
+			end
+			check(
+				plays[1] == Gear.Plays[1] and plays[2] == Gear.Plays[2],
+				"the clipboard draws up a new play every click: " .. table.concat(plays, ", ")
+			)
+			whistle:Destroy()
+			goTo(bob, whistlePrompt, Vector3.new(30, 0, 0))
+			trigger(whistlePrompt, bob)
+			check(bob.Backpack:FindFirstChild("Whistle") == nil, "no gear for players far from the rack")
+			local stray = Instance.new("Model")
+			stray.Parent = workspace
+			local strayCtx = BuildUtil.NewContext(CFrame.new(), stray, palette, "", Config)
+			local strayRack = BuildUtil.Box(strayCtx, "Rack", Vector3.new(4, 3, 0.3), Vector3.new(0, 5, 900))
+			local strayPrompt = BuildUtil.Use(strayCtx, strayRack, "whistle")
+			gearChar:PivotTo(CFrame.new(0, 3, 900))
+			Interactions._resetCooldowns(bob)
+			trigger(strayPrompt, bob)
+			check(bob.Backpack:FindFirstChild("Whistle") == nil, "...or from a rack that isn't part of a franchise")
+
+			-- tidy up for the next sections
+			stray:Destroy()
+			clipboard:Destroy()
+			Gear.BubbleSeconds = 1.6
+			alice.Character, bob.Character = walker, bobWalker
+			Interactions._resetCooldowns(alice)
+			Interactions._resetCooldowns(bob)
+		end
+		coachRoomTests()
+	end
+
 	section("Live displays")
 	local title = plotModel(1).Items:FindFirstChild("ScoreboardTitle", true)
 	local attendance = plotModel(1).Items:FindFirstChild("ScoreboardAttendance", true)

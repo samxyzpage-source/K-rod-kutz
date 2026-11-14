@@ -8,7 +8,8 @@
 	  door      opens / closes a hinged or sliding door (server)
 	  seat      sits you down; seats with a camera switch to a TV-style view (server + client)
 	  elevator  rides an elevator (or stairs) to another level (server)
-	  use       a "use" action from Interact.Uses: a mini-game on the client or an item from the server
+	  use       a "use" action from Interact.Uses: a mini-game on the client, or an item or outfit
+	            from the server
 
 	Any prompt may also carry Title / Info / LookKey attributes; the client then shows the
 	description card as well (e.g. opening a locker shows whose locker it is).
@@ -30,6 +31,9 @@ Interact.Kinds = {
 	Use actions.
 	  Game  = a mini-game on the client (Interact.client.lua); the result goes back to the server
 	  Tool  = the server hands the player this item (Snacks.lua)
+	  Gear  = the server hands the player this piece of coaching gear (Gear.lua: whistle, clipboard)
+	  Outfit = the server dresses the player in this outfit (Gear.lua); ChangeBack = true puts the
+	          player's own clothes back on
 	  Action = default prompt text
 ]]
 Interact.Uses = {
@@ -44,6 +48,13 @@ Interact.Uses = {
 	soda = { Action = "Get a soda", Tool = "Soda" },
 	sportsdrink = { Action = "Grab a sports drink", Tool = "SportsDrink" },
 	foamfinger = { Action = "Grab a foam finger", Tool = "FoamFinger" },
+	-- the coaches' locker room
+	whistle = { Action = "Grab a whistle", Gear = "Whistle", Title = "Whistle Rack" },
+	clipboard = { Action = "Grab a clipboard", Gear = "Clipboard", Title = "Clipboards" },
+	coachpolo = { Action = "Put it on", Outfit = "CoachPolo", Title = "Head Coach Polo" },
+	hoodie = { Action = "Put it on", Outfit = "SidelineHoodie", Title = "Sideline Hoodie" },
+	jersey = { Action = "Put it on", Outfit = "TeamJersey", Title = "Team Jersey" },
+	changeback = { Action = "Change back", ChangeBack = true, Title = "Your Own Clothes" },
 }
 
 -- Mini-game score limits (the server ignores anything above these)

@@ -22,7 +22,9 @@
 	                               "WELCOME TO THE <team>" LED sign (live team, look) over big
 	                               double doors with windows; the main room shell (team carpet,
 	                               light walls, ceiling panels) and both wing shells, the coach's
-	                               office door (glass) and the open archway to the showers
+	                               office door (glass) and the open archway to the showers; a
+	                               framed doorway in the corridor's west wall (z 130.6..135.4) for
+	                               the coaches' tunnel, a NEVER QUIT banner painted over it
 	    2 Lockers                  16 lockers along the side walls, each with its own door (look:
 	                               whose locker it is) and a numbered jersey + cleats inside (GUI on
 	                               the back panel), helmets on top, two padded benches facing the
@@ -38,6 +40,25 @@
 	                               on the speaker), live summary / record / season / gameday
 	                               screens, the trophy shelf (look: titles), the hype mirror and the
 	                               game-day checklist (looks) beside the doors
+	  coach_lockerroom  (zone X[-80, -9] Z[120, 160]) the coaches' own tunnel z 129.5..136.5 from
+	                    the home corridor's west wall (x -10.8) to the room X[-75, -47] Z[124, 156]
+	                    (ceiling 12), west of the coach's office, under the hollow lower rows
+	    1 Coaches' Tunnel & Walls  the COACHES door in the home corridor's doorway, the tunnel
+	                               (dark walls, team stripes, a team runner, photos of the big
+	                               moments (look: titles), the COACHING STAFF sign (live team,
+	                               look)), the room shell with its double doors, plain light
+	                               fixtures and a team rug (live team name)
+	    2 Coaches' Lockers & Gear  six open wooden stalls with name plates (HEAD COACH, OFFENSE..):
+	                               a polo on a hanger, a cap, a headset and a clipboard or a
+	                               tablet in each (looks: live roster / record / rating), the
+	                               coaches' bench (seat), the playbook library (look)
+	    3 Whistles & Headsets      the whistle rack (use: a Whistle), the headset charging station
+	                               (look), the gear table with clipboards and a tablet (use: a
+	                               Clipboard), the coaches' board (live roster, look)
+	    4 Wardrobe & Mirrors       three dress forms in the outfits (use: Head Coach Polo,
+	                               Sideline Hoodie, Team Jersey - Gear.lua dresses you), two
+	                               mirrors (look), the YOUR CLOTHES cubby (use: change back), the
+	                               changing bench (seat), the kick-off countdown (live game day)
 	  visitor_lockerroom (zone X[-80, 80] Z[-126, -35]) the corridor z -75..-63, the room
 	                    X[-18, 18] Z[-99, -76] (ceiling 11). Smaller and plainer on purpose.
 	    1 Tunnel & Walls           grey corridor with flat fluorescent tubes, the home team's
@@ -55,6 +76,7 @@
 ]]
 
 local BuildUtil = require(script.Parent.Parent.BuildUtil)
+local Gear = require(script.Parent.Parent.Gear) -- (the coaches' wardrobe shows its outfits' colours)
 
 local M = {}
 
@@ -142,6 +164,57 @@ local PODIUM_Z = 169.2
 local SPEAKER_HEAD = Vector3.new(0, 5.6, 171.8) -- where a player at the podium stands (head height)
 local BENCH_Z = 147.6
 local HOME_NUMBERS = { "1", "7", "12", "22", "24", "33", "44", "52", "55", "62", "74", "81", "88", "90", "95", "99" }
+
+--[[
+	COACHES plan (coach_lockerroom): a doorway in the home corridor's west wall (x -10.8..-10,
+	z DoorZ0..DoorZ1; the opening itself is home_lockerroom's, the door is the coaches') leads into
+	the coaches' own tunnel (inside z TunnelZ0..TunnelZ1), which runs west in front of the home
+	locker room under the hollow lower rows to the coaches' locker room X[RoomX0, RoomX1]
+	Z[RoomZ0, RoomZ1] (walls WALL thick outside that), west of the coach's office wing. The raker
+	beam + column on the x -78 aisle line stay outside its west wall; the lowest thing overhead is
+	row 8's slab (underside 16), so everything stays under 12.4.
+]]
+local COACH = {
+	DoorZ0 = 130.6,
+	DoorZ1 = 135.4,
+	DoorTop = 9.4,
+	TunnelZ0 = 129.5,
+	TunnelZ1 = 136.5,
+	TunnelCeil = 10.6,
+	RoomX0 = -75,
+	RoomX1 = -47,
+	RoomZ0 = 124,
+	RoomZ1 = 156,
+	Ceil = 12,
+	EntryZ0 = 130, -- the room's double doors from the tunnel (in its east wall)
+	EntryZ1 = 136,
+	Wall = 0.8,
+}
+-- the six coaches' stalls along the room's west wall (south to north)
+local COACH_STALLS = {
+	{ Plate = "HEAD COACH", Title = "Head Coach's Locker", LookKey = "record" },
+	{ Plate = "OFFENSE", Title = "Offensive Coordinator's Locker", LookKey = "roster:QB" },
+	{ Plate = "DEFENSE", Title = "Defensive Coordinator's Locker", LookKey = "roster:DEF" },
+	{ Plate = "SPECIAL TEAMS", Title = "Special Teams Coach's Locker", LookKey = "roster:K" },
+	{ Plate = "QB COACH", Title = "Quarterbacks Coach's Locker", LookKey = "roster:QB" },
+	{ Plate = "STRENGTH", Title = "Strength Coach's Locker", LookKey = "rating" },
+}
+local COACH_STALL_INFO = {
+	"The head coach's locker: a team polo, the lucky game-day cap, a headset and the game plan. Coach is always first in and last out!",
+	"The offensive coordinator calls the plays. Trick plays are scribbled all over that clipboard.",
+	"The defensive coordinator's locker. The tablet has every blitz in the playbook on it.",
+	"Kickoffs, punts and field goals: the special teams coach's clipboard is all about the kicker.",
+	"The quarterbacks coach works with your starting QB every single day.",
+	"The strength coach runs the weight room. Even the cap looks strong.",
+}
+local COACH_WALL = Color3.fromRGB(184, 178, 168) -- warm grey (not bright white) walls
+local COACH_CEILING = Color3.fromRGB(196, 194, 190)
+local FIXTURE = Color3.fromRGB(226, 222, 212) -- plain (not glowing) light fixtures
+local NEUTRAL_LIGHT = Color3.fromRGB(255, 250, 242)
+local COACH_TUNNEL_WALL = Color3.fromRGB(58, 60, 68)
+local HEADSET_BLACK = Color3.fromRGB(34, 36, 42)
+local MANNEQUIN = Color3.fromRGB(210, 206, 198)
+local MIRROR_GLASS = Color3.fromRGB(196, 214, 226)
 
 --[[
 	VISITOR plan: the bowl's tunnel ends at z -63 (offset 28); the corridor runs to the front wall
@@ -403,15 +476,37 @@ end
 	The corridor shell from the bowl's tunnel (z0) to a room's front wall (z1 = the wall's corridor
 	face, so no corridor face shares the wall's room face): floor, walls, ceiling. The floor runs on
 	to floorZ1 (under the doorway, up to the room's floor). Decorations are added by the callers.
-	spec: z0, z1, floorZ1, wallColor, wallMaterial, floorColor, floorMaterial, ceilingColor
+	spec: z0, z1, floorZ1, wallColor, wallMaterial, floorColor, floorMaterial, ceilingColor,
+	      doorway = { Side = -1 | 1, Z0, Z1, Top }: an opening in that side's wall (z Z0..Z1, up to
+	      Top) - the home corridor's door into the coaches' tunnel
+Returns the doorway's lintel (nil without a doorway).
 ]]
 local function corridorShell(ctx, spec)
 	local z0, z1 = spec.z0, spec.z1
 	local zLo, zHi = math.min(z0, z1), math.max(z0, z1)
 	local f1 = spec.floorZ1 or z1
+	local lintel = nil
 	box(ctx, "TunnelFloor", -TUNNEL_IN, 0, math.min(z0, f1), TUNNEL_IN, TUNNEL_FLOOR, math.max(z0, f1), spec.floorColor, spec.floorMaterial)
 	for _, s in ipairs({ -1, 1 }) do
-		box(ctx, "TunnelWall", s * TUNNEL_IN, 0, zLo, s * TUNNEL_OUT, TUNNEL_CEIL, zHi, spec.wallColor, spec.wallMaterial)
+		local door = spec.doorway
+		if door and door.Side == s then
+			box(ctx, "TunnelWall", s * TUNNEL_IN, 0, zLo, s * TUNNEL_OUT, TUNNEL_CEIL, door.Z0, spec.wallColor, spec.wallMaterial)
+			box(ctx, "TunnelWall", s * TUNNEL_IN, 0, door.Z1, s * TUNNEL_OUT, TUNNEL_CEIL, zHi, spec.wallColor, spec.wallMaterial)
+			lintel = box(
+				ctx,
+				"DoorwayLintel",
+				s * TUNNEL_IN,
+				door.Top,
+				door.Z0,
+				s * TUNNEL_OUT,
+				TUNNEL_CEIL,
+				door.Z1,
+				spec.wallColor,
+				spec.wallMaterial
+			)
+		else
+			box(ctx, "TunnelWall", s * TUNNEL_IN, 0, zLo, s * TUNNEL_OUT, TUNNEL_CEIL, zHi, spec.wallColor, spec.wallMaterial)
+		end
 	end
 	box(
 		ctx,
@@ -425,6 +520,7 @@ local function corridorShell(ctx, spec)
 		spec.ceilingColor,
 		Enum.Material.SmoothPlastic
 	)
+	return lintel
 end
 
 --[[
@@ -633,7 +729,7 @@ function M.home_lockerroom(ctx)
 	-- Step 1: Tunnel & Walls ----------------------------------------------------------------
 	BuildUtil.Stage(ctx, 1)
 	local tunnel = BuildUtil.Child(ctx, "Tunnel")
-	corridorShell(tunnel, {
+	local doorLintel = corridorShell(tunnel, {
 		z0 = P.TunnelZ,
 		z1 = P.FrontZ0,
 		floorZ1 = P.FrontZ0 + 0.5, -- (the room's floor starts there)
@@ -642,6 +738,8 @@ function M.home_lockerroom(ctx)
 		floorColor = TUNNEL_RUBBER,
 		floorMaterial = Enum.Material.Rubber,
 		ceilingColor = TUNNEL_TOP,
+		-- the doorway into the coaches' tunnel (the Coaches' Locker Room puts its door in it)
+		doorway = { Side = -1, Z0 = COACH.DoorZ0, Z1 = COACH.DoorZ1, Top = COACH.DoorTop },
 	})
 	-- the team runway continues the bowl's tunnel runway right up to the doors
 	box(
@@ -658,7 +756,8 @@ function M.home_lockerroom(ctx)
 		PAINT
 	)
 	for _, s in ipairs({ -1, 1 }) do
-		-- the bowl tunnel's team LED strip runs on along both walls
+		-- the bowl tunnel's team LED strip runs on along both walls (on the west wall, up to the
+		-- coaches' doorway)
 		local led = box(
 			tunnel,
 			"TunnelLED",
@@ -667,7 +766,7 @@ function M.home_lockerroom(ctx)
 			P.TunnelZ,
 			s * TUNNEL_IN,
 			LED_Y1,
-			P.FrontZ0 - 0.4,
+			s < 0 and COACH.DoorZ0 - 0.4 or P.FrontZ0 - 0.4,
 			team.Secondary,
 			Enum.Material.Neon,
 			PAINT
@@ -688,10 +787,10 @@ function M.home_lockerroom(ctx)
 		)
 		BuildUtil.Light(strip, "PointLight", { Name = "TunnelLight", Range = 22, Brightness = 1.3, Color = WARM_LIGHT })
 	end
-	-- four team banners on the walls (two per side), alternating team colours
+	-- four team banners on the walls (two per side), alternating team colours (NEVER QUIT is painted
+	-- over the coaches' doorway, on its lintel)
 	local banners = {
 		{ -1, 127, "PLAY\nHARD", team.Primary },
-		{ -1, 134.5, "NEVER\nQUIT", team.Secondary },
 		{ 1, 127, "ONE\nTEAM", team.Secondary },
 		{ 1, 134.5, "OUR\nHOUSE", team.Primary },
 	}
@@ -719,6 +818,14 @@ function M.home_lockerroom(ctx)
 				{ At = Vector3.new(0, -3.4, 0), Distance = 8 }
 			)
 		end
+	end
+	if doorLintel then
+		-- (on the lintel's corridor face, its Right face)
+		local h, w = TUNNEL_CEIL - COACH.DoorTop, COACH.DoorZ1 - COACH.DoorZ0
+		local gui = faceGui(doorLintel, Enum.NormalId.Right, "BannerGui", 20)
+		addFrame(gui, "Banner", team.Secondary, 0.2 / w, 0.4 / h, 1 - 0.4 / w, 1 - 0.9 / h)
+		local text = textColorOn(team.Secondary, { team.Trim, team.Primary, team.Secondary })
+		addLabel(gui, "BannerText", "NEVER\nQUIT", text, 0.2 / w + 0.08, 0.4 / h + 0.1, 1 - 0.4 / w - 0.16, 1 - 0.9 / h - 0.2).ZIndex = 2
 	end
 
 	-- the front wall with the entrance (doors x -6..6), team door frame + the welcome sign
@@ -1344,6 +1451,544 @@ function M.home_lockerroom(ctx)
 		"Ankles taped, pads on, sign slapped... just one box left to tick. Go out there and win it!",
 		{ LookKey = "season", At = Vector3.new(0, -1.5, 1.4), Distance = 8 }
 	)
+end
+
+---------------------------------------------------------------------------------------------
+-- Coaches' Locker Room (event level under the home stands, west of the home locker room)
+---------------------------------------------------------------------------------------------
+
+-- A cap (crown + brim) resting at local `frame` (its bottom centre); the brim points along local -Z.
+local function capProp(ctx, frame, d, crown, brim)
+	BuildUtil.Part(ctx, {
+		Name = "CapCrown",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(d * 0.42, d, d),
+		CFrame = frame * CFrame.new(0, d * 0.21, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = crown,
+		Material = Enum.Material.Fabric,
+		CanCollide = false,
+	})
+	lblock(ctx, frame, "CapBrim", Vector3.new(d * 0.78, 0.06, d * 0.5), 0, 0, -d * 0.62, brim, nil, DECOR)
+end
+
+-- A headset lying at local `frame` (its bottom centre): two ear cups w apart along local X, the
+-- band across their tops.
+local function headsetProp(ctx, frame, w, cups)
+	for _, s in ipairs({ -1, 1 }) do
+		BuildUtil.Part(ctx, {
+			Name = "EarCup",
+			Shape = Enum.PartType.Cylinder,
+			Size = Vector3.new(0.22, w * 0.46, w * 0.46),
+			CFrame = frame * CFrame.new(s * w / 2, w * 0.23, 0),
+			Color = cups,
+			CanCollide = false,
+		})
+	end
+	lblock(ctx, frame, "HeadsetBand", Vector3.new(w + 0.22, 0.1, 0.18), 0, w * 0.46 - 0.04, 0, HEADSET_BLACK, nil, DECOR)
+end
+
+-- A clipboard with a play sheet (or a tablet showing a play) standing on its bottom edge at local
+-- `frame`, its face along local -Z. Returns the board.
+local function boardProp(ctx, frame, tablet)
+	local size = tablet and Vector3.new(1.2, 0.9, 0.08) or Vector3.new(0.9, 1.2, 0.08)
+	local board = lblock(ctx, frame, tablet and "Tablet" or "Clipboard", size, 0, 0, 0, tablet and INK or WOOD, nil, DECOR)
+	local gui = faceGui(board, Enum.NormalId.Front, "PlayGui", 40)
+	addFrame(gui, "Sheet", tablet and SCREEN_BLACK or WHITEBOARD, 0.08, tablet and 0.08 or 0.14, 0.84, tablet and 0.84 or 0.8)
+	addLabel(gui, "Xs", "X  X  X", tablet and LED_GREEN or MARKER_BLUE, 0.14, 0.3, 0.72, 0.18).ZIndex = 2
+	addLabel(gui, "Os", "O O O O", tablet and WHITE or MARKER_RED, 0.14, 0.56, 0.72, 0.18).ZIndex = 2
+	if not tablet then
+		addFrame(gui, "Clip", CHROME, 0.3, 0, 0.4, 0.1).ZIndex = 2
+	end
+	return board
+end
+
+-- A polo on its hanger, drawn on a back panel's GUI (like hangJersey; tops are measured from the
+-- panel's top, x is the stall's centre along the panel).
+local function hangPolo(gui, faceW, faceH, x, w, color, accent)
+	local function rect(name, c, cx, top, width, height, z)
+		local frame = addFrame(gui, name, c, (faceW / 2 - cx - width / 2) / faceW, top / faceH, width / faceW, height / faceH)
+		frame.ZIndex = z
+		return frame
+	end
+	rect("Hanger", CHROME, x, 2, 0.14, 0.6, 1)
+	rect("PoloSleeves", color, x, 2.6, w - 1.1, 0.8, 2)
+	rect("PoloBody", color, x, 2.6, w - 1.9, 2.8, 2)
+	rect("PoloCollar", accent, x, 2.6, 0.9, 0.2, 3)
+	rect("PoloPlacket", accent, x, 2.8, 0.12, 0.6, 3)
+	rect("PoloLogo", accent, x - 0.5, 3.1, 0.3, 0.3, 3)
+end
+
+--[[
+	The six coaches' open wooden stalls with their gear: a polo on a hanger (on the back panel's
+	GUI), a cap on the top shelf, a headset and a clipboard (or a tablet) on the cubby, name plates
+	on the shelf front and a look card per stall. `frame`: plot-local CFrame at floor level on the
+	wall face in the middle of the bank, its LookVector into the room.
+]]
+local function coachStalls(ctx, frame, team)
+	local bank = BuildUtil.Child(ctx, "CoachStalls")
+	local n, w, H, D = #COACH_STALLS, 4, 8.6, 2.6
+	local len = n * w
+	local inner = D - 0.3 -- depth in front of the back panel
+	local mid = -0.3 - inner / 2
+	local back = lblock(bank, frame, "LockerBack", Vector3.new(len, H, 0.3), 0, 0, -0.15, WOOD_DARK, Enum.Material.Wood)
+	lblock(bank, frame, "LockerCubby", Vector3.new(len, 1.6, inner), 0, 0, mid, shade(WOOD_DARK, 0.8), Enum.Material.Wood)
+	local shelf = lblock(bank, frame, "LockerShelf", Vector3.new(len, 1, inner), 0, H - 1, mid, team.Secondary)
+	-- dividers stand 0.15 proud of the cubby + shelf and stop 0.1 under the shelf top; the end ones
+	-- sit 0.1 inside the bank's ends (no shared faces with the back, cubby or shelf)
+	for i = 0, n do
+		local x = math.clamp(-len / 2 + i * w, -len / 2 + 0.1, len / 2 - 0.1)
+		lblock(
+			bank,
+			frame,
+			"LockerDivider",
+			Vector3.new(0.3, H - 0.1, inner + 0.15),
+			x,
+			0,
+			-0.3 - (inner + 0.15) / 2,
+			WOOD,
+			Enum.Material.Wood
+		)
+	end
+	local polos = faceGui(back, Enum.NormalId.Front, "PolosGui", 20)
+	local plates = faceGui(shelf, Enum.NormalId.Front, "NameplatesGui", 24)
+	local plateColor = textColorOn(team.Secondary, { team.Primary, INK, WHITE })
+	for i, stall in ipairs(COACH_STALLS) do
+		local x = -len / 2 + (i - 0.5) * w
+		local odd = i % 2 == 1
+		hangPolo(polos, len, H, x, w, odd and team.Primary or team.Secondary, odd and team.Secondary or team.Primary)
+		local plateW = w - 0.6
+		addLabel(
+			plates,
+			"Nameplate",
+			stall.Plate,
+			plateColor,
+			(len / 2 - x - plateW / 2) / len,
+			0.2,
+			plateW / len,
+			0.6,
+			Enum.Font.GothamBold
+		)
+		-- the cap on the top shelf (brims toward the room, each a little turned), a headset and
+		-- a clipboard or a tablet leaning on the back panel
+		capProp(bank, frame * CFrame.new(x, H, mid) * CFrame.Angles(0, math.rad((i % 3 - 1) * 18), 0), 1.3, team.Primary, team.Secondary)
+		headsetProp(bank, frame * CFrame.new(x + 0.9, 1.6, mid), 1, team.Secondary)
+		local board = boardProp(bank, frame * CFrame.new(x - 0.9, 1.6, -0.55) * CFrame.Angles(math.rad(12), 0, 0), not odd)
+		BuildUtil.Look(board, stall.Title, COACH_STALL_INFO[i], { LookKey = stall.LookKey, At = Vector3.new(0, 0, -1.6), Distance = 7 })
+	end
+end
+
+-- A dress form showing an outfit, standing at (x, z) and facing -Z: base, pole, pants, torso and a
+-- head (its centre FLOOR_TOP + 6.55). Returns the torso.
+local function dressForm(ctx, x, z, torsoColor, legsColor)
+	BuildUtil.Cylinder(ctx, {
+		Name = "FormBase",
+		Position = Vector3.new(x, FLOOR_TOP + 0.1, z),
+		Height = 0.2,
+		Diameter = 1.8,
+		Axis = "Y",
+		Color = DARK_METAL,
+		Material = Enum.Material.Metal,
+	})
+	BuildUtil.Cylinder(ctx, {
+		Name = "FormPole",
+		Position = Vector3.new(x, FLOOR_TOP + 0.85, z),
+		Height = 1.3,
+		Diameter = 0.25,
+		Axis = "Y",
+		Color = CHROME,
+		Material = Enum.Material.Metal,
+		CanCollide = false,
+	})
+	box(ctx, "FormPants", x - 0.85, FLOOR_TOP + 1.5, z - 0.4, x + 0.85, FLOOR_TOP + 3.5, z + 0.4, legsColor, Enum.Material.Fabric)
+	local torso = box(ctx, "FormTorso", x - 1, FLOOR_TOP + 3.5, z - 0.5, x + 1, FLOOR_TOP + 5.9, z + 0.5, torsoColor, Enum.Material.Fabric)
+	BuildUtil.Ball(ctx, {
+		Name = "FormHead",
+		Position = Vector3.new(x, FLOOR_TOP + 6.55, z),
+		Diameter = 1.2,
+		Color = MANNEQUIN,
+		CanCollide = false,
+	})
+	return torso
+end
+
+-- Two thin tilted strips (a lanyard) and a whistle on a GUI: the "V" from the collar down.
+local function lanyardOn(gui, color)
+	for _, s in ipairs({ -1, 1 }) do
+		local strap = addFrame(gui, "Lanyard", color, 0.5 + s * 0.09 - 0.015, 0.02, 0.03, 0.36)
+		strap.Rotation = s * 22 -- (clockwise: the right strap's top leans right, the left one's left)
+		strap.ZIndex = 3
+	end
+	addFrame(gui, "LanyardWhistle", CHROME, 0.46, 0.36, 0.08, 0.1).ZIndex = 4
+end
+
+function M.coach_lockerroom(ctx)
+	local team = ctx.colors
+	local name = displayName(ctx)
+	local C = COACH
+	local W = C.Wall
+	local accent = textColorOn(SCREEN_BLACK, { team.Secondary, team.Trim, team.Primary })
+	local onWall = textColorOn(COACH_WALL, { team.Primary, team.Secondary, INK })
+
+	-- Step 1: Coaches' Tunnel & Walls -------------------------------------------------------
+	BuildUtil.Stage(ctx, 1)
+	local tunnel = BuildUtil.Child(ctx, "CoachesTunnel")
+	local tx0, tx1 = C.RoomX1 + W, -TUNNEL_OUT -- from the room's east wall to the home corridor's wall
+	-- the door in the home corridor's doorway, swinging into the coaches' tunnel (west)
+	local doorH = C.DoorTop - TUNNEL_FLOOR - 0.15
+	local door = BuildUtil.Door(tunnel, {
+		Name = "CoachesDoor",
+		Size = Vector3.new(C.DoorZ1 - C.DoorZ0 - 0.1, doorH, 0.3),
+		CFrame = CFrame.new(-(TUNNEL_IN + TUNNEL_OUT) / 2, TUNNEL_FLOOR + 0.05 + doorH / 2, (C.DoorZ0 + C.DoorZ1) / 2)
+			* CFrame.Angles(0, math.pi / 2, 0),
+		Hinge = "Left",
+		Window = true,
+		Color = team.Primary,
+		Material = Enum.Material.SmoothPlastic,
+		Object = "Coaches' Tunnel",
+		Title = "Coaches' Tunnel",
+		Info = "Coaches only! Their own tunnel runs from here to the coaches' locker room. On game day they walk out to the field through the players' tunnel, right behind the team.",
+		Distance = 8,
+	})
+	local leaf = door:FindFirstChild("DoorLeaf")
+	if leaf then
+		-- (under the window: COACHES on the corridor side, TO THE FIELD on the coaches' side)
+		local plate = textColorOn(team.Primary, { team.Secondary, team.Trim, WHITE })
+		local outside = faceGui(leaf, Enum.NormalId.Back, "DoorSignGui", 24)
+		addLabel(outside, "DoorSign", "COACHES", plate, 0.1, 0.58, 0.8, 0.08)
+		addLabel(outside, "DoorSignSmall", "STAFF ONLY", plate, 0.2, 0.67, 0.6, 0.05, Enum.Font.GothamBold)
+		local inside = faceGui(leaf, Enum.NormalId.Front, "DoorSignGui", 24)
+		addLabel(inside, "DoorSign", "TO THE FIELD", plate, 0.1, 0.58, 0.8, 0.06)
+	end
+	-- a team-colour frame round the door on the corridor side
+	for _, trim in ipairs({
+		{ TUNNEL_FLOOR, C.DoorZ0 - 0.3, C.DoorTop + 0.3, C.DoorZ0 },
+		{ TUNNEL_FLOOR, C.DoorZ1, C.DoorTop + 0.3, C.DoorZ1 + 0.3 },
+		{ C.DoorTop, C.DoorZ0, C.DoorTop + 0.3, C.DoorZ1 },
+	}) do
+		box(tunnel, "DoorTrim", -TUNNEL_IN, trim[1], trim[2], -TUNNEL_IN + 0.1, trim[3], trim[4], team.Secondary, nil, PAINT)
+	end
+	-- floor (on under the room's doorway), walls, ceiling, a team runner and two lights
+	box(tunnel, "TunnelFloor", C.RoomX1, 0, C.TunnelZ0, tx1, TUNNEL_FLOOR, C.TunnelZ1, TUNNEL_RUBBER, Enum.Material.Rubber)
+	local walls = {}
+	for index, z in ipairs({ { C.TunnelZ0 - W, C.TunnelZ0 }, { C.TunnelZ1, C.TunnelZ1 + W } }) do
+		walls[index] = box(tunnel, "TunnelWall", tx0, 0, z[1], tx1, C.TunnelCeil + 0.4, z[2], COACH_TUNNEL_WALL)
+	end
+	box(tunnel, "TunnelCeiling", tx0, C.TunnelCeil, C.TunnelZ0, tx1, C.TunnelCeil + 0.4, C.TunnelZ1, TUNNEL_TOP)
+	box(
+		tunnel,
+		"TunnelRunner",
+		tx0,
+		TUNNEL_FLOOR,
+		C.TunnelZ0 + 1.6,
+		tx1 - 0.6,
+		TUNNEL_FLOOR + 0.04,
+		C.TunnelZ1 - 1.6,
+		team.Primary,
+		Enum.Material.Fabric,
+		PAINT
+	)
+	for _, x in ipairs({ -19, -37 }) do
+		local lamp = box(tunnel, "TunnelLight", x - 0.6, C.TunnelCeil - 0.2, 131.6, x + 0.6, C.TunnelCeil, 134.4, FIXTURE, nil, PAINT)
+		BuildUtil.Light(lamp, "PointLight", { Name = "TunnelLight", Range = 14, Brightness = 0.8, Color = NEUTRAL_LIGHT })
+	end
+	-- team stripes along both walls; on the south wall photos of the big moments to come
+	local tunnelLength = tx1 - tx0
+	local wallGuis = {}
+	for index, wall in ipairs(walls) do
+		local gui = faceGui(wall, index == 1 and Enum.NormalId.Back or Enum.NormalId.Front, "WallGui", 12)
+		addFrame(gui, "TeamStripe", team.Primary, 0, 0.6, 1, 0.025)
+		addFrame(gui, "TeamStripe", team.Secondary, 0, 0.632, 1, 0.012)
+		wallGuis[index] = gui
+	end
+	local photos = wallGuis[1]
+	for i, caption in ipairs({ "FIRST PRACTICE", "FIRST WIN", "PLAYOFFS!", "CHAMPIONS?" }) do
+		local px = -41 + (i - 1) * 7.5 -- (the Back face's GUI x runs toward +X)
+		local left, width = (px - 2.1 - tx0) / tunnelLength, 4.2 / tunnelLength
+		addFrame(photos, "PhotoFrame", INK, left, 0.24, width, 0.28).ZIndex = 1
+		addFrame(photos, "Photo", i % 2 == 1 and team.Primary or team.Secondary, left + 0.006, 0.25, width - 0.012, 0.21).ZIndex = 2
+		addFrame(photos, "PhotoPlayer", i % 2 == 1 and team.Secondary or team.Primary, left + width * 0.4, 0.3, width * 0.2, 0.16).ZIndex =
+			3
+		addLabel(photos, "PhotoCaption", caption, WHITE, left + 0.004, 0.47, width - 0.008, 0.04, Enum.Font.GothamBold).ZIndex = 3
+	end
+	BuildUtil.Look(
+		walls[1],
+		"Coaching History",
+		"Photos of the big moments: the first practice, the first win, the playoffs... The last frame is waiting for a championship photo!",
+		{ LookKey = "titles", At = Vector3.new(-41 + 11.25 - (tx0 + tx1) / 2, 1.2, 0.9), Distance = 9 }
+	)
+	-- the coaching staff's sign (live team name) on the north wall
+	local staff = box(tunnel, "StaffSign", -32, 6.2, C.TunnelZ1 - 0.25, -22, 9.8, C.TunnelZ1, SCREEN_BLACK)
+	welcomeSign(staff, Enum.NormalId.Front, "COACHING STAFF", nil, name, { Text = accent, Header = WHITE })
+	BuildUtil.Look(
+		staff,
+		"Coaching Staff",
+		"The coaches' own tunnel. The head coach walks down here before every game, then out to the field with the team.",
+		{ LookKey = "team", At = Vector3.new(0, -2.2, -1.6), Distance = 9 }
+	)
+
+	-- the room: walls (the east one with the double doors from the tunnel), floor, ceiling, lights
+	local room = BuildUtil.Child(ctx, "CoachesRoom")
+	local top = C.Ceil + 0.4
+	local rx0, rx1, rz0, rz1 = C.RoomX0, C.RoomX1, C.RoomZ0, C.RoomZ1
+	box(room, "WestWall", rx0 - W, 0, rz0 - W, rx0, top, rz1 + W, COACH_WALL)
+	local south = box(room, "SouthWall", rx0, 0, rz0 - W, rx1, top, rz0, COACH_WALL)
+	local north = box(room, "NorthWall", rx0, 0, rz1, rx1, top, rz1 + W, COACH_WALL)
+	box(room, "EastWall", rx1, 0, rz0 - W, rx1 + W, top, C.EntryZ0, COACH_WALL)
+	local eastNorth = box(room, "EastWall", rx1, 0, C.EntryZ1, rx1 + W, top, rz1 + W, COACH_WALL)
+	local lintel = box(room, "EntryLintel", rx1, C.DoorTop, C.EntryZ0, rx1 + W, top, C.EntryZ1, COACH_WALL)
+	box(room, "Floor", rx0, 0, rz0, rx1, FLOOR_TOP, rz1, shade(team.Primary, 0.4), Enum.Material.Carpet)
+	box(room, "Ceiling", rx0, C.Ceil, rz0, rx1, top, rz1, COACH_CEILING)
+	for _, x in ipairs({ -67, -55 }) do
+		for _, z in ipairs({ 130, 140, 150 }) do
+			local lamp = box(room, "CeilingLight", x - 1.2, C.Ceil - 0.2, z - 1.2, x + 1.2, C.Ceil, z + 1.2, FIXTURE, nil, PAINT)
+			BuildUtil.Light(lamp, "PointLight", { Name = "RoomLight", Range = 16, Brightness = 0.9, Color = NEUTRAL_LIGHT })
+		end
+	end
+	-- the room's name over its doors (in the strip under the tunnel's ceiling), team stripes and
+	-- COACHING STAFF in big letters over the gear wall
+	local over = faceGui(lintel, Enum.NormalId.Right, "EntrySignGui", 24)
+	addLabel(over, "EntrySign", "COACHES' LOCKER ROOM", textColorOn(COACH_WALL, { INK, team.Primary }), 0.04, 0.64, 0.92, 0.3)
+	for _, wall in ipairs({ { south, Enum.NormalId.Back }, { north, Enum.NormalId.Front }, { eastNorth, Enum.NormalId.Left } }) do
+		local gui = faceGui(wall[1], wall[2], "WallGui", 20)
+		addFrame(gui, "TeamStripe", team.Primary, 0, 0.1, 1, 0.025)
+		addFrame(gui, "TeamStripe", team.Secondary, 0, 0.135, 1, 0.012)
+		if wall[1] == south then
+			addLabel(gui, "WallLettering", "COACHING STAFF", onWall, 0.1, 0.17, 0.8, 0.13)
+		end
+	end
+	local entryH = C.DoorTop - FLOOR_TOP - 0.15
+	BuildUtil.Door(room, {
+		Name = "EntranceDoors",
+		Size = Vector3.new(C.EntryZ1 - C.EntryZ0, entryH, 0.4),
+		-- the doors face -X (their LookVector) so they swing INTO the room
+		CFrame = CFrame.new(rx1 + W / 2, FLOOR_TOP + 0.05 + entryH / 2, (C.EntryZ0 + C.EntryZ1) / 2) * CFrame.Angles(0, math.pi / 2, 0),
+		Double = true,
+		Window = true,
+		Color = WOOD,
+		Material = Enum.Material.Wood,
+		Object = "Coaches' Locker Room",
+		Title = "Coaches' Locker Room",
+		Info = "Where the coaching staff gets ready: their lockers, headsets, whistles and a wardrobe full of team outfits.",
+		Distance = 8,
+	})
+	-- a team rug in the middle (reads from the doors): the live team name over COACHING STAFF
+	local rugColor = shade(team.Primary, 0.75)
+	local rug = BuildUtil.Part(room, {
+		Name = "TeamRug",
+		Size = Vector3.new(14, 0.04, 10),
+		CFrame = CFrame.new(-58, FLOOR_TOP + 0.02, 139) * CFrame.Angles(0, math.pi / 2, 0),
+		Color = rugColor,
+		Material = Enum.Material.Fabric,
+		CanCollide = false,
+		CastShadow = false,
+	})
+	local rugGui = faceGui(rug, Enum.NormalId.Top, "RugGui", 12)
+	local rugText = textColorOn(rugColor, { team.Trim, team.Secondary, WHITE })
+	addFrame(rugGui, "RugBorder", team.Secondary, 0, 0, 1, 0.05)
+	addFrame(rugGui, "RugBorder", team.Secondary, 0, 0.95, 1, 0.05)
+	local rugTeam = addLabel(rugGui, "Live_team", name, rugText, 0.06, 0.16, 0.88, 0.4)
+	rugTeam:SetAttribute("Live", "team")
+	addLabel(rugGui, "RugStaff", "COACHING STAFF", rugText, 0.12, 0.62, 0.76, 0.2, Enum.Font.GothamBold)
+
+	-- Step 2: Coaches' Lockers & Gear -------------------------------------------------------
+	BuildUtil.Stage(ctx, 2)
+	local lockers = BuildUtil.Child(ctx, "CoachLockers")
+	coachStalls(lockers, CFrame.new(rx0, FLOOR_TOP, 140) * CFrame.Angles(0, -math.pi / 2, 0), team)
+	-- the bench in front of the stalls: sitters face the coaches' board on the east wall
+	box(lockers, "BenchFrame", -69.3, FLOOR_TOP, 130.6, -67.9, FLOOR_TOP + 1.25, 145.4, DARK_METAL, Enum.Material.Metal)
+	for i, z in ipairs({ 133, 138, 143 }) do
+		BuildUtil.Seat(lockers, {
+			Name = "BenchSeat",
+			Size = Vector3.new(4.8, 0.5, 1.8),
+			CFrame = CFrame.new(-68.6, FLOOR_TOP + 1.5, z) * CFrame.Angles(0, -math.pi / 2, 0),
+			Color = shade(team.Primary, 0.8),
+			Material = Enum.Material.Fabric,
+			Object = "Coaches' Bench",
+			NoPrompt = i ~= 2,
+		})
+	end
+	-- the playbook library on the east wall, beside the doors
+	local library = box(lockers, "PlaybookShelf", rx1 - 1.2, FLOOR_TOP, rz0 + 0.6, rx1, 7.6, C.EntryZ0 - 0.6, WOOD, Enum.Material.Wood)
+	local spines = faceGui(library, Enum.NormalId.Left, "PlaybookGui", 16)
+	for row = 0, 2 do
+		for i = 0, 8 do
+			local color = (i + row) % 3 == 0 and team.Primary or ((i + row) % 3 == 1 and team.Secondary or WHITE)
+			addFrame(spines, "Playbook", color, 0.06 + i * 0.098, 0.08 + row * 0.31, 0.08, 0.22)
+		end
+	end
+	BuildUtil.Look(
+		library,
+		"Coaches' Playbooks",
+		"Every play the coaches have ever drawn up, in fat binders: runs, passes, blitzes - and a whole shelf of trick plays.",
+		{ At = Vector3.new(-1.3, -0.6, 0), Distance = 7 }
+	)
+
+	-- Step 3: Whistles & Headsets -----------------------------------------------------------
+	BuildUtil.Stage(ctx, 3)
+	local gear = BuildUtil.Child(ctx, "WhistlesAndHeadsets")
+	-- the whistle rack on the south wall: six whistles on team lanyards (grab one!)
+	local rackX0, rackX1 = -73, -66
+	local rack = box(gear, "WhistleRack", rackX0, 4.4, rz0, rackX1, 7.8, rz0 + 0.25, team.Primary)
+	local rackGui = faceGui(rack, Enum.NormalId.Back, "WhistleRackGui", 20)
+	addLabel(rackGui, "RackTitle", "WHISTLES", textColorOn(team.Primary, { team.Trim, team.Secondary, WHITE }), 0.1, 0.04, 0.8, 0.2)
+	for i = 1, 6 do
+		local x = rackX0 + (i - 0.5) * (rackX1 - rackX0) / 6
+		addFrame(rackGui, "Lanyard", team.Secondary, (x - rackX0) / (rackX1 - rackX0) - 0.012, 0.28, 0.024, 0.42) -- (GUI x runs toward +X)
+		box(gear, "RackWhistle", x - 0.16, 4.75, rz0 + 0.25, x + 0.16, 5.15, rz0 + 0.7, CHROME, Enum.Material.Metal, DECOR)
+	end
+	BuildUtil.Use(gear, rack, "whistle", {
+		Object = "Whistle Rack",
+		Title = "Whistle Rack",
+		Info = "Every coach needs a whistle! Grab one, then click (or tap) to blow it - everyone around hears the TWEEEET.",
+		At = Vector3.new(0, -0.4, 1.3),
+		Distance = 7,
+	})
+	-- the headset charging station: three headsets on top, green "charged" lights in front
+	local station = box(gear, "HeadsetStation", -63.5, FLOOR_TOP, rz0, -57.5, 3.4, rz0 + 2, DARK_METAL, Enum.Material.Metal)
+	local stationGui = faceGui(station, Enum.NormalId.Back, "ChargeGui", 20)
+	addLabel(stationGui, "ChargeLabel", "HEADSETS - CHARGED", LED_GREEN, 0.08, 0.12, 0.84, 0.2, Enum.Font.GothamBold)
+	for _, x in ipairs({ -62, -60.5, -59 }) do
+		headsetProp(gear, CFrame.new(x, 3.4, rz0 + 1), 1.1, team.Secondary)
+		addFrame(stationGui, "ChargeLED", LED_GREEN, (x + 63.5) / 6 - 0.03, 0.5, 0.06, 0.09)
+	end
+	BuildUtil.Look(
+		station,
+		"Headset Charging Station",
+		"On game day every coach wears a headset to talk to the coaches up in the press box. All charged and ready!",
+		{ At = Vector3.new(0, 0.4, 1.6), Distance = 7 }
+	)
+	-- the gear table by the doors: clipboards, a tablet and a stack of playbooks (grab a clipboard!)
+	box(gear, "TableBase", -54.4, FLOOR_TOP, rz0 + 0.4, -49.6, 3.1, rz0 + 2.2, WOOD_DARK, Enum.Material.Wood)
+	local tableTop = box(gear, "GearTable", -55, 3.1, rz0, -49, 3.4, rz0 + 2.6, WOOD, Enum.Material.Wood)
+	-- (boards lying face up from their bottom edge, their top edge toward the wall: they read from the room)
+	local flat = CFrame.Angles(0, math.pi, 0) * CFrame.Angles(math.pi / 2, 0, 0)
+	boardProp(gear, CFrame.new(-53.9, 3.44, rz0 + 2) * flat, false)
+	boardProp(gear, CFrame.new(-52.7, 3.44, rz0 + 2.1) * CFrame.Angles(0, math.rad(8), 0) * flat, false)
+	boardProp(gear, CFrame.new(-51.2, 3.44, rz0 + 1.8) * flat, true)
+	box(gear, "PlaybookStack", -50.2, 3.4, rz0 + 0.5, -49.3, 4.1, rz0 + 1.8, team.Primary, Enum.Material.Fabric, DECOR)
+	BuildUtil.Use(gear, tableTop, "clipboard", {
+		Object = "Clipboards",
+		Title = "Clipboards",
+		Info = "Grab a clipboard, then click (or tap) to draw up a play. Flea flicker, anyone?",
+		At = Vector3.new(0, 0.6, 1.9),
+		Distance = 7,
+	})
+	-- the coaches' board on the east wall: today's starters in marker (live roster)
+	local board = box(gear, "CoachesBoard", rx1 - 0.2, 3.4, 139.5, rx1, 9.6, 152.5, WHITEBOARD)
+	local _, roster = BuildUtil.LiveText(board, Enum.NormalId.Left, "roster", {
+		LabelName = "Live_roster",
+		Text = "QB\nRB\nWR\nOL\nDEF\nK",
+		TextColor3 = MARKER_BLUE,
+		Font = Enum.Font.GothamBold,
+		PixelsPerStud = 28,
+	})
+	roster.Size = UDim2.new(0.9, 0, 0.74, 0)
+	roster.Position = UDim2.new(0.05, 0, 0.22, 0)
+	addLabel(roster.Parent, "BoardHeader", "COACHES' BOARD - TODAY'S STARTERS", MARKER_RED, 0.05, 0.04, 0.9, 0.13)
+	BuildUtil.Look(
+		board,
+		"Coaches' Board",
+		"Today's starters, in the head coach's handwriting. Draft and train better players to move up the board!",
+		{ LookKey = "rating", At = Vector3.new(-1.4, -1.6, 0), Distance = 8 }
+	)
+
+	-- Step 4: Wardrobe & Mirrors ------------------------------------------------------------
+	BuildUtil.Stage(ctx, 4)
+	local wardrobe = BuildUtil.Child(ctx, "Wardrobe")
+	-- the wardrobe wall: three dress forms in the outfits you can put on (in front of a team
+	-- backboard with their names), a mirror at each end and your own clothes' cubby
+	local formZ = rz1 - 1.6
+	local backboard =
+		box(wardrobe, "WardrobeWall", -71.4, FLOOR_TOP, rz1 - 0.2, -54.6, 8.6, rz1, shade(team.Primary, 0.5), Enum.Material.Wood)
+	local boardGui = faceGui(backboard, Enum.NormalId.Front, "WardrobeGui", 16)
+	local boardText = textColorOn(shade(team.Primary, 0.5), { team.Trim, team.Secondary, WHITE })
+	local forms = {
+		{ x = -68.4, outfit = "CoachPolo", use = "coachpolo", label = "HEAD COACH\nPOLO" },
+		{ x = -63, outfit = "SidelineHoodie", use = "hoodie", label = "SIDELINE\nHOODIE" },
+		{ x = -57.6, outfit = "TeamJersey", use = "jersey", label = "TEAM\nJERSEY" },
+	}
+	for _, form in ipairs(forms) do
+		local outfit = Gear.Outfits[form.outfit]
+		local torsoColor, _, legsColor = Gear.OutfitColors(form.outfit, team)
+		local torso = dressForm(wardrobe, form.x, formZ, torsoColor or MANNEQUIN, legsColor or MANNEQUIN)
+		-- the outfit's name on the backboard over the form (the Front face's GUI x runs toward -X)
+		addLabel(boardGui, "OutfitName", form.label, boardText, (-63 - form.x - 2.2) / 16.8 + 0.5, 0.02, 4.4 / 16.8, 0.13)
+		local gui = faceGui(torso, Enum.NormalId.Front, "OutfitGui", 30)
+		local trim = textColorOn(torsoColor or MANNEQUIN, { team.Secondary, team.Trim, WHITE })
+		if outfit.Cap then
+			capProp(wardrobe, CFrame.new(form.x, FLOOR_TOP + 6.8, formZ), 1.3, team.Primary, team.Secondary)
+			addFrame(gui, "PoloCollar", trim, 0.32, 0, 0.36, 0.08).ZIndex = 2
+			lanyardOn(gui, team.Secondary)
+		end
+		if outfit.Hood then
+			box(
+				wardrobe,
+				"Hood",
+				form.x - 0.6,
+				FLOOR_TOP + 5.6,
+				formZ + 0.1,
+				form.x + 0.6,
+				FLOOR_TOP + 6.3,
+				formZ + 0.65,
+				shade(team.Primary, 0.85),
+				Enum.Material.Fabric,
+				DECOR
+			)
+			addFrame(gui, "HoodiePocket", shade(torsoColor or MANNEQUIN, 0.78), 0.2, 0.6, 0.6, 0.3).ZIndex = 2
+			for _, s in ipairs({ -1, 1 }) do
+				addFrame(gui, "Drawstring", WHITE, 0.5 + s * 0.08 - 0.01, 0.02, 0.02, 0.3).ZIndex = 2
+			end
+		end
+		if outfit.Jersey then
+			addFrame(gui, "ShoulderStripe", team.Secondary, 0, 0, 1, 0.07).ZIndex = 2
+			addLabel(gui, "JerseyNumber", "1", trim, 0.25, 0.14, 0.5, 0.7).ZIndex = 2
+		end
+		-- (a short reach: standing in front of one form shows only its prompt)
+		BuildUtil.Use(wardrobe, torso, form.use, { Object = outfit.Name, At = Vector3.new(0, -0.6, -1.4), Distance = 5 })
+	end
+	local mirrors = {}
+	for index, x in ipairs({ -73.3, -52.7 }) do
+		box(wardrobe, "MirrorFrame", x - 1.4, 0.9, rz1 - 0.15, x + 1.4, 9.6, rz1, team.Secondary)
+		mirrors[index] = box(wardrobe, "Mirror", x - 1.1, 1.2, rz1 - 0.25, x + 1.1, 9.3, rz1 - 0.15, MIRROR_GLASS, Enum.Material.Glass, {
+			Reflectance = 0.35,
+			CanCollide = false,
+		})
+	end
+	BuildUtil.Look(
+		mirrors[1],
+		"Mirror",
+		"Looking sharp, Coach! Put on an outfit from the wardrobe - your own clothes wait in the YOUR CLOTHES cubby.",
+		{ LookKey = "team", At = Vector3.new(0, -1.4, -1.2), Distance = 7 }
+	)
+	-- your own clothes' cubby (change back here) with its sign
+	local cubby = box(wardrobe, "ClothesCubby", -50.6, FLOOR_TOP, rz1 - 1.8, -47.4, 4.6, rz1, WOOD, Enum.Material.Wood)
+	local cubbyGui = faceGui(cubby, Enum.NormalId.Front, "CubbyGui", 20)
+	addFrame(cubbyGui, "CubbyHole", WOOD_DARK, 0.1, 0.1, 0.8, 0.8).ZIndex = 1
+	for i, color in ipairs({ Color3.fromRGB(70, 110, 170), Color3.fromRGB(200, 70, 60), Color3.fromRGB(90, 150, 90) }) do
+		addFrame(cubbyGui, "FoldedClothes", color, 0.2, 0.86 - i * 0.16, 0.6, 0.14).ZIndex = 2
+	end
+	local cubbySign = box(wardrobe, "ClothesSign", -50.6, 5.2, rz1 - 0.15, -47.4, 7.4, rz1, team.Primary)
+	sign(cubbySign, { Enum.NormalId.Front }, "YOUR\nCLOTHES", team.Primary, team, { InsetX = 0.08, InsetY = 0.12 })
+	BuildUtil.Use(wardrobe, cubby, "changeback", { Object = "Your Own Clothes", At = Vector3.new(0, 0.4, -1.7), Distance = 7 })
+	-- the changing bench: sitters face the wardrobe
+	box(wardrobe, "ChangingBenchFrame", -67.5, FLOOR_TOP, 148.6, -58.5, FLOOR_TOP + 1.25, 149.8, WOOD_DARK, Enum.Material.Wood)
+	for i, x in ipairs({ -65.2, -60.8 }) do
+		BuildUtil.Seat(wardrobe, {
+			Name = "ChangingBench",
+			Size = Vector3.new(4.3, 0.5, 1.6),
+			CFrame = CFrame.new(x, FLOOR_TOP + 1.5, 149.2) * CFrame.Angles(0, math.pi, 0),
+			Color = WOOD,
+			Material = Enum.Material.WoodPlanks,
+			Object = "Changing Bench",
+			NoPrompt = i ~= 1,
+		})
+	end
+	-- the kick-off countdown over the wardrobe (live game-day screen)
+	local screen = box(wardrobe, "KickoffScreen", -67, 9, rz1 - 0.3, -59, 11.6, rz1, SCREEN_BLACK)
+	local kickoff = liveScreen(screen, Enum.NormalId.Front, "gameday", "NEXT GAME IN 4:00", { TextColor3 = accent, PixelsPerStud = 24 })
+	kickoff.Position = UDim2.new(0, 0, 0.42, 0)
+	kickoff.Size = UDim2.new(1, 0, 0.58, 0)
+	addLabel(kickoff.Parent, "ScreenHeader", "BE DRESSED BY KICKOFF!", WHITE, 0.06, 0.06, 0.88, 0.32, Enum.Font.GothamBold).ZIndex = 2
 end
 
 ---------------------------------------------------------------------------------------------

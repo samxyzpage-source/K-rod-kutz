@@ -39,6 +39,7 @@ Vehicles.Init(PlotManager)
 Franchise.Init(PlotManager, remotes, notifyRemote)
 KickGame.Init(PlotManager, remotes, notifyRemote, Franchise)
 Interactions.Init(PlotManager, remotes, notifyRemote, Franchise)
+require(script.Parent.Gear).Init(PlotManager) -- the coaches' gear + wardrobe (team colours, respawns, leaving)
 LiveScreens.Init(PlotManager)
 GameDay.SetMatchMaker(Franchise.DecideGame) -- the result is decided at kick-off...
 GameDay.OnEnded(Franchise.FinishGame) -- ...and counts (prize, record, season week) at the final whistle
