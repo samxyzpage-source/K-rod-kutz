@@ -1615,6 +1615,9 @@ function Plaza.parking(ctx)
 	for _, zc in ipairs(rowCenters) do
 		for i, x in ipairs(lampXs) do
 			local inIsland = x == islandX -- island lamps stand in the planted islands: no base, no banner
+			-- (their poles stand on the island grass, whose top is curbH + 0.08; the others on the
+			-- concrete base)
+			local poleBottom = inIsland and (curbH + 0.08) or 1.6
 			if not inIsland then
 				BuildUtil.Cylinder(lamps, {
 					Name = "LampBase",
@@ -1627,8 +1630,8 @@ function Plaza.parking(ctx)
 			end
 			BuildUtil.Cylinder(lamps, {
 				Name = "LampPole",
-				Position = Vector3.new(x, 1.6 + 8, zc),
-				Height = 16,
+				Position = Vector3.new(x, (poleBottom + 17.6) / 2, zc),
+				Height = 17.6 - poleBottom,
 				Diameter = 0.6,
 				Color = DARK_METAL,
 				Material = Enum.Material.Metal,

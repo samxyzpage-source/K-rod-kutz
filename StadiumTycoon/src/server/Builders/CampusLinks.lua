@@ -754,6 +754,8 @@ local function buildHallBridge(ctx, team)
 	glass(m, "BridgeGlass", b.MinX, DECK, b.MinZ, b.MinX + 0.4, GLASS_TOP, b.MaxZ)
 	glass(m, "BridgeGlass", b.MaxX - 0.4, DECK, b.MinZ, b.MaxX, GLASS_TOP, b.MaxZ)
 	span(m, "BridgeRoof", b.MinX - 0.4, GLASS_TOP, b.MinZ, b.MaxX + 0.4, ROOF_TOP, b.MaxZ, team.Primary, Enum.Material.SmoothPlastic)
+	-- the bridge's name goes on the west fascia only: the east one faces the Hall of Fame's west wall
+	-- across a narrow slot (HallOfFame.lua, x 145), where nobody could read it
 	local bridgeName = withTeam(ctx, "", " HALL OF FAME SKYBRIDGE", "HALL OF FAME SKYBRIDGE")
 	for _, side in ipairs({ { b.MinX - 0.3, b.MinX, Enum.NormalId.Left }, { b.MaxX, b.MaxX + 0.3, Enum.NormalId.Right } }) do
 		local band = span(
@@ -768,7 +770,9 @@ local function buildHallBridge(ctx, team)
 			team.Primary,
 			Enum.Material.SmoothPlastic
 		)
-		faceText(band, side[3], { { Text = bridgeName, Color = accent, X0 = 0.2, X1 = 0.8 } })
+		if side[3] == Enum.NormalId.Left then
+			faceText(band, side[3], { { Text = bridgeName, Color = accent, X0 = 0.2, X1 = 0.8 } })
+		end
 	end
 	for _, x in ipairs({ b.MinX + 0.4, b.MaxX - 0.7 }) do
 		span(m, "BridgeHandrail", x, DECK + 2.8, b.MinZ, x + 0.3, DECK + 3.2, b.MaxZ, BRUSHED, Enum.Material.Metal)

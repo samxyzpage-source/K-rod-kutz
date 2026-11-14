@@ -1968,10 +1968,12 @@ function HQRoomsFront.hq_interview(ctx)
 	end
 	local header = box(backdrop, "BackdropHeader", backX0 - 1, 11.6, 203.3, backX1 + 1, WALL_TOP, 204.6, Color3.fromRGB(30, 30, 36))
 	sign(header, Enum.NormalId.Back, "PRESS CONFERENCE", Color3.fromRGB(30, 30, 36), team, { InsetX = 0.2, InsetY = 0.1 })
-	-- seen from the lobby: a PRESS ROOM panel and an ON AIR light
-	local lobbyPanel = box(backdrop, "LobbySign", -50.2, 3.5, 222, -50, 9.5, 246, team.Primary)
+	-- seen from the lobby: a PRESS ROOM panel and an ON AIR light, high on the lobby's east wall
+	-- above the grand staircase's first flight (Builders/HQRoomsUpperFront.lua hq_atrium: its
+	-- handrail tops out at y 9.9 at z 224), so the stairs never hide them
+	local lobbyPanel = box(backdrop, "LobbySign", -50.2, 10.4, 212, -50, 14.4, 224, team.Primary)
 	sign(lobbyPanel, Enum.NormalId.Left, "PRESS ROOM", team.Primary, team, { InsetX = 0.08, InsetY = 0.2 })
-	local onAir = box(backdrop, "OnAirLight", -50.4, 10, 229, -50, 11.6, 239, ON_AIR_RED, Enum.Material.Neon)
+	local onAir = box(backdrop, "OnAirLight", -50.4, 14.8, 214, -50, 15.9, 222, ON_AIR_RED, Enum.Material.Neon)
 	sign(onAir, Enum.NormalId.Left, "ON AIR", ON_AIR_RED, team, { TextColor3 = WHITE, InsetX = 0.1, InsetY = 0.12, LightInfluence = 0 })
 
 	-- Step 2: stage, panel table and the podium with microphones ------------------------------

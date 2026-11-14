@@ -691,6 +691,339 @@ local function runTests()
 		check(World.IsNight(Config, 20) and World.IsNight(Config, 3) and not World.IsNight(Config, 12), "IsNight boundaries")
 	end
 
+	do
+		-- Signs and props stay in view: each piece is built with its real builder (all steps) in its
+		-- own area's coordinates, then sight lines are checked against the parts that could hide them.
+		section("Signs and props stay in view")
+		local BuildUtil = requireNode("ServerScriptService/TycoonServer/BuildUtil")
+		local Builders = requireNode("ServerScriptService/TycoonServer/Builders")
+		local function build(pieceId)
+			local model = Instance.new("Model")
+			model.Name = pieceId
+			Builders[pieceId](BuildUtil.NewContext(CFrame.new(), model, Config.TeamColors[1], "TEST", Config))
+			return model
+		end
+		local function partsOf(model, name)
+			local list = {}
+			for _, d in ipairs(model:GetDescendants()) do
+				if d:IsA("BasePart") and (name == nil or d.Name == name) then
+					table.insert(list, d)
+				end
+			end
+			return list
+		end
+		-- world-space bounds of a part (rotation included)
+		local function bounds(part)
+			local cf, h = part.CFrame, part.Size / 2
+			local rv, uv, lv = cf.RightVector, cf.UpVector, cf.LookVector
+			local e = Vector3.new(
+				math.abs(rv.X) * h.X + math.abs(uv.X) * h.Y + math.abs(lv.X) * h.Z,
+				math.abs(rv.Y) * h.X + math.abs(uv.Y) * h.Y + math.abs(lv.Y) * h.Z,
+				math.abs(rv.Z) * h.X + math.abs(uv.Z) * h.Y + math.abs(lv.Z) * h.Z
+			)
+			return cf.Position - e, cf.Position + e
+		end
+		local function boxesOverlap(aLo, aHi, bLo, bHi)
+			return aLo.X < bHi.X and aHi.X > bLo.X and aLo.Y < bHi.Y and aHi.Y > bLo.Y and aLo.Z < bHi.Z and aHi.Z > bLo.Z
+		end
+		-- true if the straight line a -> b passes through the part's box
+		local function crosses(part, a, b)
+			local p0 = part.CFrame:PointToObjectSpace(a)
+			local d = part.CFrame:PointToObjectSpace(b) - p0
+			local half = part.Size / 2
+			local t0, t1 = 0, 1
+			for _, axis in ipairs({ "X", "Y", "Z" }) do
+				local o, v, h = p0[axis], d[axis], half[axis]
+				if math.abs(v) < 1e-9 then
+					if math.abs(o) > h then
+						return false
+					end
+				else
+					local ta, tb = (-h - o) / v, (h - o) / v
+					t0, t1 = math.max(t0, math.min(ta, tb)), math.min(t1, math.max(ta, tb))
+					if t0 > t1 then
+						return false
+					end
+				end
+			end
+			return true
+		end
+		-- the first part of `list` (other than `skip`) that the line a -> b passes through
+		local function blocker(list, a, b, skip)
+			for _, part in ipairs(list) do
+				if part ~= skip and crosses(part, a, b) then
+					return part
+				end
+			end
+			return nil
+		end
+		-- the keys of a set, sorted (for the messages)
+		local function keysOf(set)
+			local list = {}
+			for key in pairs(set) do
+				table.insert(list, key)
+			end
+			table.sort(list)
+			return list
+		end
+		-- the faces of a part that carry text: { { text, normal (world), centre (world) } }
+		local FACE_AXIS = {
+			Right = Vector3.new(1, 0, 0),
+			Left = Vector3.new(-1, 0, 0),
+			Top = Vector3.new(0, 1, 0),
+			Bottom = Vector3.new(0, -1, 0),
+			Back = Vector3.new(0, 0, 1),
+			Front = Vector3.new(0, 0, -1),
+		}
+		local function letteredFaces(part)
+			local faces = {}
+			for _, gui in ipairs(part:GetChildren()) do
+				if gui:IsA("SurfaceGui") then
+					for _, label in ipairs(gui:GetDescendants()) do
+						if label:IsA("TextLabel") and label.Text ~= "" then
+							local axis = FACE_AXIS[gui.Face.Name]
+							table.insert(faces, {
+								text = label.Text,
+								normal = part.CFrame:VectorToWorldSpace(axis),
+								centre = part.CFrame:PointToWorldSpace(axis * part.Size / 2),
+							})
+							break
+						end
+					end
+				end
+			end
+			return faces
+		end
+
+		-- F1: the interview room's PRESS ROOM panel and ON AIR light (on the lobby's east wall) are in
+		-- plain view from the lobby floor: the grand staircase doesn't stand in front of them
+		do
+			local stairs = partsOf(build("hq_atrium"))
+			local interview = build("hq_interview")
+			local eyes =
+				{ Vector3.new(-100, 5.3, 210), Vector3.new(-100, 5.3, 232), Vector3.new(-120, 5.3, 222), Vector3.new(-75, 5.3, 215) }
+			local found, hidden = 0, {}
+			for _, name in ipairs({ "LobbySign", "OnAirLight" }) do
+				for _, panel in ipairs(partsOf(interview, name)) do
+					found += 1
+					local lo, hi = bounds(panel)
+					for i = 1, 5 do
+						for j = 1, 3 do
+							local spot = Vector3.new(lo.X - 0.01, lo.Y + (hi.Y - lo.Y) * j / 4, lo.Z + (hi.Z - lo.Z) * i / 6)
+							for _, eye in ipairs(eyes) do
+								local hit = blocker(stairs, eye, spot)
+								if hit then
+									hidden[name .. " (" .. hit.Name .. ")"] = true
+								end
+							end
+						end
+					end
+				end
+			end
+			local list = keysOf(hidden)
+			check(
+				found == 2 and #list == 0,
+				"the PRESS ROOM panel and ON AIR light are in plain view from the lobby, not behind the grand staircase "
+					.. table.concat(list, ", ")
+			)
+		end
+
+		-- F2: every parking lamp pole stands on something (its concrete base or the island grass)
+		do
+			local parking = build("parking")
+			local all, poles, floating = partsOf(parking), partsOf(parking, "LampPole"), {}
+			for _, pole in ipairs(poles) do
+				local lo = bounds(pole)
+				local foot = pole.CFrame.Position
+				local standsOn = false
+				for _, other in ipairs(all) do
+					local oLo, oHi = bounds(other)
+					if
+						other ~= pole
+						and math.abs(oHi.Y - lo.Y) < 0.01
+						and foot.X > oLo.X
+						and foot.X < oHi.X
+						and foot.Z > oLo.Z
+						and foot.Z < oHi.Z
+					then
+						standsOn = true
+					end
+				end
+				if not standsOn then
+					table.insert(floating, ("(%.1f, %.1f) bottom %.2f"):format(foot.X, foot.Z, lo.Y))
+				end
+			end
+			check(
+				#poles == 6 and #floating == 0,
+				("the %d parking lamp poles stand on a base or on the island grass, none float %s"):format(
+					#poles,
+					table.concat(floating, ", ")
+				)
+			)
+		end
+
+		-- F3: nothing of the team bench area stands in front of the home field wall's ads, screens and
+		-- section plaques, and the plaques still mark the home sections 113..119
+		do
+			local wall = build("lower_home")
+			local bench = partsOf(build("benches"))
+			local panels, covered, plaques = 0, {}, {}
+			for _, panel in ipairs(partsOf(wall)) do
+				if panel.Name == "AdBoard" or panel.Name == "WallScreen" or panel.Name == "SectionSign" then
+					panels += 1
+					local lo, hi = bounds(panel)
+					-- the space between the panel and the field (the home wall faces -Z)
+					local zoneLo, zoneHi = Vector3.new(lo.X, lo.Y, lo.Z - 15), Vector3.new(hi.X, hi.Y, lo.Z)
+					for _, part in ipairs(bench) do
+						local bLo, bHi = bounds(part)
+						if boxesOverlap(zoneLo, zoneHi, bLo, bHi) then
+							covered[("%s x %.0f..%.0f (%s)"):format(panel.Name, lo.X, hi.X, part.Name)] = true
+						end
+					end
+					if panel.Name == "SectionSign" then
+						local face = letteredFaces(panel)[1]
+						table.insert(plaques, face and face.text or "?")
+					end
+				end
+			end
+			local list = keysOf(covered)
+			table.sort(plaques)
+			check(
+				panels > 10 and #list == 0,
+				"no bench, board or tent stands in front of a home field-wall panel " .. table.concat(list, ", ")
+			)
+			check(
+				table.concat(plaques, ",") == "SEC 113,SEC 114,SEC 115,SEC 116,SEC 117,SEC 118,SEC 119",
+				"the home field wall's plaques mark sections 113..119: " .. table.concat(plaques, ",")
+			)
+		end
+
+		-- F4: the Hall of Fame skybridge's name doesn't face the Hall of Fame's wall, and the concourse
+		-- restroom blade signs hang over the lane's edge (above its head room, not collidable) with
+		-- neither face looking into a food stand or a restroom wall
+		do
+			local fascias = partsOf(build("campus_links"), "BridgeFascia")
+			local hall = partsOf(build("hall_of_fame"))
+			local lettered, facingWall = 0, {}
+			for _, fascia in ipairs(fascias) do
+				for _, face in ipairs(letteredFaces(fascia)) do
+					lettered += 1
+					local from = face.centre + face.normal * 0.05
+					local hit = blocker(hall, from, from + face.normal * 20)
+					if hit then
+						table.insert(facingWall, hit.Name)
+					end
+				end
+			end
+			check(
+				#fascias == 2 and lettered == 1 and #facingWall == 0,
+				"the Hall of Fame skybridge's name faces open air, not the Hall of Fame's wall " .. table.concat(facingWall, ", ")
+			)
+
+			local restrooms = build("concourse_restrooms")
+			local around = partsOf(build("concourse_food"))
+			for _, part in ipairs(partsOf(restrooms)) do
+				table.insert(around, part)
+			end
+			local headRoom = Config.Layout.Bowl.MainConcourse.Floor + 9 -- the lane's head room (render_plot)
+			local blades, bad = partsOf(restrooms, "WayfindingSign"), {}
+			for _, blade in ipairs(blades) do
+				local lo, at = bounds(blade), blade.CFrame.Position
+				local where = ("(%.0f, %.0f)"):format(at.X, at.Z)
+				if blade.CanCollide or lo.Y < headRoom then
+					table.insert(bad, where .. " is in the lane's head room")
+				end
+				local faces = letteredFaces(blade)
+				if #faces ~= 2 then
+					table.insert(bad, ("%s has %d lettered faces"):format(where, #faces))
+				end
+				for _, face in ipairs(faces) do
+					local from = face.centre + face.normal * 0.05
+					local hit = blocker(around, from, from + face.normal * 12, blade)
+					if hit then
+						table.insert(bad, where .. " faces " .. hit.Name)
+					end
+				end
+			end
+			check(#blades == 6 and #bad == 0, "the restroom blade signs face along the concourse lane " .. table.concat(bad, ", "))
+		end
+
+		-- F5: the AWAY stencil over the visitor locker room door is not covered by the welcome sign, and
+		-- the staff's role signs stand in front of the figures (text toward the road, nothing of the
+		-- figure in front of it, no prop hidden behind it)
+		do
+			local visitor = build("visitor_lockerroom")
+			local others = partsOf(visitor)
+			local stencils, covered = 0, {}
+			for _, lintel in ipairs(partsOf(visitor, "DoorLintel")) do
+				local gui = lintel:FindFirstChild("DoorStencilGui")
+				local label = gui and gui:FindFirstChild("Stencil")
+				if label then
+					stencils += 1
+					-- the label's rectangle on the lintel's corridor face (Back, +Z), either way round
+					local lo, hi = bounds(lintel)
+					local w, h = hi.X - lo.X, hi.Y - lo.Y
+					local a0, a1 = label.Position.X.Scale, label.Position.X.Scale + label.Size.X.Scale
+					local top = hi.Y - label.Position.Y.Scale * h
+					local zoneLo = Vector3.new(lo.X + math.min(a0, 1 - a1) * w, top - label.Size.Y.Scale * h, hi.Z)
+					local zoneHi = Vector3.new(lo.X + math.max(a1, 1 - a0) * w, top, hi.Z + 0.5)
+					for _, part in ipairs(others) do
+						local pLo, pHi = bounds(part)
+						if part ~= lintel and boxesOverlap(zoneLo, zoneHi, pLo, pHi) then
+							table.insert(covered, part.Name)
+						end
+					end
+				end
+			end
+			check(
+				stencils == 1 and #covered == 0,
+				"the AWAY stencil over the visitor locker room door is in view " .. table.concat(covered, ", ")
+			)
+
+			local signs, problems = 0, {}
+			for _, pieceId in ipairs({ "staff_coaches", "staff_trainers" }) do
+				local staff = build(pieceId)
+				local figures = partsOf(staff)
+				local roleSigns = partsOf(staff, "RoleSign")
+				for _, sign in ipairs(roleSigns) do
+					local sLo, sHi = bounds(sign)
+					for _, face in ipairs(letteredFaces(sign)) do
+						signs += 1
+						if face.normal.Z > -0.99 then
+							problems[face.text .. " doesn't face the road"] = true
+						end
+						-- sight lines from spots across the text (between and in front of the legs too)
+						for _, u in ipairs({ -0.4, -0.25, -0.11, 0, 0.11, 0.25, 0.4 }) do
+							for _, v in ipairs({ -0.3, 0, 0.3 }) do
+								local from = face.centre
+									+ sign.CFrame.RightVector * (u * sign.Size.X)
+									+ sign.CFrame.UpVector * (v * sign.Size.Y)
+									+ face.normal * 0.02
+								local hit = blocker(figures, from, from + face.normal * 10, sign)
+								if hit then
+									problems[hit.Name .. " in front of " .. face.text] = true
+								end
+							end
+						end
+					end
+					for _, part in ipairs(figures) do
+						local pLo, pHi = bounds(part)
+						if part ~= sign and boxesOverlap(sLo, sHi, pLo, pHi) then
+							problems[part.Name .. " runs into a role sign"] = true
+						end
+					end
+				end
+				for _, bell in ipairs(partsOf(staff, "Kettlebell")) do
+					if blocker(roleSigns, bell.CFrame.Position, bell.CFrame.Position + Vector3.new(0, 0, -10)) then
+						problems["the kettlebell hides behind a sign"] = true
+					end
+				end
+			end
+			local list = keysOf(problems)
+			check(signs == 6 and #list == 0, "the staff's role signs stand in front of them, in view " .. table.concat(list, ", "))
+		end
+	end
+
 	section("Bowl geometry (V5)")
 	do
 		local Bowl = requireNode("ServerScriptService/TycoonServer/Bowl")

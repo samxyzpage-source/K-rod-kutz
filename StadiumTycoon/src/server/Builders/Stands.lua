@@ -955,6 +955,18 @@ local SIDE_PLAQUES = {
 	{ 101, 107 },
 	{ 130.4, 134.8 },
 }
+-- The home wall's plaques stay out of the team bench area in front of it (Field.lua benches:
+-- |x| 16..58): the two next to it move to the outer ends of their sections (beside the entry
+-- openings at +-78), the middle one into the players' tunnel lane (beside its pillars).
+local HOME_PLAQUES = {
+	{ -134.8, -130.4 },
+	{ -107, -101 },
+	{ -75.8, -70.2 },
+	{ -15.9, -11.7 },
+	{ 70.2, 75.8 },
+	{ 101, 107 },
+	{ 130.4, 134.8 },
+}
 
 local function sideline(ctx, name, home)
 	local L = ctx.config.Layout
@@ -991,14 +1003,14 @@ local function sideline(ctx, name, home)
 	end
 	local panels
 	if home then
-		-- (the middle of the home wall hides behind the benches: screens go further out)
+		-- (Field.lua's bench area fills |x| 16..58 in front of the middle of the home wall: no ads
+		-- or screens there, they would only peek out beside the bench boards; the score screens
+		-- stop at 69.2 to leave room for the plaques beside the entry openings, HOME_PLAQUES)
 		panels = {
 			{ -128, -110, "team" },
 			{ -99, -83, "gameday" },
-			{ -74, -59, "score" },
-			{ -47, -28, "ad" },
-			{ 28, 47, "ad" },
-			{ 59, 74, "score" },
+			{ -69.2, -59, "score" },
+			{ 59, 69.2, "score" },
 			{ 83, 99, "gameday" },
 			{ 110, 128, "ad" },
 		}
@@ -1014,7 +1026,7 @@ local function sideline(ctx, name, home)
 			{ 110, 128, "ad" },
 		}
 	end
-	for _, plaque in ipairs(SIDE_PLAQUES) do
+	for _, plaque in ipairs(home and HOME_PLAQUES or SIDE_PLAQUES) do
 		table.insert(panels, { plaque[1], plaque[2], "plaque" })
 	end
 	fieldWall(ctx, L, name, spansBetween(-wallEnd, wallEnd, holes), panels, home and 1 or 6)
