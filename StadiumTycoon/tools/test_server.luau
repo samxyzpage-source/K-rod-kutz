@@ -1029,6 +1029,87 @@ local function runTests()
 			local list = keysOf(problems)
 			check(signs == 6 and #list == 0, "the staff's role signs stand in front of them, in view " .. table.concat(list, ", "))
 		end
+
+		-- TRAP-2: the club ring's skirt over the main concourse roof doesn't collide, so anyone up on
+		-- that roof when club_lounge step 1 lays the ring floor walks out under it and drops down
+		do
+			local skirts, solid = partsOf(build("club_lounge"), "ClubRingSkirt"), {}
+			for _, skirt in ipairs(skirts) do
+				if skirt.CanCollide then
+					table.insert(solid, ("(%.0f, %.0f)"):format(skirt.CFrame.Position.X, skirt.CFrame.Position.Z))
+				end
+			end
+			check(
+				#skirts > 0 and #solid == 0,
+				("the club ring's skirt over the main concourse roof doesn't collide (%d spans) %s"):format(
+					#skirts,
+					table.concat(solid, ", ")
+				)
+			)
+		end
+
+		-- the gate halls' wayfinding signs stand on posts or hang from the lobby ceiling (none floats),
+		-- and the club lounge's popcorn carts stand on the floor: each post's foot is on something
+		-- solid and its top under a sign, each hanger hangs from a ceiling over a sign
+		do
+			local escalators = build("escalators")
+			local structure = partsOf(escalators)
+			for _, part in ipairs(partsOf(build("gates"))) do
+				table.insert(structure, part) -- (the gate halls' lobby ceilings)
+			end
+			local signs = partsOf(escalators, "WayfindingSign")
+			-- a part of `list` whose top (or bottom) face is at height y over the point `at`
+			local function meets(list, at, y, face)
+				for _, other in ipairs(list) do
+					local lo, hi = bounds(other)
+					local h = face == "top" and hi.Y or lo.Y
+					if math.abs(h - y) < 0.01 and at.X > lo.X and at.X < hi.X and at.Z > lo.Z and at.Z < hi.Z then
+						return other
+					end
+				end
+				return nil
+			end
+			local held, loose = {}, {}
+			for _, name in ipairs({ "SignPost", "SignHanger" }) do
+				for _, rod in ipairs(partsOf(escalators, name)) do
+					local lo, hi = bounds(rod)
+					local at = rod.CFrame.Position
+					local base, sign
+					if name == "SignPost" then
+						base, sign = meets(structure, at, lo.Y, "top"), meets(signs, at, hi.Y, "bottom")
+					else
+						base, sign = meets(structure, at, hi.Y, "bottom"), meets(signs, at, lo.Y, "top")
+					end
+					if base and base.CanCollide and sign then
+						held[sign] = (held[sign] or 0) + 1
+					else
+						table.insert(loose, ("%s (%.1f, %.1f, %.1f)"):format(name, at.X, at.Y, at.Z))
+					end
+				end
+			end
+			local carried = 0
+			for _, rods in pairs(held) do
+				if rods >= 2 then
+					carried += 1
+				end
+			end
+			local lounge = build("club_lounge")
+			local all = partsOf(lounge)
+			local carts = partsOf(lounge, "PopcornCart")
+			for _, cart in ipairs(carts) do
+				local lo = bounds(cart)
+				if not meets(all, cart.CFrame.Position, lo.Y, "top") then
+					table.insert(loose, ("PopcornCart (%.1f, %.2f, %.1f)"):format(cart.CFrame.Position.X, lo.Y, cart.CFrame.Position.Z))
+				end
+			end
+			check(
+				carried >= 12 and #carts > 0 and #loose == 0,
+				("the gate halls' wayfinding signs stand on posts or hang from the ceiling (%d signs held by two rods) and the club popcorn carts stand on the floor %s"):format(
+					carried,
+					table.concat(loose, ", ")
+				)
+			)
+		end
 	end
 
 	section("Bowl geometry (V5)")
@@ -1860,6 +1941,50 @@ local function runTests()
 			("the campus map, dome tower directory and skybridge elevator signs read at 0.3 studs or more (%.2f: %s)"):format(
 				smallest,
 				worst
+			)
+		)
+		-- the small Exterior signs (corner ramp exit panels, the concourse doorways, the elevator door
+		-- headers) and the HQ glass elevator's call panels keep their bigger letters (each minimum sits
+		-- about halfway between the old, too-small size and today's: 0.6 / 0.78, 0.4 / 0.64,
+		-- 0.4 / 0.63, 0.24 / 0.54)
+		local MINIMUM = { CornerRampExitPanel = 0.7, ConcourseEntryDoor = 0.5, ElevatorDoor = 0.5, ElevatorCallPanel = 0.4 }
+		local least, short = {}, {}
+		for _, root in ipairs({ plotModel(1).Items["escalators:2"], plotModel(1).Items["escalators:3"], plotModel(1).Base }) do
+			for _, gui in ipairs(root:GetDescendants()) do
+				local part = gui.Parent
+				local name = part and part.Name or ""
+				if gui:IsA("SurfaceGui") and MINIMUM[name] then
+					local s = part.Size
+					local faceW = (gui.Face == Enum.NormalId.Left or gui.Face == Enum.NormalId.Right) and s.Z or s.X
+					for _, label in ipairs(gui:GetChildren()) do
+						if label:IsA("TextLabel") and label.Text ~= "" then
+							local size = textSize(label.Text, faceW * label.Size.X.Scale, s.Y * label.Size.Y.Scale)
+							least[name] = math.min(least[name] or math.huge, size)
+							if size < MINIMUM[name] then
+								short[("%s '%s' %.2f"):format(name, label.Text, size)] = true
+							end
+						end
+					end
+				end
+			end
+		end
+		local report, list = {}, {}
+		for name in pairs(MINIMUM) do
+			table.insert(report, ("%s %.2f"):format(name, least[name] or 0))
+			if not least[name] then
+				short[name .. " (none found)"] = true
+			end
+		end
+		for key in pairs(short) do
+			table.insert(list, key)
+		end
+		table.sort(report)
+		table.sort(list)
+		check(
+			#list == 0,
+			("the corner ramp panels, concourse doorways, elevator door headers and HQ call panels keep big letters (%s) %s"):format(
+				table.concat(report, ", "),
+				table.concat(list, ", ")
 			)
 		)
 	end
