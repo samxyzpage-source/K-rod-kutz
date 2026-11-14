@@ -1223,6 +1223,87 @@ local function runTests()
 		fakeLocal.Character = nil -- (that Drive script stays connected: leave it nobody to drive)
 		tester:Destroy()
 	end
+	do
+		-- Cart teleports check who is aboard and what is on the pad. The fake engine gets a simple
+		-- GetPartBoundsInBox (by bounding box) over the carts, the characters and the test's parts.
+		local testParts = {}
+		roblox.implementMethod("Workspace", "GetPartBoundsInBox", function(_, cframe, size)
+			local candidates = table.clone(testParts)
+			for _, plot in ipairs(tycoons:GetChildren()) do
+				local folder = plot:FindFirstChild("Carts")
+				for _, d in ipairs(folder and folder:GetDescendants() or {}) do
+					table.insert(candidates, d)
+				end
+			end
+			for _, p in ipairs(Players:GetPlayers()) do
+				for _, d in ipairs(p.Character and p.Character:GetDescendants() or {}) do
+					table.insert(candidates, d)
+				end
+			end
+			local found = {}
+			for _, part in ipairs(candidates) do
+				if part:IsA("BasePart") then
+					local x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22 = cframe:ToObjectSpace(part.CFrame):GetComponents()
+					local h = part.Size / 2
+					local ex = math.abs(r00) * h.X + math.abs(r01) * h.Y + math.abs(r02) * h.Z
+					local ey = math.abs(r10) * h.X + math.abs(r11) * h.Y + math.abs(r12) * h.Z
+					local ez = math.abs(r20) * h.X + math.abs(r21) * h.Y + math.abs(r22) * h.Z
+					if math.abs(x) < size.X / 2 + ex and math.abs(y) < size.Y / 2 + ey and math.abs(z) < size.Z / 2 + ez then
+						table.insert(found, part)
+					end
+				end
+			end
+			return found
+		end)
+		local info = Vehicles.GetCarts(PlotManager.GetPlot(alice))[3]
+		local chassis = info.model.PrimaryPart
+		local passengerSeat = info.model:FindFirstChild("PassengerSeat")
+		local function leaveFarAway()
+			info.model:PivotTo(info.home * CFrame.new(0, 1.2, 200))
+			info.lastUsed = -1000
+		end
+		local function atHome()
+			return (chassis.CFrame.Position - info.home.Position).Magnitude < 5
+		end
+		-- (a) a passenger alone in the cart: it stays where it is
+		leaveFarAway()
+		local okRide = pcall(function()
+			passengerSeat.Occupant = alice.Character:FindFirstChildOfClass("Humanoid")
+		end)
+		Vehicles.Tidy(os.clock())
+		check(okRide and not atHome(), "a cart with only a passenger aboard is not sent home")
+		pcall(function()
+			passengerSeat.Occupant = Instance.new("Humanoid") -- (Lune can't set it back to nil: an empty seat)
+		end)
+		info.lastUsed = -1000
+		instanceSignal(passengerSeat, "PropOccupant"):Fire()
+		check(os.clock() - info.lastUsed < 1, "a passenger getting out counts as using the cart (its idle time restarts)")
+		-- (b) someone stands on the pad: the cart waits; anchored parts there (the garage) don't count
+		leaveFarAway()
+		local root = alice.Character.HumanoidRootPart
+		local rootBefore = root.CFrame
+		root.CFrame = info.home * CFrame.new(0, 3, 0)
+		local floorMark = Instance.new("Part")
+		floorMark.Anchored = true
+		floorMark.Size = Vector3.new(4, 1, 4)
+		floorMark.CFrame = info.home * CFrame.new(0, 1, 0)
+		table.insert(testParts, floorMark)
+		Vehicles.Tidy(os.clock())
+		local waited = not atHome()
+		root.CFrame = rootBefore
+		Vehicles.Tidy(os.clock())
+		check(waited and atHome(), "an idle cart waits while someone stands on its pad, then comes home")
+		-- a destroyed cart is rebuilt only once its pad is clear too
+		local list = Vehicles.GetCarts(PlotManager.GetPlot(alice))
+		root.CFrame = info.home * CFrame.new(0, 3, 0)
+		info.model:Destroy()
+		Vehicles.Tidy(os.clock())
+		local notYet = list[3] == info
+		root.CFrame = rootBefore
+		Vehicles.Tidy(os.clock())
+		check(notYet and list[3] ~= info and list[3].model.Parent ~= nil, "a destroyed cart is rebuilt once its pad is clear")
+		table.clear(testParts)
+	end
 
 	section("Draft + roster")
 	do
