@@ -724,13 +724,7 @@ function M.club_lounge(ctx)
 				Glow = true,
 				PPS = 40,
 			})
-			write(lintel, OUTWARD, "CLUB LEVEL", ink(team.Primary, team), {
-				Name = "ClubLevelSign",
-				Top = 0.15,
-				Height = 0.7,
-				Glow = true,
-				PPS = 40,
-			})
+			-- (no outward CLUB LEVEL lettering: the escalators' CLUB LEVEL sign stands right in front of it)
 			BuildUtil.Look(
 				lintel,
 				"Escalators to Gate " .. seg.gate,
@@ -857,7 +851,7 @@ function M.club_lounge(ctx)
 			-- popcorn & candy carts at the ends of the lounge
 			for _, s in ipairs({ -1, 1 }) do
 				local x = s * 40
-				local cart = span(food, seg, "PopcornCart", x - 2, x + 2, 87.6, 90.2, fy + 0.6, fy + 3.6, POPCORN_RED)
+				local cart = span(food, seg, "PopcornCart", x - 2, x + 2, 87.6, 90.2, fy, fy + 3.6, POPCORN_RED)
 				span(
 					food,
 					seg,
@@ -1791,6 +1785,16 @@ function M.pressbox(ctx)
 		PPS = 24,
 		Glow = true,
 	})
+	for _, left in ipairs({ 0.01, 0.843 }) do -- (over the two coaches' booths, whose headers it covers)
+		write(visor, TOWARD_FIELD, "COACHES", ink(team.Primary, team), {
+			Left = left,
+			Width = 0.147,
+			Top = 0.1,
+			Height = 0.8,
+			PPS = 24,
+			Glow = true,
+		})
+	end
 	local soffit = span(
 		roof,
 		seg,

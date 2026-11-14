@@ -456,6 +456,7 @@ local GATE_INFO = {
 		hall = "East Entry Hall",
 		flags = { -27, -39 }, -- (clear of the east video board's pylons)
 		flagLen = 8,
+		tent = { x0 = 50, x1 = 62, o0 = 162.8, o1 = 174.8 }, -- (clear of the east video board's pylons too)
 	},
 	home = {
 		letter = "D",
@@ -706,7 +707,7 @@ local function buildGate(ctx, seg, gate, L)
 
 	-- security tent (bag check + walk-through detector)
 	-- (the plaza side: Gate B mirrors its plaza, clear of the west video board's control room)
-	local t = TENT
+	local t = gate.tent or TENT
 	local ps = gate.plazaSide or 1
 	for _, u in ipairs({ t.x0 + 0.2, t.x1 - 0.2 }) do
 		for _, o in ipairs({ t.o0 + 0.2, t.o1 - 0.2 }) do
@@ -1314,6 +1315,9 @@ local function hallSigns(ctx, seg, gate, L)
 	local l1 = write(s1, OUTWARD, "ESCALATORS  ^  MAIN CONCOURSE", color, { Glow = true, Top = 0.1, Height = 0.42, PPS = SIGN_PPS })
 	addLine(l1, "SECTIONS " .. lower .. "   |   CLUB LEVEL   |   UPPER DECK", 0.6, 0.28, Enum.Font.GothamBold)
 	BuildUtil.Light(s1, "PointLight", glow)
+	for _, hx in ipairs({ -7, 7 }) do -- (hangs from the lobby ceiling)
+		box(signs, seg, "SignHanger", hx - 0.1, hx + 0.1, 25.5, LOBBY_CEIL[1], 150.7, 150.9, DARK_STEEL, Enum.Material.Metal, NO_COLLIDE)
+	end
 	BuildUtil.Look(
 		s1,
 		"Gate " .. gate.letter .. " Escalators",
@@ -1343,7 +1347,11 @@ local function hallSigns(ctx, seg, gate, L)
 	)
 
 	-- club level: over F2's top, facing the riders
-	local s3 = box(signs, seg, "WayfindingSign", -6, 6, 62, 66, F2.top + 0.4, F2.top + 0.8, SIGN_DARK, nil, NO_COLLIDE)
+	-- (on two posts at the outer edge of F2's top landing)
+	local s3 = box(signs, seg, "WayfindingSign", -6, 6, 62, 66, F2.top - 0.4, F2.top, SIGN_DARK, nil, NO_COLLIDE)
+	for _, px in ipairs({ -5.9, 5.6 }) do
+		box(signs, seg, "SignPost", px, px + 0.3, F2.y1, 62, F2.top - 0.35, F2.top - 0.05, DARK_STEEL, Enum.Material.Metal, NO_COLLIDE)
+	end
 	local l3 = write(s3, OUTWARD, "CLUB LEVEL", color, { Glow = true, Top = 0.08, Height = 0.5, PPS = SIGN_PPS })
 	addLine(l3, "SECTIONS " .. club, 0.62, 0.3, Enum.Font.GothamBold)
 	BuildUtil.Light(s3, "PointLight", glow)
@@ -1378,6 +1386,9 @@ local function hallSigns(ctx, seg, gate, L)
 
 	-- upper concourse: over its gate opening
 	local s5 = box(signs, seg, "WayfindingSign", -7.5, 7.5, 80.6, 84.2, TOP.o0 + 0.05, TOP.o0 + 0.35, SIGN_DARK, nil, NO_COLLIDE)
+	for _, px in ipairs({ -7.5, 7.2 }) do -- (on posts: it stands before the upper concourse exists)
+		box(signs, seg, "SignPost", px, px + 0.3, F3.y1, 80.6, TOP.o0 + 0.05, TOP.o0 + 0.35, DARK_STEEL, Enum.Material.Metal, NO_COLLIDE)
+	end
 	local l5 = write(s5, OUTWARD, "UPPER CONCOURSE", color, { Glow = true, Top = 0.08, Height = 0.5, PPS = SIGN_PPS })
 	addLine(l5, "SECTIONS " .. upper, 0.62, 0.3, Enum.Font.GothamBold)
 	BuildUtil.Light(s5, "PointLight", glow)
