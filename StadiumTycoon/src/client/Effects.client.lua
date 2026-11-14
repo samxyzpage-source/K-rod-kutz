@@ -284,9 +284,9 @@ local function hqLevel(p)
 	return nil
 end
 
--- Does the line a-b (seen from above) pass through the HQ block?
-local function crossesBlock(a, b)
-	local block = GUIDE.Block
+-- Does the line a-b (seen from above) pass through the box (by default the HQ block)?
+local function crossesBlock(a, b, block)
+	block = block or GUIDE.Block
 	local dx, dz = b.X - a.X, b.Z - a.Z
 	local t0, t1 = 0, 1
 	local function clip(p, q)
@@ -310,9 +310,54 @@ do
 	CORNERS = { Vector3.new(x0, 0.2, z0), Vector3.new(x1, 0.2, z0), Vector3.new(x1, 0.2, z1), Vector3.new(x0, 0.2, z1) }
 end
 
--- The shortest way from a to b (both outside) round the HQ block: the first point to walk to
--- (b itself, or a corner) and the length.
+-- ... or through the building itself (its boxes, a stud bigger: clear of its corner columns)?
+local PADDED_BUILDING = {}
+for _, box in ipairs(GUIDE.Building) do
+	table.insert(PADDED_BUILDING, { MinX = box.MinX - 1, MaxX = box.MaxX + 1, MinZ = box.MinZ - 1, MaxZ = box.MaxZ + 1 })
+end
+local function crossesBuilding(a, b)
+	for _, box in ipairs(PADDED_BUILDING) do
+		if crossesBlock(a, b, box) then
+			return true
+		end
+	end
+	return false
+end
+
+-- A spot on the ground in the block but outside the building (the strips beside it: the covered HQ
+-- walk, beside the west wall, behind the back wall): the nearest point just outside the block.
+local function stepOut(p)
+	local block, margin = GUIDE.Block, GUIDE.CornerMargin
+	if p.Y >= GUIDE.UpstairsY or p.X <= block.MinX or p.X >= block.MaxX or p.Z <= block.MinZ or p.Z >= block.MaxZ then
+		return nil
+	end
+	local best, out = p.X - block.MinX, Vector3.new(block.MinX - margin, 0.2, p.Z)
+	if block.MaxX - p.X < best then
+		best, out = block.MaxX - p.X, Vector3.new(block.MaxX + margin, 0.2, p.Z)
+	end
+	if p.Z - block.MinZ < best then
+		best, out = p.Z - block.MinZ, Vector3.new(p.X, 0.2, block.MinZ - margin)
+	end
+	if block.MaxZ - p.Z < best then
+		out = Vector3.new(p.X, 0.2, block.MaxZ + margin)
+	end
+	return out
+end
+
+-- The shortest way from a to b (both outside the building) round the HQ block: the first point to
+-- walk to (b itself, a corner, or the way out of a strip beside the building) and the length.
 local function aroundBlock(a, b)
+	local out, into = stepOut(a), stepOut(b)
+	if out or into then
+		if not crossesBuilding(a, b) then
+			return b, (b - a).Magnitude
+		elseif out then
+			local _, rest = aroundBlock(out, b)
+			return out, (out - a).Magnitude + rest
+		end
+		local first, rest = aroundBlock(a, into)
+		return first, rest + (b - into).Magnitude
+	end
 	if not crossesBlock(a, b) then
 		return b, (b - a).Magnitude
 	end
@@ -435,6 +480,11 @@ local function guideWaypoint(p, goal, built)
 		return nil
 	elseif not playerLevel then
 		if goalLevel then
+			for _, bridge in ipairs(GUIDE.Bridges) do
+				if inBox(bridge, p) then
+					return bridge.Door -- up on a skybridge: in through the prompt at its HQ end
+				end
+			end
 			return wayIn(p, goal)
 		end
 		local first = aroundBlock(p, goal)

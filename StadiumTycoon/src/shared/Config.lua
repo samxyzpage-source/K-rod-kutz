@@ -395,9 +395,18 @@ L.HQGuide = {
 	},
 	UpstairsY = 11, -- feet this high or higher: on the upper floor (its top is L.HQ.UpperFloorY)
 	RoofY = 30, -- ... higher than this: on the roofs (no waypoints)
-	-- outside, the beam goes round the whole block, by its corners (CornerMargin studs out)
+	-- outside, the beam goes round the whole block, by its corners (CornerMargin studs out). On the
+	-- ground in the block but outside the building (the covered HQ walk, beside the west wall, behind
+	-- the back wall) it first steps out of the block when the building is in the way.
 	Block = { MinX = -262, MaxX = 118, MinZ = 198, MaxZ = 366 },
 	CornerMargin = 4,
+	-- up on the skybridges (campus_links steps 2 + 3, deck y 17, outside the building) the way into
+	-- the HQ is the "Walk into the HQ" prompt at the bridge's HQ end (Builders/CampusLinks.lua): the
+	-- beam points there (Door) for a goal in the HQ. FEET boxes.
+	Bridges = {
+		{ MinX = 118, MaxX = 142, MinZ = 212, MaxZ = 281, MinY = 15, MaxY = 20, Door = Vector3.new(122.4, 17, 271) }, -- link, Sky Lounge, Hall of Fame bridge + tower
+		{ MinX = 100, MaxX = 120, MinZ = 284, MaxZ = 409.5, MinY = 15, MaxY = 20, Door = Vector3.new(109, 17, 288.4) }, -- Dome & Garage bridge + tower
+	},
 	-- the doors to the outside, a spot just inside and just outside each (the back wall has none)
 	Doors = {
 		{ Inside = Vector3.new(-100, 0.2, 205), Outside = Vector3.new(-100, 0.2, 194) }, -- main entrance
@@ -408,8 +417,10 @@ L.HQGuide = {
 	-- (clear of the grand staircase); OpenZ is the corridor in front of that opening
 	Lobby = { MinX = -150, MaxX = -50, MinZ = 190, MaxZ = 264, OpenMinX = -145, OpenMaxX = -64, OpenZ = 268 },
 	-- stairs, in legs from the bottom up: standing in a leg's box, walk to its Up point (going up)
-	-- or Down point (going down), each inside the next leg (or off the stairs). Bottom / Top: where
-	-- to step on, going up / down. A stair with a Room of its own is entered through its Door.
+	-- or Down point (going down), each inside the next leg or off the stairs (never inside its own
+	-- box, so nobody ends up standing on a hidden waypoint; nil = already there). Bottom / Top: where
+	-- to step on, going up / down (inside a leg). A stair with a Room of its own is entered through
+	-- its Door.
 	Stairs = {
 		{ -- the grand staircase in the atrium (the Grand Atrium's first step)
 			Piece = "hq_atrium:1",

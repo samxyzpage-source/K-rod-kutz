@@ -6035,7 +6035,16 @@ local function runTests()
 		guideItems.Name = "Items"
 		guideItems.Parent = guidePlot
 		guidePlot.Parent = tycoons
-		for _, id in ipairs({ "practice_field:1", "hq_owner:1", "hq_media:1", "hq_weightroom:1", "turf:1" }) do
+		for _, id in ipairs({
+			"practice_field:1",
+			"hq_owner:1",
+			"hq_media:1",
+			"hq_weightroom:1",
+			"turf:1",
+			"hq_frontoffice:1",
+			"campus_links:1",
+			"hq_lobby:1",
+		}) do
 			local button = Items.ById[id].Button
 			local pad = Instance.new("Part")
 			pad.Name = "Buy_" .. id
@@ -6098,6 +6107,13 @@ local function runTests()
 		-- from the corridor to the main entrance: along the corridor to the lobby's opening, through it
 		expect(Vector3.new(30, 0.3, 271), "turf:1", Vector3.new(-64, 0.2, 268), "east corridor -> main entrance: to the lobby's opening")
 		expect(Vector3.new(-80, 0.3, 270), "turf:1", Vector3.new(-80, 0.2, 261), "at the opening: into the lobby")
+		-- GUIDE-BLOCK-STRIPS: from the strips beside the HQ (the covered HQ walk...) out and round
+		expect(Vector3.new(110, 0.3, 330), "turf:1", Vector3.new(122, 0.2, 330), "HQ walk -> stadium: out of the HQ's strip first")
+		expect(Vector3.new(110, 0.3, 330), "hq_frontoffice:1", Vector3.new(122, 0.2, 271), "HQ walk -> front office: the east portal")
+		expect(Vector3.new(-130, 0.3, 420), "campus_links:1", Vector3.new(122, 0.2, 370), "practice field -> HQ walk: round the corner")
+		-- CLIENT-POLISH (c): up on a skybridge, a goal in the HQ: the "Walk into the HQ" prompt at its end
+		expect(Vector3.new(109, 17.1, 330), "hq_media:1", Vector3.new(109, 17, 288.4), "dome skybridge -> the HQ prompt")
+		expect(Vector3.new(134, 17.1, 271), "hq_media:1", Vector3.new(122.4, 17, 271), "Sky Lounge -> the HQ prompt")
 		-- straight at buttons away from the HQ; hidden right next to one on the same floor only
 		local _, sameFloor = aim(Vector3.new(5, 0.3, -80), "turf:1")
 		local _, below = aim(Vector3.new(5, -16.7, -80), "turf:1")
