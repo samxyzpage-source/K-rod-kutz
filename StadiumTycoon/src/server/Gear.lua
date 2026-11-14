@@ -14,7 +14,8 @@
 	colours plus small welded parts (non-collidable, massless). Your Shirt, Pants, T-shirt and body
 	colours are put away while you wear it (layered clothing - and hats, under a cap or a hood -
 	are hidden), and "Change back" puts all of it back exactly as it was:
-	  CoachPolo       Head Coach Polo: team polo, khakis, a cap, a headset and a whistle on a lanyard
+	  CoachPolo       Head Coach Polo: team polo (short sleeves), khakis, a cap, a headset and a
+	                  whistle on a lanyard
 	  SidelineHoodie  team hoodie with a hood and a pocket, dark track pants, a headset
 	  TeamJersey      team jersey with your name and number on the back, team-colour pants
 	A respawn starts in your own clothes (the new character is built from your avatar). When the
@@ -312,10 +313,19 @@ end
 
 --[[
 	Torso / Arms / Legs: a palette key ("Primary"...) or a Color3; nil keeps that body colour
-	(the polo's short sleeves show your arms). Cap, Headset, Lanyard, Hood, Jersey: the parts.
+	(the polo shows your arms under short sleeves). Sleeves, Cap, Headset, Lanyard, Hood, Jersey:
+	the outfit's parts.
 ]]
 local OUTFITS = {
-	CoachPolo = { Name = "Head Coach Polo", Torso = "Primary", Legs = KHAKI, Cap = true, Headset = true, Lanyard = true },
+	CoachPolo = {
+		Name = "Head Coach Polo",
+		Torso = "Primary",
+		Legs = KHAKI,
+		Sleeves = true,
+		Cap = true,
+		Headset = true,
+		Lanyard = true,
+	},
 	SidelineHoodie = { Name = "Sideline Hoodie", Torso = "Primary", Arms = "Primary", Legs = TRACK_PANTS, Hood = true, Headset = true },
 	TeamJersey = { Name = "Team Jersey", Torso = "Primary", Arms = "Primary", Legs = "Secondary", Jersey = true },
 }
@@ -571,6 +581,26 @@ local function buildParts(state, spec)
 				nil,
 				Enum.PartType.Ball
 			)
+		end
+	end
+
+	if spec.Sleeves then
+		-- short sleeves round the top of each arm (R15 upper arm, or the R6 arm)
+		for _, side in ipairs({ "Left", "Right" }) do
+			local arm = character:FindFirstChild(side .. "UpperArm") or character:FindFirstChild(side .. " Arm")
+			if arm and arm:IsA("BasePart") then
+				local a = arm.Size
+				local h = math.min(a.Y * (arm.Name == side .. "UpperArm" and 0.6 or 0.32), 0.9)
+				attach(
+					folder,
+					arm,
+					"Sleeve",
+					Vector3.new(a.X + 0.1, h, a.Z + 0.1),
+					CFrame.new(0, a.Y / 2 - h / 2 + 0.03, 0),
+					primary,
+					Enum.Material.Fabric
+				)
+			end
 		end
 	end
 

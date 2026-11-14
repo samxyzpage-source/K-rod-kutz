@@ -3033,8 +3033,9 @@ local function runTests()
 					and names.EarCup == 2
 					and names.Mic == 1
 					and names.Lanyard == 2
-					and names.LanyardWhistle == 1,
-				"a cap, a headset with a microphone and a whistle on a lanyard"
+					and names.LanyardWhistle == 1
+					and names.Sleeve == 2,
+				"short team sleeves, a cap, a headset with a microphone and a whistle on a lanyard"
 			)
 			check(
 				#loose == 0 and folder.CapCrown.CFrame.Position.Y > coachChar.Head.CFrame.Position.Y + 0.3,
