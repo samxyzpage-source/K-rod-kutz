@@ -32,8 +32,16 @@ Config.DayLengthSeconds = 600 -- seconds for a full 24 hour day
 Config.NightStartsAt = 18 -- ClockTime when stadium lights switch on
 Config.NightEndsAt = 6.5 -- ClockTime when stadium lights switch off
 Config.BuildAnimation = true
+-- A returning owner's franchise (and every team change) is rebuilt a few steps per frame: the
+-- server spends at most this many seconds per frame on it, so nobody's game stalls.
+Config.BuildFrameBudget = 0.008
 Config.RespawnAtPlot = true -- owners respawn at their own stadium
 Config.ShowGuideBeam = true -- a glowing beam points to your next buy button
+-- The beam's button: the cheapest one in the part of the plot you are in (the HQ building, the
+-- campus outdoors, the stadium, the plaza or the fan zone) while it costs at most ZoneCostFactor
+-- times the cheapest one anywhere; otherwise that one. Re-checked every RecheckSeconds; the beam
+-- only moves to another button when that one wins two checks in a row.
+Config.GuideGoal = { RecheckSeconds = 2, ZoneCostFactor = 2.5 }
 
 -- Game days: every IntervalSeconds a game day starts for everyone. Fans walk in, fill the
 -- stands you've built, and income is multiplied for DurationSeconds.
@@ -319,6 +327,7 @@ L.GateHalfWidth = 13
 L.WalkwayHalfWidth = 12 -- the walkway from the claim gate to Gate A
 L.VaultPosition = Vector3.new(36, 0, -442)
 L.CollectPadPosition = Vector3.new(22, 0, -442)
+L.FieldCollectPadPosition = Vector3.new(0, 0, -29) -- on the field: the front sideline, by the visitors' tunnel
 L.SpawnPosition = Vector3.new(0, 0, -448) -- just inside the claim gate (refs.GateCFrame); owners respawn in the HQ lobby (L.HQSpawn)
 L.BusStopPlaza = Vector3.new(-26, 0, -375)
 L.BackWalk = { MinX = -12, MaxX = 12, MinZ = L.StadiumBackZ, MaxZ = 292 } -- Gate D -> campus road

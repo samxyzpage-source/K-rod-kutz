@@ -627,6 +627,7 @@ local Items = requireNode("ReplicatedStorage/TycoonShared/Items")
 Config.IncomeTickSeconds = 0.05
 Config.IncomeMultiplier = 20
 Config.AutosaveSeconds = 0.3
+Config.BuildFrameBudget = math.huge -- whole plots are built at once here (one section tests the spread-out build)
 
 local PlayerData = requireNode("ServerScriptService/TycoonServer/PlayerData")
 local PlotManager = requireNode("ServerScriptService/TycoonServer/PlotManager")
@@ -1920,6 +1921,335 @@ local function runTests()
 	local campusLabel = plotModel(1).Base:FindFirstChild("CampusVaultAmount", true)
 	check(campusLabel ~= nil and campusLabel.Text:sub(1, 1) == "$", "the team safe shows the vault amount")
 	aliceRoot.CFrame = CFrame.new(0, 3, 0)
+
+	section("Server core: rebuilding a whole plot over several frames")
+	do
+		-- a returning owner's franchise (and every team change) is built a few steps per frame
+		local pat = makePlayer("Pat", 6001)
+		local patProfile = PlayerData.Load(pat)
+		local steps = 0
+		for _, item in ipairs(Items.List) do
+			if item.PieceId == "hq_lobby" or item.PieceId == "hq_frontoffice" then
+				patProfile.Owned[item.Id] = true
+				steps += 1
+			end
+		end
+		local plot2 = PlotManager.GetPlots()[2]
+		local items2 = plotModel(2).Items
+		Config.BuildFrameBudget = 0 -- (one step per frame)
+		task.spawn(PlotManager.Claim, plot2, pat, patProfile)
+		check(
+			plot2.Building and countChildren(items2) < steps,
+			("a returning owner's steps are built over several frames (%d of %d in the first one)"):format(countChildren(items2), steps)
+		)
+		check(
+			(pat.Character.HumanoidRootPart.CFrame.Position - plot2.Refs.SpawnCFrame.Position).Magnitude < 0.01,
+			"the owner is taken into the HQ before the rebuild"
+		)
+		check(countChildren(plotModel(2).Buttons) == 0, "the buy buttons wait for the rebuild")
+		check(
+			PlotManager.ApplyTeam(pat, Config.TeamColors[4], "TESTERS") and plot2.Palette ~= Config.TeamColors[4],
+			"a team change asked for during the rebuild waits for it"
+		)
+		local frames, midText = 0, nil
+		while plot2.Palette ~= Config.TeamColors[4] and frames < 300 do
+			local lobby2 = items2:FindFirstChild("hq_lobby:2")
+			local countdown = lobby2 and lobby2:FindFirstChild("Live_gameday", true)
+			if countdown and plot2.Building and midText == nil then
+				midText = countdown.Text
+			end
+			task.wait()
+			frames += 1
+		end
+		check(midText == "NEXT GAME SOON", "live screens aren't refreshed step by step during a rebuild: " .. tostring(midText))
+		check(
+			countChildren(items2) == steps and plotModel(2).Buttons:FindFirstChild("Buy_hq_lockerroom:1") ~= nil,
+			"then every owned step is there and the buttons appear"
+		)
+		check(plot2.Palette == Config.TeamColors[4] and plot2.TeamName == "TESTERS", "and the waiting team change is applied")
+		local most = 0
+		frames = 0
+		while plot2.Building and frames < 300 do
+			most = math.max(most, countChildren(items2))
+			task.wait()
+			frames += 1
+		end
+		local itemFolders = 0
+		for _, child in ipairs(plotModel(2):GetChildren()) do
+			if child.Name == "Items" then
+				itemFolders += 1
+			end
+		end
+		check(
+			not plot2.Building and countChildren(items2) == steps and most <= steps and itemFolders == 1,
+			("a team change swaps the steps one by one: the plot never exists twice (at most %d models)"):format(most)
+		)
+		local lobby2 = items2:FindFirstChild("hq_lobby:2")
+		local countdown = lobby2 and lobby2:FindFirstChild("Live_gameday", true)
+		check(countdown and countdown.Text == "GAME DAY SOON", "the live screens are refreshed once at the end")
+		-- purchases wait while a team change rebuilds the plot
+		local lockerItem = Items.ById["hq_lockerroom:1"]
+		PlayerData.AddCash(pat, lockerItem.Cost + 100)
+		check(PlotManager.ApplyTeam(pat, Config.TeamColors[5], "SECOND") and plot2.Building, "a team change rebuilds in the background")
+		check(
+			not PlotManager.Purchase(plot2, lockerItem) and not patProfile.Owned[lockerItem.Id],
+			"nothing can be bought while the plot is being rebuilt"
+		)
+		check(lastNotification(pat).message:find("being built") ~= nil, "the owner is told to wait a moment")
+		-- the owner leaves in the middle of the rebuild: it stops, nothing is built into the freed plot
+		removePlayer(pat)
+		PlotManager.Release(pat)
+		for _ = 1, 5 do
+			task.wait()
+		end
+		check(
+			countChildren(items2) == 0 and plot2.Owner == nil and not plot2.Building,
+			"an owner who leaves mid-rebuild stops it (the freed plot stays empty)"
+		)
+		PlayerData.Release(pat)
+		Config.BuildFrameBudget = math.huge
+	end
+
+	section("Server core: sign draw distances")
+	do
+		local limited, unlimited, odd = 0, 0, 0
+		for _, gui in ipairs(plotModel(1).Items:GetDescendants()) do
+			if gui:IsA("SurfaceGui") then
+				if gui.MaxDistance == 0 then
+					unlimited += 1
+				elseif gui.MaxDistance >= 150 and gui.MaxDistance <= 1000 then
+					limited += 1
+				else
+					odd += 1
+				end
+			end
+		end
+		check(
+			limited > 2 * unlimited and odd == 0,
+			("signs and screens get a draw distance that suits their size (%d limited, %d unlimited)"):format(limited, unlimited)
+		)
+		local function guiOf(root, labelName)
+			local label = root and root:FindFirstChild(labelName, true)
+			return label and label.Parent
+		end
+		local lobbyScreen = guiOf(plotModel(1).Items:FindFirstChild("hq_lobby:2"), "Live_gameday")
+		check(
+			lobbyScreen and lobbyScreen.MaxDistance >= 150 and lobbyScreen.MaxDistance < 1000,
+			"a room's screen is drawn only within " .. tostring(lobbyScreen and lobbyScreen.MaxDistance) .. " studs"
+		)
+		local fieldPaint = true
+		for _, id in ipairs({ "yardlines:3", "midfield:2", "scoreboard:3", "jumbotron:3" }) do
+			for _, gui in ipairs(plotModel(1).Items[id]:GetDescendants()) do
+				if gui:IsA("SurfaceGui") and gui.MaxDistance ~= 0 then
+					fieldPaint = false
+				end
+			end
+		end
+		check(fieldPaint, "field numbers, the midfield logo and the video boards stay visible from anywhere in the bowl")
+		local gate = guiOf(plotModel(1).Base, "GateSign")
+		check(gate and gate.MaxDistance >= 150, "the plot base's signs get a draw distance too")
+	end
+
+	section("Server core: collect pads and the vault")
+	do
+		-- a third collect pad stands on the field, where every stadium button is
+		local L = Config.Layout
+		local fieldPad = plot1.Refs.FieldCollectPad
+		local expected = (plot1.Origin * CFrame.new(L.FieldCollectPadPosition)).Position
+		check(
+			fieldPad ~= nil and fieldPad:IsDescendantOf(plotModel(1).Base) and math.abs(fieldPad.CFrame.Position.X - expected.X) < 0.01,
+			"a collect pad stands on the field's front sideline, by the visitors' tunnel"
+		)
+		check(
+			fieldPad
+				and math.abs(fieldPad.CFrame.Position.Z - expected.Z) < 0.01
+				and plot1.Origin:PointToObjectSpace(fieldPad.CFrame.Position).Y + fieldPad.Size.Y / 2 > 0.37,
+			"it lies on top of the turf and its painted lines"
+		)
+		task.wait(0.55) -- (collecting has a 0.5 s cooldown)
+		plot1.Vault += 50
+		local cashBeforeField = PlayerData.GetCash(alice)
+		touch(fieldPad, alice)
+		check(PlayerData.GetCash(alice) >= cashBeforeField + 50, "the field pad collects the vault")
+		local fieldLabel = plotModel(1).Base:FindFirstChild("FieldVaultAmount", true)
+		check(fieldLabel ~= nil and fieldLabel.Text:sub(1, 1) == "$", "the field pad shows the vault amount")
+		aliceRoot.CFrame = fieldPad.CFrame * CFrame.new(0, 3, 0)
+		task.wait(0.2)
+		check(plot1.Vault < 1, "standing on the field pad keeps collecting")
+		aliceRoot.CFrame = CFrame.new(0, 3, 0)
+		-- buy buttons spend the vault too
+		local quinn = makePlayer("Quinn", 6002)
+		local quinnProfile = PlayerData.Load(quinn)
+		for stage = 1, 5 do
+			quinnProfile.Owned["hq_lobby:" .. stage] = true
+		end
+		local plot2 = PlotManager.GetPlots()[2]
+		PlotManager.Claim(plot2, quinn, quinnProfile)
+		local office = Items.ById["hq_frontoffice:1"]
+		PlayerData.TrySpend(quinn, PlayerData.GetCash(quinn))
+		plot2.Vault = office.Cost + 5
+		task.wait(0.1)
+		check(
+			button(2, office.Id) and button(2, office.Id).Color == Config.Colors.ButtonAffordable,
+			"buttons are green when cash + vault is enough"
+		)
+		touch(button(2, office.Id), quinn)
+		check(quinnProfile.Owned[office.Id] == true and plot2.Vault < office.Cost, "a button spends the vault when the cash is short")
+		local locker = Items.ById["hq_lockerroom:1"]
+		PlayerData.TrySpend(quinn, PlayerData.GetCash(quinn))
+		plot2.Vault = 0
+		touch(button(2, locker.Id), quinn)
+		local note = lastNotification(quinn)
+		check(
+			not quinnProfile.Owned[locker.Id] and note and note.message:find("need") ~= nil,
+			"still short: told how much more is needed: " .. tostring(note and note.message)
+		)
+		check(
+			note and note.message:find("HQ lobby", 1, true) ~= nil and note.message:find("field", 1, true) ~= nil,
+			"and where the collect pads are"
+		)
+		removePlayer(quinn)
+		PlotManager.Release(quinn)
+		PlayerData.Release(quinn)
+	end
+
+	section("Server core: the guide beam's button")
+	do
+		-- the beam points at the cheapest button in the part of the plot the owner is in (unless one
+		-- elsewhere is much cheaper), so it doesn't send them across the plot for every step
+		local rita = makePlayer("Rita", 6003)
+		local ritaProfile = PlayerData.Load(rita)
+		for _, pieceId in ipairs({ "hq_lobby", "hq_frontoffice", "hq_lockerroom" }) do
+			for _, stepId in ipairs(Items.PieceById[pieceId].StageIds) do
+				ritaProfile.Owned[stepId] = true
+			end
+		end
+		local plot2 = PlotManager.GetPlots()[2]
+		local guide = Config.GuideGoal
+		local recheck, factor = guide.RecheckSeconds, guide.ZoneCostFactor
+		guide.RecheckSeconds = 0.1
+		PlotManager.Claim(plot2, rita, ritaProfile)
+		check(
+			rita:GetAttribute("NextGoal") == "hq_coaches:1" and Items.ById["practice_field:1"].Cost < Items.ById["hq_coaches:1"].Cost,
+			"in the HQ the beam points at the HQ's cheapest button, not a cheaper one outside: " .. tostring(rita:GetAttribute("NextGoal"))
+		)
+		local ritaRoot = rita.Character.HumanoidRootPart
+		local campus = plot2.Origin * CFrame.new(Config.Layout.Areas.campus)
+		task.wait(2.2) -- (until the guide's check loop runs at the test interval)
+		ritaRoot.CFrame = campus * CFrame.new(-130, 3, 410) -- out on the practice fields
+		local frames = 0
+		while plot2.GoalChallenger == nil and frames < 200 do
+			task.wait()
+			frames += 1
+		end
+		check(
+			plot2.GoalChallenger == "practice_field:1" and rita:GetAttribute("NextGoal") == "hq_coaches:1",
+			"another button has to win two checks in a row before the beam moves (no flicker)"
+		)
+		task.wait(0.35)
+		check(rita:GetAttribute("NextGoal") == "practice_field:1", "out on the campus it moves to the campus's cheapest button")
+		ritaRoot.CFrame = campus * CFrame.new(-100, 3, 230) -- back in the HQ lobby
+		task.wait(0.35)
+		check(rita:GetAttribute("NextGoal") == "hq_coaches:1", "and back in the HQ to the HQ's")
+		guide.ZoneCostFactor = 1.1
+		task.wait(0.35)
+		check(rita:GetAttribute("NextGoal") == "practice_field:1", "unless a button elsewhere is much cheaper")
+		guide.RecheckSeconds, guide.ZoneCostFactor = recheck, factor
+		removePlayer(rita)
+		PlotManager.Release(rita)
+		PlayerData.Release(rita)
+	end
+
+	section("Server core: team colours on the plot base")
+	do
+		-- parts and signs of the always-present plot base (and the HQ building) say which team
+		-- colour they use, so a team change repaints them too
+		local function baseColors(index, palette)
+			local tagged, wrong = 0, nil
+			for _, inst in ipairs(plotModel(index).Base:GetDescendants()) do
+				local role, textRole, backRole =
+					inst:GetAttribute("TeamRole"), inst:GetAttribute("TeamTextRole"), inst:GetAttribute("TeamBackRole")
+				if role or textRole or backRole then
+					tagged += 1
+				end
+				if role and inst:IsA("BasePart") and inst.Color ~= palette[role] then
+					wrong = inst.Name
+				end
+				if textRole and inst.TextColor3 ~= palette[textRole] then
+					wrong = inst.Name
+				end
+				if backRole and inst.BackgroundColor3 ~= palette[backRole] then
+					wrong = inst.Name
+				end
+			end
+			return tagged, wrong
+		end
+		local base1 = plotModel(1).Base
+		local gateSign = base1:FindFirstChild("GateSign", true)
+		check(
+			base1:FindFirstChild("BorderFront", true):GetAttribute("TeamRole") == "Primary"
+				and base1:FindFirstChild("GateBeam", true):GetAttribute("TeamRole") == "Secondary"
+				and gateSign:GetAttribute("TeamTextRole") == "Trim"
+				and gateSign:GetAttribute("TeamBackRole") == "Primary",
+			"the plot base's team-coloured parts and signs say which team colour they use"
+		)
+		local tagged, wrong = baseColors(1, Config.TeamColors[3])
+		check(
+			tagged >= 12 and wrong == nil,
+			("a team change repaints the plot base too (%d team-coloured parts and signs; wrong: %s)"):format(tagged, tostring(wrong))
+		)
+		local sam = makePlayer("Sam", 6004)
+		local samProfile = PlayerData.Load(sam)
+		samProfile.Franchise = { Team = { Palette = 4, Nickname = 2 } }
+		local plot2 = PlotManager.GetPlots()[2]
+		PlotManager.Claim(plot2, sam, samProfile)
+		local _, wrongSaved = baseColors(2, Config.TeamColors[4])
+		check(
+			plot2.Palette == Config.TeamColors[4] and wrongSaved == nil,
+			"a returning owner's plot base is painted in their saved team colours: " .. tostring(wrongSaved)
+		)
+		removePlayer(sam)
+		PlotManager.Release(sam)
+		PlayerData.Release(sam)
+		local _, wrongFreed = baseColors(2, Config.TeamColors[2])
+		check(wrongFreed == nil, "a freed plot's base goes back to the plot's own colours: " .. tostring(wrongFreed))
+	end
+
+	section("Server core: claiming from a golf cart")
+	do
+		-- a player who rides a cart through a free gold gate gets out before being taken into the
+		-- HQ (otherwise the cart, welded to them, would come along)
+		local vic = makePlayer("Vic", 6006)
+		PlayerData.Load(vic)
+		local humanoid = vic.Character:FindFirstChildOfClass("Humanoid")
+		local cartSeat = Instance.new("VehicleSeat")
+		cartSeat.CFrame = CFrame.new(0, 2, 0)
+		local seatWeld = Instance.new("Weld")
+		seatWeld.Name = "SeatWeld"
+		seatWeld.Part0 = cartSeat
+		seatWeld.Part1 = vic.Character.HumanoidRootPart
+		seatWeld.Parent = cartSeat
+		cartSeat.Parent = workspace
+		humanoid.SeatPart = cartSeat
+		humanoid.Sit = true
+		touch(claimTrigger(2), vic)
+		task.wait(0.05)
+		local plot2 = PlotManager.GetPlots()[2]
+		check(vic:GetAttribute("PlotIndex") == 2, "a player in a golf cart can still claim a free plot")
+		check(
+			cartSeat:FindFirstChild("SeatWeld") == nil and humanoid.Sit == false,
+			"they are taken out of the cart first (the seat weld is broken)"
+		)
+		check(
+			(vic.Character.HumanoidRootPart.CFrame.Position - plot2.Refs.SpawnCFrame.Position).Magnitude < 0.01
+				and (cartSeat.CFrame.Position - Vector3.new(0, 2, 0)).Magnitude < 0.01,
+			"then they are taken into the HQ and the cart stays at the gate"
+		)
+		cartSeat:Destroy()
+		removePlayer(vic)
+		PlotManager.Release(vic)
+		PlayerData.Release(vic)
+	end
 
 	section("Respawn at plot")
 	local newCharacter = makeCharacter("AliceCharacter2")

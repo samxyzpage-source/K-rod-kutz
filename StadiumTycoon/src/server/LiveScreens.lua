@@ -108,8 +108,8 @@ end
 local function refreshPlot(plot)
 	local labels = labelsByPlot[plot] or {}
 	local fixed = baseLabels[plot] or {}
-	if not plot.Owner or (#labels == 0 and #fixed == 0) then
-		return
+	if not plot.Owner or plot.Building or (#labels == 0 and #fixed == 0) then
+		return -- (a plot that is being rebuilt is refreshed once, when the build is done)
 	end
 	local texts = LiveScreens.Texts(plot)
 	for _, label in ipairs(fixed) do
@@ -131,7 +131,8 @@ local function refreshPlot(plot)
 	end
 end
 
--- Finds the live labels in a freshly built step.
+-- Finds the live labels in a freshly built step. (While a whole plot is being rebuilt, the
+-- labels are only collected: the plot is refreshed once at the end, see LiveScreens.Init.)
 function LiveScreens.Track(plot, model)
 	local labels = labelsByPlot[plot] or {}
 	labelsByPlot[plot] = labels
@@ -172,6 +173,7 @@ function LiveScreens.Init(manager, folder)
 	plotManager.OnAnyBuilt(function(plot, _item, model)
 		LiveScreens.Track(plot, model)
 	end)
+	plotManager.OnRebuilt(refreshPlot)
 	plotManager.OnPlotReleased(function(plot)
 		labelsByPlot[plot] = nil
 		for _, label in ipairs(baseLabels[plot] or {}) do

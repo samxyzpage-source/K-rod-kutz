@@ -66,13 +66,17 @@ and championships.
 3. Press **Play** (F5).
 4. Walk through a glowing **gold gate** to claim a franchise. You are taken into your empty
    **Team HQ** and asked to **pick your team colours and nickname**.
-5. Step on the glowing **buttons** to build. Green = you can afford it, red = not yet. Each
-   button says which step it is ("Step 2/5: Lockers"). A golden **guide beam** points from
-   you to your next button. Upstairs HQ rooms have their buttons in the upstairs corridor
-   (take the stairs or the elevator). Every stadium button stands on the field.
+5. Step on the glowing **buttons** to build. Green = you can afford it (your cash plus the
+   vault), red = not yet. Each button says which step it is ("Step 2/5: Lockers"). A golden
+   **guide beam** points from you to your next button: the cheapest one in the part of your
+   plot you are in, unless one elsewhere is much cheaper. Upstairs HQ rooms have their
+   buttons in the upstairs corridor (take the stairs or the elevator). Every stadium button
+   stands on the field.
 6. Your franchise earns money every second. It piles up in the **vault**. Step on a **collect
-   pad** to move it into your cash (standing on it keeps collecting). There is one in the
-   HQ lobby (the Team Safe) and one by the stadium gate.
+   pad** to move it into your cash (standing on it keeps collecting). There are three: in the
+   HQ lobby (the Team Safe), by the gold gate at the front of your plot, and on the stadium
+   field (the front sideline, by the visitors' tunnel). Buy buttons spend the vault too: when
+   your cash is short, touching a button collects the vault first.
 7. Get around on foot, on the **Team Bus** (blue pads: HQ <-> stadium plaza), or in a
    **golf cart** once you build the garage. Sit in the driver's seat and drive with
    W/A/S/D (or the thumbstick on a phone). The plots are huge, so the bus and the carts
@@ -108,7 +112,9 @@ DataStore. That only works when:
 
 Without that the game still works. The bottom-left of the screen shows
 "Progress saving: OFF" and nothing is saved. Saving happens automatically every 90 seconds,
-when a player leaves, and when the server shuts down.
+when a player leaves, and when the server shuts down. When you come back and walk through a
+gold gate, your franchise is rebuilt around you, a few steps per frame, in a second or two
+(`Config.BuildFrameBudget`), so the server never stalls for the other player.
 
 How saving stays safe:
 * A session lock stops two servers, or a quick leave-and-rejoin, from overwriting each other.
@@ -127,8 +133,8 @@ and HQ pieces changed, so progress from earlier versions starts fresh.
 | --- | --- |
 | Gold gate | Touch it to claim an empty franchise (one per player). |
 | Buy buttons | One per piece. It shows the piece, the step ("Step 3/6: End Zones") and the price. After you buy a step, the next step's button appears in the same spot. |
-| Guide beam | A golden beam from your character to the cheapest button you can see. |
-| Vault + collect pads | Income piles up in the vault. Step on a collect pad (HQ lobby or stadium gate) to collect. |
+| Guide beam | A golden beam from your character to your next button, anywhere on your plot: the cheapest one in the part of the plot you are in (the HQ building, the campus, the stadium, the plaza or the fan zone), or the cheapest one anywhere when that costs less than 40% of it. It re-checks every 2 seconds and only moves to another button when that one wins twice in a row (`Config.GuideGoal`). |
+| Vault + collect pads | Income piles up in the vault. Step on a collect pad (HQ lobby, gold gate or the field's front sideline) to collect it. Buy buttons spend the vault too. |
 | Team Bus | Blue pads at the HQ and in the stadium plaza teleport you between them. |
 | Golf carts | The garage gives you up to 3 carts in your team colours. Abandoned carts drive themselves home. |
 | Day / night | A full day takes 10 minutes. Stadium lights switch on at night. |
@@ -154,7 +160,7 @@ and HQ pieces changed, so progress from earlier versions starts fresh.
 
 | Feature | How it works |
 | --- | --- |
-| Pick your team | Choose one of 6 colour schemes and a nickname (Comets, Thunderhawks, Ironclads...). Everything you built is repainted, including the carts. Change it any time with the **TEAM** button. |
+| Pick your team | Choose one of 6 colour schemes and a nickname (Comets, Thunderhawks, Ironclads...). Everything is repainted: what you built (step by step, over a second or two), the HQ building, the gate, the bus stops, the plot border and the carts. Change it any time with the **TEAM** button. |
 | Owner's Bonus | A free cash gift every 8 minutes: the gold **BONUS** button on the right shows the countdown. |
 | Quests | 30 goals with cash rewards, shown on the left ("Finish 2 HQ rooms", "Kick a 55-yard field goal", "Win a championship"...). |
 | Draft | Build the **Draft Board** in the Front Office, then draft players from the **ROSTER** screen. Each has a position (QB, RB, WR, OL, DEF, K) and a rating. Your film room, coaches' offices and coaching staff give better picks. |
@@ -292,9 +298,12 @@ These tools are optional. You only need them to edit the code outside Studio.
     every interaction, `--noroof` hides roofs and `--cam=x,y,z:tx,ty,tz` renders any close-up.
     The README pictures use the views `v5_aerial`, `v5_bowl`, `v5_concourse`, `v5_pressbox`,
     `v5_club`, `v5_lockers`, `v5_atrium`, `v5_back` and `v5_hq` (and `v5_field` with a crowd).
-  * `lune run tools/test_server.luau` runs about 390 checks of the server logic and the client
+  * `lune run tools/test_server.luau` runs about 430 checks of the server logic and the client
     scripts against a fake Roblox engine. It covers:
-    * claiming, step-by-step buying, the vault and auto-collect
+    * claiming (also from a golf cart), step-by-step buying, the vault, the three collect pads
+      and auto-collect, buttons that spend the vault, and the guide beam's choice of button
+    * rebuilding a returning owner's plot and a new team's colours a few steps per frame,
+      repainting the plot base, and the signs' draw distances
     * golf carts and the drive controller
     * the team picker, Owner's Bonus, quests, draft, training, field goals, seasons and playoffs
     * doors, seats, elevators, snacks, mini-game results and live screens

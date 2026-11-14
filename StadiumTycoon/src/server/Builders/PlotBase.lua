@@ -1,14 +1,23 @@
 --[[
 	PlotBase
 	The parts every plot has before anything is bought: the concrete slab, the walkway,
-	the entrance gate (touch it to claim the stadium), the cash vault and the collect pad,
-	plus the roads, team-bus stops and team safe of the campus behind the stadium, and the EMPTY
-	Team HQ building (Builders/HQShell.lua) that every plot starts with.
+	the entrance gate (touch it to claim the stadium), the cash vault and its collect pad,
+	another collect pad on the stadium field, plus the roads, team-bus stops and team safe (a
+	collect pad too) of the campus behind the stadium, and the EMPTY Team HQ building
+	(Builders/HQShell.lua) that every plot starts with.
 ]]
 
 local BuildUtil = require(script.Parent.Parent.BuildUtil)
 
 local PlotBase = {}
+
+-- Marks a part whose colour comes from the team palette with the palette key it uses
+-- ("Primary", "Secondary", "Trim"), so PlotManager can repaint the plot base when the owner
+-- picks other team colours. (Labels get TeamTextRole / TeamBackRole the same way.)
+local function teamPart(part, role)
+	part:SetAttribute("TeamRole", role)
+	return part
+end
 
 -- A team-bus stop: a glowing pad with a shelter and a sign. Touching the pad rides the bus.
 local function busStop(ctx, name, position, text)
@@ -32,13 +41,16 @@ local function busStop(ctx, name, position, text)
 			Enum.Material.Metal
 		)
 	end
-	BuildUtil.Box(
-		ctx,
-		name .. "Roof",
-		Vector3.new(10.5, 0.6, 3),
-		position + Vector3.new(0, 9.3, 4.6),
-		team.Primary,
-		Enum.Material.SmoothPlastic
+	teamPart(
+		BuildUtil.Box(
+			ctx,
+			name .. "Roof",
+			Vector3.new(10.5, 0.6, 3),
+			position + Vector3.new(0, 9.3, 4.6),
+			team.Primary,
+			Enum.Material.SmoothPlastic
+		),
+		"Primary"
 	)
 	local board = BuildUtil.Box(
 		ctx,
@@ -70,7 +82,7 @@ end
 -- Returns references used by the PlotManager:
 --   ClaimTrigger, GateSignLabel, GateBackLabel, VaultLabel, CollectPad, SpawnCFrame (world),
 --   BusStopPlaza, BusStopCampus, BusArrivePlaza, BusArriveCampus (world CFrames),
---   CampusCollectPad, CampusVaultLabel
+--   CampusCollectPad, CampusVaultLabel, FieldCollectPad, FieldVaultLabel
 function PlotBase.PlotBase(ctx)
 	local L = ctx.config.Layout
 	local C = ctx.config.Colors
@@ -88,41 +100,53 @@ function PlotBase.PlotBase(ctx)
 	-- Team-coloured border around the edge of the plot
 	local halfW = L.PlotWidth / 2
 	local borderProps = { CanCollide = false }
-	BuildUtil.Box(
-		ctx,
-		"BorderFront",
-		Vector3.new(L.PlotWidth, 0.2, 2),
-		Vector3.new(0, 0.1, L.PlotFrontZ + 1),
-		team.Primary,
-		Enum.Material.SmoothPlastic,
-		borderProps
+	teamPart(
+		BuildUtil.Box(
+			ctx,
+			"BorderFront",
+			Vector3.new(L.PlotWidth, 0.2, 2),
+			Vector3.new(0, 0.1, L.PlotFrontZ + 1),
+			team.Primary,
+			Enum.Material.SmoothPlastic,
+			borderProps
+		),
+		"Primary"
 	)
-	BuildUtil.Box(
-		ctx,
-		"BorderBack",
-		Vector3.new(L.PlotWidth, 0.2, 2),
-		Vector3.new(0, 0.1, L.PlotBackZ - 1),
-		team.Primary,
-		Enum.Material.SmoothPlastic,
-		borderProps
+	teamPart(
+		BuildUtil.Box(
+			ctx,
+			"BorderBack",
+			Vector3.new(L.PlotWidth, 0.2, 2),
+			Vector3.new(0, 0.1, L.PlotBackZ - 1),
+			team.Primary,
+			Enum.Material.SmoothPlastic,
+			borderProps
+		),
+		"Primary"
 	)
-	BuildUtil.Box(
-		ctx,
-		"BorderLeft",
-		Vector3.new(2, 0.2, depth - 4),
-		Vector3.new(-halfW + 1, 0.1, centerZ),
-		team.Primary,
-		Enum.Material.SmoothPlastic,
-		borderProps
+	teamPart(
+		BuildUtil.Box(
+			ctx,
+			"BorderLeft",
+			Vector3.new(2, 0.2, depth - 4),
+			Vector3.new(-halfW + 1, 0.1, centerZ),
+			team.Primary,
+			Enum.Material.SmoothPlastic,
+			borderProps
+		),
+		"Primary"
 	)
-	BuildUtil.Box(
-		ctx,
-		"BorderRight",
-		Vector3.new(2, 0.2, depth - 4),
-		Vector3.new(halfW - 1, 0.1, centerZ),
-		team.Primary,
-		Enum.Material.SmoothPlastic,
-		borderProps
+	teamPart(
+		BuildUtil.Box(
+			ctx,
+			"BorderRight",
+			Vector3.new(2, 0.2, depth - 4),
+			Vector3.new(halfW - 1, 0.1, centerZ),
+			team.Primary,
+			Enum.Material.SmoothPlastic,
+			borderProps
+		),
+		"Primary"
 	)
 
 	-- Flat paths and roads (all flush with the slab: 0.1 high, so carts roll straight over them)
@@ -185,7 +209,15 @@ function PlotBase.PlotBase(ctx)
 	local gateZ = L.GateZ
 	local pillarX = L.GateHalfWidth + 1.5
 	for _, side in ipairs({ -1, 1 }) do
-		BuildUtil.Block(ctx, "GatePillar", Vector3.new(3, 20, 3), Vector3.new(side * pillarX, 0, gateZ), team.Primary, Enum.Material.Brick)
+		local pillar = BuildUtil.Block(
+			ctx,
+			"GatePillar",
+			Vector3.new(3, 20, 3),
+			Vector3.new(side * pillarX, 0, gateZ),
+			team.Primary,
+			Enum.Material.Brick
+		)
+		teamPart(pillar, "Primary")
 		BuildUtil.Ball(ctx, {
 			Name = "GatePillarBall",
 			Diameter = 3.4,
@@ -194,13 +226,16 @@ function PlotBase.PlotBase(ctx)
 			Material = Enum.Material.Metal,
 		})
 	end
-	local beam = BuildUtil.Box(
-		ctx,
-		"GateBeam",
-		Vector3.new(pillarX * 2 + 6, 5, 3),
-		Vector3.new(0, 22.5, gateZ),
-		team.Secondary,
-		Enum.Material.SmoothPlastic
+	local beam = teamPart(
+		BuildUtil.Box(
+			ctx,
+			"GateBeam",
+			Vector3.new(pillarX * 2 + 6, 5, 3),
+			Vector3.new(0, 22.5, gateZ),
+			team.Secondary,
+			Enum.Material.SmoothPlastic
+		),
+		"Secondary"
 	)
 	local _, gateSign = BuildUtil.SurfaceText(beam, Enum.NormalId.Front, "CLAIM THIS STADIUM", {
 		LabelName = "GateSign",
@@ -216,6 +251,10 @@ function PlotBase.PlotBase(ctx)
 		BackgroundTransparency = 0,
 		PixelsPerStud = 25,
 	})
+	for _, label in ipairs({ gateSign, gateBack }) do
+		label:SetAttribute("TeamTextRole", "Trim")
+		label:SetAttribute("TeamBackRole", "Primary")
+	end
 
 	local claimTrigger = BuildUtil.Box(
 		ctx,
@@ -230,7 +269,9 @@ function PlotBase.PlotBase(ctx)
 	-- Cash vault + collect pad --------------------------------------------------------------
 	local vaultPos = L.VaultPosition
 	local vault = BuildUtil.Block(ctx, "Vault", Vector3.new(12, 12, 10), vaultPos, C.Vault, Enum.Material.DiamondPlate)
-	BuildUtil.Block(ctx, "VaultRoof", Vector3.new(13, 1, 11), vaultPos, team.Secondary, Enum.Material.SmoothPlastic, nil, 12)
+	local vaultRoof =
+		BuildUtil.Block(ctx, "VaultRoof", Vector3.new(13, 1, 11), vaultPos, team.Secondary, Enum.Material.SmoothPlastic, nil, 12)
+	teamPart(vaultRoof, "Secondary")
 	BuildUtil.SurfaceText(vault, Enum.NormalId.Left, "$ VAULT $", {
 		LabelName = "VaultTitle",
 		TextColor3 = C.Gold,
@@ -253,6 +294,33 @@ function PlotBase.PlotBase(ctx)
 		StudsOffset = Vector3.new(0, 3, 0),
 		TextColor3 = Color3.fromRGB(255, 255, 255),
 		MaxDistance = 80,
+	})
+
+	-- A third collect pad on the stadium field, where every stadium buy button stands: on the
+	-- front sideline, right in front of the visitors' tunnel (it lies on top of the turf layers)
+	local fieldPos = L.FieldCollectPadPosition
+	local fieldPad = BuildUtil.Box(
+		ctx,
+		"FieldCollectPad",
+		Vector3.new(8, 0.4, 8),
+		Vector3.new(fieldPos.X, 0.2, fieldPos.Z),
+		C.CollectPad,
+		Enum.Material.Neon
+	)
+	-- (its labels show from further away than the other pads': the field is big)
+	BuildUtil.Billboard(fieldPad, "STEP HERE TO COLLECT", {
+		LabelName = "FieldCollectHint",
+		Size = UDim2.new(10, 0, 2, 0),
+		StudsOffset = Vector3.new(0, 3, 0),
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		MaxDistance = 160,
+	})
+	local _, fieldVaultLabel = BuildUtil.Billboard(fieldPad, "$0", {
+		LabelName = "FieldVaultAmount",
+		Size = UDim2.new(10, 0, 2.5, 0),
+		StudsOffset = Vector3.new(0, 5.4, 0),
+		TextColor3 = Color3.fromRGB(90, 255, 120),
+		MaxDistance = 160,
 	})
 
 	-- The empty Team HQ building that every plot starts with (rooms are built inside it)
@@ -320,6 +388,8 @@ function PlotBase.PlotBase(ctx)
 		BusArriveCampus = campus.origin * arriveCampus,
 		CampusCollectPad = campusPad,
 		CampusVaultLabel = campusVaultLabel,
+		FieldCollectPad = fieldPad,
+		FieldVaultLabel = fieldVaultLabel,
 	}
 end
 
