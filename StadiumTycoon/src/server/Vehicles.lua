@@ -29,6 +29,7 @@ local TURN_RATE = 2.4 -- radians per second at full steer
 local RETURN_AFTER = 45 -- seconds a cart may sit unused away from its pad
 local RETURN_DISTANCE = 30
 local FALL_Y = -40
+local RIDE_HEIGHT = 1.2 -- chassis centre above its pad (the wheel balls rest on the 0.1 garage floor)
 
 local carts = {} -- [plot] = { [cartIndex] = cartInfo }
 local driveHooks = {} -- fn(player) when someone takes the wheel
@@ -79,7 +80,7 @@ function Vehicles.BuildCart(at, palette, number)
 	local chassis = makePart(model, nil, {
 		Name = "Chassis",
 		Size = Vector3.new(5, 1, 9),
-		CFrame = at * CFrame.new(0, 1.2, 0),
+		CFrame = at * CFrame.new(0, RIDE_HEIGHT, 0),
 		Color = palette.Primary,
 		CanCollide = false,
 		Massless = false,
@@ -251,7 +252,14 @@ end
 
 local function sendHome(info)
 	stopCart(info)
-	info.model:PivotTo(info.home)
+	-- the model's pivot is the chassis: put it back at its spawn height over the pad (not on the
+	-- pad, which buries the wheels in the floor) and drop any speed it had (a falling cart)
+	info.model:PivotTo(info.home * CFrame.new(0, RIDE_HEIGHT, 0))
+	local chassis = info.model.PrimaryPart
+	if chassis then
+		chassis.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+		chassis.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+	end
 	info.lastUsed = os.clock()
 end
 

@@ -1124,6 +1124,38 @@ local function runTests()
 		end
 		check(miss < 1, ("the garage's stadium TV looks at the stadium field (misses by %.1f)"):format(miss))
 	end
+	do
+		-- a cart sent home stands on its wheels on the garage floor like a new one (not sunk 1.2 into
+		-- it) and has lost the speed it had (a falling cart)
+		local list = Vehicles.GetCarts(PlotManager.GetPlot(alice))
+		local function lowestWheel(info)
+			local lowest = math.huge
+			for _, d in ipairs(info.model:GetDescendants()) do
+				if d.Name == "WheelCollider" then
+					lowest = math.min(lowest, info.home:PointToObjectSpace(d.CFrame.Position).Y - d.Size.Y / 2)
+				end
+			end
+			return lowest
+		end
+		local parked = lowestWheel(list[2]) -- (cart #2 hasn't moved since it was built)
+		local info = list[1]
+		local homeChassis = info.model.PrimaryPart
+		info.model:PivotTo(info.home * CFrame.new(0, -60, 150))
+		homeChassis.AssemblyLinearVelocity = Vector3.new(0, -300, 0)
+		homeChassis.AssemblyAngularVelocity = Vector3.new(0, 4, 0)
+		info.lastUsed = -1000
+		Vehicles.Tidy(os.clock())
+		local height = info.home:PointToObjectSpace(homeChassis.CFrame.Position).Y
+		local wheels = lowestWheel(info)
+		check(
+			math.abs(wheels - parked) < 0.01 and wheels >= 0.1 - 1e-3 and math.abs(height - 1.2) < 0.05,
+			("a cart sent home rests on the garage floor like a new one (wheels %.2f, new %.2f, floor top 0.1)"):format(wheels, parked)
+		)
+		check(
+			homeChassis.AssemblyLinearVelocity.Magnitude < 1e-3 and homeChassis.AssemblyAngularVelocity.Magnitude < 1e-3,
+			"a cart sent home stops (no fall speed carried onto the pad)"
+		)
+	end
 
 	section("Draft + roster")
 	do
