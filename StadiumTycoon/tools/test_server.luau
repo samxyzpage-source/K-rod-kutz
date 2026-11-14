@@ -1340,7 +1340,8 @@ local function runTests()
 			front - inFront >= 20 and L.CartPads[1].X - 4.5 > front,
 			("the garage bays open onto a %.1f-stud apron (front x %.1f, nearest: %s)"):format(front - inFront, front, blocker)
 		)
-		-- (b) the street spawn pad is a low step (the World fallback and the place's own)
+		-- (b) the street spawn pad keeps carts off newly spawned players: it stays a 0.8 step above the
+		-- street (carts steer round it), the same in the World fallback and the place file
 		local spawn = workspace:FindFirstChildOfClass("SpawnLocation")
 		local street = workspace.World:FindFirstChild("Street")
 		local streetTop = street.CFrame.Position.Y + street.Size.Y / 2
@@ -1349,8 +1350,8 @@ local function runTests()
 		local placeSpawn = project.tree.Workspace.SpawnLocation["$properties"]
 		local placeTop = placeSpawn.CFrame.CFrame.position[2] + placeSpawn.Size[2] / 2
 		check(
-			spawnTop - streetTop <= 0.2 + 1e-3 and placeTop - streetTop <= 0.2 + 1e-3,
-			("the street spawn pad is at most 0.2 above the street (%.2f, place file %.2f)"):format(
+			math.abs(spawnTop - streetTop - 0.8) < 1e-3 and math.abs(placeTop - streetTop - 0.8) < 1e-3,
+			("the street spawn pad is a 0.8 step above the street (%.2f, place file %.2f)"):format(
 				spawnTop - streetTop,
 				placeTop - streetTop
 			)
