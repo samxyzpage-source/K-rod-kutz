@@ -450,9 +450,9 @@ end
 
 --[[
 	An HQ directory: a header, two columns of rooms (the reader's left and right, nearest first)
-	and a footer line, on one face of `part` (a dark lit board).
+	and footer lines at the bottom (where the doors lead), on one face of `part` (a dark lit board).
 ]]
-local function directoryText(part, face, header, columns, footer, accent)
+local function directoryText(part, face, header, columns, footers, accent)
 	local gui = Instance.new("SurfaceGui")
 	gui.Name = "DirectoryGui"
 	gui.Face = face
@@ -483,15 +483,48 @@ local function directoryText(part, face, header, columns, footer, accent)
 	bar.Position = UDim2.new(0.05, 0, 0.175, 0)
 	bar.Size = UDim2.new(0.9, 0, 0.012, 0)
 	bar.Parent = gui
+	local footerTop = 0.97 - 0.075 * #footers
 	for c, column in ipairs(columns) do
 		local x = c == 1 and 0.05 or 0.53
 		line("ColumnTitle", column.title, x, 0.21, 0.42, 0.075, accent, Enum.Font.GothamBlack)
-		local step = math.min(0.095, 0.58 / math.max(1, #column.rooms))
+		local step = math.min(0.095, (footerTop - 0.32) / math.max(1, #column.rooms))
 		for r, room in ipairs(column.rooms) do
 			line("Room", room, x, 0.3 + (r - 1) * step, 0.42, step * 0.82, WHITE)
 		end
 	end
-	line("Footer", footer, 0.05, 0.89, 0.9, 0.08, accent, Enum.Font.GothamBlack, Enum.TextXAlignment.Center)
+	for index, footer in ipairs(footers) do
+		line("Footer", footer, 0.05, footerTop + (index - 1) * 0.075, 0.9, 0.065, accent, Enum.Font.GothamBlack, Enum.TextXAlignment.Center)
+	end
+end
+
+-- A lit EXIT sign that also says where the doors lead: a green EXIT on the reader's left, the
+-- destination lines (white) beside it.
+local function exitSignText(part, face, destinations)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "ExitSignGui"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 30
+	gui.LightInfluence = 0
+	gui.Parent = part
+	local function label(name, text, x, y, w, h, color)
+		local l = Instance.new("TextLabel")
+		l.Name = name
+		l.BackgroundTransparency = 1
+		l.BorderSizePixel = 0
+		l.Position = UDim2.new(x, 0, y, 0)
+		l.Size = UDim2.new(w, 0, h, 0)
+		l.Font = Enum.Font.GothamBlack
+		l.Text = text
+		l.TextColor3 = color
+		l.TextScaled = true
+		l.Parent = gui
+	end
+	label("Exit", "EXIT", 0.03, 0.12, 0.22, 0.76, EXIT_GREEN)
+	local h = 0.76 / #destinations
+	for index, text in ipairs(destinations) do
+		label("Destination", text, 0.3, 0.12 + (index - 1) * h, 0.67, h, WHITE)
+	end
 end
 
 -- A flat arrow painted on the floor along X: a shaft from tailX and a head (two flat wedges)
@@ -772,7 +805,8 @@ local function buildFloors(ctx, S, team)
 	}, { PixelsPerStud = 16, InsetX = 0.1, InsetY = 0.18 })
 
 	-- wayfinding at the lobby / corridor junction: a team medallion and two arrows (in the front
-	-- lane, clear of every buy button) pointing to the two ways upstairs
+	-- lane, clear of every buy button) pointing to the two ways upstairs and the two ways out to the
+	-- campus behind the HQ (its back wall has no doors)
 	local junctionX = (walk.MinX + walk.MaxX) / 2
 	local midZ = (cor.MinZ + cor.MaxZ) / 2
 	post(floor, "CorridorMedallionRing", junctionX, midZ, 0.23, 0.245, 10, team.Trim, Enum.Material.SmoothPlastic, PAINT)
@@ -782,10 +816,12 @@ local function buildFloors(ctx, S, team)
 	floorArrow(floor, "WayfindingArrowWest", junctionX - 6, junctionX - 31, laneZ, 0.23, team.Primary, {
 		"STAIRS + ELEVATOR",
 		"TO THE UPPER FLOOR",
+		"EXIT TO THE PRACTICE FIELDS",
 	}, arrowText)
 	floorArrow(floor, "WayfindingArrowEast", junctionX + 6, junctionX + 31, laneZ, 0.23, team.Primary, {
 		"GLASS ELEVATOR",
 		"UPPER FLOOR + SKY TERRACE",
+		"EXIT TO THE HALL OF FAME, GARAGE + DOME",
 	}, arrowText)
 end
 
@@ -985,26 +1021,33 @@ local function buildFacades(ctx, S, team)
 		span(walls, "BackFin", x - 0.6, 0, S.z1, x + 0.6, ROOF_BOTTOM, S.z1 + 3.2, team.Primary, Enum.Material.SmoothPlastic)
 	end
 
-	-- EXIT signs over the ground doorways at both corridor ends, STAIRS / ELEVATOR upstairs
+	-- EXIT signs over the ground doorways at both corridor ends, naming where the doors lead outside
+	-- (the practice fields are behind the HQ, nearest from the west end; the Hall of Fame, garage and
+	-- dome from the east end), STAIRS / ELEVATOR upstairs
 	for _, side in ipairs({
-		{ x = S.ix0 + 0.15, face = Enum.NormalId.Right, upper = "STAIRS" },
-		{ x = S.ix1 - 0.15, face = Enum.NormalId.Left, upper = "ELEVATOR" },
+		{ x = S.ix0 + 0.15, face = Enum.NormalId.Right, upper = "STAIRS", outside = { "^  PRACTICE FIELDS" } },
+		{ x = S.ix1 - 0.15, face = Enum.NormalId.Left, upper = "ELEVATOR", outside = { "^  HALL OF FAME", "GARAGE + DOME" } },
 	}) do
-		for _, level in ipairs({
-			{ y = DOOR_TOP, text = "EXIT", color = EXIT_GREEN },
-			{ y = up + DOOR_TOP - FLOOR_TOP, text = side.upper, color = BUTTON_GLOW },
-		}) do
-			local sign = BuildUtil.Box(
-				walls,
-				"ExitSign",
-				Vector3.new(0.3, 1.2, 5),
-				Vector3.new(side.x, level.y + 0.75, doorZ),
-				SIGN_DARK,
-				Enum.Material.SmoothPlastic,
-				DECOR
-			)
-			panelText(sign, { side.face }, { { Text = level.text, Color = level.color } }, { LightInfluence = 0, InsetY = 0.14 })
-		end
+		local exit = BuildUtil.Box(
+			walls,
+			"ExitSign",
+			Vector3.new(0.3, 1.4, 12.4), -- (the directory above starts at DOOR_TOP + 1.6)
+			Vector3.new(side.x, DOOR_TOP + 0.75, doorZ),
+			SIGN_DARK,
+			Enum.Material.SmoothPlastic,
+			DECOR
+		)
+		exitSignText(exit, side.face, side.outside)
+		local sign = BuildUtil.Box(
+			walls,
+			"ExitSign",
+			Vector3.new(0.3, 1.2, 5),
+			Vector3.new(side.x, up + DOOR_TOP - FLOOR_TOP + 0.75, doorZ),
+			SIGN_DARK,
+			Enum.Material.SmoothPlastic,
+			DECOR
+		)
+		panelText(sign, { side.face }, { { Text = side.upper, Color = BUTTON_GLOW } }, { LightInfluence = 0, InsetY = 0.14 })
 	end
 
 	-- sliding glass doors from the ground corridor into the east elevator tower
@@ -1463,15 +1506,20 @@ local function buildInterior(ctx, S, team)
 	end
 	local floors = {
 		{
-			y = DOOR_TOP + 1.6,
-			h = 5.2, -- (under the slab soffit at 16)
+			y = DOOR_TOP + 1.5, -- (over the EXIT sign)
+			h = 5.45, -- (under the slab soffit at 16)
 			header = "HQ DIRECTORY - GROUND FLOOR",
 			front = { "FRONT OFFICE", "COACHES' OFFICES", "LOBBY & TEAM SAFE", "INTERVIEW ROOM", "MEETING ROOM", "PLAYER LOUNGE" },
 			back = { "LOCKER ROOM", "EQUIPMENT ROOM", "WEIGHT ROOM", "TRAINING ROOM", "FILM ROOM", "CAFETERIA" },
-			footers = { "UPSTAIRS: STAIRS + ELEVATOR THROUGH THESE DOORS", "UPSTAIRS + SKY TERRACE: GLASS ELEVATOR THROUGH THESE DOORS" },
+			footers = {
+				{ "THESE DOORS: STAIRS + ELEVATOR, PRACTICE FIELDS", "STADIUM + TEAM BUS: MAIN ENTRANCE IN THE LOBBY" },
+				{ "THESE DOORS: GLASS ELEVATOR, HALL OF FAME, GARAGE, DOME", "STADIUM + TEAM BUS: MAIN ENTRANCE IN THE LOBBY" },
+			},
 			info = "Ground floor: Front Office (draft), Coaches' Offices, Lobby + team safe, Interview Room, Meeting Room, "
 				.. "Player Lounge, Locker Room, Equipment Room, Weight Room, Training Room, Film Room and Cafeteria. "
-				.. "Take the stairs at the west end or the glass elevator at the east end to go upstairs!",
+				.. "Take the stairs at the west end or the glass elevator at the east end to go upstairs! "
+				.. "Out the west doors: the practice fields. Out the east end: the Hall of Fame, the golf cart garage "
+				.. "and the indoor dome. The stadium and the Team Bus are out the main entrance in the lobby.",
 		},
 		{
 			y = up + DOOR_TOP - FLOOR_TOP + 1.6,
@@ -1479,10 +1527,14 @@ local function buildInterior(ctx, S, team)
 			header = "HQ DIRECTORY - UPPER FLOOR",
 			front = { "OWNER'S SUITE", "GRAND ATRIUM", "MEDIA STUDIO", "SCOUTING WAR ROOM", "ANALYTICS LAB" },
 			back = { "NUTRITION KITCHEN", "BARBERSHOP", "RECOVERY SPA & POOL", "PLAYER DEVELOPMENT" },
-			footers = { "SKY TERRACE: GLASS ELEVATOR AT THE EAST END", "SKY TERRACE: GLASS ELEVATOR THROUGH THESE DOORS" },
+			footers = {
+				{ "SKY TERRACE: GLASS ELEVATOR AT THE EAST END", "PRACTICE FIELDS: DOWN THESE STAIRS + OUT THE WEST DOORS" },
+				{ "SKY TERRACE: GLASS ELEVATOR THROUGH THESE DOORS", "STADIUM: DOWN TO THE LOBBY + OUT THE MAIN ENTRANCE" },
+			},
 			info = "Upper floor: Owner's Suite, Grand Atrium balcony, Media Studio, Scouting War Room, Analytics Lab, "
 				.. "Nutrition Kitchen, Barbershop, Recovery Spa & Pool and Player Development Center. "
-				.. "The glass elevator at the east end goes up to the Sky Terrace on the roof!",
+				.. "The glass elevator at the east end goes up to the Sky Terrace on the roof! For the practice fields, "
+				.. "take the west stairs down and go out the west doors; the stadium is out the main entrance in the lobby.",
 		},
 	}
 	local accent = teamInk(ctx, SIGN_DARK, { "Trim", "Secondary" })
