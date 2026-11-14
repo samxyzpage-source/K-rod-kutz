@@ -158,7 +158,7 @@ and HQ pieces changed, so progress from earlier versions starts fresh.
 
 | Feature | How it works |
 | --- | --- |
-| Pick your team | Choose one of 6 colour schemes and a nickname (Comets, Thunderhawks, Ironclads...). Everything you built is repainted, including the carts. Change it any time with the **TEAM** button. |
+| Pick your team | Choose one of 6 colour schemes and a nickname (Comets, Thunderhawks, Ironclads...). Everything is repainted: what you built (step by step, over a second or two), the HQ building, the gate, the bus stops, the plot border and the carts. Change it any time with the **TEAM** button. |
 | Owner's Bonus | A free cash gift every 8 minutes: the gold **BONUS** button on the right shows the countdown. |
 | Quests | 30 goals with cash rewards, shown on the left ("Finish 2 HQ rooms", "Kick a 55-yard field goal", "Win a championship"...). |
 | Draft | Build the **Draft Board** in the Front Office, then draft players from the **ROSTER** screen. Each has a position (QB, RB, WR, OL, DEF, K) and a rating. Your film room, coaches' offices and coaching staff give better picks. |

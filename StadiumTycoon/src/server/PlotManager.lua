@@ -174,6 +174,42 @@ local function updateScoreboard(plot)
 	end
 end
 
+-- The always-present plot base (gate, borders, bus stops, vault roof, the HQ building) is built
+-- once, in the plot's own palette. Its team-coloured parts carry the palette key they use
+-- (TeamRole) and its labels TeamTextRole / TeamBackRole, so it can be repainted in place.
+local function findTeamPainted(baseFolder)
+	local list = {}
+	for _, inst in ipairs(baseFolder:GetDescendants()) do
+		if inst:GetAttribute("TeamRole") or inst:GetAttribute("TeamTextRole") or inst:GetAttribute("TeamBackRole") then
+			table.insert(list, inst)
+		end
+	end
+	return list
+end
+
+-- Repaints the plot base in plot.Palette (claim, team change, release).
+local function paintBase(plot)
+	local palette = plot.Palette
+	local function color(role)
+		local value = role and palette[role]
+		return typeof(value) == "Color3" and value or nil
+	end
+	for _, inst in ipairs(plot.TeamPainted) do
+		local partColor = color(inst:GetAttribute("TeamRole"))
+		if partColor and (inst:IsA("BasePart") or inst:IsA("Light")) then
+			inst.Color = partColor
+		end
+		local textColor = color(inst:GetAttribute("TeamTextRole"))
+		if textColor and (inst:IsA("TextLabel") or inst:IsA("TextButton") or inst:IsA("TextBox")) then
+			inst.TextColor3 = textColor
+		end
+		local backColor = color(inst:GetAttribute("TeamBackRole"))
+		if backColor and inst:IsA("GuiObject") then
+			inst.BackgroundColor3 = backColor
+		end
+	end
+end
+
 -- Flood lights live on the light towers and under the canopy roof.
 local LIGHT_PIECES = { lights = true, canopy = true }
 
@@ -730,6 +766,7 @@ function PlotManager.Claim(plot, player, profile)
 	plotByPlayer[player] = plot
 	setGateClaimed(plot, player)
 	publishPlot(plot)
+	paintBase(plot) -- (a returning owner's saved team colours)
 	updateVault(plot)
 	player:SetAttribute("PlotIndex", plot.Index)
 
@@ -827,6 +864,7 @@ function PlotManager.Release(player)
 	plot.Vault = 0
 	plot.TeamName = ""
 	plot.Palette = plot.BasePalette
+	paintBase(plot)
 	plot.BuildToken += 1 -- stops a (re)build that is still running
 	plot.Building = false
 	plot.PendingTeam = nil
@@ -1043,6 +1081,7 @@ function PlotManager.Init(parentFolder, remote)
 			Building = false, -- true while the owned steps are being (re)built over several frames
 			BuildToken = 0, -- changes when a new build starts or the plot is released
 			PendingTeam = nil, -- { Palette, TeamName } asked for while a build was running
+			TeamPainted = findTeamPainted(baseFolder), -- base parts/labels in the team colours
 		}
 		plots[index] = plot
 		model.Parent = parentFolder
@@ -1223,6 +1262,7 @@ function PlotManager.ApplyTeam(player, palette, teamName)
 	end
 	plot.Palette = palette
 	plot.TeamName = teamName
+	paintBase(plot) -- the HQ building, gate, borders and bus stops are repainted in place
 	setGateClaimed(plot, player)
 	updateScoreboard(plot)
 	task.spawn(function()

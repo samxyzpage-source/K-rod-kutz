@@ -1962,6 +1962,61 @@ local function runTests()
 		PlayerData.Release(rita)
 	end
 
+	section("Server core: team colours on the plot base")
+	do
+		-- parts and signs of the always-present plot base (and the HQ building) say which team
+		-- colour they use, so a team change repaints them too
+		local function baseColors(index, palette)
+			local tagged, wrong = 0, nil
+			for _, inst in ipairs(plotModel(index).Base:GetDescendants()) do
+				local role, textRole, backRole =
+					inst:GetAttribute("TeamRole"), inst:GetAttribute("TeamTextRole"), inst:GetAttribute("TeamBackRole")
+				if role or textRole or backRole then
+					tagged += 1
+				end
+				if role and inst:IsA("BasePart") and inst.Color ~= palette[role] then
+					wrong = inst.Name
+				end
+				if textRole and inst.TextColor3 ~= palette[textRole] then
+					wrong = inst.Name
+				end
+				if backRole and inst.BackgroundColor3 ~= palette[backRole] then
+					wrong = inst.Name
+				end
+			end
+			return tagged, wrong
+		end
+		local base1 = plotModel(1).Base
+		local gateSign = base1:FindFirstChild("GateSign", true)
+		check(
+			base1:FindFirstChild("BorderFront", true):GetAttribute("TeamRole") == "Primary"
+				and base1:FindFirstChild("GateBeam", true):GetAttribute("TeamRole") == "Secondary"
+				and gateSign:GetAttribute("TeamTextRole") == "Trim"
+				and gateSign:GetAttribute("TeamBackRole") == "Primary",
+			"the plot base's team-coloured parts and signs say which team colour they use"
+		)
+		local tagged, wrong = baseColors(1, Config.TeamColors[3])
+		check(
+			tagged >= 12 and wrong == nil,
+			("a team change repaints the plot base too (%d team-coloured parts and signs; wrong: %s)"):format(tagged, tostring(wrong))
+		)
+		local sam = makePlayer("Sam", 6004)
+		local samProfile = PlayerData.Load(sam)
+		samProfile.Franchise = { Team = { Palette = 4, Nickname = 2 } }
+		local plot2 = PlotManager.GetPlots()[2]
+		PlotManager.Claim(plot2, sam, samProfile)
+		local _, wrongSaved = baseColors(2, Config.TeamColors[4])
+		check(
+			plot2.Palette == Config.TeamColors[4] and wrongSaved == nil,
+			"a returning owner's plot base is painted in their saved team colours: " .. tostring(wrongSaved)
+		)
+		removePlayer(sam)
+		PlotManager.Release(sam)
+		PlayerData.Release(sam)
+		local _, wrongFreed = baseColors(2, Config.TeamColors[2])
+		check(wrongFreed == nil, "a freed plot's base goes back to the plot's own colours: " .. tostring(wrongFreed))
+	end
+
 	section("Respawn at plot")
 	local newCharacter = makeCharacter("AliceCharacter2")
 	alice.Character = newCharacter
