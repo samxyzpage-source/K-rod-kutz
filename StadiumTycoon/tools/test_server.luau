@@ -897,6 +897,56 @@ local function runTests()
 				"the home field wall's plaques mark sections 113..119: " .. table.concat(plaques, ",")
 			)
 		end
+
+		-- F4: the Hall of Fame skybridge's name doesn't face the Hall of Fame's wall, and the concourse
+		-- restroom blade signs hang over the lane's edge (above its head room, not collidable) with
+		-- neither face looking into a food stand or a restroom wall
+		do
+			local fascias = partsOf(build("campus_links"), "BridgeFascia")
+			local hall = partsOf(build("hall_of_fame"))
+			local lettered, facingWall = 0, {}
+			for _, fascia in ipairs(fascias) do
+				for _, face in ipairs(letteredFaces(fascia)) do
+					lettered += 1
+					local from = face.centre + face.normal * 0.05
+					local hit = blocker(hall, from, from + face.normal * 20)
+					if hit then
+						table.insert(facingWall, hit.Name)
+					end
+				end
+			end
+			check(
+				#fascias == 2 and lettered == 1 and #facingWall == 0,
+				"the Hall of Fame skybridge's name faces open air, not the Hall of Fame's wall " .. table.concat(facingWall, ", ")
+			)
+
+			local restrooms = build("concourse_restrooms")
+			local around = partsOf(build("concourse_food"))
+			for _, part in ipairs(partsOf(restrooms)) do
+				table.insert(around, part)
+			end
+			local headRoom = Config.Layout.Bowl.MainConcourse.Floor + 9 -- the lane's head room (render_plot)
+			local blades, bad = partsOf(restrooms, "WayfindingSign"), {}
+			for _, blade in ipairs(blades) do
+				local lo, at = bounds(blade), blade.CFrame.Position
+				local where = ("(%.0f, %.0f)"):format(at.X, at.Z)
+				if blade.CanCollide or lo.Y < headRoom then
+					table.insert(bad, where .. " is in the lane's head room")
+				end
+				local faces = letteredFaces(blade)
+				if #faces ~= 2 then
+					table.insert(bad, ("%s has %d lettered faces"):format(where, #faces))
+				end
+				for _, face in ipairs(faces) do
+					local from = face.centre + face.normal * 0.05
+					local hit = blocker(around, from, from + face.normal * 12, blade)
+					if hit then
+						table.insert(bad, where .. " faces " .. hit.Name)
+					end
+				end
+			end
+			check(#blades == 6 and #bad == 0, "the restroom blade signs face along the concourse lane " .. table.concat(bad, ", "))
+		end
 	end
 
 	section("Bowl geometry (V5)")

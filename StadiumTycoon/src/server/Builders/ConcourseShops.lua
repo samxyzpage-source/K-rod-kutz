@@ -36,7 +36,9 @@
 	                         the side wall, toilet, sink, mirror, baby changing table (Look))
 	    3 Water Fountains    a fountain (Look) beside every restroom (in front of the next column, or
 	      & Signs            against the wall by the family rooms) + a hanging two-sided blade sign
-	                         over the nearest column line
+	                         on the nearest column line, over the lane's outer edge (offsets
+	                         72.7..76, y 39.6+: above the lane's head room, non-collidable) where
+	                         fans walking along the lane see it
 	  concourse_merch
 	    1 Pro Shop           a walk-in shop next to Gate A (white back wall, wood floor): glass
 	                         storefront + sliding glass doors,
@@ -51,7 +53,8 @@
 
 	Flat layers: floor paint (tiles, pro shop floor) 30.00..30.04, only inside the shops/rooms.
 	Collidable parts stay at offsets >= 76.2 (the lane ends at 76); food icons that stick out a
-	little toward the lane hang above head height (y > 37.5) and don't collide.
+	little toward the lane and the restroom blade signs over its edge hang above head height
+	(y > 37.5) and don't collide.
 ]]
 
 local BuildUtil = require(script.Parent.Parent.BuildUtil)
@@ -942,9 +945,11 @@ local function waterFountain(ctx, seg, x, back, team)
 	})
 end
 
--- A two-sided blade sign hanging from the ceiling over a column line (above its TV).
+-- A two-sided blade sign hanging from the ceiling on a column line, over the lane's outer edge in
+-- front of the stand fronts (so neither face looks into a stand's side wall); its bottom stays
+-- above the lane's head room (y 39) and it doesn't collide.
 local function bladeSign(ctx, seg, x, text, team)
-	local sign = span(ctx, seg, "WayfindingSign", x - 0.15, x + 0.15, 76.6, 79.9, 39.6, 41.3, team.Primary, nil, NO_COLLIDE)
+	local sign = span(ctx, seg, "WayfindingSign", x - 0.15, x + 0.15, 72.7, 76, 39.6, 41.3, team.Primary, nil, NO_COLLIDE)
 	local color = ink(team.Primary, team)
 	write(sign, TOWARD_MINUS_X, text, color, { Glow = true, Top = 0.12, Height = 0.76 })
 	write(sign, TOWARD_PLUS_X, text, color, { Glow = true, Top = 0.12, Height = 0.76 })
