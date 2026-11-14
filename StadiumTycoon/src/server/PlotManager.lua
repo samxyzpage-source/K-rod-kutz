@@ -54,6 +54,8 @@ local UNCLAIMED_TRIGGER_TRANSPARENCY = 0.55
 local BUTTON_TAG = "TycoonBuyButton" -- Effects.client.lua makes these pulse
 local ANIMATION_TIME = 0.55
 local ANIMATION_MAX_DELAY = 0.5
+local RELEASED_ITEMS = "ReleasedItems" -- a departed owner's franchise while it is taken down
+local CROWD_WAIT_SECONDS = 10 -- (at most this long for a released plot's fans to leave first)
 
 ---------------------------------------------------------------------------------------------
 -- Helpers
@@ -421,12 +423,20 @@ end
 -- first and its old one destroyed right after, so the plot never exists twice and nobody
 -- standing on a floor falls through. plot.Building is true while it runs (purchases wait).
 -- A newer build or Release changes plot.BuildToken, which stops this one.
+-- A franchise released here moments ago may still be coming down (see tearDown): the build
+-- waits for it, so a new owner's steps go into a clean plot.
 -- Returns true when every step was built.
 local function buildOwnedSteps(plot, swap)
 	local owner = plot.Owner
 	plot.BuildToken += 1
 	local token = plot.BuildToken
 	plot.Building = true
+	while plot.TearingDown > 0 do
+		task.wait()
+		if plot.BuildToken ~= token or plot.Owner ~= owner then
+			return false -- the owner left while the old franchise was still coming down
+		end
+	end
 	local sliceStart = os.clock()
 	for _, item in ipairs(Items.List) do
 		if plot.Owned[item.Id] then
@@ -446,6 +456,33 @@ local function buildOwnedSteps(plot, swap)
 	end
 	plot.Building = false
 	return true
+end
+
+-- Takes a released franchise (its step models in `folder`) down a few steps per frame, like a
+-- rebuild (Config.BuildFrameBudget per frame): a big franchise is thousands of parts, and
+-- removing them in one frame would stall the server and the other player's client. The fans of
+-- a game day cut short leave first (GameDay paces them), so nobody sits in mid-air.
+-- plot.TearingDown counts the takedowns still running (buildOwnedSteps waits for them).
+local function tearDown(plot, folder)
+	local ok, err = pcall(function()
+		local deadline = os.clock() + CROWD_WAIT_SECONDS
+		while GameDay.IsCrowdLeaving(plot) and os.clock() < deadline do
+			task.wait()
+		end
+		local sliceStart = os.clock()
+		for _, model in ipairs(folder:GetChildren()) do
+			model:Destroy()
+			if os.clock() - sliceStart > Config.BuildFrameBudget then
+				task.wait()
+				sliceStart = os.clock()
+			end
+		end
+	end)
+	if not ok then
+		warn("[PlotManager] Couldn't take a released franchise down step by step: " .. tostring(err))
+	end
+	folder:Destroy()
+	plot.TearingDown -= 1
 end
 
 -- After a whole plot was (re)built: run the hooks (e.g. live screens refresh once), then apply
@@ -861,7 +898,8 @@ local function onClaimTouched(plot, hit)
 	PlotManager.Claim(plot, player, profile)
 end
 
--- Frees the player's plot (their vault is paid out to them first so nothing is lost).
+-- Frees the player's plot (their vault is paid out to them first so nothing is lost). The
+-- franchise comes down over a few frames; the plot can be claimed again at once.
 function PlotManager.Release(player)
 	claiming[player] = nil
 	cooldowns[player] = nil
@@ -887,7 +925,14 @@ function PlotManager.Release(player)
 	plot.Building = false
 	plot.PendingTeam = nil
 	plot.GoalChallenger = nil
-	plot.ItemsFolder:ClearAllChildren()
+	-- the departed franchise steps aside at once (a fresh Items folder takes its place, ready for
+	-- the next owner) and is taken down over several frames (below)
+	local released = plot.ItemsFolder
+	released.Name = RELEASED_ITEMS
+	local items = Instance.new("Folder")
+	items.Name = "Items"
+	items.Parent = plot.Model
+	plot.ItemsFolder = items
 	plot.ItemModels = {}
 	for _, button in pairs(plot.Buttons) do
 		button:Destroy()
@@ -896,7 +941,9 @@ function PlotManager.Release(player)
 	setGateClaimed(plot, nil)
 	plot.HomeScore, plot.AwayScore = 0, 0
 	publishPlot(plot)
-	GameDay.OnPlotReleased(plot) -- a game day that is on stops (no result) and its crowd goes
+	GameDay.OnPlotReleased(plot) -- a game day that is on stops (no result) and its crowd leaves
+	plot.TearingDown += 1
+	task.spawn(tearDown, plot, released) -- (once that crowd has left)
 	for _, hook in ipairs(releaseHooks) do
 		task.spawn(hook, plot)
 	end
@@ -1094,6 +1141,7 @@ function PlotManager.Init(parentFolder, remote)
 			GoalChallenger = nil, -- a button that beat the guide beam's one once (see updateGoal)
 			Building = false, -- true while the owned steps are being (re)built over several frames
 			BuildToken = 0, -- changes when a new build starts or the plot is released
+			TearingDown = 0, -- released franchises still being taken down (see tearDown)
 			PendingTeam = nil, -- { Palette, TeamName } asked for while a build was running
 			TeamPainted = findTeamPainted(baseFolder), -- base parts/labels in the team colours
 		}

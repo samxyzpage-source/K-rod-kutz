@@ -45,8 +45,9 @@ Config.Lighting = {
 	NeonYellowLimit = 0.85, -- strong yellow Neon in rooms glows at most this bright (0..1)
 }
 Config.BuildAnimation = true
--- A returning owner's franchise (and every team change) is rebuilt a few steps per frame: the
--- server spends at most this many seconds per frame on it, so nobody's game stalls.
+-- A returning owner's franchise (and every team change) is rebuilt a few steps per frame, and a
+-- departed owner's franchise is taken down the same way: the server spends at most this many
+-- seconds per frame on it, so nobody's game stalls.
 Config.BuildFrameBudget = 0.008
 Config.RespawnAtPlot = true -- owners respawn at their own stadium
 Config.ShowGuideBeam = true -- a glowing beam points to your next buy button

@@ -4179,14 +4179,24 @@ local function runTests()
 		)
 		check(lastNotification(pat).message:find("being built") ~= nil, "the owner is told to wait a moment")
 		-- the owner leaves in the middle of the rebuild: it stops, nothing is built into the freed plot
+		-- (its franchise steps aside into another folder and comes down step by step, see below)
 		removePlayer(pat)
 		PlotManager.Release(pat)
 		for _ = 1, 5 do
 			task.wait()
 		end
 		check(
-			countChildren(items2) == 0 and plot2.Owner == nil and not plot2.Building,
+			countChildren(plotModel(2).Items) == 0 and items2.Name ~= "Items" and plot2.Owner == nil and not plot2.Building,
 			"an owner who leaves mid-rebuild stops it (the freed plot stays empty)"
+		)
+		local takedownFrames = 0
+		while items2.Parent ~= nil and takedownFrames < 300 do
+			task.wait()
+			takedownFrames += 1
+		end
+		check(
+			items2.Parent == nil and plot2.TearingDown == 0 and takedownFrames >= 1,
+			("and the departed franchise comes down a step per frame here (%d more frames)"):format(takedownFrames)
 		)
 		PlayerData.Release(pat)
 		Config.BuildFrameBudget = math.huge
@@ -4990,13 +5000,18 @@ local function runTests()
 			"releasing the plot ends its game day at once"
 		)
 		check(hankPlot.IncomeBoost == 1 and hankPlot.GameDayActive == false, "and its income boost")
-		check(model1:FindFirstChild("GameDayFans") == nil, "and its crowd is gone")
+		check(model1:FindFirstChild("GameDayFans") == nil, "and its crowd isn't the plot's crowd any more (it leaves)")
 		task.wait(1.2)
 		check(
 			(hankF.Stats.Wins or 0) + (hankF.Stats.Losses or 0) == gamesAtLeave and not said(hank, fromLeave, "FINAL:"),
 			"a game day cut short has no result (and nothing happens to the freed plot later)"
 		)
-		check(model1:GetAttribute("GameDayActive") == false and model1:GetAttribute("GameDayStatus") == nil, "the freed plot stays quiet")
+		check(
+			model1:GetAttribute("GameDayActive") == false
+				and model1:GetAttribute("GameDayStatus") == nil
+				and model1:FindFirstChild("GameDayFansLeaving") == nil,
+			"the freed plot stays quiet (and its crowd has left)"
+		)
 
 		-- coming back: the franchise is rebuilt over several frames; no kick-off until it's done
 		Config.BuildFrameBudget = 0 -- (one step per frame)
@@ -5019,6 +5034,133 @@ local function runTests()
 		Config.BuildFrameBudget = math.huge
 		removePlayer(hank)
 		PlotManager.Release(hank)
+
+		do
+			-- the owner of a big franchise leaves during their game day (PERF-1's other half): the
+			-- plot steps aside at once, the fans leave a chunk per frame, then the franchise comes down
+			-- a step per frame; a player who claims the plot meanwhile gets a clean plot once it's gone
+			Config.GameDay.DurationSeconds = 30 -- (on until the owner leaves)
+			Config.GameDay.SeatedFans = 400
+			Config.GameDay.FansPerFrame = 50
+			Config.GameDay.WalkingFans = 0
+			local tess = makePlayer("Tess", 6101)
+			local tessProfile = PlayerData.Load(tess)
+			local tessSteps = 0
+			for _, pieceId in ipairs({ "hq_lobby", "goalposts", "lower_home" }) do
+				for _, stepId in ipairs(Items.PieceById[pieceId].StageIds) do
+					tessProfile.Owned[stepId] = true
+					tessSteps += 1
+				end
+			end
+			PlotManager.Claim(hankPlot, tess, tessProfile)
+			check(GameDay.RequestStart(tess) == true, "(the owner of a big franchise kicks off)")
+			waitUntil(function()
+				return (crowdOf(hankPlot)) >= 400
+			end, 2)
+			task.wait(0.05) -- (the whole crowd is in)
+			local oldItems = hankPlot.ItemsFolder
+			local fromRelease = #notifications + 1
+			Config.BuildFrameBudget = 0 -- (a step per frame)
+			removePlayer(tess)
+			PlotManager.Release(tess)
+			local leaving = model1:FindFirstChild("GameDayFansLeaving")
+			local atRelease = 0
+			for _, fan in ipairs(leaving and leaving:GetChildren() or {}) do
+				fan:SetAttribute("AtRelease", true)
+				atRelease += 1
+			end
+			check(
+				hankPlot.ItemsFolder ~= oldItems
+					and plotModel(1).Items == hankPlot.ItemsFolder
+					and countChildren(hankPlot.ItemsFolder) == 0
+					and oldItems.Parent == model1
+					and countChildren(oldItems) == tessSteps,
+				("a released franchise steps aside at once into its own folder (%d of %d steps there, a fresh Items folder)"):format(
+					countChildren(oldItems),
+					tessSteps
+				)
+			)
+			check(
+				not GameDay.IsActive(hankPlot) and model1:FindFirstChild("GameDayFans") == nil and atRelease > 0,
+				("its game day ends at once and its crowd steps aside to leave (%d fans)"):format(atRelease)
+			)
+			-- somebody claims the plot straight away, while the old franchise is still there
+			local uma = makePlayer("Uma", 6102)
+			local umaProfile = PlayerData.Load(uma)
+			local umaSteps = { "hq_lobby:1", "hq_lobby:2", "hq_lobby:3", "lower_home:1" }
+			for _, stepId in ipairs(umaSteps) do
+				umaProfile.Owned[stepId] = true
+			end
+			task.spawn(PlotManager.Claim, hankPlot, uma, umaProfile)
+			local frames, fanFrames, maxDrop, late, lastFans = 0, 0, 0, 0, atRelease
+			local downFrames, standsEarly, builtEarly = 0, false, false
+			while (oldItems.Parent ~= nil or hankPlot.Building) and frames < 600 do
+				task.wait()
+				frames += 1
+				local folder = model1:FindFirstChild("GameDayFansLeaving")
+				local fans = 0
+				for _, fan in ipairs(folder and folder:GetChildren() or {}) do
+					fans += 1
+					if not fan:GetAttribute("AtRelease") then
+						late += 1 -- (a fan that arrived after the release)
+						fan:SetAttribute("AtRelease", true)
+					end
+				end
+				maxDrop = math.max(maxDrop, lastFans - fans)
+				lastFans = fans
+				local oldLeft = oldItems.Parent and countChildren(oldItems) or 0
+				if fans > 0 then
+					fanFrames += 1
+					standsEarly = standsEarly or oldLeft < tessSteps
+				elseif oldItems.Parent ~= nil and oldLeft < tessSteps then
+					downFrames += 1
+				end
+				if oldItems.Parent ~= nil and (countChildren(hankPlot.ItemsFolder) > 0 or countChildren(plotModel(1).Buttons) > 0) then
+					builtEarly = true
+				end
+			end
+			check(
+				fanFrames >= 2 and maxDrop <= 2 * 50 and late == 0 and model1:FindFirstChild("GameDayFansLeaving") == nil,
+				("the fans leave a chunk per frame (over %d frames, at most %d in one), and none arrives after the release"):format(
+					fanFrames,
+					maxDrop
+				)
+			)
+			check(not standsEarly, "the stands stay up until the fans have left (nobody sits in mid-air)")
+			check(
+				oldItems.Parent == nil and downFrames >= 2 and hankPlot.TearingDown == 0,
+				("then the departed franchise comes down over several frames, not in one (%d frames here)"):format(downFrames)
+			)
+			local leftovers, itemFolders, onlyUma = {}, 0, countChildren(hankPlot.ItemsFolder) == #umaSteps
+			for _, child in ipairs(model1:GetChildren()) do
+				if child.Name == "Items" then
+					itemFolders += 1
+				elseif child.Name == "ReleasedItems" or child.Name:find("GameDayFans", 1, true) then
+					table.insert(leftovers, child.Name)
+				end
+			end
+			for _, stepId in ipairs(umaSteps) do
+				local model = hankPlot.ItemModels[stepId]
+				onlyUma = onlyUma and model ~= nil and model.Parent == hankPlot.ItemsFolder
+			end
+			check(
+				not builtEarly
+					and hankPlot.Owner == uma
+					and not hankPlot.Building
+					and onlyUma
+					and itemFolders == 1
+					and #leftovers == 0
+					and button(1, "hq_lobby:4") ~= nil,
+				"a player who claims the plot meanwhile waits for it, then gets a clean plot with only their steps "
+					.. table.concat(leftovers, ", ")
+			)
+			check(not said(tess, fromRelease, "FINAL:"), "(the game day cut short has no result)")
+			Config.BuildFrameBudget = math.huge
+			removePlayer(uma)
+			PlotManager.Release(uma)
+			PlayerData.Release(uma)
+			PlayerData.Release(tess)
+		end
 
 		-- back to how the later tests expect plot 1: hank owns it, nothing built
 		for stage = 1, 3 do
