@@ -2732,6 +2732,11 @@ local function runTests()
 			"the owner is taken into the HQ before the rebuild"
 		)
 		check(countChildren(plotModel(2).Buttons) == 0, "the buy buttons wait for the rebuild")
+		local fullIncome = Items.TotalIncome(patProfile.Owned) * Config.IncomeMultiplier
+		check(
+			plot2.Building and fullIncome > 0 and PlotManager.GetBaseIncome(pat) == fullIncome and pat:GetAttribute("Income") == fullIncome,
+			"the income is right while the plot is still rebuilding (bonus, prizes and prices use it)"
+		)
 		check(
 			PlotManager.ApplyTeam(pat, Config.TeamColors[4], "TESTERS") and plot2.Palette ~= Config.TeamColors[4],
 			"a team change asked for during the rebuild waits for it"

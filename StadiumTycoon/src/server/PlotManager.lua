@@ -769,6 +769,9 @@ function PlotManager.Claim(plot, player, profile)
 	setGateClaimed(plot, player)
 	publishPlot(plot)
 	paintBase(plot) -- (a returning owner's saved team colours)
+	-- income only depends on what is owned, not on the built models: set it before the (spread
+	-- out) rebuild, so the Owner's Bonus, prizes and prices are right while it runs
+	recalcIncome(plot)
 	updateVault(plot)
 	player:SetAttribute("PlotIndex", plot.Index)
 
