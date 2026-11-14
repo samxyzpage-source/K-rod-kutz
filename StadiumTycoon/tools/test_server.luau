@@ -1304,6 +1304,65 @@ local function runTests()
 		check(notYet and list[3] ~= info and list[3].model.Parent ~= nil, "a destroyed cart is rebuilt once its pad is clear")
 		table.clear(testParts)
 	end
+	do
+		-- Cart routes off the roads (the whole franchise is built): parts a cart can't roll over (top
+		-- above 0.4, below the cart's roof) in plot coordinates
+		local L = Config.Layout
+		local origin = PlotManager.GetPlot(alice).Origin
+		local function plotBox(part)
+			local x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22 = origin:ToObjectSpace(part.CFrame):GetComponents()
+			local h = part.Size / 2
+			local ex = math.abs(r00) * h.X + math.abs(r01) * h.Y + math.abs(r02) * h.Z
+			local ey = math.abs(r10) * h.X + math.abs(r11) * h.Y + math.abs(r12) * h.Z
+			local ez = math.abs(r20) * h.X + math.abs(r21) * h.Y + math.abs(r22) * h.Z
+			return x - ex, x + ex, y - ey, y + ey, z - ez, z + ez
+		end
+		-- (a) the garage bays open onto an apron: nothing in front of the garage within 20 studs
+		local z0, z1 = L.Areas.campus.Z + 329, L.Areas.campus.Z + 367 -- the garage's west front
+		local front, inFront, blocker = math.huge, -math.huge, "nothing"
+		for _, item in ipairs({ plotModel(1).Base, table.unpack(plotModel(1).Items:GetChildren()) }) do
+			local isGarage = item.Name:sub(1, 11) == "golf_carts:"
+			for _, part in ipairs(item:GetDescendants()) do
+				if part:IsA("BasePart") and part.CanCollide then
+					local minX, maxX, minY, maxY, minZ, maxZ = plotBox(part)
+					if maxY > 0.4 and minY < 7 and maxZ > z0 and minZ < z1 and maxX < 200 and minX > 60 then
+						if isGarage then
+							front = math.min(front, minX)
+						elseif maxX < 140 and maxX > inFront then
+							inFront, blocker = maxX, item.Name .. "/" .. part.Name
+						end
+					end
+				end
+			end
+		end
+		check(
+			front - inFront >= 20 and L.CartPads[1].X - 4.5 > front,
+			("the garage bays open onto a %.1f-stud apron (front x %.1f, nearest: %s)"):format(front - inFront, front, blocker)
+		)
+		-- (b) the street spawn pad is a low step (the World fallback and the place's own)
+		local spawn = workspace:FindFirstChildOfClass("SpawnLocation")
+		local street = workspace.World:FindFirstChild("Street")
+		local streetTop = street.CFrame.Position.Y + street.Size.Y / 2
+		local spawnTop = spawn.CFrame.Position.Y + spawn.Size.Y / 2
+		local project = serde.decode("json", fs.readFile("default.project.json"))
+		local placeSpawn = project.tree.Workspace.SpawnLocation["$properties"]
+		local placeTop = placeSpawn.CFrame.CFrame.position[2] + placeSpawn.Size[2] / 2
+		check(
+			spawnTop - streetTop <= 0.2 + 1e-3 and placeTop - streetTop <= 0.2 + 1e-3,
+			("the street spawn pad is at most 0.2 above the street (%.2f, place file %.2f)"):format(
+				spawnTop - streetTop,
+				placeTop - streetTop
+			)
+		)
+		-- (c) the parking lot's curbs
+		local tallest = 0
+		for _, part in ipairs(plotModel(1).Items["parking:1"]:GetDescendants()) do
+			if part:IsA("BasePart") and part.CanCollide and part.Name:find("Curb") then
+				tallest = math.max(tallest, select(4, plotBox(part)))
+			end
+		end
+		check(tallest > 0 and tallest <= 0.4 + 1e-3, ("the parking lot's curbs are at most 0.4 tall (%.2f)"):format(tallest))
+	end
 
 	section("Draft + roster")
 	do

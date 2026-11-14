@@ -110,12 +110,14 @@ function World.Build(config)
 		end
 	end
 
+	-- the spawn pad in the middle of the street is a low step (top 0.4, the street's top is 0.2), so
+	-- golf carts roll over it on their way between the two plots' gates (as in default.project.json)
 	if not Workspace:FindFirstChildOfClass("SpawnLocation") then
 		local spawn = Instance.new("SpawnLocation")
 		spawn.Name = "SpawnLocation"
 		spawn.Anchored = true
-		spawn.Size = Vector3.new(12, 1, 12)
-		spawn.CFrame = CFrame.new(0, 0.5, 0)
+		spawn.Size = Vector3.new(12, 0.4, 12)
+		spawn.CFrame = CFrame.new(0, 0.2, 0)
 		spawn.Neutral = true
 		spawn.Duration = 0
 		spawn.Parent = Workspace

@@ -36,7 +36,8 @@
 	players through (onto the tower's landing, and back onto the bridge). If the shell opens doorways
 	there later, the bridges simply become walk-through as well.
 
-	Kept clear: the carts' way out of the garage X[118, 144] Z[331, 365] (nothing at ground level),
+	Kept clear: the carts' way out of the garage X[118, 154] Z[331, 365] (nothing at ground level:
+	the bays open at x 139, 22 studs east of the HQ walk's columns and pier legs at x 116.6),
 	the back road and the campus road (only flush paint on the road; canopy and bridge undersides
 	stay >= 12.3 above it, columns and piers stand beside it), every buy button (campus_links
 	(110, 230), golf_carts (124, 324), indoor_dome (150, 400) ...) and the HQ entrance walk.
@@ -96,7 +97,7 @@ local SPINE_BRANCH = { MinX = 16, MaxX = 34, MinZ = 440, MaxZ = 450 }
 -- cameras (campus coordinates; the stadium's field centre is at campus (0, 0, -90))
 local STADIUM_CAM = { From = Vector3.new(90, 170, 180), To = Vector3.new(0, 0, -90), Fov = 50, Label = "STADIUM CAM" }
 local HALL_CAM = { From = Vector3.new(150, 22, 168), To = Vector3.new(195, 12, 230), Fov = 55, Label = "HALL OF FAME CAM" }
-local CART_CAM = { From = Vector3.new(119, 12, 322), To = Vector3.new(150, 3, 352), Fov = 65, Label = "CART CAM" }
+local CART_CAM = { From = Vector3.new(119, 12, 322), To = Vector3.new(160, 3, 352), Fov = 65, Label = "CART CAM" }
 
 local PAINT = { CanCollide = false, CastShadow = false }
 local DECOR = { CanCollide = false }
