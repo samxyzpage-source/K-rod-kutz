@@ -99,6 +99,7 @@ local ROW_LIGHT = Color3.fromRGB(158, 158, 163)
 local ROW_DARK = Color3.fromRGB(136, 136, 142)
 local CLUB_LIGHT = Color3.fromRGB(174, 168, 160)
 local CLUB_DARK = Color3.fromRGB(152, 146, 139)
+local CLUB_CARPET = Color3.fromRGB(72, 76, 90) -- the club aisles' carpeted steps
 local STRUCTURE = Color3.fromRGB(122, 123, 130)
 local WALL_COLOR = Color3.fromRGB(178, 178, 182)
 local FLOOR_COLOR = Color3.fromRGB(198, 194, 184)
@@ -111,6 +112,8 @@ local NOSING = Color3.fromRGB(255, 206, 46)
 local LAMP = Color3.fromRGB(255, 246, 228)
 local RAMP_COLOR = Color3.fromRGB(184, 180, 170)
 local LIGHT_COLOR = Color3.fromRGB(255, 238, 210)
+local ACCESS_BLUE = Color3.fromRGB(28, 92, 178) -- painted wheelchair spaces
+local CHAIR_DARK = Color3.fromRGB(52, 54, 62)
 
 local NO_COLLIDE = { CanCollide = false }
 local GLASS = { Transparency = 0.45 }
@@ -426,12 +429,15 @@ end
 	Stair aisles: a light concrete step on the back half of every row the aisle runs through (1 stud
 	up, 2 deep), so walking up goes row top -> step -> next row top. The steps cover the seat strips
 	inside the aisle. topLanding adds a step on the top row too (club: it covers the top row's seats
-	where the aisle meets the club ring floor). Returns rowsOf, order (see aisleRows).
+	where the aisle meets the club ring floor). carpet = true lays the club's carpet on the steps
+	instead of bare concrete. Returns rowsOf, order (see aisleRows).
 ]]
-local function stairAisles(ctx, seg, tierName, topLanding)
+local function stairAisles(ctx, seg, tierName, topLanding, carpet)
 	local L = ctx.config.Layout
 	local C = ctx.config.Colors
 	local tier = L.Bowl.Tiers[tierName]
+	local color = carpet and CLUB_CARPET or C.Walkway
+	local material = carpet and Enum.Material.Carpet or Enum.Material.Concrete
 	local half = L.Bowl.AisleWidth / 2
 	local rowsOf, order = aisleRows(L, seg, tierName)
 	for _, x in ipairs(order) do
@@ -450,8 +456,8 @@ local function stairAisles(ctx, seg, tierName, topLanding)
 					r.top + STEP,
 					r.inner + L.Bowl.Depth / 2,
 					r.outer,
-					C.Walkway,
-					Enum.Material.Concrete
+					color,
+					material
 				)
 			end
 		end
@@ -880,6 +886,48 @@ local function frontRail(ctx, seg, U, withCap)
 			C.Metal,
 			Enum.Material.Metal
 		)
+	end
+end
+
+--[[
+	Step "Aisles & Railings" (sides): an accessible-seating bay on the cross-aisle at segment x, right
+	behind its glass rail: two painted wheelchair spaces (look) and two slim companion chairs (seats
+	with a view of the field). Everything stays within 1.9 of the rail, so 2.1 of the 4-deep
+	cross-aisle stays free to walk along behind them.
+]]
+local function accessibleBay(ctx, seg, U, x)
+	local L = ctx.config.Layout
+	local r = Bowl.Row(L, "upper", U.cross)
+	local o0 = r.inner + 0.4 -- (just behind the glass rail)
+	-- (turned round: the lettering reads upright from the walkway behind)
+	local spaces = BuildUtil.Part(ctx, {
+		Name = "WheelchairSpaces",
+		Size = Vector3.new(6, 0.06, 1.5),
+		CFrame = at(seg, x - 1.6, r.top + 0.03, o0 + 0.75) * TURN,
+		Color = ACCESS_BLUE,
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		CastShadow = false,
+	})
+	write(spaces, Enum.NormalId.Top, "WHEELCHAIR SPACES", WHITE, { PixelsPerStud = 24 })
+	BuildUtil.Look(
+		spaces,
+		"Accessible Seating",
+		"Wheelchair spaces with a great view of the field, right beside the tunnel to the concourse, and seats for friends and family next to them.",
+		{ Distance = 12 }
+	)
+	for _, cx in ipairs({ x + 2.5, x + 4.5 }) do
+		local eye = at(seg, cx, r.top + 4.5, o0 + 0.2).Position
+		BuildUtil.Seat(ctx, {
+			Name = "CompanionSeat",
+			Size = Vector3.new(1.8, 0.8, 1.2),
+			CFrame = at(seg, cx, r.top + 0.4, o0 + 0.6) * TURN,
+			Color = ctx.colors.Primary,
+			Material = Enum.Material.Fabric,
+			Object = "Companion Seat",
+			Camera = { From = eye, To = Vector3.new(0, 2, L.FieldCenterZ), Fov = 58, Label = "UPPER DECK" },
+		})
+		block(ctx, seg, "CompanionSeatBack", cx - 0.9, cx + 0.9, r.top, r.top + 2.4, o0 + 1.2, o0 + 1.45, CHAIR_DARK, Enum.Material.Metal)
 	end
 end
 
@@ -1407,7 +1455,7 @@ function M.club_seats(ctx)
 	-- 3 AISLES & GLASS RAILS
 	BuildUtil.Stage(ctx, 3)
 	for _, seg in ipairs(segs) do
-		local rowsOf, order = stairAisles(ctx, seg, "club", true)
+		local rowsOf, order = stairAisles(ctx, seg, "club", true, true)
 		clubGlass(ctx, seg)
 		clubRails(ctx, seg, rowsOf, order)
 	end
@@ -1451,6 +1499,10 @@ local function upperSide(ctx, name, firstFact, banners)
 	frontRail(ctx, seg, U, true)
 	crossAisleRail(ctx, seg, U, rowsOf, order)
 	fanBanners(ctx, seg, U, banners(name0))
+	-- (between each vomitory and the next aisle out)
+	for _, x in ipairs({ -64, 64 }) do
+		accessibleBay(ctx, seg, U, x)
+	end
 	for index, v in ipairs(voms) do
 		vomitoryFinish(ctx, seg, U, v, vomitoryTitle(name, index), UPPER_FACTS[firstFact + index - 1])
 	end
