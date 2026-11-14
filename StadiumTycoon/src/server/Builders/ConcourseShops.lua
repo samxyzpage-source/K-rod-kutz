@@ -1278,7 +1278,7 @@ local function proShop(ctx, seg, cx, team)
 	-- the signed game ball in a glass case in the window (look: your record)
 	local plinth = span(ctx, seg, "DisplayCase", x(-13.2), x(-10.4), 77.5, 78.9, 30, 32.4, wallColor)
 	span(ctx, seg, "DisplayGlass", x(-13.1), x(-10.5), 77.6, 78.8, 32.4, 34.6, GLASS, Enum.Material.Glass, { Transparency = 0.6 })
-	football(ctx, seg, "SignedBall", x(-11.8), 33.1, 78.2, 1.4, 0.85)
+	football(ctx, seg, "SignedBall", x(-11.8), 32.83, 78.2, 1.4, 0.85)
 	BuildUtil.Look(plinth, "Signed Game Ball", "Signed by the whole team after a big win. Not for sale - sorry!", {
 		LookKey = "record",
 		At = localPoint(ctx, plinth, seg, x(-11.8), 33.4, 79.8),
