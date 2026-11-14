@@ -112,7 +112,9 @@ DataStore. That only works when:
 
 Without that the game still works. The bottom-left of the screen shows
 "Progress saving: OFF" and nothing is saved. Saving happens automatically every 90 seconds,
-when a player leaves, and when the server shuts down.
+when a player leaves, and when the server shuts down. When you come back and walk through a
+gold gate, your franchise is rebuilt around you, a few steps per frame, in a second or two
+(`Config.BuildFrameBudget`), so the server never stalls for the other player.
 
 How saving stays safe:
 * A session lock stops two servers, or a quick leave-and-rejoin, from overwriting each other.
@@ -296,9 +298,12 @@ These tools are optional. You only need them to edit the code outside Studio.
     every interaction, `--noroof` hides roofs and `--cam=x,y,z:tx,ty,tz` renders any close-up.
     The README pictures use the views `v5_aerial`, `v5_bowl`, `v5_concourse`, `v5_pressbox`,
     `v5_club`, `v5_lockers`, `v5_atrium`, `v5_back` and `v5_hq` (and `v5_field` with a crowd).
-  * `lune run tools/test_server.luau` runs about 390 checks of the server logic and the client
+  * `lune run tools/test_server.luau` runs about 430 checks of the server logic and the client
     scripts against a fake Roblox engine. It covers:
-    * claiming, step-by-step buying, the vault and auto-collect
+    * claiming (also from a golf cart), step-by-step buying, the vault, the three collect pads
+      and auto-collect, buttons that spend the vault, and the guide beam's choice of button
+    * rebuilding a returning owner's plot and a new team's colours a few steps per frame,
+      repainting the plot base, and the signs' draw distances
     * golf carts and the drive controller
     * the team picker, Owner's Bonus, quests, draft, training, field goals, seasons and playoffs
     * doors, seats, elevators, snacks, mini-game results and live screens
