@@ -5,40 +5,49 @@
 
 	  scoreboard  the EAST end-zone video board (its screens face -X, the field)
 	                1 Support Legs   two steel pylons at x 312..320 (behind the Gate C plaza, either side
-	                                 of the gate), the truss + X-braces between them, the arms reaching
-	                                 over the facade, crew landings + the service catwalk behind the
-	                                 board (y 128), and a service lift in the south pylon
+	                                 of the gate) with team banners on their outer faces and beacons on
+	                                 top, the truss + X-braces between them, the arms reaching over the
+	                                 facade, crew landings + the service catwalk behind the board
+	                                 (y 128, yellow handrails), and a service lift in the south pylon
 	                2 Board Frame    the team-coloured housing (104 x 36) over the back rows of the east
 	                                 upper deck, crown, wings, face plate, lettering on the back, a
 	                                 service hatch and the operator's booth (VIDEO BOARD CAM seat)
 	                3 Screens        title / score / attendance screens, live record, season, game day
-	                                 and titles panels, play clock, down & distance, LED power racks
+	                                 and titles panels, play clock, down & distance, a bezel round the
+	                                 score, LED power racks and the case of spare LED tiles
 	  lights      four lattice flood-light towers (platform at y 140, banks up to ~165) at
 	              Layout.LightTowerPositions, ONE per step, every bank aimed at the field centre; a lift
 	              rides up to each tower's top platform (TOWER CAM seat). Lights reach 60 studs at most,
 	              so each tower also adds invisible field-level fixtures (FieldLight) that light its
-	              quarter of the turf
+	              quarter of the turf. Plinths under the legs, a crew ladder (rungs drawn on one carrier)
+	              with two rest landings, a beacon halfway up and a team pennant on the platform
 	  jumbotron   the WEST end-zone video board (its screen faces +X)
-	                1 Support Tower  two concrete towers (x -320..-308) flanking the board like goalposts,
-	                                 joined by a bridge (the Gate B plaza stays open between them), the
-	                                 walk-in Video Control Room at the foot of the south tower, the
-	                                 screen deck behind the board (y 128) + a lift in the north tower
+	                1 Support Tower  two concrete towers (x -320..-308, floor bands, a stair window and
+	                                 a beacon each) flanking the board like goalposts, joined by a
+	                                 bridge (the Gate B plaza stays open between them), the walk-in
+	                                 Video Control Room at the foot of the south tower, the screen deck
+	                                 behind the board (y 128, yellow handrails) + a lift in the north tower
 	                2 Screen Frame   housing, crown, wings, face plate, lettering, JUMBOTRON CAM seat
-	                3 Video Screen & Speakers  the big screen (JumbotronText), a live score ribbon,
-	                                 record / season / game day / titles panels, speaker stacks, the amp
-	                                 rack and the control room's gear (live monitors, switcher, SKYCAM
-	                                 seat, replay server, crew fridge)
+	                3 Video Screen & Speakers  the big screen (JumbotronText) in a bezel, a live score
+	                                 ribbon, record / season / game day / titles panels, speaker stacks,
+	                                 the amp rack, the satellite uplink dish and the control room's gear
+	                                 (live monitors, switcher, SKYCAM seat, replay server, crew fridge +
+	                                 coffee machine, countdown clock, the show's rundown board)
 	  canopy      a ring roof over the upper deck (offsets 70..167, deck y 116..117), open over the
 	              field and notched at both ends where the video boards stand
 	                1 Roof Supports  20 masts outside the facade (sides at +-30 / 90 / 150, ends at +-82,
 	                                 corners outside the corner ramps) carrying cantilever girders on
-	                                 top of the roof line, tie rods, the inner + outer ring beams
+	                                 top of the roof line (each with a rib under the deck), tie rods,
+	                                 the inner + outer ring beams
 	                2 Sideline Roofs glass (inner) + metal (outer) decks over the home and visitor sides,
-	                                 lettered fascias, a rain downpipe
-	                3 End Roofs      the end and corner decks + fascias, the bands along the notches
-	                4 Roof Lights    light bars (FloodPanel / FloodLight) under the inner edge and the
+	                                 purlins under them, lettered fascias, PA speaker clusters, a rain
+	                                 downpipe
+	                3 End Roofs      the end and corner decks + purlins + fascias, the bands along the
+	                                 notches
+	                4 Roof Lights    light bars (FloodPanel / FloodLight) under the inner edge, the
 	                                 lighting catwalk (two halves), each with a Roof Tour lift from the
-	                                 ground and a ROOF CAM seat
+	                                 ground and a ROOF CAM seat, and the SkyCam over the field on four
+	                                 cables from the corner roofs
 
 	Runtime contracts (PlotManager finds these by name; do not rename them):
 	  scoreboard      TextLabels "ScoreboardTitle", "ScoreboardScore", "ScoreboardAttendance" (step 3)
@@ -219,6 +228,32 @@ local function guard(ctx, x0, x1, y, z0, z1)
 	return span(ctx, "SafetyGuard", x0, x1, y, y + 3.4, z0, z1, STEEL, Enum.Material.Metal, GUARD)
 end
 
+-- A safety-yellow handrail on top of a guard (same footprint, widened a little).
+local function topRail(ctx, x0, x1, y, z0, z1)
+	x0, x1 = math.min(x0, x1), math.max(x0, x1)
+	z0, z1 = math.min(z0, z1), math.max(z0, z1)
+	local w = 0.08
+	if x1 - x0 < z1 - z0 then
+		x0, x1 = x0 - w, x1 + w
+	else
+		z0, z1 = z0 - w, z1 + w
+	end
+	return span(ctx, "TopRail", x0, x1, y + 3.4, y + 3.65, z0, z1, SAFETY_YELLOW, Enum.Material.Metal)
+end
+
+-- A red aviation beacon (Neon) of diameter d centred at (x, y, z).
+local function beacon(ctx, name, x, y, z, d)
+	return BuildUtil.Ball(ctx, {
+		Name = name,
+		Position = Vector3.new(x, y, z),
+		Diameter = d,
+		Color = BEACON_RED,
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+		CastShadow = false,
+	})
+end
+
 ---------------------------------------------------------------------------------------------
 -- Video boards (shared layout)
 --
@@ -257,6 +292,19 @@ local function faceScreen(ctx, s, name, u0, u1, y0, y1, text, opts)
 	local size = Vector3.new(0.3, y1 - y0, math.abs(zb - za))
 	local position = Vector3.new(s * (BOARD.faceX - 0.35), (y0 + y1) / 2, (za + zb) / 2)
 	return screen(ctx, name, size, position, faceNormal(s), text, opts)
+end
+
+-- A team-trim bezel round the main screen (u0..u1, y0..y1) on the face of board s: four bars just
+-- in front of the screens, overlapping the screen's edge by 0.2 and the gap round it by 0.4.
+local function screenFrame(ctx, s, u0, u1, y0, y1, color)
+	local x0, x1 = s * (BOARD.faceX - 0.5), s * (BOARD.faceX - 0.72)
+	local function z(u)
+		return BOARD.zc + s * u
+	end
+	span(ctx, "ScreenBezel", x0, x1, y1 - 0.2, y1 + 0.4, z(u0 - 0.4), z(u1 + 0.4), color, nil, GLOW)
+	span(ctx, "ScreenBezel", x0, x1, y0 - 0.4, y0 + 0.2, z(u0 - 0.4), z(u1 + 0.4), color, nil, GLOW)
+	span(ctx, "ScreenBezel", x0, x1, y0 + 0.2, y1 - 0.2, z(u0 - 0.4), z(u0 + 0.2), color, nil, GLOW)
+	span(ctx, "ScreenBezel", x0, x1, y0 + 0.2, y1 - 0.2, z(u1 - 0.2), z(u1 + 0.4), color, nil, GLOW)
 end
 
 -- Step "frame" of either board: housing, crown, skirt, wings, the dark face plate and big
@@ -336,6 +384,7 @@ function M.scoreboard(ctx)
 		)
 		guard(support, walkX, backX - 0.1, deckY, zc < 30 and zc + 4.65 or zc - 4.95, zc < 30 and zc + 4.95 or zc - 4.65) -- catwalk side
 		guard(support, B.backX + 0.5, backX - 0.1, deckY, zc < 30 and zc - 4.95 or zc + 4.65, zc < 30 and zc - 4.65 or zc + 4.95) -- outer side
+		topRail(support, B.backX + 0.5, backX - 0.1, deckY, zc < 30 and zc - 4.95 or zc + 4.65, zc < 30 and zc - 4.65 or zc + 4.95)
 		guard(support, backX - 0.4, backX - 0.1, deckY, zc - 5 + col, zc + 5 - col)
 	end
 	-- arms from the pylons (and the truss in the middle) over the facade to the board's back
@@ -349,11 +398,32 @@ function M.scoreboard(ctx)
 	local braceX = frontX + col / 2
 	strut(support, "TrussBrace", Vector3.new(braceX, 22, south + 5), Vector3.new(braceX, 110, north - 5), 1.2, STEEL)
 	strut(support, "TrussBrace", Vector3.new(braceX, 22, north - 5), Vector3.new(braceX, 110, south + 5), 1.2, STEEL)
+	-- a team banner strapped across the outer (east) face of each pylon, greeting the fans who
+	-- walk in from the east road (beside Gate C, clear of the facade's team-name sign)
+	for _, zc in ipairs(B.supportZ) do
+		local banner =
+			span(support, "GateBanner", backX + 0.05, backX + 0.25, 36, 82, zc - 4.6, zc + 4.6, team.Primary, Enum.Material.Fabric, GLOW)
+		local text = zc > B.zc and "WELCOME TO GATE C" or ("GO " .. (name ~= "" and name or "TEAM") .. "!")
+		local _, label = BuildUtil.SurfaceText(banner, Enum.NormalId.Right, text, {
+			LabelName = "GateBannerText",
+			TextColor3 = readable(team.Primary, team.Trim),
+			PixelsPerStud = 6,
+		})
+		label.TextWrapped = true
+		label.Position = UDim2.new(0.08, 0, 0.06, 0)
+		label.Size = UDim2.new(0.84, 0, 0.84, 0)
+		span(support, "GateBannerHem", backX + 0.05, backX + 0.3, 36, 37.4, zc - 4.6, zc + 4.6, team.Secondary, nil, GLOW)
+	end
+	-- aviation beacons on both pylon caps (the highest points of the stadium)
+	for _, zc in ipairs(B.supportZ) do
+		beacon(support, "PylonBeacon", (frontX + backX) / 2, B.top + 1.85, zc, 0.9)
+	end
 
 	-- the service catwalk behind the board (between the landings), with its guards + hangers
 	span(support, "CatwalkFloor", B.backX + 0.2, walkX, deckY - 0.4, deckY, south + 4.95, north - 4.95, STEEL, Enum.Material.DiamondPlate)
 	guard(support, B.backX + 0.2, B.backX + 0.5, deckY, south - 5, north + 5) -- board side (the housing stands right in front)
 	guard(support, walkX - 0.3, walkX, deckY, south + 5, north - 5)
+	topRail(support, walkX - 0.3, walkX, deckY, south + 5, north - 5)
 	post(support, "CatwalkHanger", walkX - 0.15, B.zc, deckY + 3.4, B.armHigh[1], 0.35, STEEL, Enum.Material.Metal, NO_COLLIDE)
 	span(
 		support,
@@ -551,6 +621,17 @@ function M.scoreboard(ctx)
 		"These racks feed power to every screen on the video board. Together the screens are brighter than 10,000 light bulbs!",
 		{ Distance = 8 }
 	)
+	-- a bright bezel round the big score screen, so the score stands out from across the bowl
+	screenFrame(ctx, s, -30, 30, 125, 141, team.Trim)
+	-- the road case of spare LED tiles on the south landing (against its outer guard)
+	local case = span(ctx, "LedTileCase", 300, 302.4, deckY, deckY + 1.8, south - 4.6, south - 2.8, DESK_DARK, Enum.Material.Metal)
+	span(ctx, "LedTileCaseLid", 299.9, 302.5, deckY + 1.8, deckY + 2.05, south - 4.7, south - 2.7, SAFETY_YELLOW, Enum.Material.Metal)
+	BuildUtil.Look(
+		case,
+		"Spare LED Tiles",
+		"When a pixel on the video board breaks, the crew pulls a new LED tile out of this case and clicks it in. Every tile has 1,024 tiny lights!",
+		{ Distance = 8 }
+	)
 end
 
 ---------------------------------------------------------------------------------------------
@@ -571,6 +652,30 @@ local TOWER = {
 local function legOffset(y)
 	local t = (y - TOWER.footY) / (TOWER.platformY - TOWER.footY)
 	return TOWER.baseHalf + (TOWER.topHalf - TOWER.baseHalf) * t
+end
+
+-- Ladder rungs drawn on both big faces of an invisible carrier part (dozens of rungs for the price
+-- of one part): steel bars `thickness` thick every `spacing` studs up the carrier.
+local function ladderRungs(part, spacing, thickness)
+	local height = part.Size.Y
+	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
+		local gui = Instance.new("SurfaceGui")
+		gui.Name = "LadderRungs"
+		gui.Face = face
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 10
+		gui.LightInfluence = 1
+		gui.Parent = part
+		for y = spacing / 2, height - thickness, spacing do
+			local rung = Instance.new("Frame")
+			rung.Name = "Rung"
+			rung.BorderSizePixel = 0
+			rung.BackgroundColor3 = STEEL
+			rung.Position = UDim2.new(0, 0, y / height, 0)
+			rung.Size = UDim2.new(1, 0, thickness / height, 0)
+			rung.Parent = gui
+		end
+	end
 end
 
 -- A grid of FloodPanels on a dark back plate. `cframe` faces the target (Front face = -Z).
@@ -891,6 +996,88 @@ local function lightTower(ctx, number, base, target)
 		{ Distance = 8 }
 	)
 
+	-- concrete plinths under the four legs
+	for _, dx in ipairs({ -1, 1 }) do
+		for _, dz in ipairs({ -1, 1 }) do
+			BuildUtil.Block(
+				tower,
+				"LegPlinth",
+				Vector3.new(2.8, 1.2, 2.8),
+				Vector3.new(bx + dx * TOWER.baseHalf, 0, bz + dz * TOWER.baseHalf),
+				CONCRETE,
+				Enum.Material.Concrete,
+				nil,
+				footY
+			)
+		end
+	end
+	-- the crew's ladder up the middle of the lattice (beside the lift), with two rest landings
+	local ladderX, ladderZ = bx - sx * 1.2, bz - sz * 1.9
+	local ladderHeight = topY - 0.5 - footY
+	for _, side in ipairs({ -1, 1 }) do
+		BuildUtil.Block(
+			tower,
+			"LadderRail",
+			Vector3.new(0.22, ladderHeight, 0.22),
+			Vector3.new(ladderX + side * 0.6, 0, ladderZ),
+			STEEL,
+			Enum.Material.Metal,
+			NO_COLLIDE,
+			footY
+		)
+	end
+	local rungs = BuildUtil.Block(
+		tower,
+		"LadderRungs",
+		Vector3.new(1.2, ladderHeight, 0.05),
+		Vector3.new(ladderX, 0, ladderZ),
+		STEEL,
+		Enum.Material.Metal,
+		{ Transparency = 1, CanCollide = false, CastShadow = false },
+		footY
+	)
+	rungs.CanQuery = false
+	rungs.CanTouch = false
+	ladderRungs(rungs, 1.4, 0.22)
+	for _, y in ipairs({ TOWER.rings[2] + 1, TOWER.rings[3] + 1 }) do
+		BuildUtil.Block(
+			tower,
+			"RestLanding",
+			Vector3.new(2.6, 0.3, 2.4),
+			Vector3.new(ladderX, 0, bz - sz * 0.6),
+			STEEL,
+			Enum.Material.DiamondPlate,
+			nil,
+			y - 0.3
+		)
+	end
+	-- a red beacon halfway up the outer leg
+	local o2 = legOffset(TOWER.rings[2])
+	beacon(tower, "TowerBeacon", bx + sx * (o2 + 0.7), TOWER.rings[2] + 0.6, bz + sz * (o2 + 0.7), 0.9)
+	-- the team pennant flying from the platform's outer corner
+	local poleX, poleZ = bx + sx * 8.2, bz + sz * 8.2
+	post(tower, "PennantPole", poleX, poleZ, topY, topY + 12, 0.3, STEEL_PALE, Enum.Material.Metal, NO_COLLIDE)
+	local pennant = span(
+		tower,
+		"Pennant",
+		poleX + sx * 0.15,
+		poleX + sx * 4.4,
+		topY + 8.9,
+		topY + 11.6,
+		poleZ - 0.06,
+		poleZ + 0.06,
+		team.Primary,
+		Enum.Material.Fabric,
+		GLOW
+	)
+	for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
+		BuildUtil.SurfaceText(pennant, face, teamText(ctx, "GO TEAM!"), {
+			LabelName = "PennantText",
+			TextColor3 = readable(team.Primary, team.Trim),
+			PixelsPerStud = 20,
+		})
+	end
+
 	-- its quarter of the field lights up at night
 	fieldLights(tower, ctx.config.Layout, sx, sz)
 end
@@ -954,7 +1141,18 @@ function M.jumbotron(ctx)
 		-- a tall team-coloured stripe up the outer (west) face
 		local zm = (zs[1] + zs[2]) / 2
 		span(ctx, "TowerStripe", x0 - 0.3, x0, 16, 138, zm - 1.6, zm + 1.6, team.Secondary, nil, NO_COLLIDE)
+		-- darker concrete floor bands break the tall walls into storeys
+		for _, y in ipairs({ 42, 72, 102 }) do
+			span(ctx, "TowerFloorBand", x0 - 0.4, x1 + 0.4, y, y + 0.8, zs[1] - 0.4, zs[2] + 0.4, C.ConcreteDark, concreteMat, NO_COLLIDE)
+		end
+		-- a red aviation beacon on top of each tower
+		beacon(ctx, "TowerBeacon", (x0 + x1) / 2, B.top + 1.85, zm, 0.9)
 	end
+	-- a tall stair window up the south tower's face toward Gate B, above the control room
+	span(ctx, "StairWindow", -315.2, -312.8, 16, 136, south[2], south[2] + 0.25, FACE_DARK, Enum.Material.Glass, {
+		Reflectance = 0.15,
+		CanCollide = false,
+	})
 	-- the beam under the screen deck + the arms over the facade to the board's back
 	span(ctx, "LowerBeam", x1 - 2.4, x1, 110, B.armLow[2], south[2], north[1], STEEL, Enum.Material.Metal)
 	for _, z in ipairs({ B.supportZ[1], B.zc, B.supportZ[2] }) do
@@ -968,6 +1166,9 @@ function M.jumbotron(ctx)
 	guard(ctx, x1, x1 + 0.3, deckY, south[2], north[1])
 	guard(ctx, x1 + 0.3, -(B.backX + 0.5), deckY, south[1], south[1] + 0.3)
 	guard(ctx, x1 + 0.3, -(B.backX + 0.5), deckY, north[2] - 0.3, north[2])
+	topRail(ctx, x1, x1 + 0.3, deckY, south[2], north[1])
+	topRail(ctx, x1 + 0.3, -(B.backX + 0.5), deckY, south[1], south[1] + 0.3)
+	topRail(ctx, x1 + 0.3, -(B.backX + 0.5), deckY, north[2] - 0.3, north[2])
 
 	-- the room: floor, ceiling, lamp, a sign over the door and the door itself
 	span(ctx, "ControlRoomFloor", rx0, rx1, 0, 0.2, rz0, rz1, FLOOR_DARK)
@@ -1221,6 +1422,61 @@ function M.jumbotron(ctx)
 	local fridge = span(ctx, "CrewFridge", rx0 + 0.2, rx0 + 1.8, 0.2, 3.4, midZ + 2, midZ + 3.6, FRIDGE_WHITE)
 	span(ctx, "FridgeHandle", rx0 + 1.8, rx0 + 1.95, 1.6, 3, midZ + 3.2, midZ + 3.4, STEEL, Enum.Material.Metal, NO_COLLIDE)
 	BuildUtil.Use(ctx, fridge, "soda", { Object = "Crew Fridge", Distance = 7 })
+	-- the crew's coffee machine (and a mug) on the fridge
+	span(ctx, "CoffeeMachine", rx0 + 0.4, rx0 + 1.3, 3.4, 4.5, midZ + 2.3, midZ + 3.2, DESK_DARK, Enum.Material.Metal, NO_COLLIDE)
+	post(ctx, "CoffeeMug", rx0 + 1.55, midZ + 3.3, 3.4, 3.75, 0.32, team.Primary, Enum.Material.SmoothPlastic, NO_COLLIDE)
+	-- a countdown clock over the room (the next game / the time left) and the show's rundown
+	local clock = span(ctx, "CountdownClock", -315.6, -313.2, 7.2, 8.4, rz0, rz0 + 0.15, SCREEN_BLACK, nil, NO_COLLIDE)
+	BuildUtil.LiveText(clock, Enum.NormalId.Back, "gameday", {
+		LabelName = "CountdownClockText",
+		Text = "NEXT GAME SOON",
+		TextColor3 = LED_RED,
+		BackgroundColor3 = SCREEN_BLACK,
+		BackgroundTransparency = 0,
+		LightInfluence = 0,
+		Font = Enum.Font.Arcade,
+		PixelsPerStud = 40,
+	})
+	local rundown = span(ctx, "RundownBoard", rx0, rx0 + 0.15, 3.6, 7.2, rz0 + 2.8, midZ + 1.4, DESK_DARK, nil, NO_COLLIDE)
+	local _, rundownLabel = BuildUtil.SurfaceText(
+		rundown,
+		Enum.NormalId.Right,
+		"TODAY'S SHOW\n1. KICKOFF CAM\n2. CROWD CAM\n3. DANCE CAM\n4. INSTANT REPLAY\n5. TOUCHDOWN!!",
+		{ LabelName = "RundownText", TextColor3 = FRIDGE_WHITE, Font = Enum.Font.GothamBold, PixelsPerStud = 30 }
+	)
+	rundownLabel.TextXAlignment = Enum.TextXAlignment.Left
+	rundownLabel.Position = UDim2.new(0.06, 0, 0.05, 0)
+	rundownLabel.Size = UDim2.new(0.88, 0, 0.9, 0)
+	BuildUtil.Look(
+		rundown,
+		"Today's Show",
+		"The director plans every game like a TV show: kickoff cam, crowd cam, dance cam, replays and the giant TOUCHDOWN graphics!",
+		{ At = Vector3.new(0.12, 0, 0), Distance = 7 }
+	)
+
+	-- a bright bezel round the big screen
+	screenFrame(ctx, s, -30.8, 30.8, 121, 146.8, team.Trim)
+
+	-- the satellite uplink on the screen deck, its dish tilted up toward the southern sky
+	local dishFoot = Vector3.new(-300, deckY, south[1] + 8)
+	post(ctx, "DishPost", dishFoot.X, dishFoot.Z, deckY, deckY + 3.4, 0.5, STEEL, Enum.Material.Metal)
+	local aim = Vector3.new(0, math.sin(math.rad(45)), -math.cos(math.rad(45)))
+	local dishCentre = dishFoot + Vector3.new(0, 4.2, 0)
+	local dish = BuildUtil.Part(ctx, {
+		Name = "SatelliteDish",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.35, 5, 5),
+		CFrame = CFrame.fromMatrix(dishCentre, aim, Vector3.new(0, aim.Z, -aim.Y) * -1),
+		Color = FRIDGE_WHITE,
+		Material = Enum.Material.SmoothPlastic,
+	})
+	strut(ctx, "DishFeed", dishCentre + aim * 0.2, dishCentre + aim * 2.4, 0.22, STEEL)
+	BuildUtil.Look(
+		dish,
+		"Satellite Uplink",
+		"This dish beams your games up to a satellite in space, so fans all over the world can watch them on TV!",
+		{ Distance = 9 }
+	)
 end
 
 ---------------------------------------------------------------------------------------------
@@ -1246,6 +1502,8 @@ local ROOF = {
 	walkIn = 72, -- the lighting catwalk (offsets 72..76.8, 4.2 clear between its guards; floor top y 110)
 	walkOut = 76.8,
 	walkY = 110,
+	ribBottom = 114.9, -- under-deck ribs (below every girder) and purlins hang down to here
+	purlins = { 92, 140 }, -- purlin offsets: one under the glass, one under the metal deck
 }
 
 -- girder / mast positions (along each segment) and the masts' offset. Exterior.lua lays out the
@@ -1340,6 +1598,25 @@ local function roofEdge(ctx, L, piece, name, o, o0, o1, y0, y1, color, material,
 	return segBlock(ctx, piece.seg, name, xa, xb, y0, y1, o0, o1, color, material, extra)
 end
 
+-- The purlins under a roof piece's deck: steel beams along the piece that cross the girders' ribs.
+local function purlins(ctx, L, piece)
+	for _, o in ipairs(ROOF.purlins) do
+		roofEdge(
+			ctx,
+			L,
+			piece,
+			"RoofPurlin",
+			o,
+			o - 0.45,
+			o + 0.45,
+			ROOF.ribBottom + 0.1,
+			ROOF.deckBottom - 0.1,
+			STEEL_PALE,
+			Enum.Material.Metal
+		)
+	end
+end
+
 -- The pieces of the ring: the two sides and four corners run corner line to corner line, the
 -- ends are split by the notch in front of the video boards. half = which catwalk half it is on.
 local function roofPieces(L)
@@ -1409,6 +1686,8 @@ local function mastAndGirder(ctx, seg, x, C, mastO)
 	})
 	local tieO = 108
 	strut(ctx, "RoofTie", Vector3.new(p.X, ROOF.mastTop - 1.5, p.Z), at(seg, x, girderTopAt(tieO, root) - 0.3, tieO).Position, 0.45, STEEL)
+	-- the girder's rib under the roof deck, from ring beam to ring beam (fans see it from below)
+	segBlock(ctx, seg, "RoofRib", x - 0.5, x + 0.5, ROOF.ribBottom, ROOF.deckBottom, ROOF.inner + 1.6, 165, STEEL_PALE, Enum.Material.Metal)
 	return mast
 end
 
@@ -1470,6 +1749,68 @@ local function lightBar(ctx, seg, x, length)
 		Color = WARM_WHITE,
 	})
 	return panel
+end
+
+-- A PA speaker cluster hanging under the inner ring beam at along-position x, tilted 15 degrees
+-- down toward the seats (under the fascia's lettering, clear of the catwalk's guard).
+local function speakerCluster(ctx, seg, x)
+	BuildUtil.Part(ctx, {
+		Name = "PASpeaker",
+		Size = Vector3.new(3.6, 5, 2),
+		CFrame = at(seg, x, 109.6, 70.4) * TURN * CFrame.Angles(math.rad(-15), 0, 0),
+		Color = SPEAKER_GREY,
+		Material = Enum.Material.Fabric,
+		CanCollide = false,
+	})
+	local top = at(seg, x, 0, 70.8).Position
+	post(ctx, "PASpeakerHanger", top.X, top.Z, 111.8, 114.7, 0.3, STEEL, Enum.Material.Metal, NO_COLLIDE)
+end
+
+--[[
+	The SkyCam (step 4): a camera pod over the field on four cables, each run from a winch under
+	the inner ring beam of a corner roof (beside its light bar). Nothing of it collides; it hangs
+	well above the field goal kicks.
+]]
+local SKYCAM = { pod = Vector3.new(-24, 46, 26), winchAlong = 16 }
+
+local function skyCam(ctx, cornerPieces)
+	local team = ctx.colors
+	local podTop = SKYCAM.pod + Vector3.new(0, 1.75, 0)
+	for _, piece in ipairs(cornerPieces) do
+		local a = SKYCAM.winchAlong
+		segBlock(ctx, piece.seg, "SkyCamWinch", a - 0.6, a + 0.6, 112.2, 114.7, 70.2, 71.4, STEEL, Enum.Material.Metal, NO_COLLIDE)
+		local from = at(piece.seg, a, 112.2, 70.8).Position
+		strut(ctx, "SkyCamCable", from, podTop, 0.14, INK, Enum.Material.Metal, GLOW)
+	end
+	BuildUtil.Box(ctx, "SkyCamFrame", Vector3.new(2.4, 0.5, 2.4), podTop - Vector3.new(0, 0.25, 0), team.Primary, nil, GLOW)
+	local body = BuildUtil.Box(
+		ctx,
+		"SkyCamBody",
+		Vector3.new(1.8, 1.6, 2.2),
+		SKYCAM.pod + Vector3.new(0, 0.2, 0),
+		DESK_DARK,
+		Enum.Material.Metal,
+		NO_COLLIDE
+	)
+	-- the lens looks down at the 50-yard line
+	local lensBase = SKYCAM.pod + Vector3.new(0, -0.4, 0)
+	local aim = (Vector3.new(0, 0, 30) - lensBase).Unit
+	BuildUtil.Part(ctx, {
+		Name = "SkyCamLens",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(1, 0.9, 0.9),
+		CFrame = CFrame.lookAt(lensBase + aim * 0.5, lensBase + aim * 2) * CFrame.Angles(0, math.rad(90), 0),
+		Color = SCREEN_BLACK,
+		Material = Enum.Material.Glass,
+		CanCollide = false,
+		CastShadow = false,
+	})
+	BuildUtil.Look(
+		body,
+		"SkyCam",
+		"This TV camera flies over the field on four cables from the roof, so fans at home watch the game from right above the players. Jump high to see it!",
+		{ Distance = 12 }
+	)
 end
 
 -- The Roof Tour lift at a mast (step 4): a glass cabin at its foot, a glass shaft up the mast, a
@@ -1586,8 +1927,13 @@ function M.canopy(ctx)
 			glassExtra
 		)
 		roofBand(sideRoof, L, piece, "RoofPanel", ROOF.seam, ROOF.outer, ROOF.deckBottom, ROOF.deckTop, ROOF_WHITE, Enum.Material.Metal)
+		purlins(sideRoof, L, piece)
 		local inner = roofEdge(sideRoof, L, piece, "InnerFascia", ROOF.inner, ROOF.inner - 0.6, ROOF.inner, 112.5, 117.6, team.Primary)
 		local outer = roofEdge(sideRoof, L, piece, "OuterFascia", 167.6, ROOF.outer, 167.6, 112.5, 119.5, team.Primary)
+		-- PA speaker clusters hang under the inner edge between the light bars, aimed at the seats
+		for _, x in ipairs({ -90, -30, 30, 90 }) do
+			speakerCluster(sideRoof, piece.seg, x)
+		end
 		roofEdge(
 			sideRoof,
 			L,
@@ -1648,6 +1994,7 @@ function M.canopy(ctx)
 			glassExtra
 		)
 		roofBand(endRoof, L, piece, "RoofPanel", ROOF.seam, ROOF.outer, ROOF.deckBottom, ROOF.deckTop, ROOF_WHITE, Enum.Material.Metal)
+		purlins(endRoof, L, piece)
 		local inner = roofEdge(endRoof, L, piece, "InnerFascia", ROOF.inner, ROOF.inner - 0.6, ROOF.inner, 112.5, 117.6, team.Primary)
 		labels(inner, TOWARD_FIELD, { { text = endWords[index], from = 0.06, to = 0.94, top = 0.12, bottom = 0.88 } }, textColor, 8)
 		roofEdge(endRoof, L, piece, "OuterFascia", 167.6, ROOF.outer, 167.6, 112.5, 119.5, team.Primary)
@@ -1685,6 +2032,7 @@ function M.canopy(ctx)
 			glassExtra
 		)
 		roofBand(endRoof, L, piece, "RoofPanel", ROOF.seam, ROOF.outer, ROOF.deckBottom, ROOF.deckTop, ROOF_WHITE, Enum.Material.Metal)
+		purlins(endRoof, L, piece)
 		roofEdge(endRoof, L, piece, "InnerFascia", ROOF.inner, ROOF.inner - 0.6, ROOF.inner, 112.5, 117.6, team.Primary)
 		roofEdge(endRoof, L, piece, "OuterFascia", 167.6, ROOF.outer, 167.6, 112.5, 119.5, team.Primary)
 		roofEdge(
@@ -1742,8 +2090,10 @@ function M.canopy(ctx)
 		("%d light bars hang under the edge of the roof. At night they switch on with the light towers and the whole field glows!"):format(
 			barCount
 		),
-		{ Distance = 9 }
+		-- (the catwalk's see-through guard stands between the bar and anyone on the catwalk)
+		{ Distance = 9, LineOfSight = false }
 	)
+	skyCam(lightsCtx, pieces.corners)
 
 	-- the lighting catwalk: two halves (front + back), split by the video boards' notches
 	local walk = BuildUtil.Child(ctx, "LightingCatwalk")
