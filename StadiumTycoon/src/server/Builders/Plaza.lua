@@ -7,7 +7,8 @@
 	                                  security camera (look) watching the queue
 	               2 Window & Awning  ticket window (look: next game day) + speaker grille, counter,
 	                                  striped awning and chrome queue posts with team-coloured belts,
-	                                  a bench for the people waiting and two flower pots
+	                                  a bench for the people waiting (against the north wall) and two
+	                                  flower pots
 	               3 Signs            BOX OFFICE panel, TICKETS roof sign, a live game-day countdown
 	                                  screen for the street, OPEN + NOW SERVING signs, giant ADMIT ONE
 	                                  ticket, two self-serve ticket kiosks (look: the prices)
@@ -37,7 +38,8 @@
 	                                  racks, a giant foam finger (grab one), display table, checkout +
 	                                  till, best-selling jersey wall, fitting bench + mirror, a shelf of
 	                                  mini helmets, a barrel of souvenir footballs (look), a NEW SEASON
-	                                  GEAR banner, the side case's jerseys, helmet and ball, roof football
+	                                  GEAR banner on two wires, the side case's jerseys, helmet and ball
+	                                  round a GAME-WORN GEAR card, roof football
 	  trophy       1 Plinth           stepped stone plinth, pedestal, corner flags and a viewing bench
 	                                  (TV camera seat on the trophy), two park benches, four planters
 	               2 Trophy Base      black marble base with gold bands + team name, gold foot
@@ -661,9 +663,10 @@ function Plaza.ticketbooth(ctx)
 			)
 		end
 	end
-	-- a bench for the people waiting (on the stadium side, under the giant ticket) and two flower
-	-- pots at the far end of the queue lane
-	parkBench(ctx, "WaitingBench", CFrame.new(bodyX, 0, northZ + 2) * CFrame.Angles(0, math.pi, 0), 4.6, 0, C.Wood)
+	-- a bench for the people waiting (on the stadium side, under the giant ticket; its back against
+	-- the wall, so there is no narrow slot behind it) and two flower pots at the far end of the
+	-- queue lane
+	parkBench(ctx, "WaitingBench", CFrame.new(bodyX, 0, northZ + 0.95) * CFrame.Angles(0, math.pi, 0), 4.6, 0, C.Wood)
 	flowerPot(ctx, "FlowerPot", frontX + 0.9, northZ + 1.8, 0, 1.6, 1.4, TERRACOTTA, FLOWER_PINK)
 	flowerPot(ctx, "FlowerPot", queueX + 1.2, northZ + 1.8, 0, 1.6, 1.4, TERRACOTTA, FLOWER_RED)
 
@@ -1387,18 +1390,21 @@ function Plaza.concessions(ctx)
 
 	-- the day's special on a chalkboard A-frame by the patio, facing the walkway
 	local tilt = math.rad(13)
-	local boardX, boardZ = STAND.MaxX + 1.6, cz - 5.6 -- (beside the trash can, out of the way to the hatch)
+	-- (beside the trash can with room to walk between them, out of the way to the hatch; the
+	-- boards' lower edges stand on the plaza)
+	local boardX, boardZ = STAND.MaxX + 2.8, cz - 5.6
+	local boardY = math.cos(tilt) * 1.5 + math.sin(tilt) * 0.075 - 0.02
 	local special = BuildUtil.Part(ctx, {
 		Name = "SpecialsBoard",
 		Size = Vector3.new(0.15, 3, 2.2),
-		CFrame = CFrame.new(boardX + 0.42, 1.55, boardZ) * CFrame.Angles(0, 0, tilt),
+		CFrame = CFrame.new(boardX + 0.42, boardY, boardZ) * CFrame.Angles(0, 0, tilt),
 		Color = CHALKBOARD,
 		Material = Enum.Material.Slate,
 	})
 	BuildUtil.Part(ctx, {
 		Name = "SpecialsBoardBack",
 		Size = Vector3.new(0.15, 3, 2.2),
-		CFrame = CFrame.new(boardX - 0.42, 1.55, boardZ) * CFrame.Angles(0, 0, -tilt),
+		CFrame = CFrame.new(boardX - 0.42, boardY, boardZ) * CFrame.Angles(0, 0, -tilt),
 		Color = C.Wood,
 		Material = Enum.Material.WoodPlanks,
 	})
@@ -1948,8 +1954,11 @@ function Plaza.parking(ctx)
 			team.Secondary,
 			Enum.Material.Metal
 		)
-		BuildUtil.Box(ctx, "BikeSeat", Vector3.new(0.7, 0.9, 0.3), Vector3.new(rackX - 0.6, 2.1, bikeZ), INK)
-		BuildUtil.Box(ctx, "BikeHandlebar", Vector3.new(0.18, 0.9, 1.3), Vector3.new(rackX + 0.9, 2.1, bikeZ), INK)
+		-- a saddle on its post, and the handlebar across the stem (resting against the hoop)
+		BuildUtil.Box(ctx, "BikeSeatPost", Vector3.new(0.15, 0.7, 0.15), Vector3.new(rackX - 0.6, 2, bikeZ), INK, Enum.Material.Metal)
+		BuildUtil.Box(ctx, "BikeSeat", Vector3.new(0.8, 0.18, 0.4), Vector3.new(rackX - 0.6, 2.44, bikeZ), INK)
+		BuildUtil.Box(ctx, "BikeStem", Vector3.new(0.15, 0.75, 0.15), Vector3.new(rackX + 0.9, 2.02, bikeZ), INK, Enum.Material.Metal)
+		BuildUtil.Box(ctx, "BikeHandlebar", Vector3.new(0.15, 0.15, 1.2), Vector3.new(rackX + 0.9, 2.47, bikeZ), INK)
 		BuildUtil.Look(
 			bikeFrame,
 			"Bike Rack",
@@ -2982,9 +2991,32 @@ function Plaza.teamstore(ctx)
 		NO_COLLIDE
 	)
 	sign(hanging, { Enum.NormalId.Left }, "NEW SEASON GEAR", team.Secondary, team, { InsetY = 0.14 })
+	-- (on two thin wires from the ceiling, clear of the light panel)
+	for _, dz in ipairs({ -3.1, 3.1 }) do
+		BuildUtil.Box(
+			interior,
+			"BannerWire",
+			Vector3.new(0.06, wallH - 11, 0.06),
+			Vector3.new(tableX, (11 + wallH) / 2, cz + dz),
+			DARK_METAL,
+			Enum.Material.Metal,
+			NO_COLLIDE
+		)
+	end
 
 	-- the side display case (built with the glass front): two jerseys, a helmet and a football
+	-- round a GAME-WORN GEAR card
 	local caseZ = southZ - 0.7 -- (the glass front's inner face is at southZ - 1.375)
+	local card = BuildUtil.Box(
+		ctx,
+		"CaseCard",
+		Vector3.new(3.4, 0.9, 0.05),
+		Vector3.new(sideMidX, 6.35, southZ - 0.045),
+		WHITE,
+		Enum.Material.SmoothPlastic,
+		NO_COLLIDE
+	)
+	sign(card, { Enum.NormalId.Front }, "GAME-WORN GEAR", WHITE, team, { TextColor3 = INK, InsetX = 0.08, InsetY = 0.16 })
 	for index, spec in ipairs({ { -6, team.Primary, "12" }, { 6, altJersey, "88" } }) do
 		local shirt = BuildUtil.Box(
 			ctx,
@@ -3003,10 +3035,11 @@ function Plaza.teamstore(ctx)
 		Color = team.Primary,
 		Reflectance = 0.1,
 	})
+	-- (turned a little, clear of both the wall and the glass)
 	cylinderAt(
 		ctx,
 		"CaseFootball",
-		CFrame.new(sideMidX + 1.6, 3.38, caseZ + 0.15) * CFrame.Angles(0, math.rad(25), 0),
+		CFrame.new(sideMidX + 1.6, 3.38, caseZ) * CFrame.Angles(0, math.rad(15), 0),
 		1.3,
 		0.75,
 		LEATHER,

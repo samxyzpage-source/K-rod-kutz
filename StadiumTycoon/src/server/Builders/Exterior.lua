@@ -23,8 +23,9 @@
 	              3 Elevators (a glass elevator per gate hall; a call panel with the level number
 	              beside every door)  4 Wayfinding Signs
 	  facade      1 Lower Facade (+ a dark granite plinth along the base (not behind the corner
-	              ramps), steel canopies with lamps over the service exits, boards of made-up sponsors
-	              between the masts, poster cases with the season and the next game beside every gate)
+	              ramps), steel canopies with lamps and SERVICE DOOR signs over the service exits,
+	              framed boards of made-up sponsors between the masts, poster cases with the season and
+	              the next game beside every gate)
 	              2 Glass Curtain Walls  3 Upper Facade & Fins
 	              4 Banners & Night Lights (+ two tall player / team banners on the glass beside
 	              every gate, team-colour LED ribbons up the gate towers)
@@ -613,7 +614,9 @@ end
 ---------------------------------------------------------------------------------------------
 
 -- The pylons' dark granite plinths (round the portal side, the front and the outer side, under the
--- ticket window) and a team-colour LED ribbon up each portal side.
+-- ticket window) and a team-colour LED ribbon up each portal side. (The plinth starts just in front
+-- of the pylon's back face, so the two never share that plane: it shows in the lobby and from the
+-- event level behind.)
 local function pylonTrim(ctx, seg, team)
 	for _, s in ipairs({ -1, 1 }) do
 		box(
@@ -624,7 +627,7 @@ local function pylonTrim(ctx, seg, team)
 			s * (PYLON_OUT + 0.3),
 			0,
 			2.4,
-			PYLON_IN,
+			PYLON_IN + 0.1,
 			PYLON_FRONT + 0.3,
 			PLINTH_STONE,
 			Enum.Material.Granite
@@ -661,7 +664,8 @@ local function clearBagSign(ctx, seg, t, ps, team)
 	local tilt, len, width = math.rad(14), 3.4, 2.4
 	local xc, oc = ps * (t.x0 + 2.1), t.o1 - 1.6
 	local d = math.sin(tilt) * len / 2 + 0.1
-	local yc = math.cos(tilt) * len / 2 + 0.1
+	-- (the boards' lower edges stand on the ground: the tent is off the gate paving)
+	local yc = math.cos(tilt) * len / 2 + math.sin(tilt) * 0.075 - 0.02
 	-- (the boards lean together: each top tips toward the other)
 	local front = BuildUtil.Part(ctx, {
 		Name = "ClearBagSign",
@@ -723,10 +727,11 @@ local function stadiumMap(ctx, seg, gate, L)
 	)
 end
 
--- A two-colour medallion set into the lobby floor between the portal and the escalators.
+-- A two-colour medallion set into the lobby floor between the portal and the escalators (the ring's
+-- top stays 0.02 under the core's, so the two never flicker).
 local function lobbyMedallion(ctx, seg, team)
 	local upright = CFrame.Angles(0, 0, math.pi / 2) -- (a cylinder's axis turned to point up)
-	cyl(ctx, "FloorMedallion", at(seg, 0, 0.225, 147.5) * upright, 0.05, 8, team.Secondary, Enum.Material.Marble, PAINT)
+	cyl(ctx, "FloorMedallion", at(seg, 0, 0.22, 147.5) * upright, 0.04, 8, team.Secondary, Enum.Material.Marble, PAINT)
 	cyl(ctx, "FloorMedallionCore", at(seg, 0, 0.23, 147.5) * upright, 0.06, 6.4, team.Primary, Enum.Material.Marble, PAINT)
 end
 
@@ -1285,8 +1290,8 @@ end
 	A bank of `lanes` escalators: the steps' walking surface runs from a (bottom) to b (top),
 	w0..w1 wide (see slope). Steps (diamond plate), the truss under them (from `trussFrom` along
 	the run, 0..1), glass balustrades on both sides and between lanes, black handrails.
-	skirts: { color, sides } - a team-colour band along the truss on its w0 side (-1) and / or its
-	w1 side (+1).
+	skirts: { color, sides, from } - a team-colour band along the truss on its w0 side (-1) and / or
+	its w1 side (+1), from `from` along the run (0..1; default: where the truss starts).
 ]]
 local function escalatorBank(ctx, seg, a, b, w0, w1, lanes, trussFrom, skirts)
 	local dx, dy, dz = b[1] - a[1], b[2] - a[2], b[3] - a[3]
@@ -1296,9 +1301,11 @@ local function escalatorBank(ctx, seg, a, b, w0, w1, lanes, trussFrom, skirts)
 	local t = trussFrom or 0
 	local start = { a[1] + dx * t, a[2] + dy * t, a[3] + dz * t }
 	local truss = slope(ctx, seg, "EscalatorTruss", start, b, w0, w1, TRUSS, CLADDING, Enum.Material.Metal, nil, TREAD)
+	local skirtFrom = skirts and skirts.from or t
+	local skirtStart = { a[1] + dx * skirtFrom, a[2] + dy * skirtFrom, a[3] + dz * skirtFrom }
 	for _, side in ipairs(skirts and skirts.sides or {}) do
 		local edge = side < 0 and w0 or w1
-		slope(ctx, seg, "EscalatorSkirt", start, b, edge, edge + side * 0.12, 1.3, skirts.color, nil, PAINT, TREAD + 0.6)
+		slope(ctx, seg, "EscalatorSkirt", skirtStart, b, edge, edge + side * 0.12, 1.3, skirts.color, nil, PAINT, TREAD + 0.6)
 	end
 	lightsAlongZ(
 		truss,
@@ -1381,7 +1388,18 @@ local function hallEscalators(ctx, seg)
 
 	-- F2: main concourse -> club ring (y 54) ---------------------------------------------------
 	local f2run = F2.bottom - F2.top
-	escalatorBank(esc, seg, { F2.x, F2.y0, F2.bottom }, { F2.x, F2.y1, F2.top }, -6, 6, 2, trussStart(24, f2run), skirts)
+	-- (its skirts start where they clear bridge A's glass rail beside the bank's foot)
+	escalatorBank(
+		esc,
+		seg,
+		{ F2.x, F2.y0, F2.bottom },
+		{ F2.x, F2.y1, F2.top },
+		-6,
+		6,
+		2,
+		trussStart(24, f2run),
+		{ color = skirts.color, sides = skirts.sides, from = 0.28 }
+	)
 	combPlate(esc, seg, -5.6, 5.6, F2.y0, F2.bottom + 0.1, F2.bottom + 1.4)
 	combPlate(esc, seg, -5.6, 5.6, F2.y1, F2.top - 1.4, F2.top - 0.1)
 	box(esc, seg, "LandingD", -6, 6, 53, 54, CLUB_EDGE, F2.top, slab, Enum.Material.Concrete)
@@ -1479,7 +1497,8 @@ local function cornerRamp(ctx, seg, s)
 		box(ramp, seg, "RampParapet", x(landingEnd), x(R.low), 15, 15 + h, R.outer[2] - 0.6, R.outer[2], wall, Enum.Material.Concrete)
 	BuildUtil.Light(lp, "PointLight", light)
 	-- a team stripe along R1's outer parapet (facing the corner plaza) and a plaque on the landing's
-	-- end parapet for the fans coming up R1
+	-- end parapet for the fans coming up R1 (centred on R1's lane, so it is in full view all the way
+	-- up: R2's parapet hides the inner lane's end from R1)
 	local team = ctx.colors
 	slope(
 		ramp,
@@ -1502,8 +1521,8 @@ local function cornerRamp(ctx, seg, s)
 		x(landingEnd),
 		15.6,
 		18.2,
-		R.inner[1] + 4,
-		R.outer[2] - 4,
+		R.outer[1] + 0.4,
+		R.outer[2] - 1,
 		team.Primary,
 		nil,
 		NO_COLLIDE
@@ -1656,8 +1675,11 @@ local function elevator(ctx, seg)
 			end
 		end
 		-- the call panel beside the door (on the riders' side, behind the prompts): the level number
-		-- over the call buttons (the bottom level only goes up, the top one only down)
+		-- over the call buttons (the bottom level only goes up, the top one only down). It is a box
+		-- from the face the door stands on (the shaft glass; at the top, the upper concourse's outer
+		-- wall the door stands 0.2 off) to just in front of the door, so it never floats.
 		local front = level.side > 0 and level.o[2] or level.o[1]
+		local behind = index == #levels and FRONT or (level.side > 0 and level.o[1] or level.o[2])
 		local panel = box(
 			lift,
 			seg,
@@ -1666,7 +1688,7 @@ local function elevator(ctx, seg)
 			x1 + 1,
 			level.y + 2.6,
 			level.y + 7.4,
-			front,
+			behind + level.side * 0.02,
 			front + level.side * 0.1,
 			DARK_STEEL,
 			Enum.Material.Metal,
@@ -1897,6 +1919,18 @@ local function sponsorBoard(ctx, seg, x, sponsor)
 	local text = contrast(color, WHITE) >= contrast(color, INK) and WHITE or INK
 	local name = write(board, OUTWARD, sponsor[1], text, { Top = 0.14, Height = 0.44 })
 	addLine(name, sponsor[2], 0.66, 0.18, Enum.Font.GothamBold)
+	-- a thin rule round the edge, like a billboard's frame (drawn on the same SurfaceGui)
+	local frame = Instance.new("Frame")
+	frame.Name = "BoardFrame"
+	frame.BackgroundTransparency = 1
+	frame.Position = UDim2.new(0.025, 0, 0.045, 0)
+	frame.Size = UDim2.new(0.95, 0, 0.91, 0)
+	frame.Parent = name.Parent
+	local stroke = Instance.new("UIStroke")
+	stroke.Name = "Rule"
+	stroke.Color = text
+	stroke.Thickness = 2
+	stroke.Parent = frame
 end
 
 -- A tall banner on the curtain glass beside a gate, between two fins (x0..x1), below the sight line
@@ -1983,8 +2017,9 @@ function M.facade(ctx)
 		for _, r in ipairs(facadeRuns(seg, F.out + 0.3, plinthCuts)) do
 			box(base, seg, "FacadePlinth", r[1], r[2], 0, 1.6 - k, F.out - 0.1, F.out + 0.3, PLINTH_STONE, Enum.Material.Granite)
 		end
-		-- sponsor boards between the masts (corners: on the side away from the ramp)
-		local boards = seg.kind == "side" and { -120, 120 } or seg.kind == "end" and { -100, 100 } or { -44 * rampSide(seg) }
+		-- sponsor boards between the masts (sides: also on the long bare stretch between the outer
+		-- masts and the corner piers; corners: on the side away from the ramp)
+		local boards = seg.kind == "side" and { -175, -120, 120, 175 } or seg.kind == "end" and { -100, 100 } or { -44 * rampSide(seg) }
 		for _, x in ipairs(boards) do
 			sponsorIndex += 1
 			sponsorBoard(base, seg, x, SPONSORS[(sponsorIndex - 1) % #SPONSORS + 1])
@@ -2006,6 +2041,8 @@ function M.facade(ctx)
 			local s = SERVICE
 			local lintel = box(base, seg, "ServiceLintel", s.x0, s.x1, s.top, F.baseTop, F.baseIn, F.out, STONE, Enum.Material.Limestone)
 			write(lintel, INWARD, "EXIT", SCANNER_GREEN, { Glow = true, PPS = SIGN_PPS, Name = "ExitSign" })
+			-- (and the plaza side says what the door is, above its canopy)
+			write(lintel, OUTWARD, "SERVICE DOOR", INK, { Top = 0.3, Height = 0.36, Name = "ServiceSign" })
 			BuildUtil.Light(
 				lintel,
 				"PointLight",
