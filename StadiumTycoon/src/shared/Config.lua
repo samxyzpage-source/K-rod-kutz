@@ -464,6 +464,9 @@ L.Zones = {
 	lower_ends = { MinX = -196, MaxX = 196, MinZ = -60, MaxZ = 120, MaxY = 36 },
 	lower_corners = { MinX = -196, MaxX = 196, MinZ = -96, MaxZ = 156, MaxY = 36 },
 	home_lockerroom = { MinX = -80, MaxX = 80, MinZ = 95, MaxZ = 186, MaxY = 29 },
+	-- the coaches' door in the home corridor's west wall (x -10.8..-10), their tunnel west of it and
+	-- their room west of the coach's office (Builders/StadiumRooms.lua), under the hollow lower rows
+	coach_lockerroom = { MinX = -80, MaxX = -9, MinZ = 120, MaxZ = 160, MaxY = 16 },
 	visitor_lockerroom = { MinX = -80, MaxX = 80, MinZ = -126, MaxZ = -35, MaxY = 29 },
 	main_concourse = { MinX = -226, MaxX = 226, MinZ = -126, MaxZ = 186, MaxY = 46 },
 	concourse_food = { MinX = -226, MaxX = 226, MinZ = -126, MaxZ = 186, MaxY = 44 },
