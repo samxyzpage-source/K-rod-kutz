@@ -308,7 +308,7 @@ end
 local function glassElevator(ctx, name, s, team)
 	span(ctx, name .. "ShaftGlass", s.X0, 0.2, s.Z0, s.X1, s.Top, s.Z1, GLASS, Enum.Material.Glass, SHAFT_PROPS)
 	span(ctx, name .. "Cab", s.X0 + 0.5, 0.4, s.Z0 + 0.5, s.X1 - 0.5, 9.4, s.Z1 - 0.5, team.Secondary, Enum.Material.Metal, DECOR)
-	local dark = textColorOn(SIGN_DARK, { team.Trim, team.Secondary, WHITE })
+	local onDoors = textColorOn(BRUSHED, { team.Primary, INK })
 	for index, level in ipairs(s.Levels) do
 		local other = s.Levels[3 - index]
 		local y = level.Y
@@ -346,12 +346,14 @@ local function glassElevator(ctx, name, s, team)
 			)
 			face = Enum.NormalId.Front
 		end
-		faceText(doors, face, { { Text = level.Name, Color = dark, Y0 = 0.02, Y1 = 0.1 } }, { LightInfluence = 0 })
+		-- where the ride goes, across the top of the 5-wide doors (the narrow call panel beside them
+		-- only says UP or DOWN, big): both read from the landing
 		local goingUp = other.Y > y
+		local destination = (goingUp and "UP TO THE " or "DOWN TO THE ") .. other.Name
+		faceText(doors, face, { { Text = destination, Color = onDoors, Y0 = 0.02, Y1 = 0.16 } }, { LightInfluence = 0, PixelsPerStud = 40 })
 		faceText(panel, face, {
-			{ Text = goingUp and "UP" or "DOWN", Color = BUTTON_GLOW, Y0 = 0.1, Y1 = 0.5 },
-			{ Text = other.Name, Color = WHITE, Y0 = 0.55, Y1 = 0.9 },
-		}, { LightInfluence = 0 })
+			{ Text = goingUp and "UP" or "DOWN", Color = BUTTON_GLOW, X0 = 0.08, X1 = 0.92, Y0 = 0.2, Y1 = 0.8 },
+		}, { LightInfluence = 0, PixelsPerStud = 40 })
 		BuildUtil.Elevator(ctx, panel, other.Target, {
 			Action = other.Action,
 			Object = "Glass Elevator",
@@ -715,14 +717,20 @@ local function buildHallBridge(ctx, team)
 	bench(m, "LoungeChair", 139.6, 274.5, DECK, Vector3.new(1, 0, 0), 3, team, { Object = "Lounge Chair" })
 
 	-- campus map + live TV
-	local map = span(m, "CampusMap", g.MinX + 0.6, DECK + 1.5, 277.3, g.MinX + 0.9, DECK + 7, 280.2, SIGN_DARK, Enum.Material.SmoothPlastic)
+	-- (the glass beside the link is only 2.9 wide: the map uses its full height and keeps every
+	-- line short - a destination and how to get there - so the letters stay big enough to read)
+	local map =
+		span(m, "CampusMap", g.MinX + 0.6, DECK + 0.4, 277.3, g.MinX + 0.9, DECK + 9.4, 280.2, SIGN_DARK, Enum.Material.SmoothPlastic)
+	local how = Enum.Font.GothamBold
 	faceText(map, Enum.NormalId.Right, {
-		{ Text = "CAMPUS MAP", Color = dark, Y0 = 0.05, Y1 = 0.2 },
-		{ Text = "HALL OF FAME: ACROSS THE SKYBRIDGE", Color = WHITE, Y0 = 0.28, Y1 = 0.4, Font = Enum.Font.GothamBold },
-		{ Text = "TEAM HQ: THROUGH THE GLASS LINK", Color = WHITE, Y0 = 0.46, Y1 = 0.58, Font = Enum.Font.GothamBold },
-		{ Text = "FIELDS + DOME: DOWN THE CAMPUS WALK", Color = WHITE, Y0 = 0.64, Y1 = 0.76, Font = Enum.Font.GothamBold },
-		{ Text = "GOLF CARTS: NEXT TO THE CAMPUS WALK", Color = WHITE, Y0 = 0.82, Y1 = 0.94, Font = Enum.Font.GothamBold },
-	}, { LightInfluence = 0 })
+		{ Text = "CAMPUS MAP", Color = dark, Y0 = 0.02, Y1 = 0.11 },
+		{ Text = "HALL OF FAME", Color = WHITE, Y0 = 0.15, Y1 = 0.27 },
+		{ Text = "ACROSS THE SKYBRIDGE", Color = dark, Y0 = 0.27, Y1 = 0.38, Font = how },
+		{ Text = "TEAM HQ", Color = WHITE, Y0 = 0.44, Y1 = 0.56 },
+		{ Text = "THROUGH THE GLASS LINK", Color = dark, Y0 = 0.56, Y1 = 0.67, Font = how },
+		{ Text = "FIELDS, DOME + CARTS", Color = WHITE, Y0 = 0.73, Y1 = 0.85 },
+		{ Text = "DOWN THE CAMPUS WALK", Color = dark, Y0 = 0.85, Y1 = 0.96, Font = how },
+	}, { LightInfluence = 0, PixelsPerStud = 40 })
 	BuildUtil.Look(
 		map,
 		"Campus Map",
@@ -1139,13 +1147,14 @@ local function buildDomeBridge(ctx, team)
 		Info = "A cold soda for the walk to practice. Press the big button and listen for the clunk!",
 		At = Vector3.new(0, -0.5, -1.6),
 	})
-	local directory = span(m, "DomeTowerDirectory", t.MaxX - 1, 2.6, 401, t.MaxX - 0.7, 7.4, 404, SIGN_DARK, Enum.Material.SmoothPlastic)
+	-- (wide along the east glass, so each line reads at about 0.6 studs)
+	local directory = span(m, "DomeTowerDirectory", t.MaxX - 1, 2.2, 401, t.MaxX - 0.7, 7.8, 407.4, SIGN_DARK, Enum.Material.SmoothPlastic)
 	faceText(directory, Enum.NormalId.Left, {
-		{ Text = "DIRECTORY", Color = dark, Y0 = 0.06, Y1 = 0.24 },
-		{ Text = "INDOOR DOME: OUT + RIGHT", Color = WHITE, Y0 = 0.34, Y1 = 0.5, Font = Enum.Font.GothamBold },
-		{ Text = "PRACTICE FIELD: OUT + LEFT", Color = WHITE, Y0 = 0.56, Y1 = 0.72, Font = Enum.Font.GothamBold },
-		{ Text = "GOLF CARTS: ACROSS THE ROAD", Color = WHITE, Y0 = 0.78, Y1 = 0.94, Font = Enum.Font.GothamBold },
-	}, { LightInfluence = 0 })
+		{ Text = "DIRECTORY", Color = dark, Y0 = 0.04, Y1 = 0.2 },
+		{ Text = "INDOOR DOME: OUT + RIGHT", Color = WHITE, Y0 = 0.26, Y1 = 0.46, Font = Enum.Font.GothamBold },
+		{ Text = "PRACTICE FIELD: OUT + LEFT", Color = WHITE, Y0 = 0.51, Y1 = 0.71, Font = Enum.Font.GothamBold },
+		{ Text = "GOLF CARTS: ACROSS THE ROAD", Color = WHITE, Y0 = 0.76, Y1 = 0.96, Font = Enum.Font.GothamBold },
+	}, { LightInfluence = 0, PixelsPerStud = 40 })
 	BuildUtil.Look(
 		directory,
 		"Dome & Garage Tower",

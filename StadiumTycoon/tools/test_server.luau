@@ -1387,6 +1387,60 @@ local function runTests()
 			("the dome tower's vending machine leaves no narrow pocket (gaps %.2f, %.2f, %.2f)"):format(gaps[1], gaps[2], gaps[3])
 		)
 	end
+	do
+		-- the small campus signs keep their letters readable: the campus map, the dome tower's
+		-- directory and the skybridge elevators (estimated TextScaled size in studs: wrapped at
+		-- spaces, capitals about 0.7 em wide, one em per line)
+		local function textSize(text, w, h)
+			local best = 0
+			for step = 1, 200 do
+				local size = step / 100
+				local lines, line, fits = 1, 0, true
+				for word in text:gmatch("%S+") do
+					local ww = #word * 0.7 * size
+					local wider = line == 0 and ww or line + 0.3 * size + ww
+					if ww > w then
+						fits = false
+					elseif wider > w then
+						lines += 1
+						line = ww
+					else
+						line = wider
+					end
+				end
+				if fits and lines * size <= h then
+					best = size
+				end
+			end
+			return best
+		end
+		local smallest, worst = math.huge, "none"
+		for _, stepId in ipairs({ "campus_links:2", "campus_links:3" }) do
+			for _, gui in ipairs(plotModel(1).Items[stepId]:GetDescendants()) do
+				local part = gui.Parent
+				local name = part and part.Name or ""
+				if gui:IsA("SurfaceGui") and (name == "CampusMap" or name == "DomeTowerDirectory" or name:find("Elevator")) then
+					local s = part.Size
+					local faceW = (gui.Face == Enum.NormalId.Left or gui.Face == Enum.NormalId.Right) and s.Z or s.X
+					for _, label in ipairs(gui:GetChildren()) do
+						if label:IsA("TextLabel") then
+							local size = textSize(label.Text, faceW * label.Size.X.Scale, s.Y * label.Size.Y.Scale)
+							if size < smallest then
+								smallest, worst = size, name .. ": " .. label.Text
+							end
+						end
+					end
+				end
+			end
+		end
+		check(
+			smallest >= 0.3,
+			("the campus map, dome tower directory and skybridge elevator signs read at 0.3 studs or more (%.2f: %s)"):format(
+				smallest,
+				worst
+			)
+		)
+	end
 
 	section("Draft + roster")
 	do
