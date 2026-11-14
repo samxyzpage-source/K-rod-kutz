@@ -12,11 +12,21 @@
 
 	PIECES + STEPS
 	  gates       1 Gate A (Main Gate)  2 Gate B (West)  3 Gate C (East)  4 Gate D (Players' Gate):
-	              one complete gate per step (portal, plaza, entry hall)
-	  escalators  1 Main Escalators (3 flights + landings in every gate hall)  2 Corner Ramps
-	              3 Elevators (a glass elevator per gate hall)  4 Wayfinding Signs
-	  facade      1 Lower Facade  2 Glass Curtain Walls  3 Upper Facade & Fins
-	              4 Banners & Night Lights
+	              one complete gate per step (portal, plaza, entry hall). Every gate also has granite
+	              plinths and team-colour LED ribbons on its pylons, two hedge planters at the front of
+	              its plaza, a CLEAR BAGS ONLY board in the security tent, a lit stadium map on the
+	              lobby wall and (not Gate D: its red carpet) a team medallion in the lobby floor;
+	              Gate A's plaza has THE LEGEND, a bronze quarterback statue
+	  escalators  1 Main Escalators (3 flights + landings in every gate hall, yellow comb plates where
+	              riders step on and off, team-colour skirts on the trusses)  2 Corner Ramps (a
+	              team stripe along the outer parapet, a HALFWAY UP! plaque on the landing)
+	              3 Elevators (a glass elevator per gate hall; a call panel with the level number
+	              beside every door)  4 Wayfinding Signs
+	  facade      1 Lower Facade (+ a dark granite plinth along the base, steel canopies over the
+	              service exits, poster cases with the season and the next game beside every gate)
+	              2 Glass Curtain Walls  3 Upper Facade & Fins
+	              4 Banners & Night Lights (+ two tall player / team banners on the glass beside
+	              every gate)
 
 	THE GATE HALL (the same on all four gate axes: A front/visitor, B west, C east, D back/home),
 	segment x |x| < 14 between the hall walls (14..15), offsets 84.2..152:
@@ -109,6 +119,14 @@ local TENT_WHITE = Color3.fromRGB(244, 244, 246)
 local RED_CARPET = Color3.fromRGB(170, 22, 32)
 local LIGHT_WARM = Color3.fromRGB(255, 240, 214)
 local LIGHT_COOL = Color3.fromRGB(226, 238, 255)
+local LIGHT_NEUTRAL = Color3.fromRGB(246, 246, 250)
+local PLINTH_STONE = Color3.fromRGB(132, 126, 116) -- the dark granite feet of the pylons and the facade
+local BRONZE = Color3.fromRGB(150, 104, 58)
+local SAFETY_YELLOW = Color3.fromRGB(240, 188, 30) -- painted escalator comb plates (not lit)
+local PLANTER_GREY = Color3.fromRGB(152, 148, 140)
+local HEDGE = Color3.fromRGB(58, 116, 60)
+local MAP_GRASS = Color3.fromRGB(58, 125, 52)
+local MARKER_RED = Color3.fromRGB(222, 44, 44)
 -- pixels per stud of the small lit signs read up close (wayfinding, exits, elevator doors): sharp
 -- glyphs (TextScaled keeps the letters the same size in studs)
 local SIGN_PPS = 32
@@ -318,6 +336,78 @@ local function lightsAlongZ(part, count, props, dx, dy)
 	end
 end
 
+-- The team colour for new LED ribbons: never white or yellow (they glow too harshly) and bright
+-- enough to glow - the secondary, else the primary, else the trim.
+local function ledColor(team)
+	for _, c in ipairs({ team.Secondary, team.Primary, team.Trim }) do
+		local whiteish = math.min(c.R, c.G, c.B) >= 0.6
+		local yellow = c.R >= 0.8 and c.G >= 0.6 and c.B <= 0.5
+		if math.max(c.R, c.G, c.B) >= 0.3 and not whiteish and not yellow then
+			return c
+		end
+	end
+	return team.Primary
+end
+
+-- A cylinder along the local X axis of `cframe` (a segment-space CFrame, see at()).
+local function cyl(ctx, name, cframe, length, diameter, color, material, extra)
+	local props = extra and table.clone(extra) or {}
+	props.Name = name
+	props.Shape = Enum.PartType.Cylinder
+	props.Size = Vector3.new(length, diameter, diameter)
+	props.CFrame = cframe
+	props.Color = color
+	props.Material = material or Enum.Material.SmoothPlastic
+	return BuildUtil.Part(ctx, props)
+end
+
+-- A SurfaceGui to draw on (maps, posters). glow = LightInfluence 0 (only on dark backgrounds).
+local function canvas(part, face, name, pps, glow)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = name
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = pps or 20
+	gui.LightInfluence = glow and 0 or 1
+	gui.Parent = part
+	return gui
+end
+
+-- A frame placed by scale (x, y = top-left corner, w, h = size); round = a circle / pill.
+local function blob(parent, name, x, y, w, h, color, round, z)
+	local frame = Instance.new("Frame")
+	frame.Name = name
+	frame.BackgroundColor3 = color
+	frame.BorderSizePixel = 0
+	frame.Position = UDim2.new(x, 0, y, 0)
+	frame.Size = UDim2.new(w, 0, h, 0)
+	frame.ZIndex = z or 1
+	frame.Parent = parent
+	if round then
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(round, 0)
+		corner.Parent = frame
+	end
+	return frame
+end
+
+-- A text label placed by scale inside `parent`.
+local function words(parent, name, x, y, w, h, text, color, font, z)
+	local label = Instance.new("TextLabel")
+	label.Name = name
+	label.BackgroundTransparency = 1
+	label.BorderSizePixel = 0
+	label.Position = UDim2.new(x, 0, y, 0)
+	label.Size = UDim2.new(w, 0, h, 0)
+	label.Font = font or Enum.Font.GothamBlack
+	label.Text = text
+	label.TextColor3 = color
+	label.TextScaled = true
+	label.ZIndex = z or 2
+	label.Parent = parent
+	return label
+end
+
 ---------------------------------------------------------------------------------------------
 -- Segment geometry
 ---------------------------------------------------------------------------------------------
@@ -431,12 +521,17 @@ end
 ---------------------------------------------------------------------------------------------
 
 local GATE_INFO = {
+	-- (hero = the player banner on the glass beside the gate: number + position; cheer = the live
+	-- text on the banner across the gate: Interact.LiveKinds, under a fixed headline)
 	visitor = {
 		letter = "A",
 		name = "MAIN GATE",
 		title = "Gate A - Main Gate",
 		info = "The front door of the stadium! The plaza walkway runs straight in here.",
 		hall = "Main Entry Hall",
+		hero = { "12", "QUARTERBACK" },
+		cheer = { "WELCOME HOME", "team" },
+		statue = true, -- THE LEGEND stands in front of the main gate
 	},
 	west = {
 		letter = "B",
@@ -447,6 +542,8 @@ local GATE_INFO = {
 		plazaSide = -1,
 		flags = { -27, -39 }, -- (between the west video board's towers)
 		flagLen = 8,
+		hero = { "88", "WIDE RECEIVER" },
+		cheer = { "THIS SEASON", "record" },
 	},
 	east = {
 		letter = "C",
@@ -457,6 +554,8 @@ local GATE_INFO = {
 		flags = { -27, -39 }, -- (clear of the east video board's pylons)
 		flagLen = 8,
 		tent = { x0 = 50, x1 = 62, o0 = 162.8, o1 = 174.8 }, -- (clear of the east video board's pylons too)
+		hero = { "56", "LINEBACKER" },
+		cheer = { "TROPHY CASE", "titles" },
 	},
 	home = {
 		letter = "D",
@@ -464,6 +563,9 @@ local GATE_INFO = {
 		title = "Gate D - Players' Gate",
 		info = "The players walk in here from the team campus on game day - follow the red carpet!",
 		hall = "Players' Entry Hall",
+		hero = { "21", "RUNNING BACK" },
+		cheer = { "LET'S GO", "team" },
+		carpet = true, -- (the red carpet runs where the other halls have a floor medallion)
 	},
 }
 
@@ -508,6 +610,180 @@ end
 ---------------------------------------------------------------------------------------------
 -- GATES
 ---------------------------------------------------------------------------------------------
+
+-- The pylons' dark granite plinths (round the portal side, the front and the outer side, under the
+-- ticket window) and a team-colour LED ribbon up each portal side.
+local function pylonTrim(ctx, seg, team)
+	for _, s in ipairs({ -1, 1 }) do
+		box(
+			ctx,
+			seg,
+			"PylonPlinth",
+			s * (PORTAL_HALF - 0.3),
+			s * (PYLON_OUT + 0.3),
+			0,
+			2.4,
+			PYLON_IN,
+			PYLON_FRONT + 0.3,
+			PLINTH_STONE,
+			Enum.Material.Granite
+		)
+		box(
+			ctx,
+			seg,
+			"PylonLED",
+			s * (PORTAL_HALF - 0.1),
+			s * PORTAL_HALF,
+			3,
+			LINTEL[1] - 1,
+			PYLON_FRONT - 1.3,
+			PYLON_FRONT - 0.5,
+			ledColor(team),
+			Enum.Material.Neon,
+			PAINT
+		)
+	end
+end
+
+-- Two concrete planters with clipped hedges at the front corners of the gate plaza (outside the
+-- walkway, in front of the canopy posts).
+local function gatePlanters(ctx, seg)
+	for _, s in ipairs({ -1, 1 }) do
+		box(ctx, seg, "GatePlanter", s * 18.6, s * 24.4, 0, 2.4, 179.4, 181.8, PLANTER_GREY, Enum.Material.Concrete)
+		box(ctx, seg, "PlanterHedge", s * 18.9, s * 24.1, 2.4, 3.9, 179.7, 181.5, HEDGE, Enum.Material.Grass)
+	end
+end
+
+-- A CLEAR BAGS ONLY sandwich board just inside the front of the security tent `t` (beside the
+-- queue for the bag table, clear of the walk-through arch).
+local function clearBagSign(ctx, seg, t, ps, team)
+	local tilt, len, width = math.rad(14), 3.4, 2.4
+	local xc, oc = ps * (t.x0 + 2.1), t.o1 - 1.6
+	local d = math.sin(tilt) * len / 2 + 0.1
+	local yc = math.cos(tilt) * len / 2 + 0.1
+	-- (the boards lean together: each top tips toward the other)
+	local front = BuildUtil.Part(ctx, {
+		Name = "ClearBagSign",
+		Size = Vector3.new(width, len, 0.15),
+		CFrame = at(seg, xc, yc, oc + d) * CFrame.Angles(tilt, 0, 0),
+		Color = WHITE,
+	})
+	BuildUtil.Part(ctx, {
+		Name = "ClearBagSignBack",
+		Size = Vector3.new(width, len, 0.15),
+		CFrame = at(seg, xc, yc, oc - d) * CFrame.Angles(-tilt, 0, 0),
+		Color = team.Primary,
+	})
+	local label = write(front, OUTWARD, "CLEAR BAGS ONLY", ink(WHITE, team), { Top = 0.08, Height = 0.46 })
+	label.TextWrapped = true
+	local size = addLine(label, "12 x 6 x 12 MAX", 0.62, 0.12, Enum.Font.GothamBold)
+	size.TextColor3 = INK
+	BuildUtil.Look(
+		front,
+		"Clear Bag Rule",
+		"Only see-through bags (or a tiny clutch) come into the stadium, so security can check them in a snap. Sorry - no backpacks, and no pet hamsters!",
+		{ Distance = 8 }
+	)
+end
+
+-- The lit stadium directory on the lobby wall (between the guest services desk and the front):
+-- the bowl from above as you see it walking in at Gate A (Gate D at the top, C on the left, B on
+-- the right) with a red YOU ARE HERE dot on this gate, and the section numbers of every level.
+local MAP_GATES = { { "A", 0.665, 0.86 }, { "B", 0.91, 0.52 }, { "C", 0.42, 0.52 }, { "D", 0.665, 0.18 } }
+local function stadiumMap(ctx, seg, gate, L)
+	local team = ctx.colors
+	local lower, club, upper = sections(L, seg.name)
+	local panel = box(ctx, seg, "StadiumMap", -HALL_HALF, -HALL_HALF + 0.18, 2.4, 8.4, 136.5, 145.5, SIGN_DARK, nil, NO_COLLIDE)
+	local gui = canvas(panel, Enum.NormalId.Right, "StadiumMapGui", SIGN_PPS, true)
+	words(gui, "MapTitle", 0.04, 0.06, 0.32, 0.1, "STADIUM MAP", WHITE)
+	words(gui, "MapHere", 0.04, 0.22, 0.32, 0.07, "YOU ARE HERE", MARKER_RED, Enum.Font.GothamBold)
+	words(gui, "MapGate", 0.04, 0.3, 0.32, 0.17, "GATE " .. gate.letter, ink(SIGN_DARK, team))
+	for index, line in ipairs({ "LOWER BOWL  " .. lower, "CLUB LEVEL  " .. club, "UPPER DECK  " .. upper }) do
+		words(gui, "MapLevel", 0.04, 0.45 + index * 0.11, 0.32, 0.07, line, WHITE, Enum.Font.GothamBold)
+	end
+	-- the bowl (stands) round the field, the four gates on its rim
+	blob(gui, "MapBowl", 0.42, 0.18, 0.49, 0.68, CLADDING, 0.4, 1)
+	blob(gui, "MapField", 0.535, 0.37, 0.26, 0.3, MAP_GRASS, nil, 2)
+	blob(gui, "MapMidfield", 0.663, 0.37, 0.004, 0.3, WHITE, nil, 3)
+	for _, spot in ipairs(MAP_GATES) do
+		local here = spot[1] == gate.letter
+		local dot = blob(gui, "MapGate" .. spot[1], spot[2] - 0.035, spot[3] - 0.0525, 0.07, 0.105, here and MARKER_RED or WHITE, 0.5, 4)
+		words(dot, "MapGateLetter", 0.15, 0.15, 0.7, 0.7, spot[1], here and WHITE or INK, Enum.Font.GothamBlack, 5)
+	end
+	BuildUtil.Look(
+		panel,
+		"Stadium Map",
+		"You are at Gate "
+			.. gate.letter
+			.. ". Gates A, B, C and D sit on all four sides of the bowl. Ride up for the main concourse (sections "
+			.. lower
+			.. "), the club level and the upper deck!",
+		{ At = Vector3.new(0.7, -1.4, 0), Distance = 9 }
+	)
+end
+
+-- A two-colour medallion set into the lobby floor between the portal and the escalators.
+local function lobbyMedallion(ctx, seg, team)
+	local upright = CFrame.Angles(0, 0, math.pi / 2) -- (a cylinder's axis turned to point up)
+	cyl(ctx, "FloorMedallion", at(seg, 0, 0.225, 147.5) * upright, 0.05, 8, team.Secondary, Enum.Material.Marble, PAINT)
+	cyl(ctx, "FloorMedallionCore", at(seg, 0, 0.23, 147.5) * upright, 0.06, 6.4, team.Primary, Enum.Material.Marble, PAINT)
+end
+
+-- THE LEGEND: a bronze quarterback frozen mid-throw on a granite pedestal in front of Gate A,
+-- facing the plaza (left of the walkway, clear of the flags and the front road).
+local function legendStatue(ctx, seg)
+	local sx, so = -20, 188
+	local statue = BuildUtil.Child(ctx, "LegendStatue")
+	box(statue, seg, "StatuePedestal", sx - 2.3, sx + 2.3, 0, 4, so - 2.3, so + 2.3, PLINTH_STONE, Enum.Material.Granite)
+	local plaque = box(statue, seg, "StatuePlaque", sx - 1.6, sx + 1.6, 1.1, 3.1, so + 2.3, so + 2.42, BRONZE, Enum.Material.Metal)
+	local title =
+		write(plaque, OUTWARD, "THE LEGEND", Color3.fromRGB(246, 226, 180), { Top = 0.08, Height = 0.44, Font = Enum.Font.Garamond })
+	addLine(title, "OUR FIRST STAR QUARTERBACK", 0.6, 0.26, Enum.Font.GothamBold)
+	local function bronze(name, size, cframe)
+		return BuildUtil.Part(statue, {
+			Name = name,
+			Size = size,
+			CFrame = cframe,
+			Color = BRONZE,
+			Material = Enum.Material.Metal,
+			Reflectance = 0.08,
+		})
+	end
+	-- the left foot steps toward the plaza, the right one pushes off behind
+	bronze("StatueLeg", Vector3.new(0.9, 3.6, 1), at(seg, sx - 0.55, 5.75, so + 0.45) * CFrame.Angles(math.rad(14), 0, 0))
+	bronze("StatueLeg", Vector3.new(0.9, 3.6, 1), at(seg, sx + 0.55, 5.75, so - 0.45) * CFrame.Angles(math.rad(-14), 0, 0))
+	bronze("StatueTorso", Vector3.new(2.4, 2.8, 1.3), at(seg, sx, 8.9, so) * CFrame.Angles(0, math.rad(-12), 0))
+	bronze("StatuePads", Vector3.new(3.1, 0.7, 1.7), at(seg, sx, 10.15, so) * CFrame.Angles(0, math.rad(-12), 0))
+	BuildUtil.Part(statue, {
+		Name = "StatueHelmet",
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.new(1.6, 1.6, 1.6),
+		CFrame = at(seg, sx, 11.05, so),
+		Color = BRONZE,
+		Material = Enum.Material.Metal,
+		Reflectance = 0.08,
+	})
+	bronze("StatueFacemask", Vector3.new(1, 0.5, 0.22), at(seg, sx, 10.85, so + 0.8))
+	-- the left arm points at the receiver, the throwing arm cocks the ball up and back
+	bronze("StatueArm", Vector3.new(0.6, 2.6, 0.6), at(seg, sx - 1.45, 10.35, so + 1.22) * CFrame.Angles(math.rad(-70), 0, 0))
+	bronze("StatueArm", Vector3.new(0.6, 2.6, 0.6), at(seg, sx + 1.45, 10.97, so - 0.75) * CFrame.Angles(math.rad(35), 0, 0))
+	cyl(
+		statue,
+		"StatueFootball",
+		at(seg, sx + 1.45, 12.3, so - 1.55) * CFrame.Angles(0, math.pi / 2, 0),
+		1.1,
+		0.62,
+		BRONZE,
+		Enum.Material.Metal,
+		{ Reflectance = 0.08 }
+	)
+	BuildUtil.Look(
+		plaque,
+		"The Legend",
+		"A bronze statue of the franchise's first star quarterback, frozen mid-throw. Fans rub the football for luck before every game. Will your quarterback be the next legend?",
+		{ LookKey = "roster:QB", Distance = 10 }
+	)
+end
 
 -- The portal (pylons, marquee, canopy), the plaza in front of it (paving, turnstiles, scanners,
 -- security tent, flags) and the entry hall behind it.
@@ -973,8 +1249,21 @@ local function buildGate(ctx, seg, gate, L)
 	pad.PaddingTop, pad.PaddingBottom = UDim.new(0.15, 0), UDim.new(0.15, 0)
 	pad.Parent = clockLabel
 	BuildUtil.Light(deskSign, "PointLight", { Name = "DeskLight", Range = 12, Brightness = 1, Color = LIGHT_WARM, Shadows = false })
-	if gate.letter == "D" then
+	if gate.carpet then
 		box(hall, seg, "RedCarpet", -3, 3, 0.26, 0.32, F1.bottom + 4, PAVING_OUT, RED_CARPET, Enum.Material.Fabric, PAINT)
+	end
+
+	-- DETAILS: pylon plinths + LED ribbons, planters, the clear-bag board, the lobby's map and floor
+	-- medallion, and Gate A's statue
+	pylonTrim(hall, seg, team)
+	gatePlanters(hall, seg)
+	clearBagSign(hall, seg, t, ps, team)
+	stadiumMap(hall, seg, gate, L)
+	if not gate.carpet then
+		lobbyMedallion(hall, seg, team)
+	end
+	if gate.statue then
+		legendStatue(hall, seg)
 	end
 	return hall
 end
@@ -995,8 +1284,10 @@ end
 	A bank of `lanes` escalators: the steps' walking surface runs from a (bottom) to b (top),
 	w0..w1 wide (see slope). Steps (diamond plate), the truss under them (from `trussFrom` along
 	the run, 0..1), glass balustrades on both sides and between lanes, black handrails.
+	skirts: { color, sides } - a team-colour band along the truss on its w0 side (-1) and / or its
+	w1 side (+1).
 ]]
-local function escalatorBank(ctx, seg, a, b, w0, w1, lanes, trussFrom)
+local function escalatorBank(ctx, seg, a, b, w0, w1, lanes, trussFrom, skirts)
 	local dx, dy, dz = b[1] - a[1], b[2] - a[2], b[3] - a[3]
 	local run = math.sqrt(dx * dx + dz * dz)
 	local cosA = run / math.sqrt(run * run + dy * dy)
@@ -1004,6 +1295,10 @@ local function escalatorBank(ctx, seg, a, b, w0, w1, lanes, trussFrom)
 	local t = trussFrom or 0
 	local start = { a[1] + dx * t, a[2] + dy * t, a[3] + dz * t }
 	local truss = slope(ctx, seg, "EscalatorTruss", start, b, w0, w1, TRUSS, CLADDING, Enum.Material.Metal, nil, TREAD)
+	for _, side in ipairs(skirts and skirts.sides or {}) do
+		local edge = side < 0 and w0 or w1
+		slope(ctx, seg, "EscalatorSkirt", start, b, edge, edge + side * 0.12, 1.3, skirts.color, nil, PAINT, TREAD + 0.6)
+	end
 	lightsAlongZ(
 		truss,
 		2,
@@ -1049,16 +1344,26 @@ local function trussStart(rise, run)
 	return math.max(0, f) / run
 end
 
+-- A safety-yellow comb plate on a landing where riders step on or off an escalator (x0..x1 along
+-- the segment, o0..o1, painted on the floor at height y).
+local function combPlate(ctx, seg, x0, x1, y, o0, o1)
+	box(ctx, seg, "CombPlate", x0, x1, y, y + 0.06, o0, o1, SAFETY_YELLOW, Enum.Material.DiamondPlate, PAINT)
+end
+
 -- Step 1: the escalator banks + landings of one gate hall.
 local function hallEscalators(ctx, seg)
 	local esc = BuildUtil.Child(ctx, "Escalators")
 	local slab = CONCRETE
+	local skirts = { color = ctx.colors.Primary, sides = { -1, 1 } }
 	-- F1: ground -> main concourse (y 30) ------------------------------------------------------
 	local f1run = F1.bottom - F1.top
 	-- (from the ground the truss starts where its lower corner clears the floor)
 	local len1 = math.sqrt(f1run * f1run + 30 * 30)
 	local f1start = ((TREAD + TRUSS) * f1run / len1 + 0.3) / (30 / f1run) / f1run
-	local f1 = escalatorBank(esc, seg, { F1.x, F1.y0, F1.bottom }, { F1.x, F1.y1, F1.top }, -6, 6, 2, f1start)
+	local f1 = escalatorBank(esc, seg, { F1.x, F1.y0, F1.bottom }, { F1.x, F1.y1, F1.top }, -6, 6, 2, f1start, skirts)
+	-- (the steps come out of the hall floor 0.35 before their foot)
+	combPlate(esc, seg, -5.6, 5.6, 0.2, F1.bottom - 0.2, F1.bottom + 1.2)
+	combPlate(esc, seg, -5.6, 5.6, F1.y1, F1.top - 1.4, F1.top - 0.1)
 	-- (the steps' local +Z runs down the slope: the prompt hangs over the bottom of the bank)
 	BuildUtil.Look(
 		f1,
@@ -1075,7 +1380,9 @@ local function hallEscalators(ctx, seg)
 
 	-- F2: main concourse -> club ring (y 54) ---------------------------------------------------
 	local f2run = F2.bottom - F2.top
-	escalatorBank(esc, seg, { F2.x, F2.y0, F2.bottom }, { F2.x, F2.y1, F2.top }, -6, 6, 2, trussStart(24, f2run))
+	escalatorBank(esc, seg, { F2.x, F2.y0, F2.bottom }, { F2.x, F2.y1, F2.top }, -6, 6, 2, trussStart(24, f2run), skirts)
+	combPlate(esc, seg, -5.6, 5.6, F2.y0, F2.bottom + 0.1, F2.bottom + 1.4)
+	combPlate(esc, seg, -5.6, 5.6, F2.y1, F2.top - 1.4, F2.top - 0.1)
 	box(esc, seg, "LandingD", -6, 6, 53, 54, CLUB_EDGE, F2.top, slab, Enum.Material.Concrete)
 	rail(esc, seg, -6, -5.6, 54, CLUB_EDGE, F2.top)
 	-- bridge E (on top of the +x hall wall) to the elevator + the path to F3 (the rails between it
@@ -1095,7 +1402,20 @@ local function hallEscalators(ctx, seg)
 
 	-- F3: club ring -> upper concourse (y 74), along the segment inside the facade band ----------
 	local f3run = F3.bottom - F3.top
-	escalatorBank(esc, seg, { F3.bottom, F3.y0, F3.o }, { F3.top, F3.y1, F3.o }, F3.o - 3, F3.o + 3, 1, trussStart(20, f3run))
+	-- (its outer skirt shows through the curtain glass from the plaza)
+	escalatorBank(
+		esc,
+		seg,
+		{ F3.bottom, F3.y0, F3.o },
+		{ F3.top, F3.y1, F3.o },
+		F3.o - 3,
+		F3.o + 3,
+		1,
+		trussStart(20, f3run),
+		{ color = skirts.color, sides = { 1 } }
+	)
+	combPlate(esc, seg, F3.bottom + 0.1, F3.bottom + 1.4, F3.y0, F3.o - 2.6, F3.o + 2.6)
+	combPlate(esc, seg, F3.top - 1.4, F3.top - 0.1, F3.y1, F3.o - 2.6, F3.o + 2.6)
 	box(esc, seg, "TopLanding", TOP.x0, TOP.x1, 73, 74, TOP.o0, TOP.o1, slab, Enum.Material.Concrete)
 	rail(esc, seg, TOP.x0, TOP.x1, 74, TOP.o1 - 0.4, TOP.o1)
 	rail(esc, seg, TOP.x0, TOP.x0 + 0.4, 74, TOP.o0, TOP.o1 - 0.4)
@@ -1157,6 +1477,41 @@ local function cornerRamp(ctx, seg, s)
 	local lp =
 		box(ramp, seg, "RampParapet", x(landingEnd), x(R.low), 15, 15 + h, R.outer[2] - 0.6, R.outer[2], wall, Enum.Material.Concrete)
 	BuildUtil.Light(lp, "PointLight", light)
+	-- a team stripe along R1's outer parapet (facing the corner plaza) and a plaque on the landing's
+	-- end parapet for the fans coming up R1
+	local team = ctx.colors
+	slope(
+		ramp,
+		seg,
+		"RampStripe",
+		{ x(R.high), h - 0.5, R.outer[2] },
+		{ x(R.low), 15 + h - 0.5, R.outer[2] },
+		R.outer[2],
+		R.outer[2] + 0.12,
+		0.9,
+		team.Primary,
+		nil,
+		PAINT
+	)
+	local plaque = box(
+		ramp,
+		seg,
+		"RampHalfwayPlaque",
+		x(landingEnd - 0.15),
+		x(landingEnd),
+		15.6,
+		18.2,
+		R.inner[1] + 4,
+		R.outer[2] - 4,
+		team.Primary,
+		nil,
+		NO_COLLIDE
+	)
+	local halfway = write(plaque, s > 0 and Enum.NormalId.Left or Enum.NormalId.Right, "HALFWAY UP!", ink(team.Primary, team), {
+		Top = 0.1,
+		Height = 0.5,
+	})
+	addLine(halfway, "ONE MORE RAMP TO THE MAIN CONCOURSE", 0.66, 0.22, Enum.Font.GothamBold)
 
 	-- the bridge at y 30 through the facade (R2 arrives at its +u side at the outer end), ending in a
 	-- wide balcony at the main concourse's outer wall (offsets 84..100)
@@ -1298,6 +1653,31 @@ local function elevator(ctx, seg)
 					At = Vector3.new((buttons - 2) * 3.2, -1, level.side > 0 and -0.8 or 0.8),
 				})
 			end
+		end
+		-- the call panel beside the door (on the riders' side, behind the prompts): the level number
+		-- over the call buttons (the bottom level only goes up, the top one only down)
+		local front = level.side > 0 and level.o[2] or level.o[1]
+		local panel = box(
+			lift,
+			seg,
+			"ElevatorCallPanel",
+			x1 + 0.3,
+			x1 + 1,
+			level.y + 2.6,
+			level.y + 7.4,
+			front,
+			front + level.side * 0.1,
+			DARK_STEEL,
+			Enum.Material.Metal,
+			NO_COLLIDE
+		)
+		local gui = canvas(panel, level.side > 0 and OUTWARD or INWARD, "CallPanelGui", SIGN_PPS, true)
+		words(gui, "LevelNumber", 0.12, 0.05, 0.76, 0.2, tostring(index), Color3.fromRGB(255, 170, 70), Enum.Font.GothamBold)
+		if index < #levels then
+			blob(gui, "CallUp", 0.25, 0.42, 0.5, 0.073, Color3.fromRGB(150, 220, 255), 0.5)
+		end
+		if index > 1 then
+			blob(gui, "CallDown", 0.25, 0.58, 0.5, 0.073, Color3.fromRGB(220, 222, 230), 0.5)
 		end
 	end
 end
@@ -1486,6 +1866,49 @@ local function sink(seg)
 	return seg.kind == "corner" and 0.04 or 0
 end
 
+-- A poster case on the stone base (x0..x1, at eye level): a team-colour poster with a headline and
+-- a line the server keeps up to date (Interact.LiveKinds `live`).
+local function posterCase(ctx, seg, x0, x1, headline, live, placeholder, team)
+	local case = box(ctx, seg, "PosterCase", x0, x1, 2.2, 10.2, F.out - 0.05, F.out + 0.3, DARK_STEEL, Enum.Material.Metal)
+	local gui = canvas(case, OUTWARD, "PosterGui", 24)
+	local paper = blob(gui, "Poster", 0.07, 0.04, 0.86, 0.92, team.Primary, nil, 1)
+	local color = ink(team.Primary, team)
+	words(paper, "Headline", 0.06, 0.06, 0.88, 0.16, headline, color, Enum.Font.GothamBlack, 2)
+	blob(paper, "Rule", 0.1, 0.26, 0.8, 0.012, color, nil, 2)
+	local line = words(paper, "LiveLine", 0.08, 0.34, 0.84, 0.54, placeholder, color, Enum.Font.GothamBold, 2)
+	line.TextWrapped = true
+	line:SetAttribute("Live", live)
+	return case
+end
+
+-- A tall banner on the curtain glass beside a gate, between two fins (x0..x1), below the sight line
+-- of the outside escalator F3.
+local function glassBanner(ctx, seg, x0, x1, color)
+	local banner = box(ctx, seg, "GateBanner", x0, x1, 33, 56, F.glassOut + 0.02, F.glassOut + 0.18, color, Enum.Material.Fabric, PAINT)
+	return banner, canvas(banner, OUTWARD, "GateBannerGui", 10)
+end
+
+-- The player banner (a number and a position over the team's name, between two jersey stripes) and
+-- the team's cheer (a headline over a live line) on the glass on both sides of a gate.
+local function gateBanners(ctx, seg, gate, team)
+	local _, hero = glassBanner(ctx, seg, -39.4, -24.6, team.Primary)
+	local color = ink(team.Primary, team)
+	for _, y in ipairs({ 0.05, 0.92 }) do
+		blob(hero, "JerseyStripe", 0, y, 1, 0.03, team.Secondary, nil, 1)
+	end
+	words(hero, "Number", 0.08, 0.13, 0.84, 0.46, gate.hero[1], color, Enum.Font.GothamBlack, 2)
+	words(hero, "Position", 0.08, 0.6, 0.84, 0.08, gate.hero[2], color, Enum.Font.GothamBold, 2)
+	words(hero, "TeamName", 0.08, 0.72, 0.84, 0.13, teamLabel(ctx), color, Enum.Font.GothamBlack, 2):SetAttribute("Live", "team")
+	local _, cheer = glassBanner(ctx, seg, 24.6, 39.4, team.Secondary)
+	local cheerColor = ink(team.Secondary, team)
+	words(cheer, "Headline", 0.08, 0.1, 0.84, 0.16, gate.cheer[1], cheerColor, Enum.Font.GothamBlack, 2)
+	blob(cheer, "Rule", 0.15, 0.3, 0.7, 0.012, cheerColor, nil, 1)
+	local placeholder = ({ record = "RECORD 0-0", titles = "CHAMPIONSHIPS: 0" })[gate.cheer[2]] or teamLabel(ctx)
+	local live = words(cheer, "LiveLine", 0.08, 0.36, 0.84, 0.5, placeholder, cheerColor, Enum.Font.GothamBlack, 2)
+	live.TextWrapped = true
+	live:SetAttribute("Live", gate.cheer[2])
+end
+
 -- Fin positions along a segment.
 local function finPositions(seg)
 	local list = {}
@@ -1528,6 +1951,26 @@ function M.facade(ctx)
 		for _, r in ipairs(facadeRuns(seg, F.capOut, gateCut(seg))) do
 			box(base, seg, "FacadeCap", r[1], r[2], F.baseTop - k, F.capTop - k, F.capIn, F.capOut, STONE_DARK, Enum.Material.Limestone)
 		end
+		-- a dark granite plinth along the foot of the base (it stops short of the service doors,
+		-- whose leaves swing out past it)
+		local plinthCuts = gateCut(seg)
+		if seg.kind ~= "corner" then
+			table.insert(plinthCuts, { SERVICE.x0 - 0.4, SERVICE.x1 + 0.4 })
+		end
+		for _, r in ipairs(facadeRuns(seg, F.out + 0.3, plinthCuts)) do
+			box(base, seg, "FacadePlinth", r[1], r[2], 0, 1.6 - k, F.out - 0.1, F.out + 0.3, PLINTH_STONE, Enum.Material.Granite)
+		end
+		if GATE_INFO[seg.name] then
+			-- poster cases beside the gate: the season so far and the next game day
+			local season = posterCase(base, seg, -24.8, -20.4, "THIS SEASON", "season", "SEASON 1 - WEEK 1/8", team)
+			posterCase(base, seg, 20.4, 24.8, "GAME DAY", "gameday", "NEXT GAME SOON", team)
+			BuildUtil.Look(
+				season,
+				"Season Poster",
+				"Every game day is one week of the season. Win five of the eight games and you're in the playoffs!",
+				{ LookKey = "record", At = Vector3.new(0, -2.2, -0.8), Distance = 9 }
+			)
+		end
 		if seg.kind ~= "corner" then
 			-- the service exit: a double door (its leaves swing out onto the plaza) under a lintel
 			-- with a lit EXIT sign facing the event level
@@ -1538,6 +1981,25 @@ function M.facade(ctx)
 				lintel,
 				"PointLight",
 				{ Name = "ExitLight", Range = 18, Brightness = 1, Color = SCANNER_GREEN, Shadows = false }
+			)
+			-- a steel canopy with a lamp over the door
+			local canopy = box(
+				base,
+				seg,
+				"ServiceCanopy",
+				s.x0 - 1.2,
+				s.x1 + 1.2,
+				s.top + 0.6,
+				s.top + 1,
+				F.out,
+				F.out + 2.4,
+				DARK_STEEL,
+				Enum.Material.Metal
+			)
+			BuildUtil.Light(
+				canopy,
+				"PointLight",
+				{ Name = "ServiceLamp", Range = 10, Brightness = 0.8, Color = LIGHT_NEUTRAL, Shadows = false }
 			)
 			local doorH = s.top - 0.2
 			BuildUtil.Door(base, {
@@ -1788,6 +2250,11 @@ function M.facade(ctx)
 					{ Top = 0.36, Height = 0.28, PPS = 10 }
 				)
 			end
+		end
+		-- the player banner and the team's cheer on the glass beside every gate
+		local gate = GATE_INFO[seg.name]
+		if gate then
+			gateBanners(lights, seg, gate, team)
 		end
 	end
 end
